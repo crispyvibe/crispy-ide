@@ -192,6 +192,8 @@ struct TerminalComposeInputView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .scrollAssistGlassBackground(in: RoundedRectangle(cornerRadius: ComposeLayoutTokens.editorCornerRadius))
+        .shadow(color: canSend ? palette.accentColor.opacity(0.3) : .clear, radius: 6, y: 0)
+        .animation(.easeOut(duration: 0.2), value: canSend)
         .onChange(of: text) { _, newValue in
             if newValue.isEmpty {
                 contentHeight = 28
@@ -563,6 +565,8 @@ private final class ComposeTextView: NSTextView {
     var canSend = false
     var showBroadcast = false
     var isRephrasing = false
+    var placeholderString = "Compose message… (⌘↩ to send)"
+    var placeholderColor: NSColor = .secondaryLabelColor
     var onSend: (() -> Void)?
     var onBroadcast: (() -> Void)?
     var onRephrase: (() -> Void)?
@@ -577,6 +581,25 @@ private final class ComposeTextView: NSTextView {
     var onPasteImage: ((NSImage) -> Void)?
     var onHistoryBack: (() -> Void)?
     var onHistoryForward: (() -> Void)?
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        if string.isEmpty, let font = self.font {
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: placeholderColor
+            ]
+            let inset = textContainerInset
+            let rect = NSRect(x: inset.width + (textContainer?.lineFragmentPadding ?? 0),
+                              y: inset.height, width: bounds.width, height: bounds.height)
+            placeholderString.draw(in: rect, withAttributes: attrs)
+        }
+    }
+
+    override func didChangeText() {
+        super.didChangeText()
+        needsDisplay = true // redraw to show/hide placeholder
+    }
 
     private var isCaretOnFirstVisualLine: Bool {
         guard let layoutManager, let textContainer else { return true }
