@@ -1,0 +1,1854 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' file:; script-src 'self' 'nonce-crispyvibes-editor' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: https: http:; connect-src 'none'; frame-src 'self' file: blob:;">
+  <link rel="stylesheet" href="github-markdown.min.css" />
+  <style>
+    html, body {
+      margin: 0;
+      background: transparent;
+      color-scheme: light dark;
+      height: 100%;
+    }
+    :root {
+      --crispyvibes-editor-fg: var(--fgColor-default);
+      --crispyvibes-editor-muted-bg: var(--bgColor-muted);
+      --crispyvibes-editor-border: var(--borderColor-default);
+    }
+    #editor {
+      box-sizing: border-box;
+      min-height: 100%;
+      width: 100%;
+      outline: none;
+      padding: 16px;
+      background: transparent !important;
+      color: var(--fgColor-default);
+    }
+    .markdown-body {
+      max-width: none;
+      background: transparent !important;
+      color: var(--fgColor-default);
+      border-color: var(--borderColor-default);
+    }
+    #editor.html-host {
+      padding: 0;
+    }
+    #html-frame {
+      border: 0;
+      display: block;
+      width: 100%;
+      background: transparent;
+    }
+    .mermaid-diagram, pre.mermaid {
+      margin: 1em 0;
+      text-align: center;
+      overflow-x: auto;
+    }
+    .mermaid-diagram svg, pre.mermaid svg {
+      max-width: 100%;
+      height: auto;
+    }
+    pre.mermaid[data-processed] {
+      background: transparent;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+    pre.mermaid[data-processed]:hover {
+      outline: 1px dashed var(--borderColor-default, rgba(255,255,255,0.2));
+      outline-offset: 4px;
+    }
+    .mermaid-editing {
+      position: relative;
+      border: 1px solid var(--borderColor-default, rgba(255,255,255,0.2));
+      border-radius: 6px;
+      padding: 8px;
+      margin: 1em 0;
+    }
+    .mermaid-editing pre {
+      margin: 0;
+    }
+    .mermaid-editing code {
+      outline: none;
+      display: block;
+      white-space: pre-wrap;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+    }
+    .mermaid-done-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      font-size: 11px;
+      padding: 2px 10px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.08);
+      color: var(--fgColor-default, #ccc);
+      cursor: pointer;
+    }
+    .mermaid-done-btn:hover {
+      background: rgba(255,255,255,0.15);
+    }
+
+    .markdown-body .hljs {
+      color: var(--fgColor-default);
+      background: var(--bgColor-muted);
+    }
+    .markdown-body .hljs-doctag,
+    .markdown-body .hljs-keyword,
+    .markdown-body .hljs-meta .hljs-keyword,
+    .markdown-body .hljs-template-tag,
+    .markdown-body .hljs-template-variable,
+    .markdown-body .hljs-type,
+    .markdown-body .hljs-variable.language_ {
+      color: var(--color-prettylights-syntax-keyword);
+    }
+    .markdown-body .hljs-title,
+    .markdown-body .hljs-title.class_,
+    .markdown-body .hljs-title.class_.inherited__,
+    .markdown-body .hljs-title.function_ {
+      color: var(--color-prettylights-syntax-entity);
+    }
+    .markdown-body .hljs-attr,
+    .markdown-body .hljs-attribute,
+    .markdown-body .hljs-literal,
+    .markdown-body .hljs-meta,
+    .markdown-body .hljs-number,
+    .markdown-body .hljs-operator,
+    .markdown-body .hljs-selector-attr,
+    .markdown-body .hljs-selector-class,
+    .markdown-body .hljs-selector-id,
+    .markdown-body .hljs-variable {
+      color: var(--color-prettylights-syntax-constant);
+    }
+    .markdown-body .hljs-meta .hljs-string,
+    .markdown-body .hljs-regexp,
+    .markdown-body .hljs-string {
+      color: var(--color-prettylights-syntax-string);
+    }
+    .markdown-body .hljs-built_in,
+    .markdown-body .hljs-symbol {
+      color: var(--color-prettylights-syntax-variable);
+    }
+    .markdown-body .hljs-code,
+    .markdown-body .hljs-comment,
+    .markdown-body .hljs-formula {
+      color: var(--color-prettylights-syntax-comment);
+    }
+    .markdown-body .hljs-name,
+    .markdown-body .hljs-quote,
+    .markdown-body .hljs-selector-pseudo,
+    .markdown-body .hljs-selector-tag {
+      color: var(--color-prettylights-syntax-entity-tag);
+    }
+    .markdown-body .hljs-subst {
+      color: var(--fgColor-default);
+    }
+    .markdown-body .hljs-section {
+      color: var(--color-prettylights-syntax-markup-heading);
+      font-weight: 700;
+    }
+    .markdown-body .hljs-bullet {
+      color: var(--color-prettylights-syntax-markup-list);
+    }
+    .markdown-body .hljs-emphasis {
+      color: var(--fgColor-default);
+      font-style: italic;
+    }
+    .markdown-body .hljs-strong {
+      color: var(--fgColor-default);
+      font-weight: 700;
+    }
+    .markdown-body .hljs-addition {
+      color: var(--color-prettylights-syntax-markup-inserted-text);
+      background-color: var(--color-prettylights-syntax-markup-inserted-bg);
+    }
+    .markdown-body .hljs-deletion {
+      color: var(--color-prettylights-syntax-markup-deleted-text);
+      background-color: var(--color-prettylights-syntax-markup-deleted-bg);
+    }
+
+    #crispyvibes-toast-layer {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 5000;
+      pointer-events: none;
+    }
+    .crispyvibes-toast {
+      background: color-mix(in srgb, var(--bgColor-muted) 78%, transparent);
+      border: 1px solid var(--borderColor-muted);
+      color: var(--fgColor-default);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.20);
+      border-radius: 10px;
+      font: 500 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 8px 10px;
+      max-width: 320px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 120ms ease, transform 120ms ease;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .crispyvibes-toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .crispyvibes-dialog-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 4200;
+      background: rgba(0, 0, 0, 0.16);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .crispyvibes-dialog {
+      width: min(620px, calc(100vw - 40px));
+      max-height: min(84vh, 760px);
+      background: var(--bgColor-default);
+      color: var(--fgColor-default);
+      border: 1px solid var(--borderColor-default);
+      border-radius: 12px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.24);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .crispyvibes-dialog-header {
+      padding: 14px 16px 10px 16px;
+      border-bottom: 1px solid var(--borderColor-muted);
+    }
+    .crispyvibes-dialog-title {
+      font: 600 14px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+    }
+    .crispyvibes-dialog-subtitle {
+      font: 500 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--fgColor-muted);
+      margin: 6px 0 0 0;
+    }
+    .crispyvibes-dialog-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px 16px;
+      overflow: auto;
+      min-height: 0;
+    }
+    .crispyvibes-dialog-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 16px 14px 16px;
+      border-top: 1px solid var(--borderColor-muted);
+      background: color-mix(in srgb, var(--bgColor-muted) 38%, transparent);
+    }
+    .crispyvibes-dialog-label {
+      font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--fgColor-muted);
+      margin-bottom: 4px;
+      display: block;
+    }
+    .crispyvibes-dialog-input {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 8px;
+      border: 1px solid var(--borderColor-default);
+      background: color-mix(in srgb, var(--bgColor-default) 88%, var(--bgColor-muted) 12%);
+      color: var(--fgColor-default);
+      padding: 8px 10px;
+      font: 500 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      outline: none;
+    }
+    .crispyvibes-dialog-input:focus {
+      border-color: var(--borderColor-accent-emphasis);
+      box-shadow: 0 0 0 1px var(--borderColor-accent-emphasis);
+    }
+    .crispyvibes-dialog-inline-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    .crispyvibes-dialog-validation {
+      display: none;
+      font: 600 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--fgColor-danger, #b42318);
+      background: color-mix(in srgb, var(--bgColor-danger-muted, #fff4f2) 60%, transparent);
+      border: 1px solid color-mix(in srgb, var(--borderColor-danger-emphasis, #f97066) 55%, transparent);
+      border-radius: 8px;
+      padding: 7px 9px;
+    }
+    .crispyvibes-dialog-validation.visible {
+      display: block;
+    }
+    .crispyvibes-dialog-button {
+      border: 1px solid var(--borderColor-default);
+      background: var(--bgColor-default);
+      color: var(--fgColor-default);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      cursor: pointer;
+    }
+    .crispyvibes-dialog-button:hover {
+      background: color-mix(in srgb, var(--bgColor-muted) 50%, transparent);
+    }
+    .crispyvibes-dialog-button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    .crispyvibes-dialog-button.primary {
+      border-color: var(--borderColor-accent-emphasis);
+      background: var(--bgColor-accent-emphasis, var(--fgColor-accent));
+      color: var(--fgColor-onEmphasis, white);
+    }
+    .crispyvibes-dialog-selected-text {
+      border-radius: 8px;
+      border: 1px dashed var(--borderColor-muted);
+      background: color-mix(in srgb, var(--bgColor-muted) 40%, transparent);
+      color: var(--fgColor-muted);
+      padding: 8px 10px;
+      font: 500 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .crispyvibes-image-picker-list {
+      border: 1px solid var(--borderColor-default);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bgColor-default) 92%, var(--bgColor-muted) 8%);
+      overflow: auto;
+      max-height: 260px;
+      min-height: 140px;
+    }
+    .crispyvibes-image-picker-empty {
+      color: var(--fgColor-muted);
+      font: 500 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 12px;
+    }
+    .crispyvibes-image-candidate {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--borderColor-muted) 80%, transparent);
+      background: transparent;
+      color: var(--fgColor-default);
+      padding: 9px 10px;
+      cursor: pointer;
+      font: 500 12px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .crispyvibes-image-candidate-content {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+    .crispyvibes-image-candidate-thumb {
+      width: 52px;
+      height: 40px;
+      border-radius: 6px;
+      border: 1px solid var(--borderColor-muted);
+      background: color-mix(in srgb, var(--bgColor-muted) 45%, transparent);
+      object-fit: cover;
+      display: block;
+    }
+    .crispyvibes-image-candidate:last-child {
+      border-bottom: 0;
+    }
+    .crispyvibes-image-candidate:hover {
+      background: color-mix(in srgb, var(--bgColor-muted) 52%, transparent);
+    }
+    .crispyvibes-image-candidate.active {
+      background: color-mix(in srgb, var(--bgColor-attention-muted) 45%, transparent);
+      box-shadow: inset 2px 0 0 var(--borderColor-accent-emphasis);
+    }
+    .crispyvibes-image-candidate-name {
+      display: block;
+      font-weight: 600;
+    }
+    .crispyvibes-image-candidate-path {
+      display: block;
+      color: var(--fgColor-muted);
+      margin-top: 2px;
+    }
+    .crispyvibes-image-preview {
+      border: 1px solid var(--borderColor-default);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--bgColor-muted) 35%, transparent);
+    }
+    .crispyvibes-image-preview-label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--fgColor-muted);
+      font: 600 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .crispyvibes-image-preview-value {
+      display: block;
+      font: 500 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      color: var(--fgColor-default);
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <article id="editor" class="markdown-body" contenteditable="true" spellcheck="true"></article>
+  <script src="marked.umd.js"></script>
+  <script src="highlight.min.js"></script>
+  <script src="mermaid.min.js" defer></script>
+  <script src="turndown.js"></script>
+  <script nonce="crispyvibes-editor">
+    const editor = document.getElementById("editor");
+    const turndownService = new TurndownService({
+      headingStyle: "atx",
+      codeBlockStyle: "fenced",
+      bulletListMarker: "-",
+      emDelimiter: "*"
+    });
+    // Keep table elements as raw HTML so inserted tables persist across save/reopen.
+    turndownService.keep(["table", "thead", "tbody", "tfoot", "tr", "th", "td"]);
+
+    // Convert rendered mermaid diagrams back to fenced code blocks using stored source.
+    turndownService.addRule("mermaid", {
+      filter: function(node) {
+        return node.nodeName === "PRE" && node.classList.contains("mermaid");
+      },
+      replacement: function(content, node) {
+        var source = node.getAttribute("data-mermaid-source") || content;
+        return "\n\n```mermaid\n" + source.trim() + "\n```\n\n";
+      }
+    });
+
+    marked.setOptions({
+      gfm: true,
+      breaks: true,
+      headerIds: true
+    });
+
+    var editorMode = "markdown";
+    var pendingTimer = null;
+    var htmlFrame = null;
+    var suppressSync = false;
+    var activeDialog = null;
+    var imageCandidateRequestCounter = 0;
+    var markdownBaseHref = "";
+    const imageCandidateRequestHandlers = new Map();
+
+    function applyThemeTokens(tokens) {
+      if (!tokens || typeof tokens !== "object") return;
+      const rootStyle = document.documentElement.style;
+      Object.entries(tokens).forEach(([key, value]) => {
+        if (typeof key === "string" && typeof value === "string") {
+          rootStyle.setProperty(key, value);
+        }
+      });
+    }
+
+    window.crispyvibesSetThemeTokens = function(tokens) {
+      applyThemeTokens(tokens);
+    };
+
+    window.crispyvibesReceiveImageCandidates = function(payload) {
+      if (!payload || typeof payload !== "object") return;
+      const requestID = typeof payload.requestID === "string" ? payload.requestID : "";
+      if (!requestID) return;
+      const handler = imageCandidateRequestHandlers.get(requestID);
+      if (!handler) return;
+      imageCandidateRequestHandlers.delete(requestID);
+      clearTimeout(handler.timeoutToken);
+      const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+      handler.resolve(normalizeImageCandidates(candidates));
+    };
+
+    function highlightCodeBlocks() {
+      if (!window.hljs) return;
+      editor.querySelectorAll("pre code").forEach((el) => {
+        if (el.classList.contains("language-mermaid")) return;
+        hljs.highlightElement(el);
+      });
+    }
+
+    var mermaidCounter = 0;
+    var mermaidReady = false;
+
+    function initMermaid() {
+      if (window.mermaid && !mermaidReady) {
+        mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
+        mermaidReady = true;
+        // Re-render any pending mermaid blocks from initial load
+        renderMermaidBlocks();
+      }
+    }
+    window.addEventListener("load", initMermaid);
+
+    function renderMermaidBlocks() {
+      if (!mermaidReady) return;
+      const blocks = editor.querySelectorAll('pre code.language-mermaid');
+      if (blocks.length === 0) return;
+      suppressSync = true;
+      blocks.forEach((el) => {
+        const pre = el.parentElement;
+        const source = el.textContent;
+        const container = document.createElement("pre");
+        container.className = "mermaid";
+        container.setAttribute("data-mermaid-source", source);
+        container.textContent = source;
+        container.addEventListener("click", onMermaidClick);
+        pre.replaceWith(container);
+      });
+      mermaid.run({ querySelector: "pre.mermaid:not([data-processed])" }).then(() => {
+        suppressSync = false;
+      }).catch(() => {
+        suppressSync = false;
+      });
+    }
+
+    function onMermaidClick(e) {
+      const container = e.currentTarget;
+      const source = container.getAttribute("data-mermaid-source") || "";
+      // Build editing wrapper
+      const wrapper = document.createElement("div");
+      wrapper.className = "mermaid-editing";
+      wrapper.setAttribute("contenteditable", "false");
+      const btn = document.createElement("button");
+      btn.textContent = "Done";
+      btn.className = "mermaid-done-btn";
+      const code = document.createElement("code");
+      code.className = "language-mermaid";
+      code.setAttribute("contenteditable", "true");
+      code.textContent = source;
+      const pre = document.createElement("pre");
+      pre.appendChild(code);
+      wrapper.appendChild(btn);
+      wrapper.appendChild(pre);
+      container.replaceWith(wrapper);
+      code.focus();
+      btn.addEventListener("click", function() {
+        var newSource = code.textContent;
+        var newContainer = document.createElement("pre");
+        newContainer.className = "mermaid";
+        newContainer.setAttribute("data-mermaid-source", newSource);
+        newContainer.textContent = newSource;
+        newContainer.addEventListener("click", onMermaidClick);
+        wrapper.replaceWith(newContainer);
+        mermaid.run({ nodes: [newContainer] }).catch(() => {});
+      });
+    }
+
+    function renderMarkdown(markdown, baseHref) {
+      suppressSync = true;
+      teardownHTMLFrame();
+      editor.setAttribute("contenteditable", "true");
+      editor.className = "markdown-body";
+      markdownBaseHref = baseHref || "";
+      const html = window.marked ? marked.parse(markdown || "") : (markdown || "");
+      editor.innerHTML = html;
+      resolveMarkdownImageSources(markdownBaseHref);
+      highlightCodeBlocks();
+      var hasMermaid = editor.querySelectorAll('pre code.language-mermaid').length > 0;
+      if (hasMermaid) {
+        renderMermaidBlocks(); // suppressSync managed inside
+      } else {
+        suppressSync = false;
+      }
+    }
+
+    function renderHTML(html, baseHref) {
+      suppressSync = true;
+      markdownBaseHref = "";
+      editor.setAttribute("contenteditable", "false");
+      editor.className = "html-host";
+      ensureHTMLFrame();
+
+      const htmlWithBase = injectBaseTag(html || "", baseHref || "");
+      const frameDoc = htmlFrame.contentDocument;
+      if (frameDoc) {
+        frameDoc.open();
+        frameDoc.write(htmlWithBase);
+        frameDoc.close();
+      }
+      attachHTMLFrameListeners();
+      resizeHTMLFrame();
+      suppressSync = false;
+      scheduleSync();
+
+      // Fallback so sync cannot stay blocked if load callbacks are missed.
+      setTimeout(() => {
+        suppressSync = false;
+      }, 350);
+    }
+
+    function syncToNative() {
+      if (suppressSync) return;
+      if (!window.webkit || !window.webkit.messageHandlers || !window.webkit.messageHandlers.contentChanged) return;
+
+      if (editorMode === "html") {
+        window.webkit.messageHandlers.contentChanged.postMessage(currentHTMLFromFrame());
+      } else {
+        const markdown = turndownService.turndown(editor.innerHTML);
+        window.webkit.messageHandlers.contentChanged.postMessage(markdown);
+      }
+    }
+
+    function scheduleSync() {
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+      }
+      pendingTimer = setTimeout(syncToNative, 220);
+    }
+
+    window.crispyvibesSetMarkdown = function(markdown, baseHref) {
+      editorMode = "markdown";
+      renderMarkdown(markdown || "", baseHref || "");
+    };
+
+    window.crispyvibesSetHTML = function(html, baseHref) {
+      editorMode = "html";
+      renderHTML(html || "", baseHref || "");
+    };
+
+    window.crispyvibesApplyFormattingCommand = function(command) {
+      applyFormattingCommand(command);
+    };
+
+    function ensureHTMLFrame() {
+      if (htmlFrame) return;
+      htmlFrame = document.createElement("iframe");
+      htmlFrame.id = "html-frame";
+      htmlFrame.spellcheck = true;
+      htmlFrame.setAttribute("title", "HTML Document");
+      editor.replaceChildren(htmlFrame);
+      resizeHTMLFrame();
+    }
+
+    function teardownHTMLFrame() {
+      if (!htmlFrame) return;
+      htmlFrame.remove();
+      htmlFrame = null;
+    }
+
+    function resizeHTMLFrame() {
+      if (!htmlFrame) return;
+      htmlFrame.style.minHeight = `${Math.max(window.innerHeight, 280)}px`;
+    }
+
+    function attachHTMLFrameListeners() {
+      if (!htmlFrame || !htmlFrame.contentDocument) return;
+      const doc = htmlFrame.contentDocument;
+
+      try {
+        doc.designMode = "on";
+      } catch (_) {
+        // Keep best-effort behavior if designMode cannot be enabled.
+      }
+
+      doc.addEventListener("input", scheduleSync);
+      doc.addEventListener("keyup", scheduleSync);
+      doc.addEventListener("paste", () => setTimeout(scheduleSync, 0));
+      doc.addEventListener("blur", syncToNative, true);
+    }
+
+    function currentHTMLFromFrame() {
+      if (!htmlFrame || !htmlFrame.contentDocument) return "";
+      const doc = htmlFrame.contentDocument;
+      const doctype = serializeDoctype(doc.doctype);
+      const html = doc.documentElement ? doc.documentElement.outerHTML : "";
+      return doctype ? `${doctype}\n${html}` : html;
+    }
+
+    function editingDocument() {
+      if (editorMode === "html") {
+        return htmlFrame && htmlFrame.contentDocument ? htmlFrame.contentDocument : null;
+      }
+      return document;
+    }
+
+    function focusEditingSurface(doc) {
+      if (!doc) return;
+      if (editorMode === "html") {
+        if (doc.body) {
+          doc.body.focus();
+        }
+      } else {
+        editor.focus();
+      }
+    }
+
+    function execEditingCommand(doc, command, value) {
+      if (!doc || !doc.execCommand) return false;
+      try {
+        return doc.execCommand(command, false, value);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function ensureToastLayer() {
+      let toastLayer = document.getElementById("crispyvibes-toast-layer");
+      if (toastLayer) return toastLayer;
+      toastLayer = document.createElement("div");
+      toastLayer.id = "crispyvibes-toast-layer";
+      toastLayer.setAttribute("data-accessibility-id", "editor.markdown.toast.layer");
+      document.body.appendChild(toastLayer);
+      return toastLayer;
+    }
+
+    function showSubtleNotification(message) {
+      const text = String(message || "").trim();
+      if (!text) return;
+      const layer = ensureToastLayer();
+      const toast = document.createElement("div");
+      toast.className = "crispyvibes-toast";
+      toast.textContent = text;
+      toast.setAttribute("role", "status");
+      toast.setAttribute("aria-live", "polite");
+      toast.setAttribute("data-accessibility-id", "editor.markdown.toast.message");
+      layer.appendChild(toast);
+      requestAnimationFrame(() => {
+        toast.classList.add("visible");
+      });
+      setTimeout(() => {
+        toast.classList.remove("visible");
+        setTimeout(() => toast.remove(), 140);
+      }, 2100);
+    }
+
+    function closeActiveDialog() {
+      if (!activeDialog) return;
+      activeDialog.close();
+      activeDialog = null;
+    }
+
+    function openDialog(options) {
+      closeActiveDialog();
+      const backdrop = document.createElement("div");
+      backdrop.className = "crispyvibes-dialog-backdrop";
+      if (options.id) {
+        backdrop.id = options.id;
+      }
+      if (options.accessibilityID) {
+        backdrop.setAttribute("data-accessibility-id", options.accessibilityID);
+      }
+      backdrop.setAttribute("role", "dialog");
+      backdrop.setAttribute("aria-modal", "true");
+
+      const panel = document.createElement("div");
+      panel.className = "crispyvibes-dialog";
+      panel.tabIndex = -1;
+
+      const header = document.createElement("div");
+      header.className = "crispyvibes-dialog-header";
+      const titleNode = document.createElement("h2");
+      titleNode.className = "crispyvibes-dialog-title";
+      titleNode.textContent = options.title || "";
+      header.appendChild(titleNode);
+      if (options.subtitle) {
+        const subtitleNode = document.createElement("p");
+        subtitleNode.className = "crispyvibes-dialog-subtitle";
+        subtitleNode.textContent = options.subtitle;
+        header.appendChild(subtitleNode);
+      }
+
+      const body = document.createElement("div");
+      body.className = "crispyvibes-dialog-body";
+
+      const footer = document.createElement("div");
+      footer.className = "crispyvibes-dialog-footer";
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.className = "crispyvibes-dialog-button";
+      cancelButton.textContent = options.cancelLabel || "Cancel";
+      cancelButton.setAttribute("data-accessibility-id", options.cancelAccessibilityID || "editor.markdown.dialog.cancel");
+
+      const applyButton = document.createElement("button");
+      applyButton.type = "button";
+      applyButton.className = "crispyvibes-dialog-button primary";
+      applyButton.textContent = options.applyLabel || "Apply";
+      applyButton.setAttribute("data-accessibility-id", options.applyAccessibilityID || "editor.markdown.dialog.apply");
+
+      footer.appendChild(cancelButton);
+      footer.appendChild(applyButton);
+
+      panel.appendChild(header);
+      panel.appendChild(body);
+      panel.appendChild(footer);
+      backdrop.appendChild(panel);
+      document.body.appendChild(backdrop);
+
+      let didClose = false;
+      const api = {
+        panel,
+        body,
+        applyButton,
+        cancelButton,
+        close: () => {
+          if (didClose) return;
+          didClose = true;
+          backdrop.remove();
+          if (activeDialog === api) {
+            activeDialog = null;
+          }
+        },
+        isClosed: () => didClose,
+        setApplyEnabled: (enabled) => {
+          applyButton.disabled = !enabled;
+        }
+      };
+
+      function handleCancel() {
+        api.close();
+        if (typeof options.onCancel === "function") {
+          options.onCancel();
+        }
+      }
+
+      function handleApply() {
+        if (typeof options.onApply !== "function") {
+          api.close();
+          return;
+        }
+        const shouldClose = options.onApply(api) !== false;
+        if (shouldClose) {
+          api.close();
+        }
+      }
+
+      cancelButton.addEventListener("click", handleCancel);
+      applyButton.addEventListener("click", handleApply);
+      backdrop.addEventListener("click", (event) => {
+        if (event.target === backdrop) {
+          handleCancel();
+        }
+      });
+      panel.addEventListener("keydown", (event) => {
+        if (event.isComposing) return;
+        if (event.key === "Escape") {
+          event.preventDefault();
+          handleCancel();
+          return;
+        }
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          handleApply();
+        }
+      });
+
+      if (typeof options.buildBody === "function") {
+        options.buildBody(body, api);
+      }
+
+      activeDialog = api;
+      requestAnimationFrame(() => {
+        const focusTarget = options.initialFocusElement || panel;
+        if (focusTarget && typeof focusTarget.focus === "function") {
+          focusTarget.focus();
+        }
+      });
+      return api;
+    }
+
+    function normalizeImageCandidates(candidates) {
+      return candidates
+        .map((candidate) => {
+          if (!candidate || typeof candidate !== "object") return null;
+          const filename = String(candidate.filename || "").trim();
+          const relativePath = String(candidate.relativePath || "").trim();
+          const insertPath = String(candidate.insertPath || relativePath || "").trim();
+          const previewURL = String(candidate.previewURL || "").trim();
+          if (!filename || !relativePath || !insertPath) return null;
+          return { filename, relativePath, insertPath, previewURL };
+        })
+        .filter((candidate) => candidate !== null);
+    }
+
+    function requestImageCandidatesFromNative() {
+      return new Promise((resolve) => {
+        if (!window.webkit || !window.webkit.messageHandlers || !window.webkit.messageHandlers.requestImageCandidates) {
+          resolve([]);
+          return;
+        }
+        const requestID = `img_${Date.now()}_${++imageCandidateRequestCounter}`;
+        const timeoutToken = setTimeout(() => {
+          if (!imageCandidateRequestHandlers.has(requestID)) return;
+          imageCandidateRequestHandlers.delete(requestID);
+          resolve([]);
+          showSubtleNotification("Image search timed out. Try again.");
+        }, 9000);
+        imageCandidateRequestHandlers.set(requestID, { resolve, timeoutToken });
+        window.webkit.messageHandlers.requestImageCandidates.postMessage({ requestID });
+      });
+    }
+
+    function markdownSelectionSnapshot() {
+      return markdownRangeSnapshot({ requireNonEmptySelection: true });
+    }
+
+    function markdownCaretSnapshot() {
+      return markdownRangeSnapshot({ requireNonEmptySelection: false });
+    }
+
+    function markdownRangeSnapshot(options) {
+      const requireNonEmptySelection = Boolean(options && options.requireNonEmptySelection);
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return null;
+      const range = selection.getRangeAt(0);
+      if (!range) return null;
+      if (!editor.contains(range.commonAncestorContainer)) return null;
+      const selectedText = selection.toString().trim();
+      if (requireNonEmptySelection) {
+        if (range.collapsed) return null;
+        if (!selectedText) return null;
+      }
+      return {
+        range: range.cloneRange(),
+        selectedText
+      };
+    }
+
+    function restoreMarkdownSelection(snapshot, options) {
+      if (!snapshot || !snapshot.range) return false;
+      const selection = window.getSelection();
+      if (!selection) return false;
+      try {
+        selection.removeAllRanges();
+        selection.addRange(snapshot.range);
+      } catch (_) {
+        return false;
+      }
+      const requireNonCollapsed = Boolean(options && options.requireNonCollapsed);
+      if (requireNonCollapsed) {
+        return !selection.isCollapsed;
+      }
+      return true;
+    }
+
+    function applyMarkdownMutation() {
+      resolveMarkdownImageSources(markdownBaseHref || "");
+      highlightCodeBlocks();
+      scheduleSync();
+    }
+
+    function openMarkdownLinkDialog(doc) {
+      const selectionSnapshot = markdownSelectionSnapshot();
+      if (!selectionSnapshot) {
+        showSubtleNotification("Select text first to add a link.");
+        return;
+      }
+
+      const selectedTextNode = document.createElement("div");
+      selectedTextNode.className = "crispyvibes-dialog-selected-text";
+      selectedTextNode.textContent = selectionSnapshot.selectedText;
+      selectedTextNode.setAttribute("data-accessibility-id", "editor.markdown.link.selection");
+
+      const urlInput = document.createElement("input");
+      urlInput.type = "text";
+      urlInput.className = "crispyvibes-dialog-input";
+      urlInput.placeholder = "https://example.com";
+      urlInput.value = "https://";
+      urlInput.id = "markdown-link-url-input";
+      urlInput.setAttribute("data-accessibility-id", "editor.markdown.link.url");
+
+      const validationNode = document.createElement("div");
+      validationNode.className = "crispyvibes-dialog-validation";
+      validationNode.setAttribute("data-accessibility-id", "editor.markdown.link.validation");
+
+      function setValidationMessage(message) {
+        const text = String(message || "").trim();
+        validationNode.textContent = text;
+        if (text) {
+          validationNode.classList.add("visible");
+        } else {
+          validationNode.classList.remove("visible");
+        }
+      }
+
+      openDialog({
+        id: "markdown-link-dialog",
+        accessibilityID: "editor.markdown.link.dialog",
+        title: "Insert Link",
+        subtitle: "Enter a destination URL for the selected text.",
+        applyLabel: "Apply",
+        applyAccessibilityID: "editor.markdown.link.apply",
+        cancelAccessibilityID: "editor.markdown.link.cancel",
+        buildBody: (body) => {
+          const selectionLabel = document.createElement("label");
+          selectionLabel.className = "crispyvibes-dialog-label";
+          selectionLabel.textContent = "Selected Text";
+          selectionLabel.htmlFor = "markdown-link-selected-text";
+          selectionLabel.setAttribute("data-accessibility-id", "editor.markdown.link.selection.label");
+          selectedTextNode.id = "markdown-link-selected-text";
+          body.appendChild(selectionLabel);
+          body.appendChild(selectedTextNode);
+
+          const urlLabel = document.createElement("label");
+          urlLabel.className = "crispyvibes-dialog-label";
+          urlLabel.textContent = "URL";
+          urlLabel.htmlFor = urlInput.id;
+          urlLabel.setAttribute("data-accessibility-id", "editor.markdown.link.url.label");
+          body.appendChild(urlLabel);
+          body.appendChild(urlInput);
+          body.appendChild(validationNode);
+        },
+        initialFocusElement: urlInput,
+        onApply: () => {
+          setValidationMessage("");
+          const url = urlInput.value.trim();
+          if (!url) {
+            setValidationMessage("Enter a URL to apply the link.");
+            urlInput.focus();
+            return false;
+          }
+
+          const restored = restoreMarkdownSelection(selectionSnapshot, { requireNonCollapsed: true });
+          const liveSelection = markdownSelectionSnapshot();
+          if (!restored || !liveSelection) {
+            showSubtleNotification("Select text first to add a link.");
+            return true;
+          }
+          focusEditingSurface(doc);
+          const linked = execEditingCommand(doc, "createLink", url);
+          if (!linked) {
+            execEditingCommand(
+              doc,
+              "insertHTML",
+              `<a href="${escapeHTMLAttribute(url)}">${escapeHTML(selectionSnapshot.selectedText)}</a>`
+            );
+          }
+          applyMarkdownMutation();
+          return true;
+        }
+      });
+
+      urlInput.addEventListener("input", () => {
+        if (urlInput.value.trim()) {
+          setValidationMessage("");
+        }
+      });
+    }
+
+    function defaultAltTextForFilename(filename) {
+      return String(filename || "")
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function openMarkdownImageDialog(doc) {
+      const insertionSnapshot = markdownCaretSnapshot();
+      const searchInput = document.createElement("input");
+      searchInput.type = "search";
+      searchInput.className = "crispyvibes-dialog-input";
+      searchInput.placeholder = "Search by filename";
+      searchInput.id = "markdown-image-search";
+      searchInput.setAttribute("data-accessibility-id", "editor.markdown.image.search");
+
+      const list = document.createElement("div");
+      list.className = "crispyvibes-image-picker-list";
+      list.id = "markdown-image-list";
+      list.setAttribute("role", "listbox");
+      list.tabIndex = 0;
+      list.setAttribute("data-accessibility-id", "editor.markdown.image.list");
+
+      const altInput = document.createElement("input");
+      altInput.type = "text";
+      altInput.className = "crispyvibes-dialog-input";
+      altInput.placeholder = "Alternative text";
+      altInput.id = "markdown-image-alt";
+      altInput.setAttribute("data-accessibility-id", "editor.markdown.image.alt");
+
+      const previewNode = document.createElement("div");
+      previewNode.className = "crispyvibes-image-preview";
+      previewNode.setAttribute("data-accessibility-id", "editor.markdown.image.preview");
+
+      const previewLabel = document.createElement("span");
+      previewLabel.className = "crispyvibes-image-preview-label";
+      previewLabel.textContent = "Insertion Preview";
+
+      const previewValue = document.createElement("span");
+      previewValue.className = "crispyvibes-image-preview-value";
+      previewValue.textContent = "Select an image to preview markdown insertion.";
+
+      previewNode.appendChild(previewLabel);
+      previewNode.appendChild(previewValue);
+
+      let allCandidates = [];
+      let filteredCandidates = [];
+      let selectedCandidate = null;
+      let userEditedAlt = false;
+      let lastAutoAlt = "";
+
+      const pickerDialog = openDialog({
+        id: "markdown-image-dialog",
+        accessibilityID: "editor.markdown.image.dialog",
+        title: "Insert Image",
+        subtitle: "Search images in this markdown file's folder and descendants.",
+        applyLabel: "Insert",
+        applyAccessibilityID: "editor.markdown.image.apply",
+        cancelAccessibilityID: "editor.markdown.image.cancel",
+        buildBody: (body, dialogAPI) => {
+          const searchLabel = document.createElement("label");
+          searchLabel.className = "crispyvibes-dialog-label";
+          searchLabel.textContent = "Find Image";
+          searchLabel.htmlFor = searchInput.id;
+          searchLabel.setAttribute("data-accessibility-id", "editor.markdown.image.search.label");
+          body.appendChild(searchLabel);
+          body.appendChild(searchInput);
+
+          const listLabel = document.createElement("label");
+          listLabel.className = "crispyvibes-dialog-label";
+          listLabel.textContent = "Candidates";
+          listLabel.htmlFor = list.id;
+          listLabel.setAttribute("data-accessibility-id", "editor.markdown.image.list.label");
+          body.appendChild(listLabel);
+          body.appendChild(list);
+
+          const altLabel = document.createElement("label");
+          altLabel.className = "crispyvibes-dialog-label";
+          altLabel.textContent = "Alt Text";
+          altLabel.htmlFor = altInput.id;
+          altLabel.setAttribute("data-accessibility-id", "editor.markdown.image.alt.label");
+          body.appendChild(altLabel);
+          body.appendChild(altInput);
+          body.appendChild(previewNode);
+
+          dialogAPI.setApplyEnabled(false);
+        },
+        initialFocusElement: searchInput,
+        onApply: () => {
+          if (!selectedCandidate) {
+            showSubtleNotification("Select an image to insert.");
+            return false;
+          }
+          const insertPath = String(selectedCandidate.insertPath || "").trim();
+          if (!insertPath) {
+            showSubtleNotification("Selected image path is invalid.");
+            return false;
+          }
+          const alt = altInput.value.trim();
+          const html = `<img src="${escapeHTMLAttribute(insertPath)}" alt="${escapeHTMLAttribute(alt)}" />`;
+          if (insertionSnapshot) {
+            restoreMarkdownSelection(insertionSnapshot);
+          }
+          focusEditingSurface(doc);
+          execEditingCommand(doc, "insertHTML", `${html}<p></p>`);
+          applyMarkdownMutation();
+          return true;
+        }
+      });
+
+      function updateInsertionPreview() {
+        if (!selectedCandidate) {
+          previewValue.textContent = "Select an image to preview markdown insertion.";
+          return;
+        }
+        const insertPath = String(selectedCandidate.insertPath || "").trim();
+        const candidateAlt = altInput.value.trim() || defaultAltTextForFilename(selectedCandidate.filename);
+        previewValue.textContent = `![${candidateAlt}](${insertPath})`;
+      }
+
+      function applyDefaultAltFromCandidate(candidate) {
+        const candidateAlt = defaultAltTextForFilename(candidate.filename);
+        lastAutoAlt = candidateAlt;
+        if (!userEditedAlt || !altInput.value.trim()) {
+          altInput.value = candidateAlt;
+          userEditedAlt = false;
+        }
+        updateInsertionPreview();
+      }
+
+      function setSelectedCandidate(candidate) {
+        selectedCandidate = candidate;
+        applyDefaultAltFromCandidate(candidate);
+        pickerDialog.setApplyEnabled(true);
+        renderCandidates();
+        scrollSelectedCandidateIntoView();
+      }
+
+      function selectedCandidateIndex() {
+        if (!selectedCandidate) return -1;
+        return filteredCandidates.findIndex(
+          (candidate) => candidate.relativePath === selectedCandidate.relativePath
+        );
+      }
+
+      function moveSelectionBy(delta) {
+        if (filteredCandidates.length === 0) return;
+        const currentIndex = selectedCandidateIndex();
+        const baseIndex = currentIndex < 0 ? 0 : currentIndex;
+        const nextIndex = Math.min(
+          filteredCandidates.length - 1,
+          Math.max(0, baseIndex + delta)
+        );
+        setSelectedCandidate(filteredCandidates[nextIndex]);
+      }
+
+      function scrollSelectedCandidateIntoView() {
+        const activeNode = list.querySelector(".crispyvibes-image-candidate.active");
+        if (activeNode && typeof activeNode.scrollIntoView === "function") {
+          activeNode.scrollIntoView({ block: "nearest" });
+        }
+      }
+
+      function renderEmptyState(message) {
+        list.replaceChildren();
+        const emptyNode = document.createElement("div");
+        emptyNode.className = "crispyvibes-image-picker-empty";
+        emptyNode.textContent = message;
+        emptyNode.setAttribute("data-accessibility-id", "editor.markdown.image.empty");
+        list.appendChild(emptyNode);
+        updateInsertionPreview();
+      }
+
+      function renderCandidates() {
+        list.replaceChildren();
+        if (filteredCandidates.length === 0) {
+          const emptyMessage = allCandidates.length === 0 ? "No image files found." : "No matching images.";
+          renderEmptyState(emptyMessage);
+          if (!selectedCandidate) {
+            pickerDialog.setApplyEnabled(false);
+          }
+          return;
+        }
+
+        filteredCandidates.forEach((candidate) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "crispyvibes-image-candidate";
+          const isActive = selectedCandidate && selectedCandidate.relativePath === candidate.relativePath;
+          if (isActive) {
+            button.classList.add("active");
+            button.setAttribute("aria-selected", "true");
+          } else {
+            button.setAttribute("aria-selected", "false");
+          }
+          button.setAttribute("role", "option");
+          button.tabIndex = isActive ? 0 : -1;
+          button.setAttribute("data-accessibility-id", "editor.markdown.image.candidate");
+
+          const contentNode = document.createElement("div");
+          contentNode.className = "crispyvibes-image-candidate-content";
+
+          const thumbNode = document.createElement("img");
+          thumbNode.className = "crispyvibes-image-candidate-thumb";
+          thumbNode.alt = "";
+          thumbNode.setAttribute("aria-hidden", "true");
+          if (candidate.previewURL) {
+            thumbNode.src = candidate.previewURL;
+          }
+          thumbNode.addEventListener("error", () => {
+            thumbNode.style.visibility = "hidden";
+          });
+
+          const metaNode = document.createElement("div");
+          const filenameNode = document.createElement("span");
+          filenameNode.className = "crispyvibes-image-candidate-name";
+          filenameNode.textContent = candidate.filename;
+          const pathNode = document.createElement("span");
+          pathNode.className = "crispyvibes-image-candidate-path";
+          pathNode.textContent = candidate.relativePath;
+
+          metaNode.appendChild(filenameNode);
+          metaNode.appendChild(pathNode);
+          contentNode.appendChild(thumbNode);
+          contentNode.appendChild(metaNode);
+          button.appendChild(contentNode);
+          button.addEventListener("click", () => {
+            setSelectedCandidate(candidate);
+          });
+          button.addEventListener("keydown", (event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              moveSelectionBy(1);
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              moveSelectionBy(-1);
+            }
+          });
+          button.addEventListener("dblclick", () => {
+            pickerDialog.applyButton.click();
+          });
+          list.appendChild(button);
+        });
+        updateInsertionPreview();
+      }
+
+      function filterCandidates() {
+        const query = searchInput.value.trim().toLowerCase();
+        if (!query) {
+          filteredCandidates = allCandidates.slice();
+        } else {
+          filteredCandidates = allCandidates.filter((candidate) => {
+            return candidate.filename.toLowerCase().includes(query)
+              || candidate.relativePath.toLowerCase().includes(query);
+          });
+        }
+
+        if (selectedCandidate) {
+          const selectedStillVisible = filteredCandidates.some(
+            (candidate) => candidate.relativePath === selectedCandidate.relativePath
+          );
+          if (!selectedStillVisible) {
+            selectedCandidate = null;
+          }
+        }
+
+        if (!selectedCandidate && filteredCandidates.length > 0) {
+          setSelectedCandidate(filteredCandidates[0]);
+          return;
+        }
+
+        pickerDialog.setApplyEnabled(Boolean(selectedCandidate));
+        renderCandidates();
+      }
+
+      searchInput.addEventListener("input", filterCandidates);
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          moveSelectionBy(1);
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          moveSelectionBy(-1);
+        }
+      });
+      list.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          moveSelectionBy(1);
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          moveSelectionBy(-1);
+        }
+      });
+      altInput.addEventListener("input", () => {
+        userEditedAlt = altInput.value !== lastAutoAlt;
+        updateInsertionPreview();
+      });
+
+      renderEmptyState("Loading images...");
+      requestImageCandidatesFromNative().then((candidates) => {
+        if (pickerDialog.isClosed()) return;
+        allCandidates = candidates;
+        filterCandidates();
+      });
+    }
+
+    function parsePositiveInteger(rawValue) {
+      const value = Number.parseInt(String(rawValue || "").trim(), 10);
+      if (!Number.isFinite(value)) return null;
+      if (!Number.isInteger(value)) return null;
+      if (value < 1) return null;
+      return value;
+    }
+
+    function previousElementSiblingSkippingWhitespace(node) {
+      let sibling = node ? node.previousSibling : null;
+      while (sibling) {
+        if (sibling.nodeType === Node.TEXT_NODE && !String(sibling.textContent || "").trim()) {
+          sibling = sibling.previousSibling;
+          continue;
+        }
+        if (sibling.nodeType === Node.ELEMENT_NODE) {
+          return sibling;
+        }
+        sibling = sibling.previousSibling;
+      }
+      return null;
+    }
+
+    function nextElementSiblingSkippingWhitespace(node) {
+      let sibling = node ? node.nextSibling : null;
+      while (sibling) {
+        if (sibling.nodeType === Node.TEXT_NODE && !String(sibling.textContent || "").trim()) {
+          sibling = sibling.nextSibling;
+          continue;
+        }
+        if (sibling.nodeType === Node.ELEMENT_NODE) {
+          return sibling;
+        }
+        sibling = sibling.nextSibling;
+      }
+      return null;
+    }
+
+    function closestEditableBlockForNode(node) {
+      const element = node && node.nodeType === Node.ELEMENT_NODE ? node : (node ? node.parentElement : null);
+      if (!element) return null;
+      return element.closest("p,div,li,blockquote,pre,h1,h2,h3,h4,h5,h6");
+    }
+
+    function closestTableForNode(node) {
+      const element = node && node.nodeType === Node.ELEMENT_NODE ? node : (node ? node.parentElement : null);
+      if (!element) return null;
+      return element.closest("table");
+    }
+
+    function closestTableCellForNode(node) {
+      const element = node && node.nodeType === Node.ELEMENT_NODE ? node : (node ? node.parentElement : null);
+      if (!element) return null;
+      return element.closest("th,td");
+    }
+
+    function isCaretAtStartOfNode(range, node) {
+      if (!range || !range.collapsed || !node) return false;
+      try {
+        const probe = range.cloneRange();
+        probe.selectNodeContents(node);
+        probe.setEnd(range.startContainer, range.startOffset);
+        return !String(probe.toString() || "").length;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function isCaretAtEndOfNode(range, node) {
+      if (!range || !range.collapsed || !node) return false;
+      try {
+        const probe = range.cloneRange();
+        probe.selectNodeContents(node);
+        probe.setStart(range.startContainer, range.startOffset);
+        return !String(probe.toString() || "").length;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function isCaretAtBlockBoundary(range, block, atStart) {
+      return atStart
+        ? isCaretAtStartOfNode(range, block)
+        : isCaretAtEndOfNode(range, block);
+    }
+
+    function ensureEditorHasCaretHost() {
+      if (!editor.firstElementChild) {
+        const paragraph = document.createElement("p");
+        paragraph.innerHTML = "<br>";
+        editor.appendChild(paragraph);
+      }
+    }
+
+    function placeCaretAtStart(element) {
+      if (!element) return;
+      const target = element.nodeType === Node.ELEMENT_NODE ? element : element.parentElement;
+      if (!target) return;
+      const selection = window.getSelection();
+      if (!selection) return;
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    function selectedSingleTable(range) {
+      if (!range || range.collapsed) return null;
+      if (range.startContainer !== range.endContainer) return null;
+      if (range.startContainer.nodeType !== Node.ELEMENT_NODE) return null;
+      if (range.endOffset - range.startOffset !== 1) return null;
+
+      const container = range.startContainer;
+      const candidate = container.childNodes[range.startOffset];
+      if (!candidate || candidate.nodeType !== Node.ELEMENT_NODE) return null;
+      return candidate.tagName === "TABLE" ? candidate : null;
+    }
+
+    function removeTableAndRestoreCaret(table, preferredFocusTarget) {
+      if (!table || !editor.contains(table)) return false;
+      const fallbackFocusTarget =
+        preferredFocusTarget ||
+        table.nextElementSibling ||
+        table.previousElementSibling ||
+        editor;
+      table.remove();
+      ensureEditorHasCaretHost();
+      placeCaretAtStart(fallbackFocusTarget === editor ? editor.firstElementChild : fallbackFocusTarget);
+      applyMarkdownMutation();
+      return true;
+    }
+
+    function removeAdjacentTableForDeleteKey(event) {
+      if (editorMode !== "markdown") return false;
+      if (event.isComposing) return false;
+      if (event.key !== "Backspace" && event.key !== "Delete") return false;
+
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return false;
+      const range = selection.getRangeAt(0);
+
+      // Allow deleting a table when it is directly selected as a single node.
+      const directlySelectedTable = selectedSingleTable(range);
+      if (directlySelectedTable && editor.contains(directlySelectedTable)) {
+        event.preventDefault();
+        return removeTableAndRestoreCaret(directlySelectedTable);
+      }
+
+      if (!range.collapsed) return false;
+
+      const activeTable = closestTableForNode(range.startContainer);
+      if (activeTable && editor.contains(activeTable)) {
+        const activeCell = closestTableCellForNode(range.startContainer);
+        const cells = Array.from(activeTable.querySelectorAll("th,td"));
+        const firstCell = cells.length > 0 ? cells[0] : null;
+        const lastCell = cells.length > 0 ? cells[cells.length - 1] : null;
+
+        const modifierDeleteIntent = event.metaKey || event.ctrlKey;
+        if (modifierDeleteIntent) {
+          event.preventDefault();
+          return removeTableAndRestoreCaret(activeTable);
+        }
+
+        if (event.key === "Backspace" &&
+            activeCell &&
+            firstCell &&
+            activeCell === firstCell &&
+            isCaretAtStartOfNode(range, activeCell)) {
+          event.preventDefault();
+          return removeTableAndRestoreCaret(activeTable);
+        }
+
+        if (event.key === "Delete" &&
+            activeCell &&
+            lastCell &&
+            activeCell === lastCell &&
+            isCaretAtEndOfNode(range, activeCell)) {
+          event.preventDefault();
+          return removeTableAndRestoreCaret(activeTable);
+        }
+      }
+
+      const block = closestEditableBlockForNode(range.startContainer);
+      if (!block || !editor.contains(block)) return false;
+
+      if (event.key === "Backspace" && isCaretAtBlockBoundary(range, block, true)) {
+        const previousElement = previousElementSiblingSkippingWhitespace(block);
+        if (previousElement && previousElement.tagName === "TABLE") {
+          event.preventDefault();
+          previousElement.remove();
+          ensureEditorHasCaretHost();
+          placeCaretAtStart(block);
+          applyMarkdownMutation();
+          return true;
+        }
+      }
+
+      if (event.key === "Delete" && isCaretAtBlockBoundary(range, block, false)) {
+        const nextElement = nextElementSiblingSkippingWhitespace(block);
+        if (nextElement && nextElement.tagName === "TABLE") {
+          event.preventDefault();
+          nextElement.remove();
+          ensureEditorHasCaretHost();
+          placeCaretAtStart(block);
+          applyMarkdownMutation();
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function markdownTableHTML(rows, columns) {
+      const headerCells = Array.from({ length: columns }, (_, idx) => `<th>Header ${idx + 1}</th>`).join("");
+      const bodyRows = Array.from({ length: rows }, (_, rowIdx) => {
+        const cells = Array.from({ length: columns }, (_, colIdx) => `<td>Row ${rowIdx + 1} Col ${colIdx + 1}</td>`).join("");
+        return `<tr>${cells}</tr>`;
+      }).join("");
+      return `<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table><p></p>`;
+    }
+
+    function openMarkdownTableDialog(doc) {
+      const insertionSnapshot = markdownCaretSnapshot();
+      const rowInput = document.createElement("input");
+      rowInput.type = "number";
+      rowInput.className = "crispyvibes-dialog-input";
+      rowInput.min = "1";
+      rowInput.max = "50";
+      rowInput.step = "1";
+      rowInput.value = "3";
+      rowInput.id = "markdown-table-rows";
+      rowInput.setAttribute("data-accessibility-id", "editor.markdown.table.rows");
+
+      const columnInput = document.createElement("input");
+      columnInput.type = "number";
+      columnInput.className = "crispyvibes-dialog-input";
+      columnInput.min = "1";
+      columnInput.max = "20";
+      columnInput.step = "1";
+      columnInput.value = "3";
+      columnInput.id = "markdown-table-cols";
+      columnInput.setAttribute("data-accessibility-id", "editor.markdown.table.cols");
+
+      const validationNode = document.createElement("div");
+      validationNode.className = "crispyvibes-dialog-validation";
+      validationNode.setAttribute("data-accessibility-id", "editor.markdown.table.validation");
+
+      function setValidationMessage(message) {
+        const text = String(message || "").trim();
+        validationNode.textContent = text;
+        if (text) {
+          validationNode.classList.add("visible");
+        } else {
+          validationNode.classList.remove("visible");
+        }
+      }
+
+      openDialog({
+        id: "markdown-table-dialog",
+        accessibilityID: "editor.markdown.table.dialog",
+        title: "Insert Table",
+        subtitle: "Choose body rows and columns. Header row is added automatically.",
+        applyLabel: "Insert",
+        applyAccessibilityID: "editor.markdown.table.apply",
+        cancelAccessibilityID: "editor.markdown.table.cancel",
+        buildBody: (body) => {
+          const fieldGrid = document.createElement("div");
+          fieldGrid.className = "crispyvibes-dialog-inline-fields";
+          fieldGrid.setAttribute("data-accessibility-id", "editor.markdown.table.fields");
+
+          const rowField = document.createElement("div");
+          const rowLabel = document.createElement("label");
+          rowLabel.className = "crispyvibes-dialog-label";
+          rowLabel.textContent = "Rows";
+          rowLabel.htmlFor = rowInput.id;
+          rowLabel.setAttribute("data-accessibility-id", "editor.markdown.table.rows.label");
+          rowField.appendChild(rowLabel);
+          rowField.appendChild(rowInput);
+
+          const colField = document.createElement("div");
+          const colLabel = document.createElement("label");
+          colLabel.className = "crispyvibes-dialog-label";
+          colLabel.textContent = "Columns";
+          colLabel.htmlFor = columnInput.id;
+          colLabel.setAttribute("data-accessibility-id", "editor.markdown.table.cols.label");
+          colField.appendChild(colLabel);
+          colField.appendChild(columnInput);
+
+          fieldGrid.appendChild(rowField);
+          fieldGrid.appendChild(colField);
+          body.appendChild(fieldGrid);
+          body.appendChild(validationNode);
+        },
+        initialFocusElement: rowInput,
+        onApply: () => {
+          setValidationMessage("");
+          const rows = parsePositiveInteger(rowInput.value);
+          if (!rows || rows > 50) {
+            setValidationMessage("Rows must be a whole number between 1 and 50.");
+            rowInput.focus();
+            return false;
+          }
+          const columns = parsePositiveInteger(columnInput.value);
+          if (!columns || columns > 20) {
+            setValidationMessage("Columns must be a whole number between 1 and 20.");
+            columnInput.focus();
+            return false;
+          }
+
+          const tableHTML = markdownTableHTML(rows, columns);
+          if (insertionSnapshot) {
+            restoreMarkdownSelection(insertionSnapshot);
+          }
+          focusEditingSurface(doc);
+          execEditingCommand(doc, "insertHTML", tableHTML);
+          applyMarkdownMutation();
+          return true;
+        }
+      });
+
+      rowInput.addEventListener("input", () => {
+        setValidationMessage("");
+      });
+      columnInput.addEventListener("input", () => {
+        setValidationMessage("");
+      });
+    }
+
+    function applyFormattingCommand(command) {
+      const doc = editingDocument();
+      if (!doc) return;
+      focusEditingSurface(doc);
+
+      if (editorMode === "markdown") {
+        if (command === "link") {
+          openMarkdownLinkDialog(doc);
+          return;
+        }
+        if (command === "image") {
+          openMarkdownImageDialog(doc);
+          return;
+        }
+        if (command === "table") {
+          openMarkdownTableDialog(doc);
+          return;
+        }
+      }
+
+      switch (command) {
+        case "bold":
+          execEditingCommand(doc, "bold");
+          break;
+        case "italic":
+          execEditingCommand(doc, "italic");
+          break;
+        case "heading1":
+          execEditingCommand(doc, "formatBlock", "<h1>");
+          break;
+        case "heading2":
+          execEditingCommand(doc, "formatBlock", "<h2>");
+          break;
+        case "unorderedList":
+          execEditingCommand(doc, "insertUnorderedList");
+          break;
+        case "orderedList":
+          execEditingCommand(doc, "insertOrderedList");
+          break;
+        case "blockQuote":
+          execEditingCommand(doc, "formatBlock", "<blockquote>");
+          break;
+        case "codeBlock":
+          execEditingCommand(doc, "insertHTML", "<pre><code>code</code></pre><p></p>");
+          break;
+        case "link":
+          execEditingCommand(doc, "insertHTML", "<a href=\"https://example.com\">link text</a>");
+          break;
+        case "image":
+          execEditingCommand(doc, "insertHTML", "<img src=\"\" alt=\"\" />");
+          break;
+        case "table":
+          execEditingCommand(
+            doc,
+            "insertHTML",
+            "<table><thead><tr><th>Header 1</th><th>Header 2</th></tr></thead><tbody><tr><td>Cell 1</td><td>Cell 2</td></tr></tbody></table><p></p>"
+          );
+          break;
+        case "horizontalRule":
+          execEditingCommand(doc, "insertHorizontalRule");
+          break;
+        default:
+          return;
+      }
+
+      if (editorMode === "markdown") {
+        highlightCodeBlocks();
+      }
+      scheduleSync();
+    }
+
+    function serializeDoctype(doctype) {
+      if (!doctype) return "";
+      let serialized = `<!DOCTYPE ${doctype.name}`;
+      if (doctype.publicId) {
+        serialized += ` PUBLIC "${doctype.publicId}"`;
+      } else if (doctype.systemId) {
+        serialized += " SYSTEM";
+      }
+      if (doctype.systemId) {
+        serialized += ` "${doctype.systemId}"`;
+      }
+      serialized += ">";
+      return serialized;
+    }
+
+    function injectBaseTag(html, baseHref) {
+      if (!baseHref) return html;
+      if (/<base\s/i.test(html)) return html;
+
+      const escapedBase = escapeHTMLAttribute(baseHref.endsWith("/") ? baseHref : `${baseHref}/`);
+      const baseTag = `<base href="${escapedBase}">`;
+
+      if (/<head(\s[^>]*)?>/i.test(html)) {
+        return html.replace(/<head(\s[^>]*)?>/i, (match) => `${match}${baseTag}`);
+      }
+      if (/<html(\s[^>]*)?>/i.test(html)) {
+        return html.replace(/<html(\s[^>]*)?>/i, (match) => `${match}<head>${baseTag}</head>`);
+      }
+      return `<!doctype html><html><head>${baseTag}</head><body>${html}</body></html>`;
+    }
+
+    function resolveMarkdownImageSources(baseHref) {
+      const normalizedBase = normalizeBaseHref(baseHref);
+      if (!normalizedBase) return;
+
+      editor.querySelectorAll("img[src]").forEach((image) => {
+        const src = image.getAttribute("src");
+        if (!shouldResolveRelativeURL(src)) return;
+        image.setAttribute("src", resolveRelativeURL(src, normalizedBase));
+      });
+    }
+
+    function normalizeBaseHref(baseHref) {
+      if (!baseHref) return "";
+
+      try {
+        const url = new URL(baseHref, window.location.href);
+        if (!url.pathname.endsWith("/")) {
+          url.pathname = `${url.pathname}/`;
+        }
+        return url.toString();
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function shouldResolveRelativeURL(value) {
+      if (!value) return false;
+      const trimmed = String(value).trim();
+      if (!trimmed) return false;
+      if (trimmed.startsWith("#")) return false;
+      if (trimmed.startsWith("//")) return false;
+      if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(trimmed)) return false;
+      return true;
+    }
+
+    function resolveRelativeURL(value, baseHref) {
+      try {
+        return new URL(String(value).trim(), baseHref).toString();
+      } catch (_) {
+        return value;
+      }
+    }
+
+    function escapeHTMLAttribute(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function escapeHTML(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    editor.addEventListener("input", scheduleSync);
+    editor.addEventListener("keydown", (event) => {
+      removeAdjacentTableForDeleteKey(event);
+    });
+    editor.addEventListener("paste", () => setTimeout(scheduleSync, 0));
+    editor.addEventListener("blur", syncToNative, true);
+    window.addEventListener("resize", resizeHTMLFrame);
+
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.editorReady) {
+      window.webkit.messageHandlers.editorReady.postMessage("ready");
+    }
+  </script>
+</body>
+</html>

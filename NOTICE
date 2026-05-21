@@ -1,0 +1,20 @@
+Crispy
+Copyright 2026 crispyvibe
+
+This product includes software developed by crispyvibe.
+
+This product bundles the following third-party software. See
+projects/crispyvibes/crispyvibes/Resources/THIRD_PARTY_NOTICES.md for
+the full attribution and license texts.
+
+  - GhosttyKit (Ghostty terminal engine) — MIT License
+  - Sparkle (auto-updater framework) — MIT License
+  - SwiftTerm (fallback terminal emulator) — MIT License
+  - Seti UI icons — MIT License, Copyright (c) 2014 Jesse Weed
+  - mermaid.js (markdown diagram rendering) — MIT License
+  - marked.js (markdown rendering) — MIT License
+  - turndown (HTML to markdown) — MIT License
+
+All third-party components are used under their respective licenses,
+which are compatible with the Apache License 2.0 under which Crispy
+is distributed.

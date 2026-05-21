@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "crispyvibes-cli",
+    "crispyvibes-external-sessions",
+    "crispyvibes-path-search",
+    "crispyvibes-persistence",
+]
+resolver = "2"

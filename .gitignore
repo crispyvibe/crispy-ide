@@ -1,0 +1,54 @@
+# macOS
+.DS_Store
+.crispyvibes/
+**/.crispyvibes/
+
+# Xcode build output
+build/
+DerivedData/
+.derived/
+
+# Xcode user data
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Generated local dependency caches
+/.cache/
+
+# Generated Ghostty integration artifacts
+projects/crispyvibes/vendor/GhosttyKit.xcframework/
+projects/crispyvibes/vendor/.ghostty-build.json
+projects/crispyvibes/crispyvibes/Resources/GhosttyRuntime/ghostty/
+projects/crispyvibes/crispyvibes/Resources/GhosttyRuntime/terminfo/
+projects/crispyvibes/crispyvibes/Resources/GhosttyRuntime/.ghostty-build.json
+
+# Local release automation config
+scripts/release-publish.env
+*.derived-local/
+*.tgz
+
+# Secrets and certificates
+.env*
+!.env.example
+*.pem
+*.p12
+*.key
+*.cer
+*.credentials
+updates/
