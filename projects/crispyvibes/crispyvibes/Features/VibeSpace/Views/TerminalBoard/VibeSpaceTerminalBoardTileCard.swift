@@ -126,48 +126,44 @@ struct VibeSpaceTerminalBoardTileCard: View {
     }
 
     var body: some View {
-        Group {
-            if let session = terminalViewModel.session(for: terminalTabID) {
-                TerminalSessionHostView(
-                    session: session,
-                    displayDensity: .regular,
-                    isActive: isActive,
-                    allowsOwnershipParticipation: isCanvasVisible,
-                    accessibilityIdentifier: "vibespace.terminal-board.session",
-                    inlineTriggerTerminalTitle: terminalTab?.title ?? projectTitle ?? "Terminal",
-                    inlineTriggerSearchRoots: inlineTriggerSearchRoots,
-                    inlineTriggerShortcuts: shortcutDefinitions,
-                    onManageInlineTriggerShortcutsRequested: onManageShortcutsRequested,
-                    onSplitTerminalRequested: onSplitTerminal,
-                    onTemporaryTerminalRequested: onTemporaryTerminal,
-                    onOpenInEditorPaneRequested: onOpenInEditorPaneRequested,
-                    onLinkTargetActivated: onLinkTargetActivated,
-                    onFileSystemTargetActivated: onFileSystemTargetActivated
-                )
-                .id(session.viewIdentity)
-                .onTapGesture(count: 2) {
-                    onSpotlight()
-                }
-                .onTapGesture {
-                    onSelect()
-                }
-            } else {
-                ContentUnavailableView(
-                    AppStrings.Terminal.noSession,
-                    systemImage: "terminal",
-                    description: Text(AppStrings.Terminal.noSessionDescription)
-                )
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .top) {
+        VStack(spacing: 0) {
             header
-                .scrollAssistGlassBackground(in: UnevenRoundedRectangle(
-                    topLeadingRadius: crispyvibesTheme.borderShape.cornerRadius,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: crispyvibesTheme.borderShape.cornerRadius
-                ))
+                .background(headerBackgroundColor)
+
+            Group {
+                if let session = terminalViewModel.session(for: terminalTabID) {
+                    TerminalSessionHostView(
+                        session: session,
+                        displayDensity: .regular,
+                        isActive: isActive,
+                        allowsOwnershipParticipation: isCanvasVisible,
+                        accessibilityIdentifier: "vibespace.terminal-board.session",
+                        inlineTriggerTerminalTitle: terminalTab?.title ?? projectTitle ?? "Terminal",
+                        inlineTriggerSearchRoots: inlineTriggerSearchRoots,
+                        inlineTriggerShortcuts: shortcutDefinitions,
+                        onManageInlineTriggerShortcutsRequested: onManageShortcutsRequested,
+                        onSplitTerminalRequested: onSplitTerminal,
+                        onTemporaryTerminalRequested: onTemporaryTerminal,
+                        onOpenInEditorPaneRequested: onOpenInEditorPaneRequested,
+                        onLinkTargetActivated: onLinkTargetActivated,
+                        onFileSystemTargetActivated: onFileSystemTargetActivated
+                    )
+                    .id(session.viewIdentity)
+                    .onTapGesture(count: 2) {
+                        onSpotlight()
+                    }
+                    .onTapGesture {
+                        onSelect()
+                    }
+                } else {
+                    ContentUnavailableView(
+                        AppStrings.Terminal.noSession,
+                        systemImage: "terminal",
+                        description: Text(AppStrings.Terminal.noSessionDescription)
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .animation(.easeOut(duration: 0.18), value: isTileHovered)
         .animation(.easeOut(duration: 0.18), value: isActive)
