@@ -51,4 +51,4 @@ scripts/release-publish.env
 *.key
 *.cer
 *.credentials
-updates/
+/updates/
