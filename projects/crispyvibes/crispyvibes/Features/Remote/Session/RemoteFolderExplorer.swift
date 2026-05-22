@@ -69,6 +69,12 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
     // MARK: - Tree Operations
 
     func setRootFolder(_ url: URL) {
+        AppDiagnostics.record(
+            category: .remote,
+            level: .info,
+            event: "remote_explorer_set_root",
+            metadata: ["url_path": url.path, "remote_path": remotePath]
+        )
         rootURL = url
         watcher.watch(paths: [url.path])
         refresh()
@@ -190,6 +196,16 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
         refreshRequestID = requestID
         workerStatus = .busy("Loading")
         refreshTask?.cancel()
+        AppDiagnostics.record(
+            category: .remote,
+            level: .info,
+            event: "remote_explorer_refresh_start",
+            metadata: [
+                "path": path,
+                "root_url_set": rootURL != nil ? "true" : "false",
+                "request_id": requestID.uuidString
+            ]
+        )
         refreshTask = Task { [weak self] in
             defer {
                 Task { @MainActor [weak self] in
@@ -200,7 +216,15 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
             guard let self else { return }
             do {
                 let items = try await self.fileSystem.contentsOfDirectory(at: path)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    AppDiagnostics.record(
+                        category: .remote,
+                        level: .info,
+                        event: "remote_explorer_refresh_cancelled",
+                        metadata: ["path": path, "request_id": requestID.uuidString]
+                    )
+                    return
+                }
                 // Preserve previously-loaded children for items that still
                 // exist at the same path. The polling watcher fires periodic
                 // refreshes which would otherwise clear out lazily-loaded
@@ -212,22 +236,47 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
                         return (item.id, children)
                     }
                 )
-                self.rootItems = items.map { descriptor in
-                    let url = URL(fileURLWithPath: descriptor.path)
-                    return FileItem(
-                        url: url,
-                        isDirectory: descriptor.isDirectory,
-                        isHidden: descriptor.isHidden,
-                        children: cachedChildrenByID[url.path]
-                    )
-                }.sorted { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending }
+                let newRootItems: [FileItem] = items
+                    .map { descriptor -> FileItem in
+                        let url = URL(fileURLWithPath: descriptor.path)
+                        return FileItem(
+                            url: url,
+                            isDirectory: descriptor.isDirectory,
+                            isHidden: descriptor.isHidden,
+                            children: cachedChildrenByID[url.path]
+                        )
+                    }
+                    .sorted { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending }
+                self.rootItems = newRootItems
+                self.refreshDisplayedItems()
                 self.workerStatus = .ready
+                AppDiagnostics.record(
+                    category: .remote,
+                    level: .info,
+                    event: "remote_explorer_refresh_ok",
+                    metadata: [
+                        "path": path,
+                        "descriptor_count": String(items.count),
+                        "root_items_count": String(newRootItems.count),
+                        "request_id": requestID.uuidString
+                    ]
+                )
             } catch {
                 guard !Task.isCancelled else { return }
                 if !Self.shouldSuppressConnectionReadinessError(error) {
                     self.userFacingError = error.localizedDescription
                 }
                 self.workerStatus = .ready
+                AppDiagnostics.record(
+                    category: .remote,
+                    level: .error,
+                    event: "remote_explorer_refresh_failed",
+                    metadata: [
+                        "path": path,
+                        "error": String(error.localizedDescription.prefix(300)),
+                        "request_id": requestID.uuidString
+                    ]
+                )
             }
         }
     }
@@ -242,8 +291,20 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
                     FileItem(url: URL(fileURLWithPath: $0.path), isDirectory: $0.isDirectory, isHidden: $0.isHidden)
                 }.sorted { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending }
                 rootItems = rootItems.map { updateItem($0, parentID: item.id, children: children) }
+                refreshDisplayedItems()
+                // Tell AppKitTreeView that this directory's children changed.
+                // rootItemsMatch deliberately ignores children for diff cost
+                // reasons, so without bumping the revision the NSOutlineView
+                // never re-queries its data source and the new children stay
+                // invisible until the user manually collapses + re-expands.
+                recordTreeMutation(changedDirectoryIDs: [item.id])
             } catch { userFacingError = "Failed to load directory: \(error.localizedDescription)" }
         }
+    }
+
+    private func recordTreeMutation(changedDirectoryIDs: Set<String>) {
+        self.changedDirectoryIDs = changedDirectoryIDs
+        self.treeMutationRevision += 1
     }
 
     private func updateItem(_ item: FileItem, parentID: String, children: [FileItem]) -> FileItem {
@@ -255,16 +316,40 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
     }
 
     private func bindSearch() {
+        // Observe only the search query. `displayedItems` is updated
+        // synchronously when `rootItems` changes (see refresh / loadChildren),
+        // because Combine delivery via RunLoop.main introduces a brief async
+        // gap where rootItems is non-empty but displayedItems still is, and
+        // SwiftUI's conditional rendering can snapshot the empty state into a
+        // freshly-created AppKitTreeView whose NSOutlineView never repaints.
         $searchQuery
-            .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
-            .combineLatest($rootItems)
-            .sink { [weak self] query, items in
-                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                self?.displayedItems = trimmed.isEmpty ? items : items.compactMap {
-                    FolderExplorerViewModel.filterForSearch(item: $0, query: trimmed)
-                }
-            }
+            .removeDuplicates()
+            .debounce(for: .milliseconds(180), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshDisplayedItems() }
             .store(in: &subscriptions)
+    }
+
+    private func refreshDisplayedItems() {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let newDisplayed: [FileItem]
+        if trimmed.isEmpty {
+            newDisplayed = rootItems
+        } else {
+            newDisplayed = rootItems.compactMap {
+                FolderExplorerViewModel.filterForSearch(item: $0, query: trimmed)
+            }
+        }
+        displayedItems = newDisplayed
+        AppDiagnostics.record(
+            category: .remote,
+            level: .info,
+            event: "remote_explorer_displayed_items_updated",
+            metadata: [
+                "root_items_count": String(rootItems.count),
+                "displayed_items_count": String(newDisplayed.count),
+                "query_present": trimmed.isEmpty ? "false" : "true"
+            ]
+        )
     }
 
     private static func shouldSuppressConnectionReadinessError(_ error: Error) -> Bool {
