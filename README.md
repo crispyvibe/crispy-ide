@@ -60,7 +60,7 @@ xcodebuild test -project projects/crispyvibes/crispyvibes.xcodeproj \
   -scheme crispyvibes -destination 'platform=macOS' -only-testing:CrispyVibesUnitTests
 
 # Launch local build
-open ~/Library/Developer/Xcode/DerivedData/crispyvibes-*/Build/Products/DebugLocal/CrispyLocal.app
+./scripts/run-local.sh
 ```
 
 ## Worktrees

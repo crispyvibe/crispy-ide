@@ -9,7 +9,7 @@ Crispy is a native macOS terminal-first workspace IDE built with Swift and Swift
 - Open Xcode project: `open projects/crispyvibes/crispyvibes.xcodeproj`
 - Build (local scheme): `xcodebuild build -project projects/crispyvibes/crispyvibes.xcodeproj -scheme crispyvibes-local -configuration DebugLocal -destination 'platform=macOS'`
 - Run tests: `xcodebuild test -project projects/crispyvibes/crispyvibes.xcodeproj -scheme crispyvibes -destination 'platform=macOS' -only-testing:CrispyVibesUnitTests`
-- Launch local build: `open ~/Library/Developer/Xcode/DerivedData/crispyvibes-*/Build/Products/DebugLocal/CrispyLocal.app`
+- Launch local build: `./scripts/run-local.sh` (builds and launches `CrispyLocal.app` from the current worktree's DerivedData)
 
 ## Local build prerequisites
 
