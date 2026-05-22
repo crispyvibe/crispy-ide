@@ -201,8 +201,25 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
             do {
                 let items = try await self.fileSystem.contentsOfDirectory(at: path)
                 guard !Task.isCancelled else { return }
-                self.rootItems = items.map {
-                    FileItem(url: URL(fileURLWithPath: $0.path), isDirectory: $0.isDirectory, isHidden: $0.isHidden)
+                // Preserve previously-loaded children for items that still
+                // exist at the same path. The polling watcher fires periodic
+                // refreshes which would otherwise clear out lazily-loaded
+                // sub-trees (FileItem.children populated by loadChildren),
+                // making expanded directories appear empty until re-expanded.
+                let cachedChildrenByID: [String: [FileItem]] = Dictionary(
+                    uniqueKeysWithValues: self.rootItems.compactMap { item in
+                        guard let children = item.children else { return nil }
+                        return (item.id, children)
+                    }
+                )
+                self.rootItems = items.map { descriptor in
+                    let url = URL(fileURLWithPath: descriptor.path)
+                    return FileItem(
+                        url: url,
+                        isDirectory: descriptor.isDirectory,
+                        isHidden: descriptor.isHidden,
+                        children: cachedChildrenByID[url.path]
+                    )
                 }.sorted { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending }
                 self.workerStatus = .ready
             } catch {

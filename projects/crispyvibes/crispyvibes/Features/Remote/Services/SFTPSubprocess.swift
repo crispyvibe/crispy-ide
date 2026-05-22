@@ -379,7 +379,13 @@ private extension Data {
     mutating func readSSHString() -> String? {
         guard let len = readUInt32() else { return nil }
         guard count >= Int(len) else { return nil }
-        let s = String(data: self[startIndex..<startIndex+Int(len)], encoding: .utf8)
+        let bytes = self[startIndex..<startIndex+Int(len)]
+        // Use lossy UTF-8 decoding so a single filename with non-UTF-8 bytes
+        // (legal on POSIX) cannot abort an SFTP READDIR loop and silently drop
+        // the rest of the directory entries. Invalid sequences become U+FFFD;
+        // the byte stream is still consumed correctly so subsequent fields
+        // remain in sync.
+        let s = String(decoding: bytes, as: UTF8.self)
         self = self.dropFirst(Int(len)).asData
         return s
     }
