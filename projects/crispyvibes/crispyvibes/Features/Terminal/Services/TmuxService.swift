@@ -33,9 +33,66 @@ enum TmuxService {
     }
 
     static func launchArguments(sessionName: String, shell: String, workingDirectory: String) -> (executable: String, args: [String]) {
+        launchArguments(sessionName: sessionName, shell: shell, workingDirectory: workingDirectory, agentCLIEnvironment: [:])
+    }
+
+    /// Returns the executable + arguments for launching/attaching a tmux session,
+    /// and refreshes `CRISPY_*` env vars on the session if it already exists.
+    ///
+    /// **Why the env refresh:** tmux remembers the env from when its server first
+    /// started. When Crispy reattaches to an existing session via `-A`, the shell
+    /// inside inherits from tmux's stored env — so `CRISPY_SOCKET`,
+    /// `CRISPY_VIBESPACE`, etc. would be stale (e.g., pointing at the wrong app's
+    /// socket if the user previously ran a different Crispy variant).
+    /// `tmux set-environment -t <session>` updates the session's env so any
+    /// **new** shells (new pane, new window, respawned shell) pick up the
+    /// current values. The shell that's already running keeps its old env —
+    /// that's an unavoidable POSIX limitation; the user can `exec $SHELL` to
+    /// refresh it.
+    ///
+    /// New sessions don't need this because they inherit env via process
+    /// inheritance from the launching `tmux new-session` call.
+    static func launchArguments(
+        sessionName: String,
+        shell: String,
+        workingDirectory: String,
+        agentCLIEnvironment: [String: String]
+    ) -> (executable: String, args: [String]) {
         guard let path = tmuxPath else { return (shell, []) }
         applyServerOptions(path: path)
+        if sessionExists(sessionName) {
+            refreshSessionEnvironment(
+                path: path,
+                sessionName: sessionName,
+                environment: agentCLIEnvironment
+            )
+        }
         return (path, ["new-session", "-A", "-s", sessionName, "-c", workingDirectory, shell])
+    }
+
+    private static func refreshSessionEnvironment(
+        path: String,
+        sessionName: String,
+        environment: [String: String]
+    ) {
+        // Restrict to the agent CLI vars we own — never push arbitrary env
+        // into tmux sessions.
+        let allowedKeys = [
+            "CRISPY_SOCKET",
+            "CRISPY_BUNDLE_ID",
+            "CRISPY_CONTEXT",
+            "CRISPY_VIBESPACE",
+            "CRISPY_PROJECT_PATH",
+        ]
+        for key in allowedKeys {
+            if let value = environment[key], !value.isEmpty {
+                run(path, arguments: ["set-environment", "-t", sessionName, key, value])
+            } else {
+                // Clear any stale value if the current launch has no value for
+                // this key (e.g., a standalone terminal with no vibespace ID).
+                run(path, arguments: ["set-environment", "-t", sessionName, "-u", key])
+            }
+        }
     }
 
     private static func applyServerOptions(path: String) {

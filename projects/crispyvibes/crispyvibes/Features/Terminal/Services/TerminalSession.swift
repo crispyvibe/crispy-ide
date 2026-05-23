@@ -32,6 +32,11 @@ final class TerminalSession: NSObject {
     let shellResolutionProvider: @Sendable () -> TerminalShellResolution
     var operationMetricsStore: OperationMetricsStore?
     var tmuxSessionName: String?
+    /// F044-R04: tagged vibespace ID exported to spawned shells as
+    /// `CRISPY_VIBESPACE`. Set by `ProjectSession` via the
+    /// `sessionConfigurator` hook on `TerminalViewModel`. Nil for
+    /// detached/standalone terminals not owned by a vibespace.
+    var vibespaceID: UUID?
     /// Override for remote SSH terminals. When set, replaces the shell executable/args.
     /// Returns (executable, arguments) to launch instead of the local shell.
     var processLaunchOverride: ((TerminalSession) -> (String, [String]))?
@@ -123,15 +128,17 @@ final class TerminalSession: NSObject {
         let resolutionProvider = shellResolutionProvider
         let terminalID = self.id.uuidString
         let projectPath = self.initialWorkingDirectory.path
+        let vibespaceID = self.vibespaceID
         pendingStartupTask = Task { [weak self] in
             let prepared = await Task.detached(priority: .userInitiated) {
                 let resolution = resolutionProvider()
                 var environment = Self.launchEnvironment
-                // Per-session Agent CLI context (F044-R04). The vibespace ID
-                // is resolved server-side from focused state; only the caller's
-                // tagged context and project path are injected here.
+                // Per-session Agent CLI context (F044-R04).
                 environment.append("CRISPY_CONTEXT=terminal.\(terminalID)")
                 environment.append("CRISPY_PROJECT_PATH=\(projectPath)")
+                if let vibespaceID {
+                    environment.append("CRISPY_VIBESPACE=vibespace.\(vibespaceID.uuidString)")
+                }
                 return (resolution, environment)
             }.value
 
@@ -167,10 +174,21 @@ final class TerminalSession: NSObject {
             executable = exe
             args = a
         } else if let tmuxSessionName, TmuxService.isEnabled, TmuxService.isAvailable {
+            // Extract CRISPY_* env vars so tmux can refresh them on reattach
+            // (F044-R04 + tmux-session env refresh — see TmuxService.refreshSessionEnvironment).
+            var agentCLIEnv: [String: String] = [:]
+            for entry in environment {
+                guard let separator = entry.firstIndex(of: "=") else { continue }
+                let key = String(entry[..<separator])
+                guard key.hasPrefix("CRISPY_") else { continue }
+                let value = String(entry[entry.index(after: separator)...])
+                agentCLIEnv[key] = value
+            }
             let tmuxLaunch = TmuxService.launchArguments(
                 sessionName: tmuxSessionName,
                 shell: shellPath,
-                workingDirectory: initialWorkingDirectory.path
+                workingDirectory: initialWorkingDirectory.path,
+                agentCLIEnvironment: agentCLIEnv
             )
             executable = tmuxLaunch.executable
             args = tmuxLaunch.args
