@@ -137,6 +137,7 @@ extension VibeSpaceTerminalOnlyView {
                 BrowserBoardTileView(
                     viewModel: coordinator.viewModel(for: tile.id, url: url),
                     isActive: isActive,
+                    projectAccentColor: tile.projectPath.flatMap { accentColor(for: $0) },
                     onSelect: { boardStore.activateTile(tile.id, requestFocus: false, surfaceID: surfaceID) },
                     onClose: {
                         coordinator.removeViewModel(for: tile.id)
