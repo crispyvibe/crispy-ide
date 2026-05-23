@@ -285,6 +285,27 @@ struct ContentView: View {
             .standardizedFileURL
     }
 
+    /// F021-R15: resolve the owning project path for a content-viewer tab.
+    /// Returns nil for tab kinds that have no project association (vibeCast,
+    /// acpPane). For file tabs, finds the longest project-root prefix match.
+    private func resolveOwningProjectPath(for tab: ContentViewerTab) -> String? {
+        let projects = activeVibeSpaceSession.projects
+        switch tab.kind {
+        case .file(let reference):
+            let normalizedFilePath = reference.url.standardizedFileURL.path
+            let candidates = projects.map { $0.projectIdentifier }
+            return candidates
+                .filter { normalizedFilePath == $0 || normalizedFilePath.hasPrefix($0 + "/") }
+                .max(by: { $0.count < $1.count })
+        case .webPage(let reference):
+            return reference.projectPath
+        case .terminal(let projectID, _):
+            return projects.first(where: { $0.id == projectID })?.projectIdentifier
+        case .vibeCast, .acpPane:
+            return nil
+        }
+    }
+
     private var lifecycleAwareContent: some View {
         styledContent
             .onAppear {
@@ -442,7 +463,16 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openNewBrowserRequested)) { notification in
                 let url = notification.userInfo?["url"] as? URL ?? URL(string: "about:blank")!
-                let projectPath = notification.userInfo?["projectPath"] as? String
+                // F012-R17: each browser is owned by exactly one project. If the
+                // caller did not supply a `projectPath`, auto-associate the new
+                // browser with the currently focused project. If no project is
+                // focused, block creation — there is no valid owner.
+                let resolvedProjectPath = (notification.userInfo?["projectPath"] as? String)
+                    ?? activeVibeSpaceSession.focusedProject?.projectIdentifier
+                guard let projectPath = resolvedProjectPath else {
+                    agentCLILogger.notice("browser open suppressed: no focused project to own browser")
+                    return
+                }
                 let browserID = notification.userInfo?["browserID"] as? UUID ?? UUID()
 
                 // Resolve the user's current canvas mode. CLI-initiated opens MUST NOT
@@ -500,6 +530,39 @@ struct ContentView: View {
                 dockedBrowserCoordinator.removeViewModel(for: browserID)
                 dockedBrowserCoordinator.removeDetailedBrowser(browserID: browserID)
                 agentCLILogger.notice("browser closed (orphan vm): \(browserID.uuidString, privacy: .public)")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .contentViewerTabActivated)) { notification in
+                // F021-R15 / R16 / R17: when a content-viewer tab becomes active,
+                // resolve its owning project and switch focus. Idempotent — the
+                // focus call is suppressed if the resolved project is already
+                // focused, so programmatic activations from `focusProject` itself
+                // do not recurse.
+                guard let tab = notification.userInfo?["tab"] as? ContentViewerTab else { return }
+                guard let owningProjectPath = resolveOwningProjectPath(for: tab) else { return }
+                let projects = activeVibeSpaceSession.projects
+                guard let owner = projects.first(where: { $0.projectIdentifier == owningProjectPath }) else { return }
+                if activeVibeSpaceSession.focusedProject?.id == owner.id { return }
+                vibespaceCanvasActionsCoordinator.focusProject(owner)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .boardTileActivated)) { notification in
+                // F021-R17: when a board tile becomes active, switch focused
+                // project to the tile's owning project. Same idempotency guard
+                // as the content-viewer tab listener.
+                guard let projectPath = notification.userInfo?["projectPath"] as? String else { return }
+                let projects = activeVibeSpaceSession.projects
+                guard let owner = projects.first(where: { $0.projectIdentifier == projectPath }) else { return }
+                if activeVibeSpaceSession.focusedProject?.id == owner.id { return }
+                vibespaceCanvasActionsCoordinator.focusProject(owner)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .parkProjectRequested)) { notification in
+                // F021-R13: park the requested project (right-click → "Park Project").
+                guard let projectID = notification.userInfo?["projectID"] as? UUID else { return }
+                vibespaceCanvasActionsCoordinator.parkProject(id: projectID)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .activateProjectRequested)) { notification in
+                // F021-R13: activate (unpark) the requested project.
+                guard let projectPath = notification.userInfo?["projectPath"] as? String else { return }
+                _ = vibespaceCanvasActionsCoordinator.unparkProject(path: projectPath)
             }
             .onReceive(NotificationCenter.default.publisher(for: .ghosttyOpenLinkTargetRequested)) { notification in
                 guard let url = notification.userInfo?[AppCommandUserInfoKey.url] as? URL else { return }

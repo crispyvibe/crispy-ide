@@ -87,6 +87,16 @@ struct VibeSpaceProjectFilesSectionView: View {
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("vibespace.sidebar.project.\(project.id.uuidString)")
+            .contextMenu {
+                // F021-R13: park the project from the Files-tab right-click menu.
+                Button("Park Project") {
+                    NotificationCenter.default.post(
+                        name: .parkProjectRequested,
+                        object: nil,
+                        userInfo: ["projectID": project.id]
+                    )
+                }
+            }
 
             if isExpanded {
                 ProjectFileTreeView(

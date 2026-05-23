@@ -34,6 +34,21 @@ extension Notification.Name {
     static let ghosttyOpenFileSystemTargetRequested = Notification.Name("ghosttyOpenFileSystemTargetRequested")
     static let terminalAddFileToShelfRequested = Notification.Name("terminalAddFileToShelfRequested")
     static let fileSystemContentsDidChange = Notification.Name("fileSystemContentsDidChange")
+    /// F021-R15 / R16 / R17: posted by `EditorGroupStore.activateTab` whenever a
+    /// tab becomes active (user-initiated or programmatic). Listeners may resolve
+    /// the active tab's owning project and switch focus accordingly. Idempotent
+    /// when the resolved project is already focused.
+    static let contentViewerTabActivated = Notification.Name("contentViewerTabActivated")
+    /// F021-R17: posted by `VibeSpaceTerminalBoardStore.activateTile` when a
+    /// board tile becomes active. userInfo: ["projectPath": String?]. Listeners
+    /// resolve the project from the path and switch focus. Idempotent.
+    static let boardTileActivated = Notification.Name("boardTileActivated")
+    /// F021-R13: posted when the user selects "Park Project" from a context menu.
+    /// userInfo: ["projectID": UUID].
+    static let parkProjectRequested = Notification.Name("parkProjectRequested")
+    /// F021-R13: posted when the user selects "Activate Project" on a parked
+    /// project. userInfo: ["projectPath": String].
+    static let activateProjectRequested = Notification.Name("activateProjectRequested")
 }
 
 enum AppCommandUserInfoKey {

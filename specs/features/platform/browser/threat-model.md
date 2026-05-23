@@ -102,6 +102,13 @@ The in-app browser embeds WKWebView to render arbitrary web content within the v
 - **Likelihood:** Low.
 - **Mitigation:** Console capture is capped at 512 entries with `flushConsoleMessages()`. The buffer is fixed-size. Developer tools auto-refresh is on a 2-second timer, not per-message. Linked NFR: PERF-Responsiveness.
 
+### F012-T11: Browser session leakage across projects via path collision
+
+- **Vector:** Two projects mounted at paths that, after normalization, collide (e.g., one path is a prefix-extension of another, or a relinked path inadvertently re-uses a stale identifier) could surface browsers from one project to another.
+- **Impact:** Persisted browser sessions (URL history, captured state) appear under the wrong project, potentially exposing per-project context to a different ownership boundary.
+- **Likelihood:** Low. `VibeSpaceValidator.normalizedPath` standardizes paths before they become identifiers; the relink flow migrates path-keyed state via `moveProjectAssociatedState`.
+- **Mitigation:** All ownership comparisons use exact-match on normalized paths (`URL(fileURLWithPath:).standardizedFileURL.path`). `BrowserSessionEntry` is keyed by `browserID` (UUID) within `ProjectConfigFile.browserSessionEntries`; the file is itself integrity-signed (HMAC-SHA256) so cross-project tampering on disk is detectable. Linked NFR: SEC-2 (Data Integrity), SEC-Data-Protection.
+
 ## Residual Risks
 
 - WKWebView runs web content in a sandboxed process, but the app has full access to the JavaScript bridge. A WebKit zero-day could potentially escape the content process sandbox — this is mitigated by macOS system updates.

@@ -234,7 +234,8 @@ struct AppContainer {
             contentViewerStore: contentViewerStore,
             splitViewStore: splitViewStore,
             dockPreviewBridge: dockPreviewBridge,
-            canvasModeProvider: canvasModeProvider
+            canvasModeProvider: canvasModeProvider,
+            dockedBrowserCoordinator: dockedBrowserCoordinator
         )
 
         return ContentViewDependencies(

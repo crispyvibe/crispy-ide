@@ -146,3 +146,11 @@ Menu key equivalents (Cmd+shortcuts) are routed to the menu system first. Return
 | Browser stealing focus | The focus guard (`allowsFirstResponderAcquisition`) controls this. If the browser unexpectedly takes focus, it may be a click-through event — this is by design for `acceptsFirstMouse`. |
 | Suggestions not appearing | Ensure search suggestions are enabled in settings. Suggestions are suppressed during active navigation. |
 | Favicon not showing | The browser queries `link[rel~=icon]` elements first, then falls back to `/favicon.ico`. Some sites may not provide either. |
+
+## Project Ownership
+
+Each browser instance belongs to exactly one project. When you create a browser via the toolbar (or via terminal link / agent CLI without specifying a project), it is automatically associated with the currently focused project. If no project is focused, the create request is suppressed.
+
+When you remove a project, all browsers owned by that project are closed automatically. The same applies when you park a project — but unlike removal, parking persists each browser's URL, history stacks, zoom, and theme so they can be restored on activate.
+
+Browser tabs in the content viewer respect project scope filtering: when scope is "focused project", only browsers belonging to the focused project are shown.

@@ -78,6 +78,24 @@ Browser MUST support routing traffic through an SSH SOCKS5 tunnel for remote vib
 
 Browser MUST support passkey authentication via a JavaScript bridge intercepting navigator.credentials and delegating to ASAuthorizationController.
 
+### F012-R17: Project Ownership
+
+Each browser instance MUST be owned by exactly one project. When a browser is created via the toolbar button, it MUST be auto-associated with the currently focused project. If no project is focused, browser creation MUST be blocked.
+
+**CLI parity:** `browser.open` (Agent CLI) MUST resolve an owning project before dispatching: prefer the caller's `CRISPY_PROJECT_PATH` (set by terminals spawned with project context), then fall back to the active vibespace's focused project. If neither resolves, the call MUST fail with `no_focused_project` rather than silently succeed.
+
+### F012-R18: Project Lifecycle Coupling
+
+When a project is removed from the vibespace OR parked (F021-R09 through R11), all browsers associated with that project MUST be closed. Lifecycle parity with terminals and files: the close request goes through the existing `.closeBrowserRequested` notification pipeline so board tiles, content-viewer tabs, and orphan view-models are torn down consistently.
+
+### F012-R19: Browser Tabs in Detailed View
+
+In detailed view, project-associated browsers MUST appear as content-viewer tabs using the existing `webPage` tab kind. Browser tabs MUST respect viewer scope filtering (F006-R13) — when scope is "focused project", only browsers belonging to the focused project are shown.
+
+### F012-R20: Browser Session Persistence per Project
+
+Browser session state (URL, history stacks, zoom, theme mode per F012-R07) MUST be persisted as part of the owning project's `ProjectConfigFile.browserSessionEntries`. On vibespace restore, browser tabs MUST be restored for active (non-parked) projects. Parked projects retain their browser session entries on disk; restoration occurs as part of unpark (F021-R11).
+
 
 ## Scenarios
 
@@ -831,6 +849,95 @@ Browser MUST support passkey authentication via a JavaScript bridge intercepting
 **When** the agent issues cookies or storage commands
 **Then** the corresponding browser data is returned or modified
 
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Project Ownership (F012-R17–R20)                            -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+
+### Scenario F012-S94: Toolbar new browser auto-associates with focused project
+
+**Given** a vibespace has a focused project
+**When** the user creates a new browser via the toolbar (or any path that posts `.openNewBrowserRequested` without an explicit `projectPath`)
+**Then** the new browser's `BrowserPanelViewModel.projectPath` is set to the focused project's normalized root path
+**And** the browser appears in the surface matching the current canvas mode (board or content viewer)
+
+### Scenario F012-S95: New browser is blocked when no project is focused
+
+**Given** a vibespace has no focused project
+**When** a new browser request is dispatched without an explicit `projectPath`
+**Then** the request is suppressed and no browser instance is created
+**And** the agent CLI logger records "browser open suppressed: no focused project"
+
+### Scenario F012-S96: Removing a project closes all its browsers
+
+**Given** project P has at least one browser open (board tile or content-viewer tab)
+**When** project P is removed from the vibespace
+**Then** `DockedBrowserCoordinator.closeBrowsers(forProjectPath:)` enumerates all browsers whose `projectPath` matches P's normalized path
+**And** each receives a `.closeBrowserRequested` notification
+**And** board tiles, content-viewer tabs, and any orphan view-models are torn down via the existing close-handling pipeline
+
+### Scenario F012-S97: Parking a project captures and persists its browser sessions
+
+**Given** project P has at least one browser owned by it
+**When** project P is parked
+**Then** `DockedBrowserCoordinator.snapshotBrowserSessions(forProjectPath:)` captures a `BrowserSessionEntry` for each browser (browserID + snapshot + optional pinned tile ID)
+**And** the entries are persisted into `ProjectConfigFile.browserSessionEntries` for P
+**And** all browsers for P are then closed via the standard close-handling pipeline
+
+### Scenario F012-S98: Unparking a project restores its persisted browser sessions
+
+**Given** parked project P has persisted `browserSessionEntries`
+**When** project P is activated (unparked)
+**Then** entries with `pinnedTileID` are restored as board tiles via `restoreTile(id:snapshot:)`
+**And** entries without `pinnedTileID` are restored as content-viewer tabs via `restoreDetailedBrowser(reference:snapshot:)`
+**And** when the canvas is in detailed mode, the corresponding `webPage` tabs are surfaced via `ContentViewerStore.openWebPage`
+
+### Scenario F012-S99: Browser tabs respect viewer scope filtering
+
+**Given** browsers belonging to multiple projects are open as content-viewer tabs
+**And** viewer scope is set to "focused project"
+**When** the active pane renders its tab strip
+**Then** only `.webPage` tabs whose `BrowserTabReference.projectPath` matches the focused project's path are shown (extends F006-S34)
+
+### Scenario F012-S100: CLI browser.open resolves project from CRISPY_PROJECT_PATH
+
+**Given** a CLI client invokes `browser.open` from a terminal whose env has `CRISPY_PROJECT_PATH` set
+**When** the request reaches `handleBrowserOpen`
+**Then** the resolved project path is taken from `_env.project_path`
+**And** the dispatch posts `.openNewBrowserRequested` with that path in userInfo
+**And** the response result includes `project_path`
+
+### Scenario F012-S101: CLI browser.open falls back to focused project
+
+**Given** a CLI client invokes `browser.open` with no `_env.project_path` (or empty string)
+**And** the active vibespace has a focused project
+**When** the request reaches `handleBrowserOpen`
+**Then** the resolved project path is the focused project's `projectIdentifier`
+**And** dispatch proceeds normally
+
+### Scenario F012-S102: CLI browser.open returns no_focused_project when no context resolves
+
+**Given** a CLI client invokes `browser.open` with no `_env.project_path`
+**And** no vibespace has a focused project (e.g., catalog empty or all projects parked)
+**When** the request reaches `handleBrowserOpen`
+**Then** the response is an error with code `no_focused_project`
+**And** no `.openNewBrowserRequested` notification is posted
+
+### Scenario F012-S103: CLI browser.list defaults to project scope, vibespace is opt-in
+
+**Given** the focused vibespace has browsers owned by projects `/p/alpha` and `/p/beta`, plus one orphan browser with no project
+**When** the agent invokes `crispy browser list` from a terminal whose `CRISPY_PROJECT_PATH` is `/p/alpha` (default scope)
+**Then** the response includes only the `/p/alpha` browser
+**And** the `/p/beta` browser and orphan browsers are filtered out
+
+**Given** the same setup
+**When** the agent invokes `crispy browser list --scope vibespace`
+**Then** the response includes all 3 entries
+**And** each entry has a `project_path` field (string for owned browsers, null for orphans)
+
+**Given** the agent invokes `crispy browser list` (default scope) with no `CRISPY_PROJECT_PATH` and no focused project
+**Then** the response is an error with code `no_focused_project` (rather than silently returning empty)
+**And** the error message hints to pass `scope=vibespace` for cross-project listings
+
 ## Acceptance Criteria
 
 - Browser navigation loads pages within standard WebKit timelines.
@@ -854,6 +961,20 @@ Browser MUST support passkey authentication via a JavaScript bridge intercepting
 - SSH SOCKS5 proxy routes traffic through remote vibespace tunnel.
 - WebAuthn passkey creation and authentication work via ASAuthorizationController bridge.
 - Agent API dispatches 84+ commands with element ref system and accessibility snapshots.
+- Each browser instance is owned by exactly one project; toolbar-created browsers auto-associate with the focused project (F012-R17).
+- Removing or parking a project closes all browsers owned by that project via the standard close pipeline (F012-R18).
+- Browser tabs in detailed view respect viewer scope filtering by project (F012-R19, extends F006-R13).
+- Browser session state is persisted per-project in `ProjectConfigFile.browserSessionEntries`; restored for active projects on vibespace open and on unpark (F012-R20).
+- CLI `browser.open` resolves an owning project (env → focused project) before dispatching, returning `no_focused_project` when neither resolves (F012-R17 CLI parity).
+
+## Test Coverage
+
+| Scope | Test File |
+|---|---|
+| Browser project ownership at the VM layer; `BrowserSessionEntry` serialization round-trip; `ProjectConfigFile` backward-compatible decode | `tests/unit/Models/VibeSpaceStateParkingTests.swift` |
+| `browser.open` CLI handler: env-path takes precedence, focused-project fallback, structured error when neither resolves, browser_id tagged identifier | `tests/unit/Models/CLICommandRouterBrowserOpenTests.swift` |
+| `browser.list` CLI handler: default vibespace scope, project scope filtering, project_path per entry, no_focused_project for unresolvable callers | `tests/unit/Models/CLICommandRouterBrowserListTests.swift` |
+| Existing browser feature tests (preview reuse, agent API, restore flows) | `tests/unit/Features/VibeSpace/Services/Browser/BrowserFeatureTests.swift` |
 
 ## Open Questions
 
@@ -866,3 +987,5 @@ _None._
 | 2026-04-15 | Migrated from docs/features/browser/feature.md (BRW-001–033) | — |
 | 2026-04-18 | Complete rewrite to reflect implemented code state with 86 scenarios | — |
 | 2026-04-18 | Fix BDD format: add Then clauses, split multi-When scenarios into S87–S93 | — |
+| 2026-05-22 | Add project ownership feature (F012-R17–R20, scenarios S94–S99) — 99 scenarios total | — |
+| 2026-05-22 | CLI parity: `browser.open` resolves owning project before dispatch (scenarios S100–S102; new error code `no_focused_project`) — 102 scenarios total | — |

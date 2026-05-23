@@ -30,6 +30,14 @@ final class BrowserPanelViewModel: ObservableObject {
     }
 
     let id: UUID
+    /// F012-R17: project ownership.
+    /// Each browser instance is owned by exactly one project, identified by
+    /// normalized root path. Set at creation time; never reassigned during a
+    /// browser's lifetime. Browsers without an owner (preview-only / pre-restore
+    /// state) carry `nil`. `DockedBrowserCoordinator.closeBrowsers(forProjectPath:)`
+    /// uses this field to enumerate and tear down all browsers belonging to a
+    /// project being removed or parked (F012-R18).
+    let projectPath: String?
     private(set) var usesEphemeralDataStore: Bool
     private(set) var webView: CrispyVibesBrowserWebView
 
@@ -78,8 +86,9 @@ final class BrowserPanelViewModel: ObservableObject {
     var onSessionStateChanged: (() -> Void)?
     var historyStore: BrowserHistoryStore?
 
-    init(id: UUID = UUID(), initialURL: URL? = nil, usesEphemeralDataStore: Bool = false) {
+    init(id: UUID = UUID(), initialURL: URL? = nil, usesEphemeralDataStore: Bool = false, projectPath: String? = nil) {
         self.id = id
+        self.projectPath = projectPath
         self.usesEphemeralDataStore = usesEphemeralDataStore
         let webView = Self.makeWebView(usesEphemeralDataStore: usesEphemeralDataStore)
         self.webView = webView

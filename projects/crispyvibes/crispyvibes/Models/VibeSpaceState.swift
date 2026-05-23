@@ -8,6 +8,10 @@ struct VibeSpaceState: Identifiable {
     var name: String
     var projects: [AnyProjectSession]
     var unresolvedProjectPaths: [String]
+    /// F021-R09: paths of parked projects. Parked projects are NOT instantiated
+    /// as live sessions; they retain their `ProjectConfigFile` (with `isParked = true`)
+    /// for restoration via `unparkProject(path:)`.
+    var parkedProjectPaths: [String]
     var focusedProjectID: UUID?
     var storedProjectPaths: [String]
     var storedFocusedProjectPath: String?
@@ -47,6 +51,7 @@ struct VibeSpaceState: Identifiable {
         }
         self.projects = sessions
         self.unresolvedProjectPaths = unresolvedPaths
+        self.parkedProjectPaths = []
         self.focusedProjectID = sessions.first?.id
         self.storedProjectPaths = sessions.map(\.projectIdentifier) + unresolvedPaths
         self.storedFocusedProjectPath = sessions.first?.projectIdentifier
@@ -82,9 +87,16 @@ struct VibeSpaceState: Identifiable {
         var seenPaths = Set<String>()
         var sessions: [AnyProjectSession] = []
         var unresolvedPaths: [String] = []
+        let parkedSet = Set(config.parkedProjectPaths.map { Self.normalizedPath(from: $0) })
         let configuredPaths = config.projectPaths + config.unresolvedProjectPaths
         for path in configuredPaths {
             guard seenPaths.insert(path).inserted else { continue }
+            // Parked projects are tracked separately and MUST NOT be instantiated
+            // as live sessions (F021-R09, F021-R14).
+            let normalizedForParkCheck = path.hasPrefix("ssh://")
+                ? path
+                : Self.normalizedPath(from: path)
+            if parkedSet.contains(normalizedForParkCheck) { continue }
 
             if path.hasPrefix("ssh://") {
                 // Remote project — always create (connection happens async)
@@ -107,6 +119,7 @@ struct VibeSpaceState: Identifiable {
 
         projects = sessions
         unresolvedProjectPaths = unresolvedPaths
+        parkedProjectPaths = config.parkedProjectPaths.map { Self.normalizedPath(from: $0) }
         storedProjectPaths = sessions.map(\.projectIdentifier) + unresolvedPaths
         sourceControlSettings = config.sourceControlSettings.normalized()
         if let focusedProjectPath = config.focusedProjectPath {
@@ -178,6 +191,7 @@ struct VibeSpaceState: Identifiable {
             name: name,
             projectPaths: paths,
             unresolvedProjectPaths: unresolved,
+            parkedProjectPaths: parkedProjectPaths,
             focusedProjectPath: focusedPath,
             startupSettings: startupSettings.normalized(),
             defaultTerminalShell: defaultTerminalShell,
@@ -223,5 +237,11 @@ struct VibeSpaceState: Identifiable {
 
     func makeProjectSession(rootURL: URL) -> AnyProjectSession {
         projectSessionFactory(rootURL)
+    }
+
+    /// Creates a remote (SSH) project session via the identifier-based factory if available.
+    /// Returns nil for vibespaces created without an identifier-based factory.
+    func makeIdentifierSession(identifier: String) -> AnyProjectSession? {
+        identifierSessionFactory?(identifier)
     }
 }

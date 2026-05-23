@@ -122,3 +122,43 @@ VibeSpace Projects covers project creation, focus management, add/remove operati
 | Focus shortcut not working | Verify the shortcut assignment in VibeSpace Settings → Shortcuts. Ensure no conflict with other shortcuts. |
 | Stacked card shows no terminal | The project's terminal hasn't hydrated yet. It will show "Loading Terminal" until ready. |
 | Close button missing | The close icon is in the focused project's header. Stacked cards don't have a direct close — focus the project first. |
+
+## Parking Projects
+
+Parking puts a project into a dormant state — its terminals are terminated, its browsers are closed, and its file watchers are stopped — without removing the project from the vibespace. The full state (open files, terminal working directories, browser URLs and history) is persisted to disk and restored when you activate the project later.
+
+### Park a project
+
+1. Open the **Files** tab in the sidebar.
+2. Right-click the project header.
+3. Choose **Park Project**.
+
+The project disappears from the project rail and from terminal hydration. Its entry moves to a "Parked Projects" section at the bottom of the Files tab.
+
+### Activate a parked project
+
+1. Open the **Files** tab.
+2. Scroll to the **Parked Projects** section.
+3. Right-click the parked project entry.
+4. Choose **Activate Project**.
+
+The project becomes the focused project. Terminals are recreated from their saved working directories. Browser tabs are restored to their last-known URLs.
+
+### What is preserved across park/unpark
+
+| State | Preserved |
+|-------|-----------|
+| Terminal tabs (working directory, custom name, origin) | Yes |
+| Browser tabs (URL, back/forward history, zoom, theme) | Yes |
+| Color tag, shortcut, startup overrides | Yes |
+| Layout splitter positions | Yes (per-path) |
+
+## Click-to-Select Project
+
+When you click a tab in the content viewer, the project that owns that tab automatically becomes the focused project. No double-click required. This applies to:
+
+- **File tabs** — focus follows the file's owning project (longest path-prefix match).
+- **Browser tabs** — focus follows the browser's owning project (set when the browser was created).
+- **Terminal tabs** — focus follows the terminal's owning project.
+
+VibeCast and ACP-pane tabs do not have a project owner, so clicking them does not change project focus.
