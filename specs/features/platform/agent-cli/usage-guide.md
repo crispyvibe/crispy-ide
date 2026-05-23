@@ -99,6 +99,16 @@ TREE=$(crispy browser snapshot --interactive --json | jq -r .tree)
 crispy browser click --ref 7
 ```
 
+### List browsers owned by your project
+
+```bash
+# Default — only browsers owned by the caller's project (CRISPY_PROJECT_PATH)
+crispy browser list
+
+# Opt-in — all browsers in the vibespace, regardless of project
+crispy browser list --scope vibespace
+```
+
 ## Discovery
 
 Don't hardcode command lists in your agent. Ask the running app what's available:

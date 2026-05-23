@@ -57,15 +57,43 @@ enum Command {
     /// Browser operations.
     #[command(subcommand)]
     Browser(BrowserCommand),
+    /// VibeSpace project operations.
+    #[command(subcommand)]
+    Vibespace(VibespaceCommand),
+}
+
+/// F044-R80–R82: project lifecycle in the focused vibespace.
+#[derive(Subcommand, Debug)]
+enum VibespaceCommand {
+    /// Add a project folder to the focused vibespace and focus it.
+    AddProject {
+        /// Absolute path to the project directory.
+        path: String,
+    },
+    /// Remove a project from the focused vibespace, closing its terminals/browsers.
+    RemoveProject {
+        /// Absolute path of the project to remove.
+        path: String,
+    },
+    /// Park a project in the focused vibespace, persisting state and terminating sessions.
+    ParkProject {
+        /// Absolute path of the project to park.
+        path: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
 enum BrowserCommand {
-    /// List open browser tabs.
+    /// List open browser tabs in the focused vibespace.
     List {
         /// Filter by title or URL substring.
         #[arg(long)]
         query: Option<String>,
+        /// Filter by ownership scope: "project" (default, only browsers owned
+        /// by CRISPY_PROJECT_PATH / focused project) or "vibespace" (all
+        /// browsers in the vibespace, opt-in for cross-project listings).
+        #[arg(long, default_value = "project")]
+        scope: String,
     },
     /// Open a new browser tab.
     Open {
@@ -352,9 +380,9 @@ fn run(cli: Cli) -> Result<(), String> {
             "shortcut.remove",
             json!({ "id": id }),
         ),
-        Command::Browser(BrowserCommand::List { query }) => (
+        Command::Browser(BrowserCommand::List { query, scope }) => (
             "browser.list",
-            json!({ "query": query.unwrap_or_default() }),
+            json!({ "query": query.unwrap_or_default(), "scope": scope }),
         ),
         Command::Browser(BrowserCommand::Open { url }) => (
             "browser.open",
@@ -424,6 +452,18 @@ fn run(cli: Cli) -> Result<(), String> {
             let base: Value = serde_json::from_str(&params).unwrap_or(json!({}));
             (Box::leak(method.into_boxed_str()) as &str, base)
         },
+        Command::Vibespace(VibespaceCommand::AddProject { path }) => (
+            "vibespace.addProject",
+            json!({ "path": path }),
+        ),
+        Command::Vibespace(VibespaceCommand::RemoveProject { path }) => (
+            "vibespace.removeProject",
+            json!({ "path": path }),
+        ),
+        Command::Vibespace(VibespaceCommand::ParkProject { path }) => (
+            "vibespace.parkProject",
+            json!({ "path": path }),
+        ),
     };
 
     let response = send_request(&socket_path, method, params, &env)?;
@@ -447,11 +487,15 @@ fn resolve_socket_path(explicit: Option<&PathBuf>) -> Result<PathBuf, String> {
     }
     let home = std::env::var("HOME")
         .map_err(|_| "HOME not set; cannot resolve default socket path".to_string())?;
-    // Default to production bundle ID. Users running CrispyLocal need to set
-    // CRISPY_SOCKET (which the app will inject automatically once env var
-    // injection is wired up).
+    // Crispy injects CRISPY_SOCKET (and CRISPY_BUNDLE_ID) into every terminal
+    // it spawns, so this fallback only fires when the CLI is invoked from a
+    // non-Crispy context — where the F044-R02 ancestry check would reject the
+    // connection regardless. Default to the production bundle ID so the error
+    // message points at the conventional location.
     let bundle = std::env::var("CRISPY_BUNDLE_ID")
-        .unwrap_or_else(|_| "com.crispyvibe.app".to_string());
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "com.crispyvibe.app".to_string());
     Ok(PathBuf::from(home)
         .join("Library/Application Support")
         .join(&bundle)

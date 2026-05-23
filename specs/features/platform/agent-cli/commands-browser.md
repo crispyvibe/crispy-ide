@@ -6,8 +6,8 @@ This document specifies the `browser.*` commands. See [spec.md](spec.md) for cro
 
 Shipped:
 
-- `browser.list` — list all browser panels in a vibespace
-- `browser.open` — open a URL in an embedded browser panel
+- `browser.list` — list browser panels, default-scoped to the caller's project
+- `browser.open` — open a URL in an embedded browser panel (auto-associates with caller's project)
 - `browser.close` — close a browser panel
 
 Deferred (spec'd but not yet implemented):
@@ -25,7 +25,69 @@ Deferred (spec'd but not yet implemented):
 - `browser.console` — read recent console messages
 - `browser.dialog` — accept or dismiss a JS dialog (alert/confirm/prompt)
 
-Browser panels are scoped to the channel client's vibespace. Multiple browser panels per vibespace are supported. See [F012 Browser](../browser/spec.md) for the underlying feature.
+Browser panels are owned by exactly one project per [F012-R17](../browser/spec.md). Multiple browser panels per vibespace are supported. List/open/close commands are project-scoped by default; cross-project operations require explicit opt-in. See [F012 Browser](../browser/spec.md) for the underlying feature.
+
+---
+
+## `browser.list`
+
+Lists browser panels owned by the caller's project (default), or across the vibespace.
+
+### Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| `query` | string | no | Filter by title or URL substring |
+| `scope` | string | no | `"project"` (default) returns only browsers owned by `CRISPY_PROJECT_PATH` / focused project; `"vibespace"` returns all browsers in the vibespace |
+
+### Result
+
+| Field | Type | Description |
+|---|---|---|
+| `tabs` | array | Array of browser entries |
+
+Each entry:
+
+| Field | Type | Description |
+|---|---|---|
+| `browser_id` | string | Tagged ID (`browser.<uuid>`) |
+| `title` | string | Page title |
+| `url` | string | Current URL (empty for blank tabs) |
+| `project_path` | string \| null | Owning project's normalized path; null for browsers with no project owner |
+
+### Requirements
+
+#### F044-R57: Default project scope
+
+`browser.list` MUST default to project scope so an agent's natural call returns only its own project's browsers — never leaking cross-project context. Cross-project listings require `scope=vibespace` opt-in.
+
+#### F044-R58: Caller-project resolution
+
+The caller's project is resolved as: `CRISPY_PROJECT_PATH` (preferred) → focused project of the active vibespace (fallback) → `no_focused_project` error. Same precedence as `browser.open`.
+
+#### F044-R59: project_path field per entry
+
+Every entry MUST include `project_path` (string for owned browsers, null for orphans). Without this, agents can't tell which project owns a browser.
+
+### Scenarios
+
+#### Scenario F044-S130: Default scope returns only caller's project
+
+**Given** the focused vibespace has browsers owned by projects `/p/alpha`, `/p/beta`, plus an orphan
+**When** the agent invokes `crispy browser list` from a terminal whose `CRISPY_PROJECT_PATH` is `/p/alpha`
+**Then** the response includes only the `/p/alpha` browser
+
+#### Scenario F044-S131: vibespace scope is opt-in
+
+**When** the agent invokes `crispy browser list --scope vibespace`
+**Then** the response includes all browsers across the vibespace
+**And** each entry's `project_path` is set to its owner (or null for orphans)
+
+#### Scenario F044-S132: Default scope without caller project errors
+
+**Given** no `CRISPY_PROJECT_PATH` and no focused project
+**When** the agent invokes `crispy browser list`
+**Then** the response is `no_focused_project` with a hint to pass `scope=vibespace`
 
 ---
 

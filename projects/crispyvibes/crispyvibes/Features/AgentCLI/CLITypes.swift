@@ -108,6 +108,10 @@ enum CLIErrorCode {
     static let timeoutCode = "timeout"
     static let notConnected = "not_connected"
     static let internalError = "internal_error"
+    /// F012-R17: a browser create request reached the router with no resolvable
+    /// owning project — neither `CRISPY_PROJECT_PATH` nor a focused project in
+    /// the active vibespace. Each browser MUST be owned by exactly one project.
+    static let noFocusedProject = "no_focused_project"
 }
 
 /// Minimal type-erased Codable JSON value for params/result payloads.

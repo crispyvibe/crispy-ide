@@ -28,6 +28,11 @@
 		11D89C946BA669BA0035F234 /* FolderExplorerViewModelActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815A47A707CDCB19D9CB666C /* FolderExplorerViewModelActions.swift */; };
 		11E0A2DCF24910EAAF15794E /* BoardCursorRegions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F347CC78926BFD8BEF0DB270 /* BoardCursorRegions.swift */; };
 		12C586A1AF30570016CA09C7 /* VibeSpaceStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72896AE448D6177CD65CB9C8 /* VibeSpaceStateTests.swift */; };
+		18A7EBE079747898EC0BCA41 /* VibeSpaceStateParkingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */; };
+		D2E735AB928E8D15CEA87462 /* CLICommandRouterBrowserOpenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9C1F8E3A5A38C9C43E8859 /* CLICommandRouterBrowserOpenTests.swift */; };
+		CCDC8997D1ABDB93ECD16E3E /* CLICommandRouterBrowserListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */; };
+		550001521069844D02A4B581 /* CLICommandRouterVibeSpaceProjectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E7236DCFA9727A2B266A6DD /* CLICommandRouterVibeSpaceProjectTests.swift */; };
+		B1A2C88AC3924AF22C8A2944 /* TerminalSessionVibeSpaceIDInjectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B691073B465571583494E749 /* TerminalSessionVibeSpaceIDInjectionTests.swift */; };
 		14F7235F22EF92C7211F7376 /* TerminalInteractionUITestsRailHydration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 861B6A15633497234A19C17E /* TerminalInteractionUITestsRailHydration.swift */; };
 		17925997C869BB368A96B724 /* BoardHitTestingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A420D8C1EB221D5AD7E4D2BE /* BoardHitTestingTests.swift */; };
 		17CC6D7AC193F5F66E547413 /* FolderExplorerViewModelHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787EE95D352218FABFA40A50 /* FolderExplorerViewModelHelpers.swift */; };
@@ -403,6 +408,7 @@
 		ADD000000000000000000005 /* RemoteFolderExplorerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD000000000000000000006 /* RemoteFolderExplorerTests.swift */; };
 		ADD000000000000000000007 /* LocalCommandExecutorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD000000000000000000008 /* LocalCommandExecutorTests.swift */; };
 		ADD00000000000000000000A /* VibeSpaceTerminalBoardStoreAddTileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD00000000000000000000B /* VibeSpaceTerminalBoardStoreAddTileTests.swift */; };
+		43653DDACECB96EA749C901E /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 188A11D13A8A6C4FAB7FA023 /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift */; };
 		ADD00000000000000000000C /* ComposeHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD00000000000000000000D /* ComposeHistoryTests.swift */; };
 		B01C6B5E7DAE99CE841EE969 /* PaneWorkerClientAndFileIconTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 554E867E1559D589DF6F2399 /* PaneWorkerClientAndFileIconTests.swift */; };
 		B01E0C43357F74CC1DD0F369 /* ContentViewCatalogRecentSnapshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C52B060B3A6451F1736E911 /* ContentViewCatalogRecentSnapshots.swift */; };
@@ -412,6 +418,7 @@
 		B441F918527A716B3B4CFEA6 /* DocumentBufferStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B3444C6DBB3A395D597D916 /* DocumentBufferStoreTests.swift */; };
 		B46CBA75328AC61E4AAEDF6B /* OperationMetricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC6AE2F6E509F8231A2F2CA /* OperationMetricsStore.swift */; };
 		B4C921675C4C4E4FB2E260FD /* CLICommandRouterBrowserHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C31719235B442EC97D7A234 /* CLICommandRouterBrowserHandlers.swift */; };
+		2BCD0396759CBC899BCAAD21 /* CLICommandRouterVibeSpaceHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D5ABD4E1C9E71C6467FD94 /* CLICommandRouterVibeSpaceHandlers.swift */; };
 		B5AE1C535A5B3A6A008F3200 /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076F010F6417EBE98E5BEA2B /* AppStrings.swift */; };
 		B5FB3BE1789896D0D9D04FCF /* VibeSpaceSettingsRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D25D8E9DD2F083E4FE0B3D /* VibeSpaceSettingsRows.swift */; };
 		B8679E2B487A2F623E34192C /* PDFFilePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6865C7E06CEF39B3C6CB25 /* PDFFilePreview.swift */; };
@@ -623,6 +630,7 @@
 		0BAE2841F03545E269F6EFDD /* ContentViewerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewerStore.swift; sourceTree = "<group>"; };
 		0C1AE4E90486DBE2684D76EB /* AppThemeResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppThemeResolver.swift; sourceTree = "<group>"; };
 		0C31719235B442EC97D7A234 /* CLICommandRouterBrowserHandlers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLICommandRouterBrowserHandlers.swift; sourceTree = "<group>"; };
+		A8D5ABD4E1C9E71C6467FD94 /* CLICommandRouterVibeSpaceHandlers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLICommandRouterVibeSpaceHandlers.swift; sourceTree = "<group>"; };
 		0CE101D119D54DCBF66222F5 /* ContentViewWelcomeRecents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentViewWelcomeRecents.swift; sourceTree = "<group>"; };
 		0D057D20F79F8DE3AD7C8756 /* EditorDropZoneOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorDropZoneOverlay.swift; sourceTree = "<group>"; };
 		0D8EB8B8342C31938D394917 /* VibeSpaceMultiProjectUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceMultiProjectUITests.swift; sourceTree = "<group>"; };
@@ -717,6 +725,11 @@
 		6E1F0A10D7D1453D9A8B2007 /* EditorBehavioralTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorBehavioralTests.swift; sourceTree = "<group>"; };
 		7007E7015EF44ABB0F29E016 /* VibeSpaceLifecycleUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceLifecycleUITests.swift; sourceTree = "<group>"; };
 		72896AE448D6177CD65CB9C8 /* VibeSpaceStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateTests.swift; sourceTree = "<group>"; };
+		B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateParkingTests.swift; sourceTree = "<group>"; };
+		5C9C1F8E3A5A38C9C43E8859 /* CLICommandRouterBrowserOpenTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterBrowserOpenTests.swift; sourceTree = "<group>"; };
+		36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterBrowserListTests.swift; sourceTree = "<group>"; };
+		4E7236DCFA9727A2B266A6DD /* CLICommandRouterVibeSpaceProjectTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterVibeSpaceProjectTests.swift; sourceTree = "<group>"; };
+		B691073B465571583494E749 /* TerminalSessionVibeSpaceIDInjectionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalSessionVibeSpaceIDInjectionTests.swift; sourceTree = "<group>"; };
 		757E2EC70C0A3BDAAEDC824A /* AppShellModelTestsFormattingAndUpdates.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppShellModelTestsFormattingAndUpdates.swift; sourceTree = "<group>"; };
 		75F983B5636E497394A7794F /* EditorGroupStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorGroupStore.swift; sourceTree = "<group>"; };
 		75FAAB0D8B5109965541C328 /* EditableRasterImageCanvasViewGeometry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditableRasterImageCanvasViewGeometry.swift; sourceTree = "<group>"; };
@@ -858,6 +871,7 @@
 		ADD000000000000000000006 /* RemoteFolderExplorerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteFolderExplorerTests.swift; sourceTree = "<group>"; };
 		ADD000000000000000000008 /* LocalCommandExecutorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalCommandExecutorTests.swift; sourceTree = "<group>"; };
 		ADD00000000000000000000B /* VibeSpaceTerminalBoardStoreAddTileTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreAddTileTests.swift; sourceTree = "<group>"; };
+		188A11D13A8A6C4FAB7FA023 /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreClickToSelectTests.swift; sourceTree = "<group>"; };
 		ADD00000000000000000000D /* ComposeHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeHistoryTests.swift; sourceTree = "<group>"; };
 		AEC6AE2F6E509F8231A2F2CA /* OperationMetricsStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OperationMetricsStore.swift; sourceTree = "<group>"; };
 		AFE41179110DAD31D25DB684 /* ShortcutPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ShortcutPanelView.swift; path = crispyvibes/Features/Terminal/Views/ShortcutPanelView.swift; sourceTree = "<group>"; };
@@ -1557,6 +1571,11 @@
 				CF95089305E64D7AD9F55E49 /* TextServiceCLIPresetCatalogTests.swift */,
 				72896AE448D6177CD65CB9C8 /* VibeSpaceStateTests.swift */,
 				07B977ECF638A5A85D81A20C /* VibeSpaceStateTestsOverridesAndPaths.swift */,
+				B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */,
+				5C9C1F8E3A5A38C9C43E8859 /* CLICommandRouterBrowserOpenTests.swift */,
+				36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */,
+				4E7236DCFA9727A2B266A6DD /* CLICommandRouterVibeSpaceProjectTests.swift */,
+				B691073B465571583494E749 /* TerminalSessionVibeSpaceIDInjectionTests.swift */,
 			);
 			name = models;
 			path = models;
@@ -1905,6 +1924,7 @@
 				2A4D5BA41C043B89D06725A3 /* TerminalViewModelTestsDiagnosticsAndEscaping.swift */,
 				5D40B67F5AF706A291328CEE /* TerminalViewModelTestsExecutionFlows.swift */,
 				ADD00000000000000000000B /* VibeSpaceTerminalBoardStoreAddTileTests.swift */,
+				188A11D13A8A6C4FAB7FA023 /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift */,
 				ADD00000000000000000000D /* ComposeHistoryTests.swift */,
 			);
 			name = ViewModels;
@@ -2086,6 +2106,7 @@
 				A6E18000000000000000071D /* CLICommandRouterFileHandlers.swift */,
 				A6E19000000000000000071D /* CLICommandRouterShortcutHandlers.swift */,
 				0C31719235B442EC97D7A234 /* CLICommandRouterBrowserHandlers.swift */,
+				A8D5ABD4E1C9E71C6467FD94 /* CLICommandRouterVibeSpaceHandlers.swift */,
 				A6E1A000000000000000071D /* CLIKeyMapping.swift */,
 			);
 			name = AgentCLI;
@@ -3670,6 +3691,7 @@
 				A6E18000000000000000B71D /* CLICommandRouterFileHandlers.swift in Sources */,
 				A6E19000000000000000B71D /* CLICommandRouterShortcutHandlers.swift in Sources */,
 				B4C921675C4C4E4FB2E260FD /* CLICommandRouterBrowserHandlers.swift in Sources */,
+				2BCD0396759CBC899BCAAD21 /* CLICommandRouterVibeSpaceHandlers.swift in Sources */,
 				A6E1A000000000000000B71D /* CLIKeyMapping.swift in Sources */,
 				A6E1B000000000000000B71D /* AppDelegateAgentCLI.swift in Sources */,
 				45A93A598B9D942D7136F7AE /* CognitoAuthSecurity.swift in Sources */,
@@ -3859,6 +3881,11 @@
 				D6ACEC07ED838E4AD12B9D09 /* ProjectPaneLayoutStateTests.swift in Sources */,
 				34F2B3A75ED03C8319284730 /* VibeSpaceStateTestsOverridesAndPaths.swift in Sources */,
 				12C586A1AF30570016CA09C7 /* VibeSpaceStateTests.swift in Sources */,
+				18A7EBE079747898EC0BCA41 /* VibeSpaceStateParkingTests.swift in Sources */,
+				D2E735AB928E8D15CEA87462 /* CLICommandRouterBrowserOpenTests.swift in Sources */,
+				CCDC8997D1ABDB93ECD16E3E /* CLICommandRouterBrowserListTests.swift in Sources */,
+				550001521069844D02A4B581 /* CLICommandRouterVibeSpaceProjectTests.swift in Sources */,
+				B1A2C88AC3924AF22C8A2944 /* TerminalSessionVibeSpaceIDInjectionTests.swift in Sources */,
 				F64B81B608FC22C1E7D303E7 /* DiagnosticsTests.swift in Sources */,
 				A36CA858C6B544EA91D8C589 /* DeveloperToolsTests.swift in Sources */,
 				BRTEST10002000200020002 /* BrowserEnhancementsTests.swift in Sources */,
@@ -3886,6 +3913,7 @@
 				7821EBF769F001F0BABA0F0C /* TerminalViewModelTestsExecutionFlows.swift in Sources */,
 				D9F5D0CF4021B85B05339FDA /* TerminalViewModelTests.swift in Sources */,
 				ADD00000000000000000000A /* VibeSpaceTerminalBoardStoreAddTileTests.swift in Sources */,
+				43653DDACECB96EA749C901E /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift in Sources */,
 				ADD00000000000000000000C /* ComposeHistoryTests.swift in Sources */,
 				B3C4D5E6F7A8091A2B3C4D5E /* TerminalMemoryLifecycleTests.swift in Sources */,
 				C4D5E6F7A8B9C0D1E2F3A4B5 /* ContentViewerMemoryLifecycleTests.swift in Sources */,

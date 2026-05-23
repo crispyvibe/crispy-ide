@@ -18,6 +18,13 @@ final class CLICommandRouter {
     var vibespaceCatalogStore: VibeSpaceCatalogStore?
     var vibespaceManagement: VibeSpaceManagementService?
     var dockedBrowserCoordinator: DockedBrowserCoordinator?
+    /// F044-R80–R82: late-bound canvas actions coordinator used by
+    /// `vibespace.addProject` / `removeProject` / `parkProject` so CLI mutations
+    /// use the same orchestration path (close pipeline, persistence,
+    /// hydration) as user-driven UI actions. Wired by `ContentView` once it
+    /// has constructed the coordinator. Weak so the router doesn't pin the
+    /// UI-layer coordinator.
+    weak var vibespaceActionsCoordinator: VibeSpaceCanvasActionsCoordinator?
 
     init(
         appBundleName: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Crispy",
@@ -64,6 +71,20 @@ final class CLICommandRouter {
         }
         self.dockedBrowserCoordinator = coordinator
         agentCLILogger.notice("docked browser coordinator attached")
+    }
+
+    /// Late-bound idempotent injection of the vibespace canvas actions
+    /// coordinator. Same rationale as `attachDockedBrowserCoordinator` —
+    /// `ContentView.init` runs on every body re-evaluation, so guarding
+    /// against re-attach prevents the router from pointing at a stale
+    /// coordinator while views still use the original.
+    func attachVibeSpaceActionsCoordinator(_ coordinator: VibeSpaceCanvasActionsCoordinator) {
+        if vibespaceActionsCoordinator != nil {
+            agentCLILogger.notice("vibespace actions coordinator attach skipped (already attached)")
+            return
+        }
+        self.vibespaceActionsCoordinator = coordinator
+        agentCLILogger.notice("vibespace actions coordinator attached")
     }
 
     func dispatch(_ request: CLIRequest) async -> CLIResponse {
@@ -388,10 +409,13 @@ final class CLICommandRouter {
         CommandRegistration(
             method: "browser.list",
             descriptor: CommandDescriptor(
-                summary: "List open browser tabs.",
-                params: [.init(name: "query", type: "string", required: false, description: "Filter by title or URL substring.")],
-                result: [.init(name: "tabs", type: "array", description: "Array of {browser_id, title, url}.")],
-                errors: []
+                summary: "List open browser tabs owned by the caller's project (default), or across the vibespace.",
+                params: [
+                    .init(name: "query", type: "string", required: false, description: "Filter by title or URL substring."),
+                    .init(name: "scope", type: "string", required: false, description: "\"project\" (default) returns browsers owned by CRISPY_PROJECT_PATH / focused project; \"vibespace\" returns every browser in the vibespace.", defaultValue: .string("project")),
+                ],
+                result: [.init(name: "tabs", type: "array", description: "Array of {browser_id, title, url, project_path}. project_path is null for browsers with no resolved project owner.")],
+                errors: ["invalid_params", "no_focused_project"]
             ),
             handler: { [unowned self] req in self.handleBrowserList(req) }
         ),
@@ -414,6 +438,51 @@ final class CLICommandRouter {
                 errors: ["browser_not_found"]
             ),
             handler: { [unowned self] req in self.handleBrowserClose(req) }
+        ),
+        // MARK: VibeSpace
+        CommandRegistration(
+            method: "vibespace.addProject",
+            descriptor: CommandDescriptor(
+                summary: "Add a project to the focused vibespace and focus it (F044-R80).",
+                params: [
+                    .init(name: "path", type: "string", required: true, description: "Absolute path to the project directory."),
+                ],
+                result: [
+                    .init(name: "project_path", type: "string", description: "Resolved absolute path of the added project."),
+                    .init(name: "project_name", type: "string", description: "Display name of the added project."),
+                    .init(name: "focused", type: "boolean", description: "True — the new project becomes focused per F021-S03."),
+                ],
+                errors: ["invalid_params", "file_not_found", "vibespace_not_found", "not_connected"]
+            ),
+            handler: { [unowned self] req in self.handleVibeSpaceAddProject(req) }
+        ),
+        CommandRegistration(
+            method: "vibespace.removeProject",
+            descriptor: CommandDescriptor(
+                summary: "Remove a project from the focused vibespace, closing all its terminals/browsers (F044-R81).",
+                params: [
+                    .init(name: "path", type: "string", required: true, description: "Absolute path of the project to remove."),
+                ],
+                result: [
+                    .init(name: "removed_project_path", type: "string", description: "Resolved absolute path of the removed project."),
+                ],
+                errors: ["invalid_params", "file_not_found", "vibespace_not_found", "not_connected"]
+            ),
+            handler: { [unowned self] req in self.handleVibeSpaceRemoveProject(req) }
+        ),
+        CommandRegistration(
+            method: "vibespace.parkProject",
+            descriptor: CommandDescriptor(
+                summary: "Park a project in the focused vibespace, persisting state and terminating sessions (F044-R82).",
+                params: [
+                    .init(name: "path", type: "string", required: true, description: "Absolute path of the project to park."),
+                ],
+                result: [
+                    .init(name: "parked_project_path", type: "string", description: "Resolved absolute path of the parked project."),
+                ],
+                errors: ["invalid_params", "file_not_found", "vibespace_not_found", "not_connected"]
+            ),
+            handler: { [unowned self] req in self.handleVibeSpaceParkProject(req) }
         ),
     ] + Self.browserForwardedRegistrations
 

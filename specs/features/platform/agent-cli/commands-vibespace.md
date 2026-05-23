@@ -176,6 +176,152 @@ Exactly one pane MUST have `focused: true` per vibespace. Within that pane, exac
 
 ---
 
+## `vibespace.addProject`
+
+Adds a project folder to the focused vibespace and focuses it.
+
+### Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | yes | Absolute path to the project directory |
+
+### Result
+
+| Field | Type | Description |
+|---|---|---|
+| `project_path` | string | Resolved absolute path of the added project |
+| `project_name` | string | Display name of the added project |
+| `focused` | boolean | Always `true` — new project becomes focused per F021-S03 |
+
+### Requirements
+
+#### F044-R80: Add Project
+
+`vibespace.addProject` MUST add a project to the focused vibespace via the same orchestration path used by the UI's "Add Project" flow (`VibeSpaceCanvasActionsCoordinator.addProjectsViaCLI`). Behavior MUST match F021-S03: the new project becomes focused, and an active terminal is ensured for the project root.
+
+Validation:
+- `path` MUST exist and be a directory; otherwise return `file_not_found`
+- `path` MUST NOT already correspond to a live project in the vibespace; otherwise return `invalid_params`. (Parked projects with the same path auto-unpark — this is delegated to `VibeSpaceState.addProjects`.)
+
+### Scenarios
+
+#### Scenario F044-S200: Adds a new project and focuses it
+
+**Given** the focused vibespace has 1 live project
+**When** the agent invokes `vibespace.addProject` with a fresh directory path
+**Then** the vibespace's `projects` count becomes 2
+**And** the new project becomes focused (`focused_project_path` matches)
+**And** the response result includes `project_path`, `project_name`, `focused: true`
+
+#### Scenario F044-S201: Rejects nonexistent path
+
+**Given** the agent invokes `vibespace.addProject` with a path that does not exist on disk
+**Then** the response is an error with code `file_not_found`
+**And** the vibespace is unmodified
+
+#### Scenario F044-S202: Rejects duplicate live project
+
+**Given** project `/foo` is already live in the vibespace
+**When** the agent invokes `vibespace.addProject` with `/foo`
+**Then** the response is an error with code `invalid_params`
+**And** the vibespace is unmodified
+
+---
+
+## `vibespace.removeProject`
+
+Removes a project from the focused vibespace and closes its artifacts.
+
+### Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | yes | Absolute path of the project to remove |
+
+### Result
+
+| Field | Type | Description |
+|---|---|---|
+| `removed_project_path` | string | Resolved absolute path of the removed project |
+
+### Requirements
+
+#### F044-R81: Remove Project
+
+`vibespace.removeProject` MUST resolve the live project at `path` and invoke `VibeSpaceCanvasActionsCoordinator.removeProject(id:)`, which:
+- closes all browsers owned by the project (F012-R18)
+- shuts down the project session (terminating terminals and watchers)
+- applies focus fallback to the last remaining project (F021-S06)
+- persists the catalog
+
+Validation:
+- `path` MUST correspond to a live project in the vibespace; otherwise return `file_not_found`
+
+### Scenarios
+
+#### Scenario F044-S203: Removes the project and applies focus fallback
+
+**Given** the focused vibespace has projects `/a` (focused) and `/b`
+**When** the agent invokes `vibespace.removeProject` with `/a`
+**Then** the vibespace's `projects` count becomes 1
+**And** `/b` becomes focused
+**And** the response result includes `removed_project_path: "/a"`
+
+---
+
+## `vibespace.parkProject`
+
+Parks a project in the focused vibespace, persisting state and terminating sessions.
+
+### Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | yes | Absolute path of the project to park |
+
+### Result
+
+| Field | Type | Description |
+|---|---|---|
+| `parked_project_path` | string | Resolved absolute path of the parked project |
+
+### Requirements
+
+#### F044-R82: Park Project
+
+`vibespace.parkProject` MUST invoke `VibeSpaceCanvasActionsCoordinator.parkProject(id:)`, which:
+- captures browser session entries (F012-R20)
+- closes browsers via the standard close pipeline
+- marks `ProjectConfigFile.isParked = true`
+- mutates state via `VibeSpaceState.parkProject(id:)` (terminates terminals, removes from `projects`, appends to `parkedProjectPaths`)
+- persists the catalog
+
+Validation:
+- `path` MUST correspond to a live project in the vibespace; otherwise return `file_not_found`. Already-parked projects are NOT live, so re-parking returns `file_not_found` rather than a no-op.
+
+### Scenarios
+
+#### Scenario F044-S204: Parks the project, moving its path to parkedProjectPaths
+
+**Given** the focused vibespace has live project `/foo`
+**When** the agent invokes `vibespace.parkProject` with `/foo`
+**Then** `/foo` is removed from `projects`
+**And** `/foo` is appended to `parkedProjectPaths`
+**And** the project's `ProjectConfigFile.isParked` becomes `true`
+**And** the response result includes `parked_project_path: "/foo"`
+
+---
+
+## Test Coverage
+
+| Scope | Test File |
+|---|---|
+| Handler-level: addProject / removeProject / parkProject success + validation paths; coordinator-not-attached fallback | `tests/unit/Models/CLICommandRouterVibeSpaceProjectTests.swift` |
+| Underlying state-layer behavior (park/unpark cycle, addProjects auto-unpark) | `tests/unit/Models/VibeSpaceStateParkingTests.swift` |
+
+---
+
 ## Open Questions
 
 ### Should agents be able to create or close vibespaces?
