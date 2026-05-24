@@ -218,6 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @MainActor
     private func handleKeyboardShortcut(_ event: NSEvent) -> Bool {
         guard let action = AppShortcutRegistry.action(matching: event) else {
             return false
@@ -231,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    @MainActor
     private func dispatchShortcutAction(_ action: AppShortcutAction) {
         switch action {
         case .saveDocument:
@@ -275,6 +277,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.post(name: .boardNavigateLeft, object: nil)
         case .boardNavigateRight:
             NotificationCenter.default.post(name: .boardNavigateRight, object: nil)
+        case .boardMoveProjectToNewWindow:
+            postBoardBulkMoveShortcut(.boardMoveProjectToNewWindowRequested)
+        case .boardRecallProjectFromWindow:
+            postBoardBulkMoveShortcut(.boardRecallProjectFromWindowRequested)
         case .increaseFontSize:
             adjustCodeFontSize(by: 1)
         case .decreaseFontSize:
@@ -296,6 +302,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             name: .focusProjectByNumber,
             object: nil,
             userInfo: [AppCommandUserInfoKey.index: index]
+        )
+    }
+
+    /// F048-R13/R16: post a bulk-move/recall notification with the source
+    /// surface ID resolved from the current key window.
+    ///
+    /// If the key window is a managed detached board window, the source surface
+    /// is that window's surface. Otherwise (primary vibespace shell or any
+    /// other window), the source defaults to the active vibespace's primary
+    /// surface — the listener is the one that ultimately checks board mode and
+    /// focused project, so we just need a sensible source.
+    @MainActor
+    private func postBoardBulkMoveShortcut(_ name: Notification.Name) {
+        var sourceSurfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID
+        if let keyWindow = NSApp.keyWindow,
+           let context = appContainer?.terminalBoardDetachedWindowManager.surfaceContext(forWindow: keyWindow) {
+            sourceSurfaceID = context.surfaceID
+        }
+        NotificationCenter.default.post(
+            name: name,
+            object: nil,
+            userInfo: [AppCommandUserInfoKey.sourceSurfaceID: sourceSurfaceID]
         )
     }
 

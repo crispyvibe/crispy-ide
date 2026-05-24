@@ -432,6 +432,17 @@ final class VibeSpaceTerminalBoardDetachedWindowManager {
         windowsByID.values.contains { $0.window === window }
     }
 
+    /// F048-R13/R16: resolve a managed `NSWindow` (typically `NSApp.keyWindow`)
+    /// to its surfaceID + vibespaceID, or nil if the window is not a managed
+    /// detached board window. Used by the bulk-move keyboard shortcuts to
+    /// determine which surface initiated the action.
+    func surfaceContext(forWindow window: NSWindow) -> (surfaceID: UUID, vibespaceID: UUID?)? {
+        guard let record = windowsByID.values.first(where: { $0.window === window }) else {
+            return nil
+        }
+        return (record.surfaceID, record.vibespaceID)
+    }
+
     private func closeWindow(id: UUID, notifyUserClose: Bool) {
         guard let record = windowsByID.removeValue(forKey: id) else { return }
         record.onPlacementChanged?(Self.placement(for: record.window))

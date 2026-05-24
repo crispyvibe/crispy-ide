@@ -78,8 +78,33 @@ Standard macOS window shortcuts apply:
 |--------|----------|
 | Close window | ⌘W |
 | Minimize window | ⌘M |
+| Move all of focused project's panes to a new monitor | ⌘⌥M |
+| Recall all panes on the current detached window back to primary | ⌘⌥B |
 
 Spotlight and terminal shortcuts work within the focused board window.
+
+### Bulk move project to a new monitor
+
+1. Switch the vibespace to terminal board mode (default `⌘T`).
+2. Focus a project that has tiles on the current board surface.
+3. Press `⌘⌥M`.
+
+Every tile on the current surface that belongs to the focused project moves to a new detached board window in one operation. Drag the new window to another display.
+
+The shortcut works from both the primary window (source = primary surface) and a detached window (source = that detached window's surface). Tiles belonging to other projects on the same surface stay where they are.
+
+You can also right-click any tile and choose **Send All From This Project to New Window** for the same effect, scoped to the right-clicked tile's project. The menu item is hidden for tiles without a project association (e.g., standalone terminals).
+
+### Bulk recall to primary
+
+1. Click into a detached board window so it becomes the key window.
+2. Press `⌘⌥B`.
+
+Every tile on that detached surface moves back to the primary surface and the detached window closes. If the primary surface is already at its 16-tile cap, overflow tiles roll into the minimized tab strip.
+
+The shortcut is a no-op when invoked from the primary window or outside terminal board mode.
+
+Both bindings are editable in App Settings → Shortcuts → Terminal Board.
 
 ## Settings / Configuration
 

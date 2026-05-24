@@ -36,6 +36,11 @@ struct VibeSpaceTerminalOnlyView: View {
     var boardWindowTransferTargets: ((VibeSpaceTerminalBoardStore, UUID) -> [VibeSpaceTerminalBoardSurfaceTransferTarget])? = nil
     var onTileSendToNewBoardWindowRequested: ((UUID, VibeSpaceTerminalBoardStore, UUID) -> Void)? = nil
     var onTileSendToBoardWindowRequested: ((UUID, UUID, VibeSpaceTerminalBoardStore, UUID) -> Void)? = nil
+    /// F048-R13: invoked from a tile's context menu "Send All From This
+    /// Project to New Window" item. The callee bulk-moves every tile on
+    /// `sourceSurfaceID` whose `projectPath == projectPath` to a new
+    /// detached board window.
+    var onTileSendAllFromProjectToNewBoardWindowRequested: ((String, VibeSpaceTerminalBoardStore, UUID) -> Void)? = nil
     var onOpenTerminalInEditorPane: ((UUID, UUID) -> Void)? = nil
     var vibeCastStore: VibeCastStore?
     var acpStoreLookup: ((UUID) -> ACPStandaloneSessionStore?)? = nil
@@ -82,6 +87,7 @@ struct VibeSpaceTerminalOnlyView: View {
         boardWindowTransferTargets: ((VibeSpaceTerminalBoardStore, UUID) -> [VibeSpaceTerminalBoardSurfaceTransferTarget])? = nil,
         onTileSendToNewBoardWindowRequested: ((UUID, VibeSpaceTerminalBoardStore, UUID) -> Void)? = nil,
         onTileSendToBoardWindowRequested: ((UUID, UUID, VibeSpaceTerminalBoardStore, UUID) -> Void)? = nil,
+        onTileSendAllFromProjectToNewBoardWindowRequested: ((String, VibeSpaceTerminalBoardStore, UUID) -> Void)? = nil,
         onOpenTerminalInEditorPane: ((UUID, UUID) -> Void)? = nil,
         vibeCastStore: VibeCastStore? = nil,
         acpStoreLookup: ((UUID) -> ACPStandaloneSessionStore?)? = nil,
@@ -121,6 +127,7 @@ struct VibeSpaceTerminalOnlyView: View {
         self.boardWindowTransferTargets = boardWindowTransferTargets
         self.onTileSendToNewBoardWindowRequested = onTileSendToNewBoardWindowRequested
         self.onTileSendToBoardWindowRequested = onTileSendToBoardWindowRequested
+        self.onTileSendAllFromProjectToNewBoardWindowRequested = onTileSendAllFromProjectToNewBoardWindowRequested
         self.onOpenTerminalInEditorPane = onOpenTerminalInEditorPane
         self.vibeCastStore = vibeCastStore
         self.acpStoreLookup = acpStoreLookup

@@ -622,6 +622,14 @@ struct ContentView: View {
                 guard terminalSpotlightCoordinator.spotlight != nil else { return }
                 switchSpotlight(by: -1)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .boardMoveProjectToNewWindowRequested)) { notification in
+                guard let surfaceID = notification.userInfo?[AppCommandUserInfoKey.sourceSurfaceID] as? UUID else { return }
+                bulkMoveCurrentProjectToNewWindow(sourceSurfaceID: surfaceID)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .boardRecallProjectFromWindowRequested)) { notification in
+                guard let surfaceID = notification.userInfo?[AppCommandUserInfoKey.sourceSurfaceID] as? UUID else { return }
+                recallProjectFromWindow(sourceSurfaceID: surfaceID)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .openDetailedVibeSpaceView)) { _ in
                 vibespaceCanvasActionsCoordinator.openDetailedVibeSpaceView()
             }

@@ -2834,6 +2834,17 @@
         }
       }
     },
+    "terminal.tile.sendAllFromProjectToNewBoardWindow" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send All From This Project to New Window"
+          }
+        }
+      }
+    },
     "terminal.window.renameWindow" : {
       "extractionState" : "stale",
       "localizations" : {

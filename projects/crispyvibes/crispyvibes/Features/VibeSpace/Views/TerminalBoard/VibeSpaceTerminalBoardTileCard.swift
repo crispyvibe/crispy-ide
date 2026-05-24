@@ -28,6 +28,8 @@ struct VibeSpaceTerminalBoardTileCard: View {
     var boardWindowTransferTargets: [VibeSpaceTerminalBoardSurfaceTransferTarget] = []
     var onSendToNewBoardWindow: (() -> Void)? = nil
     var onSendToBoardWindow: ((UUID) -> Void)? = nil
+    /// F048-R13 context menu: bulk-move all tiles for this tile's project.
+    var onSendAllFromProjectToNewBoardWindow: (() -> Void)? = nil
     var interactionController: BoardInteractionController?
 
     @State private var isRenaming = false
@@ -59,6 +61,7 @@ struct VibeSpaceTerminalBoardTileCard: View {
         boardWindowTransferTargets: [VibeSpaceTerminalBoardSurfaceTransferTarget] = [],
         onSendToNewBoardWindow: (() -> Void)? = nil,
         onSendToBoardWindow: ((UUID) -> Void)? = nil,
+        onSendAllFromProjectToNewBoardWindow: (() -> Void)? = nil,
         interactionController: BoardInteractionController? = nil
     ) {
         self.tile = tile
@@ -87,6 +90,7 @@ struct VibeSpaceTerminalBoardTileCard: View {
         self.boardWindowTransferTargets = boardWindowTransferTargets
         self.onSendToNewBoardWindow = onSendToNewBoardWindow
         self.onSendToBoardWindow = onSendToBoardWindow
+        self.onSendAllFromProjectToNewBoardWindow = onSendAllFromProjectToNewBoardWindow
         self.interactionController = interactionController
     }
 
@@ -193,7 +197,8 @@ struct VibeSpaceTerminalBoardTileCard: View {
             BoardWindowTransferContextMenuItems(
                 targets: boardWindowTransferTargets,
                 onSendToNewBoardWindow: onSendToNewBoardWindow,
-                onSendToBoardWindow: onSendToBoardWindow
+                onSendToBoardWindow: onSendToBoardWindow,
+                onSendAllFromProjectToNewBoardWindow: onSendAllFromProjectToNewBoardWindow
             )
         }
         .onAppear(perform: startSessionIfNeededForDisplay)

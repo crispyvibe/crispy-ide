@@ -409,6 +409,7 @@
 		ADD000000000000000000007 /* LocalCommandExecutorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD000000000000000000008 /* LocalCommandExecutorTests.swift */; };
 		ADD00000000000000000000A /* VibeSpaceTerminalBoardStoreAddTileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD00000000000000000000B /* VibeSpaceTerminalBoardStoreAddTileTests.swift */; };
 		43653DDACECB96EA749C901E /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 188A11D13A8A6C4FAB7FA023 /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift */; };
+		321C1DBF0EE52184B14F768D /* VibeSpaceTerminalBoardStoreBulkMoveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88A2A70496B1D17D1044FBEE /* VibeSpaceTerminalBoardStoreBulkMoveTests.swift */; };
 		ADD00000000000000000000C /* ComposeHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD00000000000000000000D /* ComposeHistoryTests.swift */; };
 		B01C6B5E7DAE99CE841EE969 /* PaneWorkerClientAndFileIconTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 554E867E1559D589DF6F2399 /* PaneWorkerClientAndFileIconTests.swift */; };
 		B01E0C43357F74CC1DD0F369 /* ContentViewCatalogRecentSnapshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C52B060B3A6451F1736E911 /* ContentViewCatalogRecentSnapshots.swift */; };
@@ -872,6 +873,7 @@
 		ADD000000000000000000008 /* LocalCommandExecutorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalCommandExecutorTests.swift; sourceTree = "<group>"; };
 		ADD00000000000000000000B /* VibeSpaceTerminalBoardStoreAddTileTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreAddTileTests.swift; sourceTree = "<group>"; };
 		188A11D13A8A6C4FAB7FA023 /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreClickToSelectTests.swift; sourceTree = "<group>"; };
+		88A2A70496B1D17D1044FBEE /* VibeSpaceTerminalBoardStoreBulkMoveTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreBulkMoveTests.swift; sourceTree = "<group>"; };
 		ADD00000000000000000000D /* ComposeHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeHistoryTests.swift; sourceTree = "<group>"; };
 		AEC6AE2F6E509F8231A2F2CA /* OperationMetricsStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OperationMetricsStore.swift; sourceTree = "<group>"; };
 		AFE41179110DAD31D25DB684 /* ShortcutPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ShortcutPanelView.swift; path = crispyvibes/Features/Terminal/Views/ShortcutPanelView.swift; sourceTree = "<group>"; };
@@ -1925,6 +1927,7 @@
 				5D40B67F5AF706A291328CEE /* TerminalViewModelTestsExecutionFlows.swift */,
 				ADD00000000000000000000B /* VibeSpaceTerminalBoardStoreAddTileTests.swift */,
 				188A11D13A8A6C4FAB7FA023 /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift */,
+				88A2A70496B1D17D1044FBEE /* VibeSpaceTerminalBoardStoreBulkMoveTests.swift */,
 				ADD00000000000000000000D /* ComposeHistoryTests.swift */,
 			);
 			name = ViewModels;
@@ -3914,6 +3917,7 @@
 				D9F5D0CF4021B85B05339FDA /* TerminalViewModelTests.swift in Sources */,
 				ADD00000000000000000000A /* VibeSpaceTerminalBoardStoreAddTileTests.swift in Sources */,
 				43653DDACECB96EA749C901E /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift in Sources */,
+				321C1DBF0EE52184B14F768D /* VibeSpaceTerminalBoardStoreBulkMoveTests.swift in Sources */,
 				ADD00000000000000000000C /* ComposeHistoryTests.swift in Sources */,
 				B3C4D5E6F7A8091A2B3C4D5E /* TerminalMemoryLifecycleTests.swift in Sources */,
 				C4D5E6F7A8B9C0D1E2F3A4B5 /* ContentViewerMemoryLifecycleTests.swift in Sources */,

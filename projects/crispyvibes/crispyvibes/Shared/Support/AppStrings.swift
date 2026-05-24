@@ -312,6 +312,7 @@ enum AppStrings {
             static let closeMinimized = String(localized: "terminal.tile.closeMinimized")
             static let sendToNewBoardWindow = String(localized: "terminal.tile.sendToNewBoardWindow")
             static let sendToBoardWindow = String(localized: "terminal.tile.sendToBoardWindow")
+            static let sendAllFromProjectToNewBoardWindow = String(localized: "terminal.tile.sendAllFromProjectToNewBoardWindow")
             static let primaryBoardWindow = String(localized: "terminal.tile.primaryBoardWindow")
             static let boardWindow = String(localized: "terminal.tile.boardWindow")
             static let panes = String(localized: "terminal.tile.panes")

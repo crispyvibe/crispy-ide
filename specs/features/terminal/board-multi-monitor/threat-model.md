@@ -59,6 +59,14 @@ This feature adds auxiliary NSWindows for terminal board surfaces. The threat su
 - If the app crashes during tile transfer, the persisted state may have the tile removed from source but not yet added to target. Normalization on next load handles orphaned references.
 - Display topology changes between sessions may cause windows to appear on unexpected monitors (macOS default behavior).
 
+## Bulk Pane Move (F048-R13 to R16) — Threat Addendum
+
+The bulk-move keyboard shortcuts and tile context menu reuse the same single-`mutate(_:)` boundary as single-tile transfer. No new threats are introduced:
+
+- **State corruption (T02 reuse)**: bulk detach + reattach happen in a single mutation; partial failure is impossible because the transformation is atomic and `mutate(_:)` only publishes the result if it differs from the previous state. Re-entrancy from the keyboard shortcut path is bounded by `@MainActor` isolation on `handleKeyboardShortcut`; the context-menu path is inherently serialized through SwiftUI's main-actor view updates.
+- **Resource leak (T04 reuse)**: the new detached window created by R13 is registered with the same `VibeSpaceTerminalBoardDetachedWindowManager` as user-initiated detached windows; the existing `closeWindows(for:)` cleanup on vibespace close still reaches it, regardless of whether the window was created via shortcut or context menu.
+- **No new attack surface**: the keyboard shortcut dispatches through the existing `AppShortcutRegistry` and `Notification.Name` plumbing; the context menu uses the existing tile-card closure plumbing already used by single-tile transfer (`onTileSendToNewBoardWindowRequested`). Both surfaces converge on the same `bulkMoveProjectToNewWindow(projectPath:sourceSurfaceID:)` orchestrator.
+
 ## NFR Compliance
 
 - **REL-1**: Single mutation boundary prevents state corruption.

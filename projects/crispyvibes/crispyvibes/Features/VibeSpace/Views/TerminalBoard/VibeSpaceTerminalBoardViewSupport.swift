@@ -4,14 +4,39 @@ struct BoardWindowTransferContextMenuItems: View {
     let targets: [VibeSpaceTerminalBoardSurfaceTransferTarget]
     let onSendToNewBoardWindow: (() -> Void)?
     let onSendToBoardWindow: ((UUID) -> Void)?
+    /// F048-R13: when non-nil, the "Send All From This Project to New Window"
+    /// menu item is rendered. The closure is provided by the call site only
+    /// when the right-clicked tile has a resolved `projectPath`.
+    let onSendAllFromProjectToNewBoardWindow: (() -> Void)?
+
+    init(
+        targets: [VibeSpaceTerminalBoardSurfaceTransferTarget],
+        onSendToNewBoardWindow: (() -> Void)? = nil,
+        onSendToBoardWindow: ((UUID) -> Void)? = nil,
+        onSendAllFromProjectToNewBoardWindow: (() -> Void)? = nil
+    ) {
+        self.targets = targets
+        self.onSendToNewBoardWindow = onSendToNewBoardWindow
+        self.onSendToBoardWindow = onSendToBoardWindow
+        self.onSendAllFromProjectToNewBoardWindow = onSendAllFromProjectToNewBoardWindow
+    }
 
     var body: some View {
-        if onSendToNewBoardWindow != nil || (onSendToBoardWindow != nil && !targets.isEmpty) {
+        let hasAny = onSendToNewBoardWindow != nil
+            || onSendAllFromProjectToNewBoardWindow != nil
+            || (onSendToBoardWindow != nil && !targets.isEmpty)
+        if hasAny {
             Divider()
 
             if let onSendToNewBoardWindow {
                 Button(AppStrings.Terminal.Tile.sendToNewBoardWindow) {
                     onSendToNewBoardWindow()
+                }
+            }
+
+            if let onSendAllFromProjectToNewBoardWindow {
+                Button(AppStrings.Terminal.Tile.sendAllFromProjectToNewBoardWindow) {
+                    onSendAllFromProjectToNewBoardWindow()
                 }
             }
 
@@ -41,6 +66,8 @@ struct MinimizedTerminalTabView: View {
     let boardWindowTransferTargets: [VibeSpaceTerminalBoardSurfaceTransferTarget]
     let onSendToNewBoardWindow: (() -> Void)?
     let onSendToBoardWindow: ((UUID) -> Void)?
+    /// F048-R13 context menu: bulk-move all tiles for this minimized tab's project.
+    let onSendAllFromProjectToNewBoardWindow: (() -> Void)?
 
     init(
         title: String,
@@ -51,7 +78,8 @@ struct MinimizedTerminalTabView: View {
         onClose: @escaping () -> Void,
         boardWindowTransferTargets: [VibeSpaceTerminalBoardSurfaceTransferTarget] = [],
         onSendToNewBoardWindow: (() -> Void)? = nil,
-        onSendToBoardWindow: ((UUID) -> Void)? = nil
+        onSendToBoardWindow: ((UUID) -> Void)? = nil,
+        onSendAllFromProjectToNewBoardWindow: (() -> Void)? = nil
     ) {
         self.title = title
         self.accentColor = accentColor
@@ -64,6 +92,7 @@ struct MinimizedTerminalTabView: View {
         self.boardWindowTransferTargets = boardWindowTransferTargets
         self.onSendToNewBoardWindow = onSendToNewBoardWindow
         self.onSendToBoardWindow = onSendToBoardWindow
+        self.onSendAllFromProjectToNewBoardWindow = onSendAllFromProjectToNewBoardWindow
     }
 
     var body: some View {
@@ -103,7 +132,8 @@ struct MinimizedTerminalTabView: View {
             BoardWindowTransferContextMenuItems(
                 targets: boardWindowTransferTargets,
                 onSendToNewBoardWindow: onSendToNewBoardWindow,
-                onSendToBoardWindow: onSendToBoardWindow
+                onSendToBoardWindow: onSendToBoardWindow,
+                onSendAllFromProjectToNewBoardWindow: onSendAllFromProjectToNewBoardWindow
             )
         }
     }
@@ -128,6 +158,10 @@ struct VibeCastBoardTileCard: View {
     let boardWindowTransferTargets: [VibeSpaceTerminalBoardSurfaceTransferTarget]
     let onSendToNewBoardWindow: (() -> Void)?
     let onSendToBoardWindow: ((UUID) -> Void)?
+    /// F048-R13 context menu: bulk-move all tiles for VibeCast's source
+    /// project, when applicable. VibeCast itself has no projectPath, so this
+    /// is typically nil.
+    let onSendAllFromProjectToNewBoardWindow: (() -> Void)?
     var interactionController: BoardInteractionController?
 
     var body: some View {
@@ -167,7 +201,8 @@ struct VibeCastBoardTileCard: View {
             BoardWindowTransferContextMenuItems(
                 targets: boardWindowTransferTargets,
                 onSendToNewBoardWindow: onSendToNewBoardWindow,
-                onSendToBoardWindow: onSendToBoardWindow
+                onSendToBoardWindow: onSendToBoardWindow,
+                onSendAllFromProjectToNewBoardWindow: onSendAllFromProjectToNewBoardWindow
             )
         }
     }

@@ -16,7 +16,7 @@
 | Feature 1: Browser-to-Project Association | F012-R17–R20 | ✅ Implemented (2026-05-22) | Specs updated, 1024 tests passing |
 | Feature 2: Project Parking | F021-R09–R14 (renumbered from R01–R06 to avoid ID collision) | ✅ Implemented (2026-05-22) | Files-tab UI; specs + threat model updated |
 | Feature 3: File Commenting System | F049-R01–R07 | ⏳ Not started | Largest scope: new Rust crate, schema, UI, agent CLI |
-| Feature 4: Multi-Monitor Bulk Pane Move | F048-R13–R16 | ⏳ Not started | Board mode only |
+| Feature 4: Multi-Monitor Bulk Pane Move | F048-R13–R16 | ✅ Implemented (2026-05-23) | Cmd+Opt+M move / Cmd+Opt+B recall; "Send All From This Project to New Window" tile context menu; surface-scoped + project-scoped; reuses single-mutate boundary |
 | Feature 5: CLI Add/Remove/Park Project | F044-R80–R82 | ✅ Implemented (2026-05-22) | Specs updated; routes through VibeSpaceCanvasActionsCoordinator for UI parity |
 | Feature 6: Click-to-Select Project | F021-R15–R17 (renumbered from R07–R09) | ✅ Implemented (2026-05-22) | Content-viewer tabs + board tiles + tray |
 | BUG-001: Docked terminal double-click spotlight | F003 / F006 | ⏳ Out of scope per direction | Not in current iteration |

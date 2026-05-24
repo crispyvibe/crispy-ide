@@ -19,6 +19,17 @@ extension VibeSpaceTerminalOnlyView {
         }
     }
 
+    /// F048-R13: closure for the "Send All From This Project to New Window"
+    /// menu item. Returns nil when the tile has no `projectPath` (so the menu
+    /// item is hidden) or no callback is wired.
+    func sendAllFromProjectToNewBoardWindowAction(for tile: VibeSpaceTerminalBoardTile) -> (() -> Void)? {
+        guard let projectPath = tile.projectPath else { return nil }
+        guard let onTileSendAllFromProjectToNewBoardWindowRequested else { return nil }
+        return {
+            onTileSendAllFromProjectToNewBoardWindowRequested(projectPath, boardStore, surfaceID)
+        }
+    }
+
     var minimizedTabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
@@ -71,7 +82,8 @@ extension VibeSpaceTerminalOnlyView {
             },
             boardWindowTransferTargets: boardWindowTargets,
             onSendToNewBoardWindow: sendToNewBoardWindowAction(for: tile.id),
-            onSendToBoardWindow: sendToBoardWindowAction(for: tile.id)
+            onSendToBoardWindow: sendToBoardWindowAction(for: tile.id),
+            onSendAllFromProjectToNewBoardWindow: sendAllFromProjectToNewBoardWindowAction(for: tile)
         )
         .gesture(
             DragGesture(minimumDistance: 6, coordinateSpace: .named("terminalBoard"))
@@ -111,6 +123,7 @@ extension VibeSpaceTerminalOnlyView {
                     boardWindowTransferTargets: boardWindowTargets,
                     onSendToNewBoardWindow: sendToNewBoardWindowAction(for: tile.id),
                     onSendToBoardWindow: sendToBoardWindowAction(for: tile.id),
+                    onSendAllFromProjectToNewBoardWindow: sendAllFromProjectToNewBoardWindowAction(for: tile),
                     interactionController: interactionController
                 )
             } else if tile.isFile, let fileURL = tile.fileURL,
@@ -130,6 +143,7 @@ extension VibeSpaceTerminalOnlyView {
                     boardWindowTransferTargets: boardWindowTargets,
                     onSendToNewBoardWindow: sendToNewBoardWindowAction(for: tile.id),
                     onSendToBoardWindow: sendToBoardWindowAction(for: tile.id),
+                    onSendAllFromProjectToNewBoardWindow: sendAllFromProjectToNewBoardWindowAction(for: tile),
                     interactionController: interactionController
                 )
             } else if tile.isBrowser, let url = tile.browserURL,
@@ -148,6 +162,7 @@ extension VibeSpaceTerminalOnlyView {
                     boardWindowTransferTargets: boardWindowTargets,
                     onSendToNewBoardWindow: sendToNewBoardWindowAction(for: tile.id),
                     onSendToBoardWindow: sendToBoardWindowAction(for: tile.id),
+                    onSendAllFromProjectToNewBoardWindow: sendAllFromProjectToNewBoardWindowAction(for: tile),
                     interactionController: interactionController
                 )
             } else if let snapshot = tile.acpSnapshot,
@@ -173,6 +188,7 @@ extension VibeSpaceTerminalOnlyView {
                     boardWindowTransferTargets: boardWindowTargets,
                     onSendToNewBoardWindow: sendToNewBoardWindowAction(for: tile.id),
                     onSendToBoardWindow: sendToBoardWindowAction(for: tile.id),
+                    onSendAllFromProjectToNewBoardWindow: sendAllFromProjectToNewBoardWindowAction(for: tile),
                     interactionController: interactionController
                 )
             } else if let context = boardStore.tileContext(for: tile) {
@@ -270,6 +286,7 @@ extension VibeSpaceTerminalOnlyView {
                     boardWindowTransferTargets: boardWindowTargets,
                     onSendToNewBoardWindow: sendToNewBoardWindowAction(for: tile.id),
                     onSendToBoardWindow: sendToBoardWindowAction(for: tile.id),
+                    onSendAllFromProjectToNewBoardWindow: sendAllFromProjectToNewBoardWindowAction(for: tile),
                     interactionController: interactionController
                 )
             } else {
@@ -349,6 +366,8 @@ private struct ACPBoardTileCard: View {
     let boardWindowTransferTargets: [VibeSpaceTerminalBoardSurfaceTransferTarget]
     let onSendToNewBoardWindow: (() -> Void)?
     let onSendToBoardWindow: ((UUID) -> Void)?
+    /// F048-R13 context menu: bulk-move all tiles for this ACP tile's project.
+    let onSendAllFromProjectToNewBoardWindow: (() -> Void)?
     var interactionController: BoardInteractionController?
 
     private var tileAccentColor: Color {
@@ -459,7 +478,8 @@ private struct ACPBoardTileCard: View {
             BoardWindowTransferContextMenuItems(
                 targets: boardWindowTransferTargets,
                 onSendToNewBoardWindow: onSendToNewBoardWindow,
-                onSendToBoardWindow: onSendToBoardWindow
+                onSendToBoardWindow: onSendToBoardWindow,
+                onSendAllFromProjectToNewBoardWindow: onSendAllFromProjectToNewBoardWindow
             )
         }
     }

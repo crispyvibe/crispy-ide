@@ -20,6 +20,8 @@ struct BrowserBoardTileView: View {
     var boardWindowTransferTargets: [VibeSpaceTerminalBoardSurfaceTransferTarget] = []
     var onSendToNewBoardWindow: (() -> Void)? = nil
     var onSendToBoardWindow: ((UUID) -> Void)? = nil
+    /// F048-R13 context menu: bulk-move all tiles for this browser's project.
+    var onSendAllFromProjectToNewBoardWindow: (() -> Void)? = nil
     var interactionController: BoardInteractionController?
 
     private var resolvedAccentColor: Color {
@@ -60,7 +62,8 @@ struct BrowserBoardTileView: View {
             BoardWindowTransferContextMenuItems(
                 targets: boardWindowTransferTargets,
                 onSendToNewBoardWindow: onSendToNewBoardWindow,
-                onSendToBoardWindow: onSendToBoardWindow
+                onSendToBoardWindow: onSendToBoardWindow,
+                onSendAllFromProjectToNewBoardWindow: onSendAllFromProjectToNewBoardWindow
             )
         }
     }

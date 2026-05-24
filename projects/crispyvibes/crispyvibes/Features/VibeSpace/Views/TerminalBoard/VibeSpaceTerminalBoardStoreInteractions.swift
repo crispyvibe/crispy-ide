@@ -214,6 +214,108 @@ extension VibeSpaceTerminalBoardStore {
         return didAttach
     }
 
+    // MARK: - Bulk Cross-Surface Transfer (F048-R13/R16)
+
+    /// F048-R13: collect all tile IDs on `surfaceID` whose `projectPath` matches
+    /// `projectPath`. Returns visible tiles followed by minimized tiles. Used by
+    /// the bulk-move-to-new-window flow to identify which tiles to relocate.
+    func tileIDs(forProject projectPath: String, onSurface surfaceID: UUID) -> [UUID] {
+        let surfaceLayout = layout(for: surfaceID)
+        let visible = surfaceLayout.tiles
+            .filter { $0.projectPath == projectPath }
+            .map(\.id)
+        let minimized = surfaceLayout.minimizedTiles
+            .filter { $0.projectPath == projectPath }
+            .map(\.id)
+        return visible + minimized
+    }
+
+    /// F048-R13: detach every tile on `surfaceID` belonging to `projectPath` in
+    /// one mutation, returning them in their original column-then-minimized
+    /// order. Caller is responsible for re-attaching them onto another surface
+    /// (typically a new detached surface created with `createDetachedSurface(with:title:placement:)`).
+    @discardableResult
+    func bulkDetachTilesForProject(
+        _ projectPath: String,
+        fromSurface surfaceID: UUID
+    ) -> [VibeSpaceTerminalBoardTile] {
+        var detached: [VibeSpaceTerminalBoardTile] = []
+        mutate { state in
+            guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
+            let visibleIDs = state.surfaces[index].layout.tiles
+                .filter { $0.projectPath == projectPath }
+                .map(\.id)
+            let minimizedIDs = state.surfaces[index].layout.minimizedTiles
+                .filter { $0.projectPath == projectPath }
+                .map(\.id)
+            // Preserve original order: visible first (column-flattened), then minimized.
+            for tileID in visibleIDs + minimizedIDs {
+                if let removed = state.surfaces[index].layout.removeTile(withID: tileID) {
+                    detached.append(removed)
+                }
+            }
+        }
+        return detached
+    }
+
+    /// F048-R13: create a new detached surface populated with the given tiles
+    /// (visible only — minimized tiles are folded into a single visible column
+    /// since the new surface is fresh and the user expects to see what they just
+    /// moved). The first tile becomes the active tile. Returns the new
+    /// surface's UUID. Caller is responsible for opening the NSWindow.
+    @discardableResult
+    func createDetachedSurface(
+        with tiles: [VibeSpaceTerminalBoardTile],
+        title: String,
+        placement: VibeSpaceTerminalBoardWindowPlacement? = nil
+    ) -> UUID {
+        let surfaceID = UUID()
+        // Distribute up to 16 tiles across up to 4 columns, mirroring the
+        // existing layout cap. Excess tiles (>16, which shouldn't happen since
+        // each surface caps at 16) fall into minimizedTiles.
+        let visibleCap = VibeSpaceTerminalBoardLayout.maximumTileCount
+        let visible = Array(tiles.prefix(visibleCap))
+        let overflow = Array(tiles.dropFirst(visibleCap))
+        let columns = Self.distributeIntoColumns(visible)
+        let surface = VibeSpaceTerminalBoardSurface(
+            id: surfaceID,
+            kind: .detached,
+            layout: VibeSpaceTerminalBoardLayout(
+                columns: columns,
+                activeTileID: visible.first?.id,
+                minimizedTiles: overflow
+            ),
+            title: title,
+            placement: placement,
+            isOpen: true
+        )
+        mutate { state in
+            state.surfaces.append(surface)
+        }
+        return surfaceID
+    }
+
+    /// Distribute `tiles` into up to `maxColumns` columns of up to
+    /// `maxRowsPerColumn` each, filling columns left-to-right. Used by bulk
+    /// detach so the new detached surface lays the tiles out predictably.
+    static func distributeIntoColumns(_ tiles: [VibeSpaceTerminalBoardTile]) -> [VibeSpaceTerminalBoardColumn] {
+        guard !tiles.isEmpty else { return [] }
+        let maxRows = VibeSpaceTerminalBoardLayout.maxRowsPerColumn
+        let maxCols = VibeSpaceTerminalBoardLayout.maxColumns
+        let columnCount = min(maxCols, Int(ceil(Double(tiles.count) / Double(maxRows))))
+        var columns: [VibeSpaceTerminalBoardColumn] = []
+        columns.reserveCapacity(columnCount)
+        var i = 0
+        for _ in 0..<columnCount {
+            let remaining = tiles.count - i
+            let take = min(maxRows, remaining)
+            let slice = Array(tiles[i..<(i + take)])
+            columns.append(VibeSpaceTerminalBoardColumn(widthWeight: 1, tiles: slice))
+            i += take
+        }
+        return columns
+    }
+
     // MARK: - Tile Context Helpers
 
     func activeTileContext(surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID) -> TileContext? {

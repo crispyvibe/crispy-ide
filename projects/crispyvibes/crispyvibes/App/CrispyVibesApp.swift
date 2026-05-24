@@ -25,6 +25,16 @@ extension Notification.Name {
     static let openDeveloperTools = Notification.Name("openDeveloperTools")
     static let boardNavigateLeft = Notification.Name("boardNavigateLeft")
     static let boardNavigateRight = Notification.Name("boardNavigateRight")
+    /// F048-R13: posted when the user invokes the bulk-move keyboard shortcut.
+    /// userInfo: ["sourceSurfaceID": UUID]. Listener moves all of the focused
+    /// project's tiles from `sourceSurfaceID` to a new detached board window.
+    /// No-op outside terminal-board mode (F048-R14).
+    static let boardMoveProjectToNewWindowRequested = Notification.Name("boardMoveProjectToNewWindowRequested")
+    /// F048-R16: posted when the user invokes the bulk-recall keyboard shortcut.
+    /// userInfo: ["sourceSurfaceID": UUID]. Listener moves all tiles on the
+    /// detached surface back to the primary surface and closes the now-empty
+    /// detached window. No-op when invoked from a primary surface.
+    static let boardRecallProjectFromWindowRequested = Notification.Name("boardRecallProjectFromWindowRequested")
     static let checkForAppUpdates = Notification.Name("checkForAppUpdates")
     static let openExternalPaths = Notification.Name("openExternalPaths")
     static let toggleVibeCast = Notification.Name("toggleVibeCast")
@@ -59,6 +69,7 @@ enum AppCommandUserInfoKey {
     static let sessionID = "sessionID"
     static let line = "line"
     static let column = "column"
+    static let sourceSurfaceID = "sourceSurfaceID"
 }
 
 enum AppCommandSource {
