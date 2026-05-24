@@ -39,6 +39,7 @@ final class CLICommandRouterVibeSpaceProjectTests: XCTestCase {
         catalog?.clearDisplayedVibeSpaces()
         catalog = nil
         router = nil
+        container?.terminalServices.focusCoordinator.unfocusCurrent()
         container = nil
     }
 

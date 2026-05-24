@@ -174,7 +174,7 @@ final class EditorGroupStore: ObservableObject, Identifiable {
             NotificationCenter.default.post(
                 name: .contentViewerTabActivated,
                 object: nil,
-                userInfo: ["tab": tab]
+                userInfo: [AppCommandUserInfoKey.tab: tab]
             )
         }
     }

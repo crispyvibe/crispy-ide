@@ -55,6 +55,7 @@ final class FolderExplorerViewModel: ObservableObject {
     private var displayedItemsComputationTask: Task<Void, Never>?
     private var displayedItemsComputationRequestID = UUID()
     private var subscriptions = Set<AnyCancellable>()
+    private var hasShutdown = false
 
     var isSearching: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -108,8 +109,6 @@ final class FolderExplorerViewModel: ObservableObject {
         displayedItemsComputationTask?.cancel()
         displayedItemsComputationTask = nil
     }
-
-    private var hasShutdown = false
 
     private func bindDisplayedItems() {
         let normalizedSearchQuery = $searchQuery

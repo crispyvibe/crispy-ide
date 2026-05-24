@@ -36,6 +36,14 @@ final class TerminalSession: NSObject {
     /// `CRISPY_VIBESPACE`. Set by `ProjectSession` via the
     /// `sessionConfigurator` hook on `TerminalViewModel`. Nil for
     /// detached/standalone terminals not owned by a vibespace.
+    /// F044-R04 / F012: vibespace ID exported via CRISPY_VIBESPACE so the
+    /// agent CLI can route requests to the right vibespace runtime.
+    /// Set once at session construction by `ProjectSession.wireViewModels`'s
+    /// `sessionConfigurator`; not intended to mutate over the session's lifetime.
+    /// Kept `var` (rather than `private(set)`/`let`) only because the
+    /// `sessionConfigurator` closure is invoked from `TerminalViewModelTabs`
+    /// after `init` returns — matching the same pattern used by sibling
+    /// fields like `operationMetricsStore` and `tmuxSessionName`.
     var vibespaceID: UUID?
     /// Override for remote SSH terminals. When set, replaces the shell executable/args.
     /// Returns (executable, arguments) to launch instead of the local shell.
@@ -178,11 +186,11 @@ final class TerminalSession: NSObject {
             // (F044-R04 + tmux-session env refresh — see TmuxService.refreshSessionEnvironment).
             var agentCLIEnv: [String: String] = [:]
             for entry in environment {
-                guard let separator = entry.firstIndex(of: "=") else { continue }
-                let key = String(entry[..<separator])
+                let parts = entry.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                guard parts.count == 2 else { continue }
+                let key = String(parts[0])
                 guard key.hasPrefix("CRISPY_") else { continue }
-                let value = String(entry[entry.index(after: separator)...])
-                agentCLIEnv[key] = value
+                agentCLIEnv[key] = String(parts[1])
             }
             let tmuxLaunch = TmuxService.launchArguments(
                 sessionName: tmuxSessionName,

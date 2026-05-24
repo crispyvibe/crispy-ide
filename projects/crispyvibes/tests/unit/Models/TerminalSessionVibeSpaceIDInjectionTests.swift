@@ -22,6 +22,7 @@ final class TerminalSessionVibeSpaceIDInjectionTests: XCTestCase {
         if let tempRoot {
             try? FileManager.default.removeItem(at: tempRoot)
         }
+        container?.terminalServices.focusCoordinator.unfocusCurrent()
         container = nil
     }
 

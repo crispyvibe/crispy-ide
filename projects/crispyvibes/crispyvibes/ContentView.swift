@@ -537,7 +537,7 @@ struct ContentView: View {
                 // focus call is suppressed if the resolved project is already
                 // focused, so programmatic activations from `focusProject` itself
                 // do not recurse.
-                guard let tab = notification.userInfo?["tab"] as? ContentViewerTab else { return }
+                guard let tab = notification.userInfo?[AppCommandUserInfoKey.tab] as? ContentViewerTab else { return }
                 guard let owningProjectPath = resolveOwningProjectPath(for: tab) else { return }
                 let projects = activeVibeSpaceSession.projects
                 guard let owner = projects.first(where: { $0.projectIdentifier == owningProjectPath }) else { return }
@@ -548,7 +548,7 @@ struct ContentView: View {
                 // F021-R17: when a board tile becomes active, switch focused
                 // project to the tile's owning project. Same idempotency guard
                 // as the content-viewer tab listener.
-                guard let projectPath = notification.userInfo?["projectPath"] as? String else { return }
+                guard let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String else { return }
                 let projects = activeVibeSpaceSession.projects
                 guard let owner = projects.first(where: { $0.projectIdentifier == projectPath }) else { return }
                 if activeVibeSpaceSession.focusedProject?.id == owner.id { return }
@@ -556,12 +556,12 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .parkProjectRequested)) { notification in
                 // F021-R13: park the requested project (right-click → "Park Project").
-                guard let projectID = notification.userInfo?["projectID"] as? UUID else { return }
+                guard let projectID = notification.userInfo?[AppCommandUserInfoKey.projectID] as? UUID else { return }
                 vibespaceCanvasActionsCoordinator.parkProject(id: projectID)
             }
             .onReceive(NotificationCenter.default.publisher(for: .activateProjectRequested)) { notification in
                 // F021-R13: activate (unpark) the requested project.
-                guard let projectPath = notification.userInfo?["projectPath"] as? String else { return }
+                guard let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String else { return }
                 _ = vibespaceCanvasActionsCoordinator.unparkProject(path: projectPath)
             }
             .onReceive(NotificationCenter.default.publisher(for: .ghosttyOpenLinkTargetRequested)) { notification in

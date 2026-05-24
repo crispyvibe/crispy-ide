@@ -3201,6 +3201,39 @@
         }
       }
     },
+    "vibespace.parkedProjects.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parked Projects"
+          }
+        }
+      }
+    },
+    "vibespace.parkProject.action" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Park Project"
+          }
+        }
+      }
+    },
+    "vibespace.activateProject.action" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activate Project"
+          }
+        }
+      }
+    },
     "vibespace.noProjects" : {
       "extractionState" : "stale",
       "localizations" : {

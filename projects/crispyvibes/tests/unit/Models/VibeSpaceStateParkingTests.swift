@@ -23,6 +23,7 @@ final class VibeSpaceStateParkingTests: XCTestCase {
         if let tempRoot {
             try? FileManager.default.removeItem(at: tempRoot)
         }
+        container?.terminalServices.focusCoordinator.unfocusCurrent()
         container = nil
     }
 

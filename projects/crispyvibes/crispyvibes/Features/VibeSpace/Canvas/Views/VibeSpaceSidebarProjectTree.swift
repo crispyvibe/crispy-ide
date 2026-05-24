@@ -89,11 +89,11 @@ struct VibeSpaceProjectFilesSectionView: View {
             .accessibilityIdentifier("vibespace.sidebar.project.\(project.id.uuidString)")
             .contextMenu {
                 // F021-R13: park the project from the Files-tab right-click menu.
-                Button("Park Project") {
+                Button(AppStrings.VibeSpace.parkProjectAction) {
                     NotificationCenter.default.post(
                         name: .parkProjectRequested,
                         object: nil,
-                        userInfo: ["projectID": project.id]
+                        userInfo: [AppCommandUserInfoKey.projectID: project.id]
                     )
                 }
             }

@@ -746,7 +746,7 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         // programmatic activations from `focusProject` don't recurse.
         var userInfo: [String: Any] = [:]
         if let projectPath = tile.projectPath {
-            userInfo["projectPath"] = projectPath
+            userInfo[AppCommandUserInfoKey.projectPath] = projectPath
         }
         NotificationCenter.default.post(
             name: .boardTileActivated,

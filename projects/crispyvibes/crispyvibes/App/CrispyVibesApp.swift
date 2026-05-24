@@ -48,16 +48,20 @@ extension Notification.Name {
     /// tab becomes active (user-initiated or programmatic). Listeners may resolve
     /// the active tab's owning project and switch focus accordingly. Idempotent
     /// when the resolved project is already focused.
+    /// userInfo: `[AppCommandUserInfoKey.tab: ContentViewerTab]`.
     static let contentViewerTabActivated = Notification.Name("contentViewerTabActivated")
     /// F021-R17: posted by `VibeSpaceTerminalBoardStore.activateTile` when a
-    /// board tile becomes active. userInfo: ["projectPath": String?]. Listeners
-    /// resolve the project from the path and switch focus. Idempotent.
+    /// board tile becomes active. Listeners resolve the project from the path
+    /// and switch focus. Idempotent.
+    /// userInfo: `[AppCommandUserInfoKey.projectPath: String]` (key omitted when
+    /// the tile has no project association).
     static let boardTileActivated = Notification.Name("boardTileActivated")
     /// F021-R13: posted when the user selects "Park Project" from a context menu.
-    /// userInfo: ["projectID": UUID].
+    /// userInfo: `[AppCommandUserInfoKey.projectID: UUID]`.
     static let parkProjectRequested = Notification.Name("parkProjectRequested")
     /// F021-R13: posted when the user selects "Activate Project" on a parked
-    /// project. userInfo: ["projectPath": String].
+    /// project.
+    /// userInfo: `[AppCommandUserInfoKey.projectPath: String]`.
     static let activateProjectRequested = Notification.Name("activateProjectRequested")
 }
 
@@ -70,6 +74,9 @@ enum AppCommandUserInfoKey {
     static let line = "line"
     static let column = "column"
     static let sourceSurfaceID = "sourceSurfaceID"
+    static let tab = "tab"
+    static let projectPath = "projectPath"
+    static let projectID = "projectID"
 }
 
 enum AppCommandSource {

@@ -28,6 +28,7 @@ final class CLICommandRouterBrowserListTests: XCTestCase {
         coordinator.removeAll()
         coordinator = nil
         router = nil
+        container?.terminalServices.focusCoordinator.unfocusCurrent()
         container = nil
     }
 

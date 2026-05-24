@@ -61,6 +61,7 @@ final class VibeSpaceTerminalBoardStoreBulkMoveTests: XCTestCase {
             try? FileManager.default.removeItem(at: tempRoot)
         }
         boardStore = nil
+        container?.terminalServices.focusCoordinator.unfocusCurrent()
         container = nil
     }
 

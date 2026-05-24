@@ -68,7 +68,7 @@ struct VibeSpaceSidebarFilesPane: View {
     @ViewBuilder
     private var parkedProjectsSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Parked Projects")
+            Text(AppStrings.VibeSpace.parkedProjectsHeader)
                 .font(AppTypographyTokens.captionSemibold)
                 .foregroundStyle(activeThemePalette.secondaryTextColor)
                 .padding(.horizontal, 10)
@@ -81,7 +81,7 @@ struct VibeSpaceSidebarFilesPane: View {
     }
 
     private func parkedProjectRow(for path: String) -> some View {
-        let displayName = (path as NSString).lastPathComponent
+        let displayName = URL(fileURLWithPath: path).lastPathComponent
         return HStack(spacing: 8) {
             Image(systemName: "shippingbox")
                 .foregroundStyle(activeThemePalette.secondaryTextColor)
@@ -97,15 +97,15 @@ struct VibeSpaceSidebarFilesPane: View {
         .contentShape(Rectangle())
         .contextMenu {
             // F021-R13: activate (unpark) the project from its right-click menu.
-            Button("Activate Project") {
+            Button(AppStrings.VibeSpace.activateProjectAction) {
                 NotificationCenter.default.post(
                     name: .activateProjectRequested,
                     object: nil,
-                    userInfo: ["projectPath": path]
+                    userInfo: [AppCommandUserInfoKey.projectPath: path]
                 )
             }
         }
-        .accessibilityIdentifier("vibespace.sidebar.files.parked.row")
+        .accessibilityIdentifier("vibespace.sidebar.files.parked.row.\(path)")
     }
 
     private func projectSection(for project: AnyProjectSession) -> some View {

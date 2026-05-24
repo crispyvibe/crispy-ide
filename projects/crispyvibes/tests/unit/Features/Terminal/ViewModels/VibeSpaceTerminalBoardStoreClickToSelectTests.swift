@@ -65,7 +65,7 @@ final class VibeSpaceTerminalBoardStoreClickToSelectTests: XCTestCase {
             object: nil,
             queue: .main
         ) { notification in
-            capturedProjectPath = notification.userInfo?["projectPath"] as? String
+            capturedProjectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String
             expectation.fulfill()
         }
         defer { NotificationCenter.default.removeObserver(observer) }
@@ -101,6 +101,6 @@ final class VibeSpaceTerminalBoardStoreClickToSelectTests: XCTestCase {
         boardStore.activateTile(firstTile.id, requestFocus: false)
 
         wait(for: [expectation], timeout: 1.0)
-        XCTAssertNil(capturedUserInfo?["projectPath"])
+        XCTAssertNil(capturedUserInfo?[AppCommandUserInfoKey.projectPath])
     }
 }

@@ -1558,7 +1558,7 @@
 			path = Core;
 			sourceTree = "<group>";
 		};
-		57A39FCD9D6A9AD08AB0D9F6 /* models */ = {
+		57A39FCD9D6A9AD08AB0D9F6 /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				00F72377C9FA23F598D0560F /* BoardCursorRegionsTests.swift */,
@@ -1579,8 +1579,8 @@
 				4E7236DCFA9727A2B266A6DD /* CLICommandRouterVibeSpaceProjectTests.swift */,
 				B691073B465571583494E749 /* TerminalSessionVibeSpaceIDInjectionTests.swift */,
 			);
-			name = models;
-			path = models;
+			name = Models;
+			path = Models;
 			sourceTree = "<group>";
 		};
 		5B1FF3CC033FBF820B7806CE /* ACP */ = {
@@ -1807,13 +1807,13 @@
 			path = Persistence;
 			sourceTree = "<group>";
 		};
-		6E1F0A10D7D1453D9A8B3020 /* models */ = {
+		6E1F0A10D7D1453D9A8B3020 /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				BFD7BF556597A1485639E590 /* ProjectSessionPersistenceServiceTests.swift */,
 				920C5E83B762C0FB5A0C90E5 /* VibeSpacePersistenceServiceTests.swift */,
 			);
-			path = models;
+			path = Models;
 			sourceTree = "<group>";
 		};
 		70C7048B058BCF68922C1233 /* Updates */ = {
@@ -2529,12 +2529,12 @@
 		C20000000000000000000002 /* unit */ = {
 			isa = PBXGroup;
 			children = (
-				6E1F0A10D7D1453D9A8B3020 /* models */,
+				6E1F0A10D7D1453D9A8B3020 /* Models */,
 				C6DA45413ACE0312B7393316 /* support */,
 				2C6AEA939FB00B3E9695A35F /* Property */,
 				FE0D423693D893E76DEE5ED1 /* App */,
 				6618899004734C5A3B779D29 /* Shared */,
-				57A39FCD9D6A9AD08AB0D9F6 /* models */,
+				57A39FCD9D6A9AD08AB0D9F6 /* Models */,
 				B3CDB86858E19D308465AF9C /* Features */,
 				EBD48BC3519938A522C9D388 /* Data */,
 			);

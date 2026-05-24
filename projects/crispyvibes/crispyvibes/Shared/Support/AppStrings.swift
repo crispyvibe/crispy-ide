@@ -129,6 +129,11 @@ enum AppStrings {
         static let noProjects = String(localized: "vibespace.noProjects")
         static let addProjectToStart = String(localized: "vibespace.addProjectToStart")
         static let closeVibeSpace = String(localized: "vibespace.closeVibeSpace")
+
+        // F021-R12 / R13: Parked project UI strings.
+        static let parkedProjectsHeader = String(localized: "vibespace.parkedProjects.header", defaultValue: "Parked Projects")
+        static let parkProjectAction = String(localized: "vibespace.parkProject.action", defaultValue: "Park Project")
+        static let activateProjectAction = String(localized: "vibespace.activateProject.action", defaultValue: "Activate Project")
     }
 
     // MARK: - Sidebar
