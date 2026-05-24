@@ -14,7 +14,7 @@ If you discover a security vulnerability in Crispy, please report it responsibly
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, email: **security@crispyvibe.com**
+Instead, email: **hello@crispyvibe.com**
 
 Include:
 - Description of the vulnerability
