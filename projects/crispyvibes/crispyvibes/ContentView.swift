@@ -327,6 +327,12 @@ struct ContentView: View {
             .onChange(of: activeVibeSpaceSession.vibespace?.name) { _, _ in
                 syncWindowTitleWithVibeSpace()
             }
+            .onChange(of: selectedVibeSpaceCanvasMode) { _, _ in
+                syncWindowTitleWithVibeSpace()
+            }
+            .onChange(of: activeVibeSpaceSession.focusedProject?.id) { _, _ in
+                syncWindowTitleWithVibeSpace()
+            }
             .onChange(of: contentViewerStore.markdownViewModel.fileURL) { _, fileURL in
                 shelfStore.syncSelection(from: fileURL)
             }

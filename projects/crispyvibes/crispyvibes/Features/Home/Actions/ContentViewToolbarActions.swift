@@ -3,13 +3,30 @@ import SwiftUI
 
 extension ContentView {
     func syncWindowTitleWithVibeSpace() {
-        let resolvedTitle: String
-        if let vibespaceName = activeVibeSpaceSession.vibespace?.name.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !vibespaceName.isEmpty {
-            resolvedTitle = vibespaceName
-        } else {
-            resolvedTitle = AppStrings.Brand.crispyvibes
+        let canvasModeLabel: String
+        switch selectedVibeSpaceCanvasMode {
+        case .detailed:
+            canvasModeLabel = "Detailed View"
+        case .terminalOnly:
+            canvasModeLabel = "Board View"
         }
+
+        var components: [String] = []
+        if let vibespaceName = activeVibeSpaceSession.vibespace?.name.trimmingCharacters(in: .whitespacesAndNewlines),
+           !vibespaceName.isEmpty {
+            components.append(vibespaceName)
+        }
+        if activeVibeSpaceID != nil {
+            components.append(canvasModeLabel)
+            if let focusedTitle = activeVibeSpaceSession.focusedProject?.title.trimmingCharacters(in: .whitespacesAndNewlines),
+               !focusedTitle.isEmpty {
+                components.append(focusedTitle)
+            }
+        }
+
+        let resolvedTitle = components.isEmpty
+            ? AppStrings.Brand.crispyvibes
+            : components.joined(separator: " / ")
 
         if let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first,
            window.title != resolvedTitle {

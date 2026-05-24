@@ -4,10 +4,6 @@ import Combine
 extension VibeSpaceTerminalOnlyView {
     var boardContent: some View {
         VStack(spacing: 0) {
-            boardHeader
-
-            Divider()
-
             GeometryReader { proxy in
                 boardCanvas(proxy: proxy)
             }
