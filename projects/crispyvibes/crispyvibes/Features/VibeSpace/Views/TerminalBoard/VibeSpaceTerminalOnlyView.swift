@@ -58,8 +58,6 @@ struct VibeSpaceTerminalOnlyView: View {
     @StateObject var boardStore: VibeSpaceTerminalBoardStore
     @StateObject var interactionController = BoardInteractionController()
     @State var delegateAdapter: BoardInteractionDelegateAdapter?
-    @State var isCreateSheetPresented = false
-    @State var createSheetInitialProjectPath: String?
     @State var boardAlertMessage: String?
     @State var currentBoardSize: CGSize = .zero
     init(

@@ -38,16 +38,6 @@ extension VibeSpaceTerminalOnlyView {
                 }
                 .buttonStyle(.crispyvibesText)
             }
-
-            Button {
-                createSheetInitialProjectPath = boardStore.activeProjectPath(surfaceID: surfaceID)
-                isCreateSheetPresented = true
-            } label: {
-                Label(AppStrings.Terminal.newTerminal, systemImage: "plus")
-            }
-            .buttonStyle(.crispyvibesPrimary)
-            .disabled(surfaceLayout.tiles.count >= VibeSpaceTerminalBoardLayout.maximumTileCount)
-            .accessibilityIdentifier("vibespace.terminal-board.add")
         }
     }
 }

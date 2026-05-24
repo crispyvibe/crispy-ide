@@ -315,6 +315,14 @@ extension ContentView {
                     })
                         .help("Open Browser")
                         .accessibilityIdentifier("toolbar.open-browser")
+
+                    vibespaceToolbarControl(NewTerminalToolbarButton(
+                        projects: activeVibeSpaceSession.projects,
+                        focusedProject: activeVibeSpaceSession.focusedProject,
+                        colorForProject: { project in
+                            vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color
+                        }
+                    ))
                 }
             }
 

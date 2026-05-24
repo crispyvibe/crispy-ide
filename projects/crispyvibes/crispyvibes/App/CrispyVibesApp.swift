@@ -39,6 +39,15 @@ extension Notification.Name {
     static let openExternalPaths = Notification.Name("openExternalPaths")
     static let toggleVibeCast = Notification.Name("toggleVibeCast")
     static let addACPTileToBoard = Notification.Name("addACPTileToBoard")
+    /// Posted by the title-bar New Terminal popover. Listeners create a
+    /// terminal in the supplied directory: a board tile in terminal-board
+    /// mode, or a temporary spotlight terminal in detailed mode.
+    /// userInfo: `[AppCommandUserInfoKey.currentDirectoryURL: URL]` (required),
+    /// `[AppCommandUserInfoKey.projectPath: String]` (optional — owning
+    /// project root path when the directory belongs to one of the open
+    /// projects), `[AppCommandUserInfoKey.preferTemporary: Bool]` (optional —
+    /// when true, force a temporary spotlight terminal even in board mode).
+    static let createTerminalRequested = Notification.Name("createTerminalRequested")
     static let terminalShortcutStoreDidChange = Notification.Name("TerminalShortcutStore.didChange")
     static let ghosttyOpenLinkTargetRequested = Notification.Name("ghosttyOpenLinkTargetRequested")
     static let ghosttyOpenFileSystemTargetRequested = Notification.Name("ghosttyOpenFileSystemTargetRequested")
@@ -77,6 +86,7 @@ enum AppCommandUserInfoKey {
     static let tab = "tab"
     static let projectPath = "projectPath"
     static let projectID = "projectID"
+    static let preferTemporary = "preferTemporary"
 }
 
 enum AppCommandSource {

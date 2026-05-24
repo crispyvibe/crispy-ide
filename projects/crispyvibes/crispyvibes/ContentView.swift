@@ -206,14 +206,7 @@ struct ContentView: View {
     private var styledContent: some View {
         shellContent
             .background(activeThemePalette.windowBackgroundColor)
-            .applyingAppThemePalette(activeThemePalette)
             .applyingAppAccentTheme(activeThemePalette.accentColor)
-            .applyingCrispyVibesUIScale(CrispyVibesUIScale(codeFontSize: codeFontSize))
-            .buttonBorderShape(themeManager.theme.borderShape.buttonBorderShape)
-            .environment(\.crispyvibesTheme, themeManager.theme)
-            .environment(\.composeHistoryStore, appContainer.composeHistoryStore)
-            .environmentObject(themeManager)
-            .preferredColorScheme(preferredAppColorScheme)
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 handleExternalFileDrop(providers)
             }
@@ -639,6 +632,9 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .toggleVibeCast)) { _ in
                 vibespaceCanvasActionsCoordinator.toggleVibeCast()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .createTerminalRequested)) { notification in
+                createTerminalFromToolbar(notification: notification)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .openAppSettings)) { _ in
                 appShellStore.presentAppSettings(.general)
             }
@@ -704,5 +700,28 @@ struct ContentView: View {
                     )
                 )
             }
+            // Apply env values at body level (outside `.toolbar { }`) so the
+            // toolbar items, popovers presented from them, and any future
+            // sheets/menus all inherit the configured theme palette, UI scale,
+            // and crispyvibesTheme. Previously these lived on `styledContent`
+            // (inside `notificationAwareContent`), which meant `.toolbar` was
+            // outside the env-injected hierarchy and toolbar items resolved
+            // env values to their hard-coded defaults (e.g. the `.ph`
+            // palette's orange accent, default UI scale).
+            //
+            // NOTE: `.applyingAppAccentTheme` is intentionally NOT here — it
+            // sets `.tint`, which `Menu` views automatically apply to their
+            // label icons. Applying it at body level would tint every toolbar
+            // Menu's icon with the accent color. It stays on `styledContent`
+            // so the canvas content gets accent-tinted but the toolbar does
+            // not. Popovers presented from toolbar items re-inject the
+            // accent tint themselves where they need it.
+            .applyingAppThemePalette(activeThemePalette)
+            .applyingCrispyVibesUIScale(CrispyVibesUIScale(codeFontSize: codeFontSize))
+            .buttonBorderShape(themeManager.theme.borderShape.buttonBorderShape)
+            .environment(\.crispyvibesTheme, themeManager.theme)
+            .environment(\.composeHistoryStore, appContainer.composeHistoryStore)
+            .environmentObject(themeManager)
+            .preferredColorScheme(preferredAppColorScheme)
     }
 }
