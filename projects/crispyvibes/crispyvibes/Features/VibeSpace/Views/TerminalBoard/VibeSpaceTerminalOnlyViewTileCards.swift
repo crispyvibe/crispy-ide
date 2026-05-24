@@ -85,7 +85,7 @@ extension VibeSpaceTerminalOnlyView {
             onSendToBoardWindow: sendToBoardWindowAction(for: tile.id),
             onSendAllFromProjectToNewBoardWindow: sendAllFromProjectToNewBoardWindowAction(for: tile)
         )
-        .gesture(
+        .simultaneousGesture(
             DragGesture(minimumDistance: 6, coordinateSpace: .named("terminalBoard"))
                 .onChanged { value in
                     if case .idle = interactionController.state {
@@ -434,7 +434,7 @@ private struct ACPBoardTileCard: View {
             .contentShape(Rectangle())
             .onTapGesture { onSelect() }
             .onTapGesture(count: 2) { onSpotlight() }
-            .gesture(
+            .simultaneousGesture(
                 DragGesture(minimumDistance: 4, coordinateSpace: .named("terminalBoard"))
                     .onChanged { value in
                         guard let interactionController else { return }

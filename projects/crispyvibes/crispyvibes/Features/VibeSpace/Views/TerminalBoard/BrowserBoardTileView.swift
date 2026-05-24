@@ -104,9 +104,10 @@ struct BrowserBoardTileView: View {
                 accessibilityLabel: "Close Browser Tile"
             ) { onClose() }
         }
+        .contentShape(Rectangle())
         .onTapGesture(count: 2) { onSpotlight() }
         .onTapGesture { onSelect() }
-        .gesture(
+        .simultaneousGesture(
             DragGesture(minimumDistance: 4, coordinateSpace: .named("terminalBoard"))
                 .onChanged { value in
                     guard let controller = interactionController else { return }

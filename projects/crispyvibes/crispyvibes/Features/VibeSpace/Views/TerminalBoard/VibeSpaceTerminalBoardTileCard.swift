@@ -287,7 +287,8 @@ struct VibeSpaceTerminalBoardTileCard: View {
                 onClose()
             }
         }
-        .gesture(
+        .contentShape(Rectangle())
+        .simultaneousGesture(
             DragGesture(minimumDistance: 4, coordinateSpace: .named("terminalBoard"))
                 .onChanged { value in
                     guard let controller = interactionController else { return }
