@@ -1,6 +1,6 @@
 # F021 — VibeSpace Projects
 
-Status: draft
+Status: implemented
 
 Domain: **VibeSpace (D2)**.
 Covers project creation, focus management, add/remove projects, project sessions,
@@ -268,25 +268,25 @@ And the scope toggle (`if projects.count > 1`) counts only live projects
 
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| F021-R01 | Add Project supports multi-select and deduplicates by normalized path |
-| F021-R02 | New project becomes focused with an active terminal ensured |
-| F021-R03 | Focused terminal hydrates first; rail terminals hydrate progressively |
-| F021-R04 | Closing focused project falls back to last remaining; closing last returns to empty state |
-| F021-R05 | Restart Project restarts explorer, editor, and terminal workers |
-| F021-R06 | Stacked cards show grouped project terminal stacks with compact previews, representative-terminal ordering, and activity indicators |
-| F021-R07 | Project layout splitter positions persist per normalized project path |
-| F021-R08 | Single-project rail shows `Add Project(s)` CTA |
-| F021-R09 | Project Park State — projects support a "parked" state retaining a full state snapshot but NOT hydrating sessions on vibespace open |
-| F021-R10 | Park Lifecycle — parking terminates terminals, closes browsers, stops watchers, persists snapshot |
-| F021-R11 | Unpark Restoration — activating a parked project recreates terminals and browsers from saved snapshot, focuses the project |
-| F021-R12 | Parked Project UI Placement — parked projects appear in the Files tab as a distinct "Parked Projects" section, NOT in the project rail |
-| F021-R13 | Park/Unpark Interaction — Park via right-click on project entry → "Park Project"; Activate via right-click on parked entry → "Activate Project". Bulk parking is NOT required |
-| F021-R14 | Parked Project Exclusion — parked projects MUST NOT appear in the rail, hydrate terminals on vibespace open, be VibeCast targets, or contribute to scope-toggle project count |
-| F021-R15 | Pane Focus Selects Project — single-click focus on a pane (terminal, file, browser) MUST set the pane's owning project as the focused project |
-| F021-R16 | Immediate Focus Change — focus change happens on single click, no double-click required |
-| F021-R17 | Cross-Surface Consistency — click-to-select MUST work across content viewer tabs, terminal tray, board tiles, and detached board windows |
+| ID | Requirement | Status |
+|----|-------------|--------|
+| F021-R01 | Add Project supports multi-select and deduplicates by normalized path | implemented |
+| F021-R02 | New project becomes focused with an active terminal ensured | implemented |
+| F021-R03 | Focused terminal hydrates first; rail terminals hydrate progressively | implemented |
+| F021-R04 | Closing focused project falls back to last remaining; closing last returns to empty state | implemented |
+| F021-R05 | Restart Project restarts explorer, editor, and terminal workers | implemented |
+| F021-R06 | Stacked cards show grouped project terminal stacks with compact previews, representative-terminal ordering, and activity indicators | implemented |
+| F021-R07 | Project layout splitter positions persist per normalized project path | implemented |
+| F021-R08 | Single-project rail shows `Add Project(s)` CTA | implemented |
+| F021-R09 | Project Park State — projects support a "parked" state retaining a full state snapshot but NOT hydrating sessions on vibespace open | implemented |
+| F021-R10 | Park Lifecycle — parking terminates terminals, closes browsers, stops watchers, persists snapshot | implemented |
+| F021-R11 | Unpark Restoration — activating a parked project recreates terminals and browsers from saved snapshot, focuses the project | implemented |
+| F021-R12 | Parked Project UI Placement — parked projects appear in the Files tab as a distinct "Parked Projects" section, NOT in the project rail | implemented |
+| F021-R13 | Park/Unpark Interaction — Park via right-click on project entry → "Park Project"; Activate via right-click on parked entry → "Activate Project". Bulk parking is NOT required | implemented |
+| F021-R14 | Parked Project Exclusion — parked projects MUST NOT appear in the rail, hydrate terminals on vibespace open, be VibeCast targets, or contribute to scope-toggle project count | implemented |
+| F021-R15 | Pane Focus Selects Project — single-click focus on a pane (terminal, file, browser) MUST set the pane's owning project as the focused project | implemented |
+| F021-R16 | Immediate Focus Change — focus change happens on single click, no double-click required | implemented |
+| F021-R17 | Cross-Surface Consistency — click-to-select MUST work across content viewer tabs, terminal tray, board tiles, and detached board windows | implemented |
 
 ---
 
