@@ -48,16 +48,6 @@ extension VibeSpaceTerminalOnlyView {
             .buttonStyle(.crispyvibesPrimary)
             .disabled(surfaceLayout.tiles.count >= VibeSpaceTerminalBoardLayout.maximumTileCount)
             .accessibilityIdentifier("vibespace.terminal-board.add")
-
-            if !surfaceLayout.tiles.contains(where: { $0.isVibeCast }) {
-                Button {
-                    boardStore.addVibeCastTile(surfaceID: surfaceID)
-                } label: {
-                    Label(AppStrings.VibeCast.title, systemImage: "note.text")
-                }
-                .buttonStyle(.crispyvibesText)
-                .accessibilityIdentifier("vibespace.terminal-board.vibeCast")
-            }
         }
     }
 }
