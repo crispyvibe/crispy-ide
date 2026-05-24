@@ -1070,6 +1070,30 @@ extension ContentView {
             },
             canAddBrowser: {
                 boardStore.layout(for: surfaceID).tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount
+            },
+            projects: activeVibeSpaceSession.projects,
+            focusedProject: activeVibeSpaceSession.focusedProject,
+            colorForProject: { [vibespaceCanvasActionsCoordinator] project in
+                vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color
+            },
+            // The detached window's New Terminal popover bypasses the
+            // notification dispatch used by the main toolbar (which always
+            // targets the primary surface). Calling `boardStore.addTile`
+            // directly with this window's `surfaceID` keeps the new tile
+            // anchored to the originating detached window. Temporary
+            // spotlight requests still fall through to a tile here because
+            // detached windows do not host a spotlight overlay — the
+            // spotlight UI lives only in the main canvas.
+            onCreateTerminal: { directoryURL, projectPath, _ in
+                _ = boardStore.addTile(
+                    projectPath: projectPath,
+                    directoryURL: directoryURL.standardizedFileURL,
+                    preferStandalone: projectPath == nil,
+                    surfaceID: surfaceID
+                )
+            },
+            canAddTerminal: {
+                boardStore.layout(for: surfaceID).tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount
             }
         )
     }

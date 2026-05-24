@@ -61,11 +61,29 @@ struct VibeSpaceTerminalBoardWindowToolbarConfiguration {
     let canAddVibeCast: () -> Bool
     let canAddAgent: () -> Bool
     let canAddBrowser: () -> Bool
+    /// Snapshot of the active vibespace's projects, used to populate the
+    /// New Terminal popover hosted in the detached window's toolbar.
+    let projects: [AnyProjectSession]
+    /// Currently-focused project — drives the popover's "Temporary Terminal"
+    /// shortcut row.
+    let focusedProject: AnyProjectSession?
+    /// Resolves a project's color tag for the popover's project-row icons.
+    let colorForProject: (AnyProjectSession) -> Color?
+    /// Invoked when the popover submits. Detached windows wire this to
+    /// `boardStore.addTile(... surfaceID: detachedSurface)` so the new tile
+    /// lands on the originating window's surface (not the primary one).
+    /// Arguments: directoryURL, optional inferred owning-project root path,
+    /// and the `preferTemporary` flag from the popover's Temporary Terminal
+    /// shortcut row.
+    let onCreateTerminal: (URL, String?, Bool) -> Void
+    /// Whether the surface still has room for another tile.
+    let canAddTerminal: () -> Bool
 }
 
 @MainActor
 private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValidation {
     private static let toolbarIdentifier = NSToolbar.Identifier("com.crispyvibe.terminalBoard.detached.toolbar")
+    private static let terminalIdentifier = NSToolbarItem.Identifier("com.crispyvibe.terminalBoard.detached.toolbar.terminal")
     private static let vibeCastIdentifier = NSToolbarItem.Identifier("com.crispyvibe.terminalBoard.detached.toolbar.vibecast")
     private static let agentIdentifier = NSToolbarItem.Identifier("com.crispyvibe.terminalBoard.detached.toolbar.agent")
     private static let browserIdentifier = NSToolbarItem.Identifier("com.crispyvibe.terminalBoard.detached.toolbar.browser")
@@ -112,6 +130,8 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
         switch itemIdentifier {
+        case Self.terminalIdentifier:
+            return makeHostedTerminalToolbarItem(identifier: itemIdentifier)
         case Self.vibeCastIdentifier:
             return toolbarItem(
                 identifier: itemIdentifier,
@@ -140,6 +160,8 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
 
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
         switch item.itemIdentifier {
+        case Self.terminalIdentifier:
+            return configuration.canAddTerminal()
         case Self.vibeCastIdentifier:
             return configuration.canAddVibeCast()
         case Self.agentIdentifier:
@@ -151,15 +173,18 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
         }
     }
 
+    /// Toolbar item order matches the main window's title-bar pill so the
+    /// detached window feels consistent: Terminal / Agent / Browser / VibeCast.
     private var toolbarItemIdentifiers: [NSToolbarItem.Identifier] {
         var identifiers: [NSToolbarItem.Identifier] = [
             .flexibleSpace,
-            Self.vibeCastIdentifier
+            Self.terminalIdentifier
         ]
         if configuration.addAgent != nil {
             identifiers.append(Self.agentIdentifier)
         }
         identifiers.append(Self.browserIdentifier)
+        identifiers.append(Self.vibeCastIdentifier)
         return identifiers
     }
 
@@ -176,6 +201,37 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
         item.image = NSImage(systemSymbolName: systemSymbolName, accessibilityDescription: label)
         item.target = self
         item.action = action
+        return item
+    }
+
+    /// Builds the SwiftUI `NewTerminalToolbarButton` hosted in an
+    /// `NSHostingView` and wrapped as a view-based `NSToolbarItem`. The
+    /// button posts no notifications — it calls `configuration.onCreateTerminal`
+    /// directly so the new tile lands on the originating detached surface
+    /// instead of the primary one. The hosting view re-injects the env
+    /// values that NSToolbarItem hosting otherwise drops.
+    private func makeHostedTerminalToolbarItem(identifier: NSToolbarItem.Identifier) -> NSToolbarItem {
+        let projects = configuration.projects
+        let focusedProject = configuration.focusedProject
+        let colorForProject = configuration.colorForProject
+        let onCreate = configuration.onCreateTerminal
+
+        let button = NewTerminalToolbarButton(
+            projects: projects,
+            focusedProject: focusedProject,
+            colorForProject: colorForProject,
+            onCreate: onCreate
+        )
+
+        let hostingView = NSHostingView(rootView: button)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        hostingView.frame = NSRect(x: 0, y: 0, width: 32, height: 28)
+
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        item.label = AppStrings.Terminal.newTerminal
+        item.paletteLabel = AppStrings.Terminal.newTerminal
+        item.toolTip = AppStrings.Terminal.newTerminal
+        item.view = hostingView
         return item
     }
 

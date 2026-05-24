@@ -285,13 +285,34 @@ extension ContentView {
             // Group 1: content creation (vibecast / agent / browser) — one pill
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 2) {
-                    vibespaceToolbarControl(Button {
-                        NotificationCenter.default.post(name: .toggleVibeCast, object: nil)
-                    } label: {
-                        HomeToolbarIconLabel(systemName: "antenna.radiowaves.left.and.right")
-                    })
-                        .help(AppStrings.VibeCast.title)
-                        .accessibilityIdentifier("toolbar.vibecast")
+                    vibespaceToolbarControl(NewTerminalToolbarButton(
+                        projects: activeVibeSpaceSession.projects,
+                        focusedProject: activeVibeSpaceSession.focusedProject,
+                        colorForProject: { project in
+                            vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color
+                        },
+                        onCreate: { directoryURL, projectPath, preferTemporary in
+                            // Post notification — `ContentView` listens and
+                            // dispatches based on canvas mode (board tile in
+                            // terminal-only mode, temporary spotlight in
+                            // detailed mode), honoring `preferTemporary` to
+                            // force a spotlight regardless of mode.
+                            var userInfo: [String: Any] = [
+                                AppCommandUserInfoKey.currentDirectoryURL: directoryURL
+                            ]
+                            if let projectPath {
+                                userInfo[AppCommandUserInfoKey.projectPath] = projectPath
+                            }
+                            if preferTemporary {
+                                userInfo[AppCommandUserInfoKey.preferTemporary] = true
+                            }
+                            NotificationCenter.default.post(
+                                name: .createTerminalRequested,
+                                object: nil,
+                                userInfo: userInfo
+                            )
+                        }
+                    ))
 
                     vibespaceToolbarControl(Button {
                         openACPConversationFromToolbar()
@@ -316,13 +337,13 @@ extension ContentView {
                         .help("Open Browser")
                         .accessibilityIdentifier("toolbar.open-browser")
 
-                    vibespaceToolbarControl(NewTerminalToolbarButton(
-                        projects: activeVibeSpaceSession.projects,
-                        focusedProject: activeVibeSpaceSession.focusedProject,
-                        colorForProject: { project in
-                            vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color
-                        }
-                    ))
+                    vibespaceToolbarControl(Button {
+                        NotificationCenter.default.post(name: .toggleVibeCast, object: nil)
+                    } label: {
+                        HomeToolbarIconLabel(systemName: "antenna.radiowaves.left.and.right")
+                    })
+                        .help(AppStrings.VibeCast.title)
+                        .accessibilityIdentifier("toolbar.vibecast")
                 }
             }
 

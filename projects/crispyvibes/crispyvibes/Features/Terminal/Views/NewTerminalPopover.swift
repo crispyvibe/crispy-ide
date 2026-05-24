@@ -22,6 +22,15 @@ struct NewTerminalToolbarButton: View {
     /// storage uses `projectIdentifier` (the SSH URI). Calling `colorTag(for:)`
     /// directly resolves correctly for both local and remote projects.
     let colorForProject: (AnyProjectSession) -> Color?
+    /// Invoked when the user picks a row or submits a custom path. Hosts
+    /// dispatch this differently: the main window posts a notification that
+    /// `ContentView` listens on (so canvas mode decides between board tile
+    /// and spotlight), while a detached terminal-board window calls
+    /// `boardStore.addTile(... surfaceID: detachedSurface)` directly so the
+    /// new tile lands on the originating window's surface. The third
+    /// argument is the `preferTemporary` flag from the popover's
+    /// "Temporary Terminal" row.
+    let onCreate: (URL, String?, Bool) -> Void
     @State private var isShowingPopover = false
 
     var body: some View {
@@ -46,7 +55,8 @@ struct NewTerminalToolbarButton: View {
                 projects: projects,
                 focusedProject: focusedProject,
                 colorForProject: colorForProject,
-                onSubmit: {
+                onCreate: onCreate,
+                onDismiss: {
                     isShowingPopover = false
                 }
             )
@@ -73,9 +83,15 @@ struct NewTerminalPopover: View {
     let projects: [AnyProjectSession]
     let focusedProject: AnyProjectSession?
     let colorForProject: (AnyProjectSession) -> Color?
-    /// Called after a notification has been posted. The host typically uses
-    /// this to dismiss the popover.
-    let onSubmit: () -> Void
+    /// Invoked with the chosen directory, optional inferred owning project
+    /// path, and the `preferTemporary` flag (true for the Temporary Terminal
+    /// shortcut row). Host wires this to the appropriate creation path —
+    /// notification post on the main window, direct store mutation on a
+    /// detached terminal-board window.
+    let onCreate: (URL, String?, Bool) -> Void
+    /// Called after `onCreate` runs. Host typically uses this to dismiss
+    /// the popover.
+    let onDismiss: () -> Void
 
     @State private var customPath: String = ""
     @FocusState private var isCustomPathFocused: Bool
@@ -261,21 +277,8 @@ struct NewTerminalPopover: View {
     }
 
     private func submit(directoryURL: URL, projectPath: String?, preferTemporary: Bool) {
-        var userInfo: [String: Any] = [
-            AppCommandUserInfoKey.currentDirectoryURL: directoryURL
-        ]
-        if let projectPath {
-            userInfo[AppCommandUserInfoKey.projectPath] = projectPath
-        }
-        if preferTemporary {
-            userInfo[AppCommandUserInfoKey.preferTemporary] = true
-        }
-        NotificationCenter.default.post(
-            name: .createTerminalRequested,
-            object: nil,
-            userInfo: userInfo
-        )
-        onSubmit()
+        onCreate(directoryURL, projectPath, preferTemporary)
+        onDismiss()
     }
 
     private func inferredProjectPath(for directoryURL: URL) -> String? {
