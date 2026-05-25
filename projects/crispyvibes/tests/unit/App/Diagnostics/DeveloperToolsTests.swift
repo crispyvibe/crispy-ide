@@ -299,7 +299,8 @@ final class DeveloperToolsTests: XCTestCase {
             acpObservabilityStore: acpStore,
             experimentalFeatures: experimentalFeatures,
             acpVibeSpaceContextStore: acpContextStore,
-            acpDeveloperToolsService: acpDeveloperToolsService
+            acpDeveloperToolsService: acpDeveloperToolsService,
+            contextSummaryObservabilityStore: ContextSummaryObservabilityStore()
         )
         XCTAssertNotNil(view)
     }
