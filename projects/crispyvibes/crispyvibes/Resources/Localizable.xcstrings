@@ -2834,6 +2834,17 @@
         }
       }
     },
+    "terminal.tile.sendAllFromProjectToNewBoardWindow" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send All From This Project to New Window"
+          }
+        }
+      }
+    },
     "terminal.window.renameWindow" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3186,6 +3197,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Close VibeSpace"
+          }
+        }
+      }
+    },
+    "vibespace.parkedProjects.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parked Projects"
+          }
+        }
+      }
+    },
+    "vibespace.parkProject.action" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Park Project"
+          }
+        }
+      }
+    },
+    "vibespace.activateProject.action" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activate Project"
           }
         }
       }

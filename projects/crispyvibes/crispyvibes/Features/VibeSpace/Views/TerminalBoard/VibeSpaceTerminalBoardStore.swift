@@ -733,12 +733,26 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         requestFocus: Bool,
         surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID
     ) {
-        guard tile(for: tileID, surfaceID: surfaceID) != nil else { return }
+        guard let tile = tile(for: tileID, surfaceID: surfaceID) else { return }
         mutate { state in
             guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
             guard state.surfaces[index].layout.activeTileID != tileID else { return }
             state.surfaces[index].layout.activeTileID = tileID
         }
+
+        // F021-R17: surface tile activation so the click-to-select listener can
+        // switch focused project to the tile's owning project. Idempotent —
+        // listener short-circuits when the project is already focused, so
+        // programmatic activations from `focusProject` don't recurse.
+        var userInfo: [String: Any] = [:]
+        if let projectPath = tile.projectPath {
+            userInfo[AppCommandUserInfoKey.projectPath] = projectPath
+        }
+        NotificationCenter.default.post(
+            name: .boardTileActivated,
+            object: nil,
+            userInfo: userInfo
+        )
 
         guard requestFocus, let context = tileContext(for: tileID, surfaceID: surfaceID) else { return }
         focusTerminal(for: context)

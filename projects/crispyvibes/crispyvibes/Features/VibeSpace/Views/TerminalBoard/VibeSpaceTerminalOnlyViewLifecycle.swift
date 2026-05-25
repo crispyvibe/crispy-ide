@@ -4,10 +4,6 @@ import Combine
 extension VibeSpaceTerminalOnlyView {
     var boardContent: some View {
         VStack(spacing: 0) {
-            boardHeader
-
-            Divider()
-
             GeometryReader { proxy in
                 boardCanvas(proxy: proxy)
             }
@@ -261,39 +257,6 @@ extension VibeSpaceTerminalOnlyView {
 
     private func applyBoardPresentations<V: View>(to content: V) -> some View {
         content
-            .overlay {
-                if isCreateSheetPresented {
-                    ZStack {
-                        // Click-blocking scrim — no visible color, just captures clicks so they
-                        // don't fall through to the canvas. No dim/scrim effect (we want the
-                        // canvas content visible behind the glass).
-                        Color.clear
-                            .contentShape(Rectangle())
-
-                        VibeSpaceTerminalCreateSheet(
-                            projects: projects,
-                            initialProjectPath: createSheetInitialProjectPath,
-                            onCreate: { selectedProjectPath, selectedDirectoryURL in
-                                if !boardStore.addTile(
-                                    projectPath: selectedProjectPath,
-                                    directoryURL: selectedDirectoryURL,
-                                    preferStandalone: selectedProjectPath == nil,
-                                    surfaceID: surfaceID
-                                ) {
-                                    boardAlertMessage = "Terminal board is full. Maximum is 16 terminals (4x4)."
-                                }
-                                isCreateSheetPresented = false
-                            },
-                            onDismiss: { isCreateSheetPresented = false }
-                        )
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .transition(.opacity)
-                    .zIndex(220)
-                    .onExitCommand { isCreateSheetPresented = false }
-                }
-            }
-            .animation(.snappy(duration: 0.18), value: isCreateSheetPresented)
             .alert(AppStrings.Terminal.boardTitle, isPresented: boardAlertIsPresented) {
                 Button(AppStrings.Common.ok, role: .cancel) {
                     boardAlertMessage = nil

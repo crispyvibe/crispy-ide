@@ -215,6 +215,31 @@ A JavaScript bridge intercepts WebAuthn credential creation and assertion reques
 
 The browser feature inherits the app's deployment target (macOS 26+ Tahoe). All AppKit/WebKit APIs used here — proxy configuration, WebAuthn passkeys via AuthenticationServices, and `WKWebView.isInspectable` — are unconditionally available at this target.
 
+## Project Ownership (F012-R17–R20)
+
+### Identifier
+
+A browser instance is owned by exactly one project, identified by the project's normalized root path (matches the existing `*ByPath` persistence pattern). Path-based identity survives app restarts and the relink flow already migrates path-keyed state.
+
+The runtime state of project ownership is held in two complementary places:
+
+- `BrowserTabReference.projectPath` — already present; persists with the content-viewer tab; consumed by F006-R13 viewer-scope filtering.
+- `BrowserPanelViewModel.projectPath` — new runtime field, set at VM construction; used by `DockedBrowserCoordinator` for project-scoped enumeration (close-all-for-project, snapshot-all-for-project).
+
+### Auto-Association
+
+The toolbar/CLI/link-click new-browser entry posts `.openNewBrowserRequested` (userInfo: `url`, `projectPath?`, `browserID?`). The `ContentView` handler resolves `projectPath` from the focused project if the userInfo lacks one. If no project is focused, the request is suppressed. This keeps every browser owned at creation time without cluttering callsites with focused-project lookup.
+
+### Lifecycle Coupling
+
+`DockedBrowserCoordinator.closeBrowsers(forProjectPath:)` enumerates board tiles, detailed-view VMs, and detailed-view references whose `projectPath` matches, and dispatches `.closeBrowserRequested` for each. The existing close handler routes board-tile, content-viewer-tab, and orphan-VM cleanup uniformly. `VibeSpaceCanvasActionsCoordinator.removeProject(id:)` and `parkProject(id:)` invoke this helper.
+
+### Per-Project Persistence
+
+`ProjectConfigFile` gains `browserSessionEntries: [BrowserSessionEntry]`. Each entry records `browserID`, the captured `BrowserSessionSnapshot`, and an optional `pinnedTileID` for board-tile browsers. Capture is via `DockedBrowserCoordinator.snapshotBrowserSessions(forProjectPath:)`. Restoration on unpark dispatches by entry shape: pinned tile browsers go through `restoreTile(id:snapshot:)`; detailed-view browsers go through `restoreDetailedBrowser(reference:snapshot:)`, and (when canvas mode is `.detailed`) are surfaced as content-viewer tabs via `ContentViewerStore.openWebPage`.
+
+For active (non-parked) projects, the existing per-vibespace board layout and per-vibespace editor session persistence continue to handle live restoration; per-project `browserSessionEntries` is the canonical store consulted on park/unpark and intended as the authoritative source going forward.
+
 ## Known Limitations
 
 - Agent API needs a socket server to be callable from terminal-based agents.

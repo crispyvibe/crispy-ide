@@ -19,6 +19,10 @@ final class VibeSpaceCanvasActionsCoordinator {
     var dockPreviewBridge: DockPreviewBridge?
     var canvasModeProvider: (() -> VibeSpaceCanvasMode)?
     var operationMetricsStore: OperationMetricsStore?
+    /// F012-R18 / F021-R10: docked browser coordinator hook used to enumerate
+    /// and tear down all browsers belonging to a project being removed or
+    /// parked. Wired by `AppContainer` after construction.
+    weak var dockedBrowserCoordinator: DockedBrowserCoordinator?
 
     init(
         appShellStore: AppShellStore,
@@ -90,12 +94,165 @@ final class VibeSpaceCanvasActionsCoordinator {
         }
         guard let vibespaceID else { return }
         if let removedProjectPath {
+            // F012-R18: tear down all browsers owned by the removed project
+            // AFTER state mutation. Browser close runs notification handlers
+            // that may activate fallback tabs in the content viewer; those
+            // activations post `.contentViewerTabActivated`, which the
+            // click-to-select listener consumes. By mutating state first,
+            // the listener's `projects.first(where:)` returns nil for the
+            // removed path and short-circuits — no stray focus changes
+            // re-enter while removal is mid-flight.
+            dockedBrowserCoordinator?.closeBrowsers(forProjectPath: removedProjectPath)
             vibespaceHydrationCoordinator.clearStartupExecutionFlag(
                 forProjectPath: removedProjectPath,
                 in: vibespaceID
             )
         }
         persistVibeSpaceCatalog()
+    }
+
+    /// F021-R10 + F012-R18: park the project with the given session ID.
+    ///
+    /// Order of operations (matters — see "Re-entrancy guard" below):
+    /// 1. Capture browser session entries owned by the project and persist them
+    ///    into the project's `ProjectConfigFile.browserSessionEntries`.
+    /// 2. Mark `isParked = true` in the project's config file.
+    /// 3. Mutate live vibespace state via `vibespace.parkProject(id:)` (which
+    ///    shuts down the live `ProjectSession` and moves the path to
+    ///    `parkedProjectPaths`). After this, the project is no longer in
+    ///    `state.projects`.
+    /// 4. Dispatch close requests for the browsers via the standard
+    ///    `.closeBrowserRequested` notification pipeline.
+    /// 5. Persist the vibespace catalog so `parkedProjectPaths` is durable.
+    ///
+    /// **Re-entrancy guard:** browser-close runs notification handlers
+    /// synchronously, which can activate fallback tabs in the content viewer.
+    /// Tab activation posts `.contentViewerTabActivated`, which the
+    /// click-to-select listener consumes and may call `focusProject` on the
+    /// activated tab's owning project. If state mutation happened *after*
+    /// browser close (the previous order), the parked project would still be
+    /// in `state.projects` during the fallback-tab activation, and a stray
+    /// focus change could re-enter while parking was mid-flight. By mutating
+    /// state first, the listener's `projects.first(where:)` returns nil for
+    /// the parked path during browser close — the listener short-circuits
+    /// and parking completes deterministically.
+    func parkProject(id: UUID) {
+        var vibespaceID: UUID?
+        var parkedProjectPath: String?
+
+        // Resolve project path BEFORE mutating state.
+        if let vibespace = activeVibeSpace {
+            vibespaceID = activeVibeSpaceID
+            parkedProjectPath = vibespace.projects.first(where: { $0.id == id })?.projectIdentifier
+        }
+        guard let vibespaceID, let parkedProjectPath else { return }
+
+        // 1. Capture browser sessions while VMs are still resolvable.
+        let browserEntries = dockedBrowserCoordinator?
+            .snapshotBrowserSessions(forProjectPath: parkedProjectPath) ?? []
+        if !browserEntries.isEmpty {
+            vibespaceManagement.saveBrowserSessions(
+                browserEntries,
+                forProject: parkedProjectPath,
+                in: vibespaceID
+            )
+        }
+
+        // 2. Mark parked in the per-project config.
+        vibespaceManagement.setProjectParked(true, forProject: parkedProjectPath, in: vibespaceID)
+
+        // 3. Mutate live state (shuts down ProjectSession including folder
+        // explorer per F021-S25; removes from projects[]; appends to
+        // parkedProjectPaths). Do this BEFORE closing browsers so that any
+        // fallback-tab activation triggered by browser close cannot re-focus
+        // the now-parked project (the click-to-select listener will see no
+        // live project for that path and short-circuit).
+        mutateActiveVibeSpace { vibespace, _ in
+            vibespace.parkProject(id: id)
+        }
+
+        // 4. Close all browsers for this project. Fallback-tab activations
+        // emitted during this loop are safe — the project is already gone
+        // from state.projects.
+        dockedBrowserCoordinator?.closeBrowsers(forProjectPath: parkedProjectPath)
+
+        // 5. Clear hydration-execution flag so re-hydrating after unpark
+        // behaves like a fresh load.
+        vibespaceHydrationCoordinator.clearStartupExecutionFlag(
+            forProjectPath: parkedProjectPath,
+            in: vibespaceID
+        )
+
+        persistVibeSpaceCatalog()
+    }
+
+    /// F021-R11: activate (unpark) the project at the given path.
+    ///
+    /// Recreates the live `ProjectSession`, restores persisted browser sessions
+    /// for the project, clears the parked flag, and persists the catalog.
+    @discardableResult
+    func unparkProject(path: String) -> AnyProjectSession? {
+        guard let vibespaceID = activeVibeSpaceID else { return nil }
+
+        var unparked: AnyProjectSession?
+        mutateActiveVibeSpace { vibespace, _ in
+            unparked = vibespace.unparkProject(path: path)
+        }
+        guard let unparked else { return nil }
+
+        // Clear parked flag in per-project config.
+        vibespaceManagement.setProjectParked(false, forProject: unparked.projectIdentifier, in: vibespaceID)
+
+        // Restore persisted browser sessions for this project (F012-R20 / F021-R11).
+        let entries = vibespaceManagement.loadBrowserSessions(
+            forProject: unparked.projectIdentifier,
+            in: vibespaceID
+        )
+        for entry in entries {
+            if let pinnedTileID = entry.pinnedTileID {
+                // Board tile browser — restore via tile factory if a tile slot exists.
+                // Note: actual board-tile reconstruction happens via the board
+                // hydration flow; here we ensure the VM is ready when the tile
+                // hydrates.
+                dockedBrowserCoordinator?.restoreTile(id: pinnedTileID, snapshot: entry.snapshot)
+            } else {
+                let url = entry.snapshot.urlString.flatMap(URL.init(string:))
+                let reference = BrowserTabReference(
+                    browserID: entry.browserID,
+                    url: url,
+                    projectPath: unparked.projectIdentifier,
+                    linkedTileID: nil
+                )
+                dockedBrowserCoordinator?.restoreDetailedBrowser(
+                    reference: reference,
+                    snapshot: entry.snapshot
+                )
+                // Re-open as a content-viewer tab so the user sees the browser
+                // in detailed mode (R19). Active vibespace's content viewer is
+                // the natural surface; fall back silently if not in detailed
+                // mode — restoreDetailedBrowser keeps the VM ready until the
+                // surface materializes.
+                if canvasModeProvider?() == .detailed, let url {
+                    contentViewerStore.openWebPage(
+                        url: url,
+                        projectPath: unparked.projectIdentifier,
+                        browserID: entry.browserID
+                    )
+                }
+            }
+        }
+
+        // Activate the new session and refocus.
+        vibespaceHydrationCoordinator.activateProjectForPresentation(
+            unparked,
+            vibespaceID: vibespaceID,
+            includeVibeSpaceDefault: true,
+            requestTerminalFocus: false,
+            transitionID: UUID().uuidString
+        )
+
+        persistVibeSpaceCatalog()
+        return unparked
     }
 
     func colorTag(for project: AnyProjectSession) -> ProjectColorTag? {
@@ -294,6 +451,25 @@ final class VibeSpaceCanvasActionsCoordinator {
         prepareForVibeSpacePresentation()
         layoutPersistence.setCanvasMode(.terminalOnly, for: activeVibeSpaceID)
         operationMetricsStore?.recordOperation(name: "canvas.modeSwitch", startTime: startTime)
+    }
+
+    /// F044-R80: add projects to the active vibespace via the agent CLI,
+    /// mirroring the UI's "Add Project" flow but with no NSOpenPanel and no
+    /// ContentView dependency. Returns the focused project (last added).
+    @discardableResult
+    func addProjectsViaCLI(urls: [URL]) -> AnyProjectSession? {
+        var focused: AnyProjectSession?
+        mutateActiveVibeSpace { vibespace, _ in
+            focused = vibespace.addProjects(from: urls)
+        }
+        persistVibeSpaceCatalog()
+        if let focused {
+            // F021-S03: new project becomes focused with terminals ensured.
+            // Reuse the existing focusProject path so hydration + signposting
+            // stay consistent with UI-driven flows.
+            focusProject(focused)
+        }
+        return focused
     }
 
     private var activeVibeSpaceID: UUID? {

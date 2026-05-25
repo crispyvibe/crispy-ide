@@ -46,9 +46,9 @@ struct TerminalSessionHostView: View {
     var body: some View {
         hostRepresentable
             .overlay(alignment: .top) {
-                if let observer = session.insightObserver {
+                if let summarySession = session.contextSummarySession {
                     TerminalContextSummaryOverlayContainer(
-                        observer: observer,
+                        summarySession: summarySession,
                         isHovering: isHovering
                     )
                     .padding(.top, 30)

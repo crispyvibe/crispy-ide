@@ -1,6 +1,6 @@
 # F021 — VibeSpace Projects
 
-Status: draft
+Status: implemented
 
 Domain: **VibeSpace (D2)**.
 Covers project creation, focus management, add/remove projects, project sessions,
@@ -162,18 +162,131 @@ And terminal pane height ratio is restored
 
 ---
 
+### F021-S16 · Park Project terminates sessions and persists snapshot (R09–R10)
+
+```gherkin
+Given project P is open with active terminals and at least one browser
+When the user selects "Park Project" on P from the Files-tab right-click menu
+Then `VibeSpaceCanvasActionsCoordinator.parkProject(id:)` runs
+And browsers owned by P are snapshotted into ProjectConfigFile.browserSessionEntries
+And the same browsers are dispatched for close via `.closeBrowserRequested`
+And ProjectConfigFile.isParked is set to true
+And `VibeSpaceState.parkProject(id:)` shuts down the live ProjectSession (terminating terminals)
+And the path is appended to `parkedProjectPaths` and removed from `projects`
+```
+
+### F021-S17 · Activate (unpark) restores a parked project (R11)
+
+```gherkin
+Given a parked project P with persisted terminalEntries and browserSessionEntries
+When the user selects "Activate Project" on P
+Then `VibeSpaceState.unparkProject(path:)` creates a fresh ProjectSession from the factory
+And the path is removed from `parkedProjectPaths` and appended to `projects`
+And ProjectConfigFile.isParked is set to false
+And persisted browser sessions are restored via DockedBrowserCoordinator (tile or detailed-view)
+And the unparked project becomes the focused project
+```
+
+### F021-S18 · Parked projects do not appear in the rail or get hydrated (R14)
+
+```gherkin
+Given a vibespace has live and parked projects
+When the vibespace opens
+Then the rail shows only live projects
+And the hydration coordinator hydrates only live projects' terminals
+And parked projects are NOT included in VibeCast broadcast target enumerations
+```
+
+### F021-S19 · Parked projects appear in the Files-tab "Parked Projects" section (R12)
+
+```gherkin
+Given a vibespace has at least one parked project
+When the Files tab renders
+Then a "Parked Projects" section appears below the live projects list
+And each parked project entry shows its folder name and an "Activate Project" right-click menu item
+```
+
+### F021-S20 · Adding a project that is already parked auto-unparks it (R09 spirit)
+
+```gherkin
+Given project P is parked
+When the user invokes Add Project for the same folder
+Then `VibeSpaceState.addProjects(from:)` detects P is parked
+And calls `unparkProject(path:)` to recreate the live session
+And no duplicate entry is created
+```
+
+### F021-S21 · Click-to-select: tab activation switches focused project (R15–R17)
+
+```gherkin
+Given content viewer has tabs from multiple projects
+And focused project is P1
+When the user clicks a tab whose owning project is P2
+Then `EditorGroupStore.activateTab` posts `.contentViewerTabActivated`
+And the listener resolves the tab's owning project (file URL prefix, BrowserTabReference.projectPath, or terminal projectID)
+And calls `vibespaceCanvasActionsCoordinator.focusProject(P2)`
+And subsequent project-scoped UI (rail focus, scope toggle) reflects P2
+```
+
+### F021-S22 · Click-to-select is idempotent for the already-focused project (R15)
+
+```gherkin
+Given focused project is P1
+When the user activates a tab whose owning project is P1
+Then the listener detects `focusedProject?.id == owner.id`
+And the focusProject call is suppressed (no recursion, no redundant focus signpost)
+```
+
+### F021-S23 · Click-to-select on board tile switches focused project (R17)
+
+```gherkin
+Given canvas mode is Board
+And a tile owned by project P2 exists on the active surface
+And focused project is P1
+When the user clicks the tile
+Then `VibeSpaceTerminalBoardStore.activateTile` posts `.boardTileActivated` with userInfo["projectPath"] = P2's path
+And the listener resolves P2 from the live projects array
+And calls `vibespaceCanvasActionsCoordinator.focusProject(P2)`
+And the same idempotency guard applies (no-op if P2 is already focused)
+```
+
+### F021-S24 · Click-to-select on terminal tray and parked-project exclusions (R17, R14)
+
+```gherkin
+Given canvas mode is Detailed
+And the terminal tray displays only the focused project's terminals (FocusedProjectView wraps a single project's terminalViewModel)
+When the user taps a terminal tab in the tray
+Then no project switch occurs (the tab's owning project is by construction the focused project)
+
+Given a vibespace has live projects and parked projects
+When VibeCast broadcast targets are enumerated for the active vibespace
+Then only live projects' terminals appear as targets (terminalSources derives from `state.projects`)
+And the scope toggle (`if projects.count > 1`) counts only live projects
+```
+
+---
+
 ## Requirements
 
-| ID | Requirement |
-|----|-------------|
-| F021-R01 | Add Project supports multi-select and deduplicates by normalized path |
-| F021-R02 | New project becomes focused with an active terminal ensured |
-| F021-R03 | Focused terminal hydrates first; rail terminals hydrate progressively |
-| F021-R04 | Closing focused project falls back to last remaining; closing last returns to empty state |
-| F021-R05 | Restart Project restarts explorer, editor, and terminal workers |
-| F021-R06 | Stacked cards show grouped project terminal stacks with compact previews, representative-terminal ordering, and activity indicators |
-| F021-R07 | Project layout splitter positions persist per normalized project path |
-| F021-R08 | Single-project rail shows `Add Project(s)` CTA |
+| ID | Requirement | Status |
+|----|-------------|--------|
+| F021-R01 | Add Project supports multi-select and deduplicates by normalized path | implemented |
+| F021-R02 | New project becomes focused with an active terminal ensured | implemented |
+| F021-R03 | Focused terminal hydrates first; rail terminals hydrate progressively | implemented |
+| F021-R04 | Closing focused project falls back to last remaining; closing last returns to empty state | implemented |
+| F021-R05 | Restart Project restarts explorer, editor, and terminal workers | implemented |
+| F021-R06 | Stacked cards show grouped project terminal stacks with compact previews, representative-terminal ordering, and activity indicators | implemented |
+| F021-R07 | Project layout splitter positions persist per normalized project path | implemented |
+| F021-R08 | Single-project rail shows `Add Project(s)` CTA | implemented |
+| F021-R09 | Project Park State — projects support a "parked" state retaining a full state snapshot but NOT hydrating sessions on vibespace open | implemented |
+| F021-R10 | Park Lifecycle — parking terminates terminals, closes browsers, stops watchers, persists snapshot | implemented |
+| F021-R11 | Unpark Restoration — activating a parked project recreates terminals and browsers from saved snapshot, focuses the project | implemented |
+| F021-R12 | Parked Project UI Placement — parked projects appear in the Files tab as a distinct "Parked Projects" section, NOT in the project rail | implemented |
+| F021-R13 | Park/Unpark Interaction — Park via right-click on project entry → "Park Project"; Activate via right-click on parked entry → "Activate Project". Bulk parking is NOT required | implemented |
+| F021-R14 | Parked Project Exclusion — parked projects MUST NOT appear in the rail, hydrate terminals on vibespace open, be VibeCast targets, or contribute to scope-toggle project count | implemented |
+| F021-R15 | Pane Focus Selects Project — single-click focus on a pane (terminal, file, browser) MUST set the pane's owning project as the focused project | implemented |
+| F021-R16 | Immediate Focus Change — focus change happens on single click, no double-click required | implemented |
+| F021-R17 | Cross-Surface Consistency — click-to-select MUST work across content viewer tabs, terminal tray, board tiles, and detached board windows | implemented |
 
 ---
 
@@ -183,12 +296,27 @@ And terminal pane height ratio is restored
 - Focus fallback chain works correctly when projects are removed
 - Terminal hydration order prioritizes focused project
 - Layout splitter positions survive app restart
+- Parked projects do not hydrate sessions on vibespace open and do not appear in the project rail (F021-R09, R14)
+- Park/unpark round-trip preserves terminals (via terminalEntries) and browsers (via browserSessionEntries) (F021-R10, R11)
+- Files tab renders a "Parked Projects" section with activate context menu (F021-R12, R13)
+- Single-click on a content-viewer tab whose owning project differs from the focused project switches focus (F021-R15, R16)
+- Click-to-select is idempotent — already-focused projects do not re-trigger focus (F021-R15)
+
+## Test Coverage
+
+| Scope | Test File |
+|---|---|
+| Park/unpark state transitions; addProjects auto-unpark; ProjectConfigFile + VibeSpaceConfigFile backward-compatible decode; ProjectSession deallocation after park; repeated park/unpark cycles do not accumulate sessions | `tests/unit/Models/VibeSpaceStateParkingTests.swift` |
+| `.boardTileActivated` notification posted with `projectPath` when project-owned tile activates; userInfo lacks key for standalone tile | `tests/unit/Features/Terminal/ViewModels/VibeSpaceTerminalBoardStoreClickToSelectTests.swift` |
+| Existing project lifecycle and add/remove behavior | `tests/unit/Models/VibeSpaceStateTests.swift`, `tests/unit/Models/VibeSpaceStateTestsOverridesAndPaths.swift` |
+| Pre-existing memory lifecycle for ProjectSession + TerminalViewModel + EditorGroupStore | `tests/unit/Features/Terminal/ViewModels/TerminalMemoryLifecycleTests.swift`, `tests/unit/Features/ContentViewer/ViewModels/ContentViewerMemoryLifecycleTests.swift` |
 
 ---
 
 ## Open Questions
 
 - Should project removal prompt for confirmation?
+- Should bulk park (multi-select) be added in a future iteration? Currently single-project only (F021-R13).
 
 ---
 
@@ -197,3 +325,5 @@ And terminal pane height ratio is restored
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-04-15 | Initial draft — extracted from F014 Navigation | — |
+| 2026-05-22 | Added project parking (F021-R09–R14) and click-to-select project (F021-R15–R17), with scenarios S16–S22 | — |
+| 2026-05-22 | Closed F021-R17 cross-surface coverage: board-tile click-to-select wired via `.boardTileActivated`; terminal-tray and exclusion behaviors documented as inherent in scenarios S23–S24 | — |

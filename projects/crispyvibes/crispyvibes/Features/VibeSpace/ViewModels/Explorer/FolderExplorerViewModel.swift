@@ -55,6 +55,7 @@ final class FolderExplorerViewModel: ObservableObject {
     private var displayedItemsComputationTask: Task<Void, Never>?
     private var displayedItemsComputationRequestID = UUID()
     private var subscriptions = Set<AnyCancellable>()
+    private var hasShutdown = false
 
     var isSearching: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -83,6 +84,30 @@ final class FolderExplorerViewModel: ObservableObject {
         pendingExternalRefreshWorkItem?.cancel()
         pendingWatchedDirectoriesSyncWorkItem?.cancel()
         displayedItemsComputationTask?.cancel()
+    }
+
+    /// Explicit shutdown for the folder explorer's long-lived resources.
+    /// Per the project's coding-guidelines memory rule (explicit `shutdown()`
+    /// for types owning long-lived resources), callers (notably
+    /// `ProjectSession.shutdown`) MUST invoke this when the owning project is
+    /// removed or parked — `deinit` alone is not sufficient because SwiftUI
+    /// may still hold `@ObservedObject` references mid-unmount, leaving the
+    /// directory watcher and pending tasks running on the main actor and
+    /// causing UI churn after the project has logically gone.
+    ///
+    /// Idempotent: safe to call multiple times. `deinit` calls the same
+    /// teardown, but those calls are no-ops once `hasShutdown` is true.
+    @MainActor
+    func shutdown() {
+        guard !hasShutdown else { return }
+        hasShutdown = true
+        directoryWatcher.invalidate()
+        pendingExternalRefreshWorkItem?.cancel()
+        pendingExternalRefreshWorkItem = nil
+        pendingWatchedDirectoriesSyncWorkItem?.cancel()
+        pendingWatchedDirectoriesSyncWorkItem = nil
+        displayedItemsComputationTask?.cancel()
+        displayedItemsComputationTask = nil
     }
 
     private func bindDisplayedItems() {

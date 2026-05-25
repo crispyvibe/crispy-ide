@@ -43,6 +43,20 @@ protocol VibeSpaceManaging: AnyObject {
         trusted: Bool
     )?
 
+    // F021-R10/R11: Project parking
+    func setProjectParked(_ parked: Bool, forProject path: String, in vibespaceID: UUID)
+
+    // F012-R20: Browser session persistence per project
+    func saveBrowserSessions(
+        _ entries: [BrowserSessionEntry],
+        forProject path: String,
+        in vibespaceID: UUID
+    )
+    func loadBrowserSessions(
+        forProject path: String,
+        in vibespaceID: UUID
+    ) -> [BrowserSessionEntry]
+
     // Scoped shortcuts
     func setVibeSpaceShortcuts(_ shortcuts: [TerminalShortcutDefinition], vibespaceID: UUID)
     func setProjectShortcuts(_ shortcuts: [TerminalShortcutDefinition], vibespaceID: UUID, projectPath: String)
@@ -330,6 +344,34 @@ final class VibeSpaceManagementService: VibeSpaceManaging {
         persistenceStore.deleteProjectConfig(for: legacyIdentifier, in: vibespaceID)
         dirtyProjectConfigs.removeValue(forKey: "\(vibespaceID.uuidString):\(legacyIdentifier)")
         return migrated
+    }
+
+    // MARK: - Parking (F021-R10/R11)
+
+    func setProjectParked(_ parked: Bool, forProject path: String, in vibespaceID: UUID) {
+        mutateProjectConfig(path, in: vibespaceID) { config in
+            config.isParked = parked
+        }
+    }
+
+    // MARK: - Browser Session Persistence (F012-R20)
+
+    func saveBrowserSessions(
+        _ entries: [BrowserSessionEntry],
+        forProject path: String,
+        in vibespaceID: UUID
+    ) {
+        mutateProjectConfig(path, in: vibespaceID) { config in
+            config.browserSessionEntries = entries
+        }
+    }
+
+    func loadBrowserSessions(
+        forProject path: String,
+        in vibespaceID: UUID
+    ) -> [BrowserSessionEntry] {
+        let normalized = VibeSpaceValidator.normalizedPath(path)
+        return persistenceStore.loadProjectConfig(for: normalized, in: vibespaceID)?.value.browserSessionEntries ?? []
     }
 
     // MARK: - Scoped Shortcuts

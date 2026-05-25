@@ -50,6 +50,9 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
     let boardWindowTransferTargets: (VibeSpaceTerminalBoardStore, UUID) -> [VibeSpaceTerminalBoardSurfaceTransferTarget]
     let onTileSendToNewBoardWindowRequested: (UUID, VibeSpaceTerminalBoardStore, UUID) -> Void
     let onTileSendToBoardWindowRequested: (UUID, UUID, VibeSpaceTerminalBoardStore, UUID) -> Void
+    /// F048-R13: bulk-move every tile on `sourceSurfaceID` whose `projectPath`
+    /// matches the right-clicked tile's project to a new detached board window.
+    let onTileSendAllFromProjectToNewBoardWindowRequested: (String, VibeSpaceTerminalBoardStore, UUID) -> Void
     let onOpenTerminalInEditorPane: (UUID, UUID) -> Void
     let onLinkTargetActivated: (URL, URL?) -> Void
     let onFileSystemTargetActivated: (TerminalFileSystemTarget, URL?) -> Void
@@ -330,6 +333,7 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
             boardWindowTransferTargets: boardWindowTransferTargets,
             onTileSendToNewBoardWindowRequested: onTileSendToNewBoardWindowRequested,
             onTileSendToBoardWindowRequested: onTileSendToBoardWindowRequested,
+            onTileSendAllFromProjectToNewBoardWindowRequested: onTileSendAllFromProjectToNewBoardWindowRequested,
             onOpenTerminalInEditorPane: { projectID, tabID in
                 onOpenTerminalInEditorPane(projectID, tabID)
             },
@@ -562,6 +566,12 @@ extension ContentView {
                     vibespaceID: vibespaceShell.activeVibeSpaceID
                 )
             },
+            onTileSendAllFromProjectToNewBoardWindowRequested: { projectPath, _, sourceSurfaceID in
+                bulkMoveProjectToNewWindow(
+                    projectPath: projectPath,
+                    sourceSurfaceID: sourceSurfaceID
+                )
+            },
             onOpenTerminalInEditorPane: { projectID, tabID in
                 contentViewerStore.activeGroup.openTab(.terminal(projectID: projectID, tabID: tabID))
             },
@@ -771,6 +781,106 @@ extension ContentView {
         )
     }
 
+    /// F048-R13: bulk-move every tile on `sourceSurfaceID` belonging to the
+    /// currently focused project into a new detached board window. Used by the
+    /// keyboard shortcut path; for a tile-anchored variant (context menu),
+    /// see `bulkMoveProjectToNewWindow(projectPath:sourceSurfaceID:)`.
+    ///
+    /// Behavior per F048 spec:
+    /// - **R14 board mode only**: no-op when `selectedCanvasMode != .terminalOnly`.
+    /// - No focused project, or focused project has no tiles on the source
+    ///   surface, → silent no-op.
+    func bulkMoveCurrentProjectToNewWindow(sourceSurfaceID: UUID) {
+        guard let focusedProject = vibespaceView.focusedProject else { return }
+        bulkMoveProjectToNewWindow(
+            projectPath: focusedProject.projectIdentifier,
+            sourceSurfaceID: sourceSurfaceID,
+            windowTitle: focusedProject.title
+        )
+    }
+
+    /// F048-R13: bulk-move every tile on `sourceSurfaceID` belonging to
+    /// `projectPath` into a new detached board window. Driven by both the
+    /// keyboard shortcut (via `bulkMoveCurrentProjectToNewWindow`) and the
+    /// tile context menu's "Send All From This Project" action.
+    ///
+    /// Behavior:
+    /// - **R14 board mode only**: no-op when `selectedCanvasMode != .terminalOnly`.
+    /// - Project has no tiles on the source surface → silent no-op.
+    /// - Tiles are detached in a single store mutation; a fresh detached
+    ///   surface is created with all of them; R15 source-surface
+    ///   reorganization is automatic via the existing layout reflow.
+    /// - The existing `closeDetachedSurfaceIfEmpty` path closes the source
+    ///   window if the source itself is detached and now empty (consistent
+    ///   with single-tile transfer behavior).
+    func bulkMoveProjectToNewWindow(
+        projectPath: String,
+        sourceSurfaceID: UUID,
+        windowTitle: String? = nil
+    ) {
+        guard vibespaceView.selectedCanvasMode == .terminalOnly else { return }
+        guard let vibespaceID = vibespaceShell.activeVibeSpaceID else { return }
+
+        let detachedTiles = boardStore.bulkDetachTilesForProject(
+            projectPath,
+            fromSurface: sourceSurfaceID
+        )
+        guard !detachedTiles.isEmpty else { return }
+
+        let resolvedTitle = windowTitle
+            ?? vibespaceView.activeVibeSpaceProjects
+                .first(where: { $0.projectIdentifier == projectPath })?
+                .title
+            ?? URL(fileURLWithPath: projectPath).lastPathComponent
+        let targetSurfaceID = boardStore.createDetachedSurface(
+            with: detachedTiles,
+            title: resolvedTitle
+        )
+        openDetachedTerminalBoardWindow(
+            vibespaceID: vibespaceID,
+            surfaceID: targetSurfaceID,
+            boardStore: boardStore,
+            title: resolvedTitle
+        )
+
+        let sourceWindowID = appContainer.terminalBoardDetachedWindowManager
+            .windowID(forSurfaceID: sourceSurfaceID, vibespaceID: vibespaceID)
+        refreshDetachedBoardWindowTitle(
+            boardStore: boardStore,
+            surfaceID: sourceSurfaceID,
+            vibespaceID: vibespaceID
+        )
+        closeDetachedSurfaceIfEmpty(
+            boardStore: boardStore,
+            sourceSurfaceID: sourceSurfaceID,
+            sourceWindowID: sourceWindowID,
+            vibespaceID: vibespaceID
+        )
+    }
+
+    /// F048-R16: bulk-recall every tile on a detached surface back to the
+    /// primary surface, then close the now-empty detached window.
+    ///
+    /// Behavior:
+    /// - Silent no-op when `sourceSurfaceID` is the primary surface (recall
+    ///   only meaningful from a detached window).
+    /// - Uses the existing `closeDetachedSurface(_:mergeIntoPrimary: true)`
+    ///   flow which handles overflow gracefully (tiles exceeding the primary
+    ///   surface's 16-tile cap roll into `minimizedTiles`).
+    /// - The detached window's NSWindow is dismissed via the standard
+    ///   `closeAfterTransfer` path so the user-close handler doesn't fire
+    ///   double-merge.
+    func recallProjectFromWindow(sourceSurfaceID: UUID) {
+        guard sourceSurfaceID != boardStore.primarySurfaceID else { return }
+        guard let vibespaceID = vibespaceShell.activeVibeSpaceID else { return }
+        guard !boardStore.isSurfaceEmpty(sourceSurfaceID) else { return }
+
+        let sourceWindowID = appContainer.terminalBoardDetachedWindowManager
+            .windowID(forSurfaceID: sourceSurfaceID, vibespaceID: vibespaceID)
+        boardStore.closeDetachedSurface(sourceSurfaceID, mergeIntoPrimary: true)
+        appContainer.terminalBoardDetachedWindowManager.closeAfterTransfer(id: sourceWindowID)
+    }
+
     /// Re-opens any detached terminal-board windows that the layout for the active
     /// vibespace declares as open. Called from ContentView's lifecycle on initial
     /// appear and on vibespace change. The board store is service-layer-owned, so
@@ -880,6 +990,12 @@ extension ContentView {
                             vibespaceID: vibespaceID
                         )
                     },
+                    onTileSendAllFromProjectToNewBoardWindowRequested: { projectPath in
+                        bulkMoveProjectToNewWindow(
+                            projectPath: projectPath,
+                            sourceSurfaceID: surfaceID
+                        )
+                    },
                     onOpenTerminalInEditorPane: { projectID, tabID in
                         contentViewerStore.activeGroup.openTab(.terminal(projectID: projectID, tabID: tabID))
                     },
@@ -953,6 +1069,30 @@ extension ContentView {
                 boardStore.layout(for: surfaceID).tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount
             },
             canAddBrowser: {
+                boardStore.layout(for: surfaceID).tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount
+            },
+            projects: activeVibeSpaceSession.projects,
+            focusedProject: activeVibeSpaceSession.focusedProject,
+            colorForProject: { [vibespaceCanvasActionsCoordinator] project in
+                vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color
+            },
+            // The detached window's New Terminal popover bypasses the
+            // notification dispatch used by the main toolbar (which always
+            // targets the primary surface). Calling `boardStore.addTile`
+            // directly with this window's `surfaceID` keeps the new tile
+            // anchored to the originating detached window. Temporary
+            // spotlight requests still fall through to a tile here because
+            // detached windows do not host a spotlight overlay — the
+            // spotlight UI lives only in the main canvas.
+            onCreateTerminal: { directoryURL, projectPath, _ in
+                _ = boardStore.addTile(
+                    projectPath: projectPath,
+                    directoryURL: directoryURL.standardizedFileURL,
+                    preferStandalone: projectPath == nil,
+                    surfaceID: surfaceID
+                )
+            },
+            canAddTerminal: {
                 boardStore.layout(for: surfaceID).tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount
             }
         )
@@ -1147,6 +1287,9 @@ private struct DetachedTerminalBoardWindowContent: View {
     let boardWindowTransferTargets: () -> [VibeSpaceTerminalBoardSurfaceTransferTarget]
     let onTileSendToNewBoardWindowRequested: (UUID) -> Void
     let onTileSendToBoardWindowRequested: (UUID, UUID) -> Void
+    /// F048-R13: bulk-move all tiles on this detached surface that share
+    /// `projectPath` to a new detached window.
+    let onTileSendAllFromProjectToNewBoardWindowRequested: (String) -> Void
     let onOpenTerminalInEditorPane: (UUID, UUID) -> Void
     let onLinkTargetActivated: (URL, URL?) -> Void
     let onFileSystemTargetActivated: (TerminalFileSystemTarget, URL?) -> Void
@@ -1178,6 +1321,7 @@ private struct DetachedTerminalBoardWindowContent: View {
         boardWindowTransferTargets: @escaping () -> [VibeSpaceTerminalBoardSurfaceTransferTarget],
         onTileSendToNewBoardWindowRequested: @escaping (UUID) -> Void,
         onTileSendToBoardWindowRequested: @escaping (UUID, UUID) -> Void,
+        onTileSendAllFromProjectToNewBoardWindowRequested: @escaping (String) -> Void,
         onOpenTerminalInEditorPane: @escaping (UUID, UUID) -> Void,
         onLinkTargetActivated: @escaping (URL, URL?) -> Void,
         onFileSystemTargetActivated: @escaping (TerminalFileSystemTarget, URL?) -> Void,
@@ -1206,6 +1350,7 @@ private struct DetachedTerminalBoardWindowContent: View {
         self.boardWindowTransferTargets = boardWindowTransferTargets
         self.onTileSendToNewBoardWindowRequested = onTileSendToNewBoardWindowRequested
         self.onTileSendToBoardWindowRequested = onTileSendToBoardWindowRequested
+        self.onTileSendAllFromProjectToNewBoardWindowRequested = onTileSendAllFromProjectToNewBoardWindowRequested
         self.onOpenTerminalInEditorPane = onOpenTerminalInEditorPane
         self.onLinkTargetActivated = onLinkTargetActivated
         self.onFileSystemTargetActivated = onFileSystemTargetActivated
@@ -1286,6 +1431,9 @@ private struct DetachedTerminalBoardWindowContent: View {
             },
             onTileSendToBoardWindowRequested: { tileID, targetSurfaceID, _, _ in
                 onTileSendToBoardWindowRequested(tileID, targetSurfaceID)
+            },
+            onTileSendAllFromProjectToNewBoardWindowRequested: { projectPath, _, _ in
+                onTileSendAllFromProjectToNewBoardWindowRequested(projectPath)
             },
             onOpenTerminalInEditorPane: onOpenTerminalInEditorPane,
             vibeCastStore: vibeCastStore,

@@ -129,7 +129,7 @@ Detailed per-command requirements and scenarios live in category-specific docs:
 | Shelf | [commands-shelf.md](commands-shelf.md) | `shelf.add`, `shelf.list`, `shelf.remove` |
 | Browser | [commands-browser.md](commands-browser.md) | `browser.open`, `browser.snapshot`, `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload`, `browser.eval`, `browser.click`, `browser.type`, `browser.wait`, `browser.screenshot`, `browser.console`, `browser.dialog` |
 | Shortcuts | [commands-shortcuts.md](commands-shortcuts.md) | `shortcut.list`, `shortcut.add` |
-| VibeSpace | [commands-vibespace.md](commands-vibespace.md) | `vibespace.list`, `vibespace.current`, `pane.list` |
+| VibeSpace | [commands-vibespace.md](commands-vibespace.md) | `vibespace.list`, `vibespace.current`, `pane.list`, `vibespace.addProject`, `vibespace.removeProject`, `vibespace.parkProject` |
 
 ## Error Codes
 

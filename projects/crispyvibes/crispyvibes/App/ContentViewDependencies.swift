@@ -46,7 +46,8 @@ final class ContentViewStableDependencies: ObservableObject {
         contentViewerStore: ContentViewerStore,
         splitViewStore: SplitViewStore,
         dockPreviewBridge: DockPreviewBridge? = nil,
-        canvasModeProvider: (() -> VibeSpaceCanvasMode)? = nil
+        canvasModeProvider: (() -> VibeSpaceCanvasMode)? = nil,
+        dockedBrowserCoordinator: DockedBrowserCoordinator? = nil
     ) {
         let terminalSpotlightCoordinator = appContainer.makeTerminalSpotlightCoordinator()
         let vibespaceCloneRepositoryCoordinator = appContainer.makeVibeSpaceCloneRepositoryCoordinator()
@@ -80,5 +81,9 @@ final class ContentViewStableDependencies: ObservableObject {
         self.vibespaceCanvasActionsCoordinator.dockPreviewBridge = dockPreviewBridge
         self.vibespaceCanvasActionsCoordinator.canvasModeProvider = canvasModeProvider
         self.vibespaceCanvasActionsCoordinator.operationMetricsStore = appContainer.operationMetricsStore
+        // F012-R18 / F021-R10: enables browser teardown on project remove + park.
+        self.vibespaceCanvasActionsCoordinator.dockedBrowserCoordinator = dockedBrowserCoordinator
+        // F044-R80–R82: enable CLI vibespace.addProject / removeProject / parkProject.
+        appContainer.cliCommandRouter.attachVibeSpaceActionsCoordinator(self.vibespaceCanvasActionsCoordinator)
     }
 }

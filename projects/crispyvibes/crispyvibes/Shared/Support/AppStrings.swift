@@ -129,6 +129,11 @@ enum AppStrings {
         static let noProjects = String(localized: "vibespace.noProjects")
         static let addProjectToStart = String(localized: "vibespace.addProjectToStart")
         static let closeVibeSpace = String(localized: "vibespace.closeVibeSpace")
+
+        // F021-R12 / R13: Parked project UI strings.
+        static let parkedProjectsHeader = String(localized: "vibespace.parkedProjects.header", defaultValue: "Parked Projects")
+        static let parkProjectAction = String(localized: "vibespace.parkProject.action", defaultValue: "Park Project")
+        static let activateProjectAction = String(localized: "vibespace.activateProject.action", defaultValue: "Activate Project")
     }
 
     // MARK: - Sidebar
@@ -312,6 +317,7 @@ enum AppStrings {
             static let closeMinimized = String(localized: "terminal.tile.closeMinimized")
             static let sendToNewBoardWindow = String(localized: "terminal.tile.sendToNewBoardWindow")
             static let sendToBoardWindow = String(localized: "terminal.tile.sendToBoardWindow")
+            static let sendAllFromProjectToNewBoardWindow = String(localized: "terminal.tile.sendAllFromProjectToNewBoardWindow")
             static let primaryBoardWindow = String(localized: "terminal.tile.primaryBoardWindow")
             static let boardWindow = String(localized: "terminal.tile.boardWindow")
             static let panes = String(localized: "terminal.tile.panes")
@@ -332,6 +338,14 @@ enum AppStrings {
             static let copySummary = String(
                 localized: "terminal.contextSummary.copySummary",
                 defaultValue: "Copy summary"
+            )
+            /// Placeholder text shown in the timeline / headline when the user submitted
+            /// input that was suppressed from the terminal display (e.g., a password
+            /// prompt with echo disabled). The literal text never enters the LLM prompt
+            /// or the summary history. F041-R17.
+            static let sensitiveInformationPlaceholder = String(
+                localized: "terminal.contextSummary.sensitiveInformation",
+                defaultValue: "sensitive information"
             )
         }
 

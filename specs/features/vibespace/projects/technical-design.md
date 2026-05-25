@@ -138,3 +138,88 @@ From old path key to new path key in all `*ByPath` dictionaries.
 
 - Color tokens are hex-only; legacy named token decoding removed
 - Project config files use integrity signing; unverified configs loadable but flagged
+
+## Project Parking (F021-R09–R14)
+
+### Model
+
+Three mutually exclusive states for a path within a vibespace:
+- **Live** — path is in `VibeSpaceState.projects` as an `AnyProjectSession`.
+- **Unresolved** — path is in `unresolvedProjectPaths` (directory missing on disk).
+- **Parked** — path is in `parkedProjectPaths` (directory exists; intentionally not loaded).
+
+`VibeSpaceConfigFile.parkedProjectPaths: [String]` persists the set across launches. `ProjectConfigFile.isParked: Bool` mirrors the state in the per-project config file (defaults to false; backward-compatible decode via `decodeIfPresent`).
+
+### Park Lifecycle (F021-R10)
+
+`VibeSpaceCanvasActionsCoordinator.parkProject(id:)` orchestrates:
+
+1. Capture browser sessions for the project via `DockedBrowserCoordinator.snapshotBrowserSessions(forProjectPath:)` and persist them into `ProjectConfigFile.browserSessionEntries`.
+2. Dispatch close requests for those browsers via the standard `.closeBrowserRequested` pipeline.
+3. Mark `isParked = true` in the per-project config.
+4. Mutate live state via `VibeSpaceState.parkProject(id:)`, which calls `ProjectSession.shutdown()` (terminating terminals + watchers), removes the session from `projects`, and appends the path to `parkedProjectPaths`.
+5. Clear the hydration startup-execution flag so re-hydration after unpark is fresh.
+6. Persist the vibespace catalog so `parkedProjectPaths` is durable.
+
+### Unpark Restoration (F021-R11)
+
+`VibeSpaceCanvasActionsCoordinator.unparkProject(path:)`:
+
+1. Mutate state via `VibeSpaceState.unparkProject(path:)`, which removes the path from `parkedProjectPaths`, creates a fresh `ProjectSession` via the session factory (or `identifierSessionFactory` for SSH paths via `makeIdentifierSession(identifier:)`), and focuses the new session.
+2. Clear `isParked` in the per-project config.
+3. Restore `browserSessionEntries` — pinned tile entries via `restoreTile(id:snapshot:)`; detailed-view entries via `restoreDetailedBrowser(reference:snapshot:)` and (when canvas is `.detailed`) surface as content-viewer tabs via `ContentViewerStore.openWebPage`.
+4. Activate the new session via `vibespaceHydrationCoordinator.activateProjectForPresentation`.
+5. Persist the catalog.
+
+The existing `ProjectSession` activation flow (`activateIfNeeded` → `restoreLocalSessionState`) reads the persisted `terminalEntries` from `ProjectConfigFile`, so terminals are recreated from the saved snapshot without additional code.
+
+### Auto-Unpark on Add
+
+`VibeSpaceState.addProjects(from:)` checks `parkedProjectPaths` for each candidate. If a folder is parked, the path is unparked instead of being treated as a duplicate-skip — preserving the spirit of F021-S02 (existing folders are not duplicated).
+
+### UI Surfacing (F021-R12, R13)
+
+The Files-tab pane (`VibeSpaceSidebarFilesPane`) takes a `parkedProjectPaths` parameter and renders a "Parked Projects" section beneath the live projects list. Each parked-project row carries an "Activate Project" right-click menu item. Live projects' headers carry a "Park Project" right-click menu item (`VibeSpaceProjectFilesSectionView`). Both surfaces post notifications (`.parkProjectRequested`, `.activateProjectRequested`) which `ContentView` routes to the actions coordinator.
+
+### Exclusion Semantics (F021-R14)
+
+Most exclusion is automatic because parked projects are not in `VibeSpaceState.projects`:
+- The rail iterates `state.projects` so parked projects do not appear.
+- Hydration coordinators iterate `state.projects` so parked terminals/watchers are not started.
+- VibeCast broadcast targets (which iterate `state.projects`) skip parked projects without explicit changes.
+- Scope-toggle project count derives from `state.projects.count`.
+
+## Click-to-Select Project (F021-R15–R17)
+
+### Mechanism
+
+`EditorGroupStore.activateTab(_:)` posts `.contentViewerTabActivated` (userInfo: `["tab": ContentViewerTab]`) on every tab activation, user-initiated or programmatic. `ContentView` listens, resolves the activated tab's owning project via `resolveOwningProjectPath(for:)`, and calls `vibespaceCanvasActionsCoordinator.focusProject(_:)` if the resolved project differs from the current focused project. Idempotency is enforced by an early-return when the resolved project's id already matches the focused project's id, which prevents recursion when programmatic activation results from a `focusProject` call.
+
+### Tab → Project Resolution
+
+| Tab Kind | Resolution |
+|---|---|
+| `.file(reference)` | longest project-root prefix match against `reference.url.standardizedFileURL.path` |
+| `.webPage(reference)` | `reference.projectPath` |
+| `.terminal(projectID, _)` | look up project by UUID in `state.projects` |
+| `.vibeCast`, `.acpPane` | nil (no ownership) |
+
+### Cross-Surface Coverage
+
+| Surface | Mechanism |
+|---|---|
+| Content-viewer tabs (file / webPage / terminal kinds) | `EditorGroupStore.activateTab` posts `.contentViewerTabActivated` (userInfo: `tab`); ContentView listener resolves the owning project via `resolveOwningProjectPath(for:)` and calls `focusProject` if different. |
+| Terminal tray (detailed mode) | `FocusedProjectView` wraps a single project's `terminalViewModel`, so the tray's terminals are by construction owned by the focused project — taps are inherently idempotent (no project switch). |
+| Board tiles (board mode) | `VibeSpaceTerminalBoardStore.activateTile` posts `.boardTileActivated` (userInfo: `projectPath`); ContentView listener resolves and calls `focusProject` if different. Also covers detached board windows since they share the same store. |
+
+All listeners apply the same idempotency guard: if the resolved project's id already matches `focusedProject?.id`, the focus call is suppressed. This makes the notifications safe to fire on every activation (programmatic or user-initiated) without recursion or telemetry inflation.
+
+### Exclusion Side-Effects
+
+Because parked projects are stored separately in `parkedProjectPaths` and never instantiated as `AnyProjectSession`, surfaces that enumerate live projects automatically exclude them:
+
+- Project rail iterates `state.projects`.
+- VibeCast broadcast targets (`VibeCastView.terminalSources`) derive from `state.projects`.
+- Scope-toggle visibility (`if projects.count > 1`) counts only live projects.
+- Hydration coordinators iterate `state.projects`.
+- Click-to-select listeners only resolve owners against `state.projects`, so a notification carrying a parked project's path resolves to nil and is ignored — closing one more potential vector.

@@ -25,15 +25,53 @@ extension Notification.Name {
     static let openDeveloperTools = Notification.Name("openDeveloperTools")
     static let boardNavigateLeft = Notification.Name("boardNavigateLeft")
     static let boardNavigateRight = Notification.Name("boardNavigateRight")
+    /// F048-R13: posted when the user invokes the bulk-move keyboard shortcut.
+    /// userInfo: ["sourceSurfaceID": UUID]. Listener moves all of the focused
+    /// project's tiles from `sourceSurfaceID` to a new detached board window.
+    /// No-op outside terminal-board mode (F048-R14).
+    static let boardMoveProjectToNewWindowRequested = Notification.Name("boardMoveProjectToNewWindowRequested")
+    /// F048-R16: posted when the user invokes the bulk-recall keyboard shortcut.
+    /// userInfo: ["sourceSurfaceID": UUID]. Listener moves all tiles on the
+    /// detached surface back to the primary surface and closes the now-empty
+    /// detached window. No-op when invoked from a primary surface.
+    static let boardRecallProjectFromWindowRequested = Notification.Name("boardRecallProjectFromWindowRequested")
     static let checkForAppUpdates = Notification.Name("checkForAppUpdates")
     static let openExternalPaths = Notification.Name("openExternalPaths")
     static let toggleVibeCast = Notification.Name("toggleVibeCast")
     static let addACPTileToBoard = Notification.Name("addACPTileToBoard")
+    /// Posted by the title-bar New Terminal popover. Listeners create a
+    /// terminal in the supplied directory: a board tile in terminal-board
+    /// mode, or a temporary spotlight terminal in detailed mode.
+    /// userInfo: `[AppCommandUserInfoKey.currentDirectoryURL: URL]` (required),
+    /// `[AppCommandUserInfoKey.projectPath: String]` (optional — owning
+    /// project root path when the directory belongs to one of the open
+    /// projects), `[AppCommandUserInfoKey.preferTemporary: Bool]` (optional —
+    /// when true, force a temporary spotlight terminal even in board mode).
+    static let createTerminalRequested = Notification.Name("createTerminalRequested")
     static let terminalShortcutStoreDidChange = Notification.Name("TerminalShortcutStore.didChange")
     static let ghosttyOpenLinkTargetRequested = Notification.Name("ghosttyOpenLinkTargetRequested")
     static let ghosttyOpenFileSystemTargetRequested = Notification.Name("ghosttyOpenFileSystemTargetRequested")
     static let terminalAddFileToShelfRequested = Notification.Name("terminalAddFileToShelfRequested")
     static let fileSystemContentsDidChange = Notification.Name("fileSystemContentsDidChange")
+    /// F021-R15 / R16 / R17: posted by `EditorGroupStore.activateTab` whenever a
+    /// tab becomes active (user-initiated or programmatic). Listeners may resolve
+    /// the active tab's owning project and switch focus accordingly. Idempotent
+    /// when the resolved project is already focused.
+    /// userInfo: `[AppCommandUserInfoKey.tab: ContentViewerTab]`.
+    static let contentViewerTabActivated = Notification.Name("contentViewerTabActivated")
+    /// F021-R17: posted by `VibeSpaceTerminalBoardStore.activateTile` when a
+    /// board tile becomes active. Listeners resolve the project from the path
+    /// and switch focus. Idempotent.
+    /// userInfo: `[AppCommandUserInfoKey.projectPath: String]` (key omitted when
+    /// the tile has no project association).
+    static let boardTileActivated = Notification.Name("boardTileActivated")
+    /// F021-R13: posted when the user selects "Park Project" from a context menu.
+    /// userInfo: `[AppCommandUserInfoKey.projectID: UUID]`.
+    static let parkProjectRequested = Notification.Name("parkProjectRequested")
+    /// F021-R13: posted when the user selects "Activate Project" on a parked
+    /// project.
+    /// userInfo: `[AppCommandUserInfoKey.projectPath: String]`.
+    static let activateProjectRequested = Notification.Name("activateProjectRequested")
 }
 
 enum AppCommandUserInfoKey {
@@ -44,6 +82,11 @@ enum AppCommandUserInfoKey {
     static let sessionID = "sessionID"
     static let line = "line"
     static let column = "column"
+    static let sourceSurfaceID = "sourceSurfaceID"
+    static let tab = "tab"
+    static let projectPath = "projectPath"
+    static let projectID = "projectID"
+    static let preferTemporary = "preferTemporary"
 }
 
 enum AppCommandSource {
@@ -195,7 +238,8 @@ struct CrispyVibesApp: App {
                 acpObservabilityStore: appContainer.acpObservabilityStore,
                 experimentalFeatures: appContainer.experimentalFeatures,
                 acpVibeSpaceContextStore: appContainer.acpVibeSpaceContextStore,
-                acpDeveloperToolsService: appContainer.acpDeveloperToolsService
+                acpDeveloperToolsService: appContainer.acpDeveloperToolsService,
+                contextSummaryObservabilityStore: appContainer.contextSummaryObservabilityStore
             )
             .frame(minWidth: 600, minHeight: 400)
         }

@@ -118,6 +118,13 @@ struct VibeSpaceConfigFile: Codable, Equatable {
     var name: String
     var projectPaths: [String]
     var unresolvedProjectPaths: [String]
+    /// F021-R09: Parked project paths.
+    /// Parked projects are NOT instantiated as live `ProjectSession` instances.
+    /// They retain their `ProjectConfigFile` (with `isParked = true`) and are
+    /// surfaced in the Files tab as a distinct section, but do not appear in
+    /// the project rail, are excluded from terminal hydration, and do not
+    /// receive VibeCast broadcasts.
+    var parkedProjectPaths: [String] = []
     var focusedProjectPath: String?
     var startupSettings: VibeSpaceStartupSettings
     var defaultTerminalShell: TerminalShellPreference?
@@ -131,6 +138,7 @@ struct VibeSpaceConfigFile: Codable, Equatable {
         case name
         case projectPaths
         case unresolvedProjectPaths
+        case parkedProjectPaths
         case focusedProjectPath
         case startupSettings
         case defaultTerminalShell
@@ -144,6 +152,7 @@ struct VibeSpaceConfigFile: Codable, Equatable {
         name: String,
         projectPaths: [String],
         unresolvedProjectPaths: [String],
+        parkedProjectPaths: [String] = [],
         focusedProjectPath: String? = nil,
         startupSettings: VibeSpaceStartupSettings,
         defaultTerminalShell: TerminalShellPreference? = nil,
@@ -155,6 +164,7 @@ struct VibeSpaceConfigFile: Codable, Equatable {
         self.name = name
         self.projectPaths = projectPaths
         self.unresolvedProjectPaths = unresolvedProjectPaths
+        self.parkedProjectPaths = parkedProjectPaths
         self.focusedProjectPath = focusedProjectPath
         self.startupSettings = startupSettings
         self.defaultTerminalShell = defaultTerminalShell
@@ -169,6 +179,7 @@ struct VibeSpaceConfigFile: Codable, Equatable {
         name = try container.decode(String.self, forKey: .name)
         projectPaths = try container.decode([String].self, forKey: .projectPaths)
         unresolvedProjectPaths = try container.decodeIfPresent([String].self, forKey: .unresolvedProjectPaths) ?? []
+        parkedProjectPaths = try container.decodeIfPresent([String].self, forKey: .parkedProjectPaths) ?? []
         focusedProjectPath = try container.decodeIfPresent(String.self, forKey: .focusedProjectPath)
         startupSettings = try container.decode(VibeSpaceStartupSettings.self, forKey: .startupSettings)
         defaultTerminalShell = try container.decodeIfPresent(TerminalShellPreference.self, forKey: .defaultTerminalShell)
@@ -180,9 +191,27 @@ struct VibeSpaceConfigFile: Codable, Equatable {
 
 // MARK: - Project Config (per project within vibespace)
 
+/// Persisted per-project browser session entry.
+///
+/// Each entry captures one browser instance owned by the project (per F012-R17).
+/// Entries are restored on vibespace open for non-parked projects (F012-R20),
+/// and serialized to disk on park (F021-R10) so unpark can recreate them.
+struct BrowserSessionEntry: Codable, Equatable {
+    /// Stable browser identifier — matches the runtime `BrowserPanelViewModel.id`
+    /// and the tab identifier used by the content viewer.
+    var browserID: UUID
+    /// Captured session state (URL, history stacks, zoom, theme).
+    var snapshot: BrowserSessionSnapshot
+    /// Optional pinned terminal-board tile ID for browsers tiled on the board.
+    var pinnedTileID: UUID?
+}
+
 struct ProjectConfigFile: Codable, Equatable {
     var version: Int = 2
     var projectPath: String
+    /// F021-R09: parked state. Parked projects retain config but do not hydrate
+    /// sessions on vibespace open. Set/cleared by `parkProject`/`unparkProject`.
+    var isParked: Bool = false
     var colorTag: String?
     var shortcutIndex: Int?
     var startupOverride: VibeSpaceProjectStartupOverride?
@@ -191,17 +220,20 @@ struct ProjectConfigFile: Codable, Equatable {
     var terminalEntries: [TerminalSessionEntry]
     var activeTerminalDirectory: String?
     var activeTerminalIdentity: String?
+    /// F012-R20: persisted browser session entries owned by this project.
+    var browserSessionEntries: [BrowserSessionEntry] = []
     var shortcuts: [TerminalShortcutDefinition] = []
 
     private enum CodingKeys: String, CodingKey {
-        case version, projectPath, colorTag, shortcutIndex, startupOverride
+        case version, projectPath, isParked, colorTag, shortcutIndex, startupOverride
         case acpAgentOverrideID, terminalShellOverride, terminalEntries, activeTerminalDirectory
-        case activeTerminalIdentity, shortcuts
+        case activeTerminalIdentity, browserSessionEntries, shortcuts
     }
 
     init(
         version: Int = 2,
         projectPath: String,
+        isParked: Bool = false,
         colorTag: String? = nil,
         shortcutIndex: Int? = nil,
         startupOverride: VibeSpaceProjectStartupOverride? = nil,
@@ -210,10 +242,12 @@ struct ProjectConfigFile: Codable, Equatable {
         terminalEntries: [TerminalSessionEntry] = [],
         activeTerminalDirectory: String? = nil,
         activeTerminalIdentity: String? = nil,
+        browserSessionEntries: [BrowserSessionEntry] = [],
         shortcuts: [TerminalShortcutDefinition] = []
     ) {
         self.version = version
         self.projectPath = projectPath
+        self.isParked = isParked
         self.colorTag = colorTag
         self.shortcutIndex = shortcutIndex
         self.startupOverride = startupOverride
@@ -222,6 +256,7 @@ struct ProjectConfigFile: Codable, Equatable {
         self.terminalEntries = terminalEntries
         self.activeTerminalDirectory = activeTerminalDirectory
         self.activeTerminalIdentity = activeTerminalIdentity
+        self.browserSessionEntries = browserSessionEntries
         self.shortcuts = shortcuts
     }
 
@@ -229,6 +264,7 @@ struct ProjectConfigFile: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 2
         projectPath = try container.decode(String.self, forKey: .projectPath)
+        isParked = try container.decodeIfPresent(Bool.self, forKey: .isParked) ?? false
         colorTag = try container.decodeIfPresent(String.self, forKey: .colorTag)
         shortcutIndex = try container.decodeIfPresent(Int.self, forKey: .shortcutIndex)
         startupOverride = try container.decodeIfPresent(VibeSpaceProjectStartupOverride.self, forKey: .startupOverride)
@@ -237,6 +273,7 @@ struct ProjectConfigFile: Codable, Equatable {
         terminalEntries = try container.decodeIfPresent([TerminalSessionEntry].self, forKey: .terminalEntries) ?? []
         activeTerminalDirectory = try container.decodeIfPresent(String.self, forKey: .activeTerminalDirectory)
         activeTerminalIdentity = try container.decodeIfPresent(String.self, forKey: .activeTerminalIdentity)
+        browserSessionEntries = try container.decodeIfPresent([BrowserSessionEntry].self, forKey: .browserSessionEntries) ?? []
         shortcuts = try container.decodeIfPresent([TerminalShortcutDefinition].self, forKey: .shortcuts) ?? []
     }
 

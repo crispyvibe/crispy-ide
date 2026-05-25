@@ -168,6 +168,14 @@ final class EditorGroupStore: ObservableObject, Identifiable {
                 tab,
                 suppressConnectionReadinessErrors: suppressConnectionReadinessErrors
             )
+            // F021-R15: surface tab activation so the click-to-select listener can
+            // resolve the tab's owning project and switch focus. Idempotent when
+            // the resolved project is already focused.
+            NotificationCenter.default.post(
+                name: .contentViewerTabActivated,
+                object: nil,
+                userInfo: [AppCommandUserInfoKey.tab: tab]
+            )
         }
     }
 

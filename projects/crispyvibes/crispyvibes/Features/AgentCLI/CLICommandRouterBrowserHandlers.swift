@@ -9,20 +9,65 @@ extension CLICommandRouter {
             return .ok(id: request.id, result: ["tabs": .array([])])
         }
 
-        var entries: [CLIJSONValue] = []
-        for tab in coordinator.searchTabs(query: "") {
-            entries.append(.object([
-                "browser_id": .string("browser.\(tab.id.uuidString)"),
-                "title": .string(tab.title),
-                "url": .string(tab.url?.absoluteString ?? ""),
-            ]))
+        // F012-R19 / scope filtering: default `project` returns only browsers
+        // owned by the caller's project (resolved from `_env.project_path` or
+        // the focused project — same precedence as `browser.open`). This is
+        // the safer default for agents — they get their own project's context
+        // without leaking cross-project state. `vibespace` is an explicit
+        // opt-in for cross-project listings.
+        let scopeParam = request.params?["scope"]?.stringValue ?? "project"
+        let env = request._env ?? .empty
+        let envProjectPath = env.project_path?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let callerProjectPath: String?
+        if let envProjectPath, !envProjectPath.isEmpty {
+            callerProjectPath = envProjectPath
+        } else if let focused = vibespaceCatalogStore?.vibespaces.first?.focusedProject {
+            callerProjectPath = focused.projectIdentifier
+        } else {
+            callerProjectPath = nil
         }
-        for tab in coordinator.searchDetailedTabs(query: "") {
-            entries.append(.object([
+
+        let scopeFilter: (String?) -> Bool
+        switch scopeParam {
+        case "project":
+            // Project scope requires a resolvable caller project; otherwise
+            // surface the failure so the agent doesn't get an empty result it
+            // can't explain.
+            guard let callerProjectPath else {
+                return .error(
+                    id: request.id,
+                    code: CLIErrorCode.noFocusedProject,
+                    message: "browser.list scope=project requires CRISPY_PROJECT_PATH or a focused project — pass scope=vibespace to list across projects"
+                )
+            }
+            scopeFilter = { $0 == callerProjectPath }
+        case "vibespace":
+            scopeFilter = { _ in true }
+        default:
+            return .error(
+                id: request.id,
+                code: CLIErrorCode.invalidParams,
+                message: "scope must be \"project\" (default) or \"vibespace\""
+            )
+        }
+
+        var seenIDs = Set<UUID>()
+        var entries: [CLIJSONValue] = []
+        let allTabs = coordinator.searchTabs(query: "") + coordinator.searchDetailedTabs(query: "")
+        for tab in allTabs {
+            guard seenIDs.insert(tab.id).inserted else { continue }
+            guard scopeFilter(tab.projectPath) else { continue }
+            var fields: [String: CLIJSONValue] = [
                 "browser_id": .string("browser.\(tab.id.uuidString)"),
                 "title": .string(tab.title),
                 "url": .string(tab.url?.absoluteString ?? ""),
-            ]))
+            ]
+            if let projectPath = tab.projectPath {
+                fields["project_path"] = .string(projectPath)
+            } else {
+                fields["project_path"] = .null
+            }
+            entries.append(.object(fields))
         }
 
         return .ok(id: request.id, result: ["tabs": .array(entries)])
@@ -32,11 +77,37 @@ extension CLICommandRouter {
         let urlString = request.params?["url"]?.stringValue ?? ""
         let url = URL(string: urlString) ?? URL(string: "about:blank")!
         let env = request._env ?? .empty
-        let projectPath = env.project_path
+
+        // F012-R17: each browser MUST be owned by exactly one project. Resolve
+        // an owning project path before dispatching: prefer the caller's
+        // CRISPY_PROJECT_PATH (set by terminals spawned with project context),
+        // then fall back to the active vibespace's focused project. If neither
+        // resolves, surface the failure to the caller as a structured error
+        // rather than silently dropping the request in the notification handler.
+        let envProjectPath = env.project_path?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedProjectPath: String?
+        if let envProjectPath, !envProjectPath.isEmpty {
+            resolvedProjectPath = envProjectPath
+        } else if let focused = vibespaceCatalogStore?.vibespaces.first?.focusedProject {
+            resolvedProjectPath = focused.projectIdentifier
+        } else {
+            resolvedProjectPath = nil
+        }
+
+        guard let projectPath = resolvedProjectPath else {
+            return .error(
+                id: request.id,
+                code: CLIErrorCode.noFocusedProject,
+                message: "browser open requires an owning project: set CRISPY_PROJECT_PATH or focus a project in the active vibespace"
+            )
+        }
 
         let browserID = UUID()
-        var userInfo: [String: Any] = ["url": url, "browserID": browserID]
-        if let projectPath { userInfo["projectPath"] = projectPath }
+        let userInfo: [String: Any] = [
+            "url": url,
+            "browserID": browserID,
+            "projectPath": projectPath
+        ]
 
         NotificationCenter.default.post(
             name: .openNewBrowserRequested,
@@ -47,6 +118,7 @@ extension CLICommandRouter {
         return .ok(id: request.id, result: [
             "browser_id": .string("browser.\(browserID.uuidString)"),
             "url": .string(url.absoluteString),
+            "project_path": .string(projectPath),
         ])
     }
 

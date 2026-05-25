@@ -51,6 +51,8 @@ enum AppShortcutAction: String, CaseIterable, Identifiable, Codable {
     case focusPreviousProjectTerminal
     case boardNavigateLeft
     case boardNavigateRight
+    case boardMoveProjectToNewWindow
+    case boardRecallProjectFromWindow
     case increaseFontSize
     case decreaseFontSize
     case resetFontSize
@@ -85,6 +87,8 @@ enum AppShortcutKeyCode {
     static let rightBracket: UInt16 = 30
     static let leftBracket: UInt16 = 33
     static let v: UInt16 = 9
+    static let b: UInt16 = 11
+    static let m: UInt16 = 46
     static let comma: UInt16 = 43
     static let leftArrow: UInt16 = 123
     static let rightArrow: UInt16 = 124
@@ -278,6 +282,8 @@ enum AppShortcutRegistry {
         .init(action: .focusPreviousProjectTerminal, title: "Focus Terminal Up", section: .board, defaultBinding: .init(keyCode: AppShortcutKeyCode.upArrow, modifiers: [.command, .option]), isEditable: true),
         .init(action: .boardNavigateLeft, title: "Focus Left", section: .board, defaultBinding: .init(keyCode: AppShortcutKeyCode.leftArrow, modifiers: [.command, .option]), isEditable: true),
         .init(action: .boardNavigateRight, title: "Focus Right", section: .board, defaultBinding: .init(keyCode: AppShortcutKeyCode.rightArrow, modifiers: [.command, .option]), isEditable: true),
+        .init(action: .boardMoveProjectToNewWindow, title: "Move Project Panes to New Window", section: .board, defaultBinding: .init(keyCode: AppShortcutKeyCode.m, modifiers: [.command, .option]), isEditable: true),
+        .init(action: .boardRecallProjectFromWindow, title: "Recall Panes to Primary Window", section: .board, defaultBinding: .init(keyCode: AppShortcutKeyCode.b, modifiers: [.command, .option]), isEditable: true),
         .init(action: .increaseFontSize, title: "Increase Font Size", section: .appearance, defaultBinding: .init(keyCode: AppShortcutKeyCode.equal, modifiers: [.command]), isEditable: true),
         .init(action: .decreaseFontSize, title: "Decrease Font Size", section: .appearance, defaultBinding: .init(keyCode: AppShortcutKeyCode.minus, modifiers: [.command]), isEditable: true),
         .init(action: .resetFontSize, title: "Reset Font Size", section: .appearance, defaultBinding: .init(keyCode: AppShortcutKeyCode.zero, modifiers: [.command]), isEditable: true),

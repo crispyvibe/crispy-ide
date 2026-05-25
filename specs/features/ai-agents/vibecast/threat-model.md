@@ -43,12 +43,12 @@ VibeCast is a broadcast compose-and-send interface that dispatches text to termi
 - **Likelihood:** Low — user reviews compose text before sending; rephrase output is visible in the compose field.
 - **Mitigation:** Rephrase output is stripped of ANSI/terminal control sequences via `stripTerminalFormatting`. Output is placed in the compose field for user review before sending — it is never auto-sent. The user must explicitly trigger send after reviewing. Linked NFR: SEC-Input-Sanitization.
 
-### F028-T04: Sensitive data exposure in message history
+### F028-T04: Sensitive data exposure in message history and downstream summary
 
-- **Vector:** User sends passwords, tokens, or secrets via VibeCast to terminal sessions (e.g., `export API_KEY=secret`). These are stored in the in-memory message history and visible in the VibeCast UI.
-- **Impact:** Secrets visible in message history to anyone with screen access.
+- **Vector:** User sends passwords, tokens, or secrets via VibeCast to terminal sessions (e.g., `export API_KEY=secret`). These are stored in the in-memory message history and visible in the VibeCast UI. The same compose-UI text is also forwarded to `TerminalSession.recordSentInput` → `TerminalInsightObserver.recordSubmittedFromComposeUI`, where it is classified `.visible` by trust boundary and reaches the centralized `ComposeHistoryStore` and the F041 Terminal Context Summary feature (when enabled).
+- **Impact:** Secrets visible in VibeCast message history, in compose history (up-arrow recall), and in the AI summary timeline / LLM prompt window.
 - **Likelihood:** Medium — developers frequently pass secrets to terminals.
-- **Mitigation:** Message history is in-memory only (not persisted to disk). History is capped at 500 messages and cleared on app termination. Consider adding a "clear history" action. Linked NFR: SEC-Data-Protection.
+- **Mitigation:** VibeCast message history is in-memory only (not persisted to disk), capped at 500 messages, cleared on app termination; consider adding a "clear history" action. The compose-UI path into the insight observer is treated as visible-by-trust-boundary because the user authored the text in a visible SwiftUI field — there is no surface check to gate it. This is a deliberate trust assumption documented in F041-T07 / F001-T06; users who paste credentials into VibeCast accept that the content flows into compose history and the AI summary like any other typed command. The screen-visibility check in `TerminalInsightObserver.recordTypedKeystroke` is reserved for direct terminal keystrokes, where a password prompt with echo disabled is the canonical hidden-input case. Linked NFR: SEC-Data-Protection.
 
 ### F028-T05: Resource exhaustion via rapid message sending
 
@@ -68,6 +68,7 @@ VibeCast is a broadcast compose-and-send interface that dispatches text to termi
 
 - VibeCast is fundamentally a "type text into terminal" tool. Any text the user sends is executed by the shell. This is by design — the same risk exists with manual typing.
 - The rephrase CLI may send compose text to external AI services. This is the user's configured tool and outside Crispy's control.
+- Compose-UI text is treated as visible-by-trust-boundary by the F041 Terminal Context Summary feature. Credentials sent via VibeCast reach the AI summary timeline and on-device LLM prompt like any other visible command. Documented in F041-T07.
 
 ## NFR Compliance
 

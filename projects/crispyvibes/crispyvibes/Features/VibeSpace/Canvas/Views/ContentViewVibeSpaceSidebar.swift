@@ -197,6 +197,7 @@ struct VibeSpaceSidebarPanelView: View {
                 expandedProjectPaths: expandedProjectPaths,
                 selectedCanvasMode: vibespaceView.selectedCanvasMode,
                 projectColorTagsByPath: projectColorTagsByPath,
+                parkedProjectPaths: vibespaceView.activeVibeSpace?.parkedProjectPaths ?? [],
                 onOpenShelfFile: onOpenShelfFile,
                 onRevealShelfFileInFinder: onRevealShelfFileInFinder,
                 onOpenShelfDirectoryInTerminal: onOpenShelfDirectoryInTerminal,

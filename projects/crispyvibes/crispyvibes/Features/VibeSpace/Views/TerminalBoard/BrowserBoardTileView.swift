@@ -7,6 +7,12 @@ struct BrowserBoardTileView: View {
     @AppStorage(AppPreferences.codeFontSizeKey) private var codeFontSize = AppPreferences.defaultCodeFontSize
     @ObservedObject var viewModel: BrowserPanelViewModel
     let isActive: Bool
+    /// F012-R17: project color tag of the browser's owning project, used to
+    /// theme the tile header (globe icon, active border) so the tile matches
+    /// the visual treatment of terminal/ACP tiles for the same project.
+    /// Falls back to the system accent color when nil (e.g., browsers with
+    /// no resolved project ownership).
+    var projectAccentColor: Color? = nil
     let onSelect: () -> Void
     let onClose: () -> Void
     let onMinimize: () -> Void
@@ -14,7 +20,13 @@ struct BrowserBoardTileView: View {
     var boardWindowTransferTargets: [VibeSpaceTerminalBoardSurfaceTransferTarget] = []
     var onSendToNewBoardWindow: (() -> Void)? = nil
     var onSendToBoardWindow: ((UUID) -> Void)? = nil
+    /// F048-R13 context menu: bulk-move all tiles for this browser's project.
+    var onSendAllFromProjectToNewBoardWindow: (() -> Void)? = nil
     var interactionController: BoardInteractionController?
+
+    private var resolvedAccentColor: Color {
+        projectAccentColor ?? appThemePalette.accentColor
+    }
 
     var body: some View {
         BrowserContentView(
@@ -50,13 +62,14 @@ struct BrowserBoardTileView: View {
             BoardWindowTransferContextMenuItems(
                 targets: boardWindowTransferTargets,
                 onSendToNewBoardWindow: onSendToNewBoardWindow,
-                onSendToBoardWindow: onSendToBoardWindow
+                onSendToBoardWindow: onSendToBoardWindow,
+                onSendAllFromProjectToNewBoardWindow: onSendAllFromProjectToNewBoardWindow
             )
         }
     }
 
     private var borderColor: Color {
-        isActive ? appThemePalette.accentColor : appThemePalette.borderColorValue
+        isActive ? resolvedAccentColor : appThemePalette.borderColorValue
     }
 
     private var chromeScale: CGFloat {
@@ -67,7 +80,7 @@ struct BrowserBoardTileView: View {
         CrispyVibesHeaderChrome(style: .card, background: .clear) {
             Image(systemName: "globe")
                 .font(CrispyVibesHeaderStyle.card.titleFont(scale: chromeScale))
-                .foregroundStyle(appThemePalette.accentColor)
+                .foregroundStyle(resolvedAccentColor)
 
             Text(viewModel.displayTitle)
                 .font(CrispyVibesHeaderStyle.card.titleFont(scale: chromeScale))
@@ -91,9 +104,10 @@ struct BrowserBoardTileView: View {
                 accessibilityLabel: "Close Browser Tile"
             ) { onClose() }
         }
+        .contentShape(Rectangle())
         .onTapGesture(count: 2) { onSpotlight() }
         .onTapGesture { onSelect() }
-        .gesture(
+        .simultaneousGesture(
             DragGesture(minimumDistance: 4, coordinateSpace: .named("terminalBoard"))
                 .onChanged { value in
                     guard let controller = interactionController else { return }

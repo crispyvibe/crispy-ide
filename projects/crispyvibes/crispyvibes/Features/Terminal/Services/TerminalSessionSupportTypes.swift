@@ -14,6 +14,17 @@ final class TerminalServices {
     let hostOwnershipCoordinator: TerminalHostOwnershipCoordinator
     let vibespaceInteraction: VibeSpaceInteractionService
     let composeHistoryStore: ComposeHistoryStore?
+    /// Builds a per-terminal context summary session given an insight observer.
+    /// Returns `nil` when the experimental feature is disabled — `TerminalSession`
+    /// uses that to skip wiring entirely. Set by `AppContainer.makeDefault()`.
+    /// F041-R11.
+    var contextSummarySessionFactory: (@MainActor (TerminalInsightObserver) -> TerminalContextSummarySession?)?
+    /// Optional configurator invoked on every newly-created
+    /// `TerminalInsightObserver`. Used by the developer-tools surface to
+    /// install diagnostic callbacks (e.g., recording sensitive classifications
+    /// into the shared trace store) regardless of whether the AI summary
+    /// session is enabled. F041-T07 diagnostic.
+    var insightObserverConfigurator: (@MainActor (TerminalInsightObserver) -> Void)?
     lazy var ghosttyRuntime = GhosttyTerminalRuntime(terminalServices: self)
 
     init(
@@ -21,13 +32,15 @@ final class TerminalServices {
         diagnosticsSnapshot: TerminalDiagnosticsSnapshot,
         hostOwnershipCoordinator: TerminalHostOwnershipCoordinator,
         vibespaceInteraction: VibeSpaceInteractionService,
-        composeHistoryStore: ComposeHistoryStore? = nil
+        composeHistoryStore: ComposeHistoryStore? = nil,
+        contextSummarySessionFactory: (@MainActor (TerminalInsightObserver) -> TerminalContextSummarySession?)? = nil
     ) {
         self.focusCoordinator = focusCoordinator
         self.diagnosticsSnapshot = diagnosticsSnapshot
         self.hostOwnershipCoordinator = hostOwnershipCoordinator
         self.vibespaceInteraction = vibespaceInteraction
         self.composeHistoryStore = composeHistoryStore
+        self.contextSummarySessionFactory = contextSummarySessionFactory
     }
 
     convenience init() {

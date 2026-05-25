@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import os.signpost
 
@@ -32,6 +33,19 @@ final class TerminalSession: NSObject {
     let shellResolutionProvider: @Sendable () -> TerminalShellResolution
     var operationMetricsStore: OperationMetricsStore?
     var tmuxSessionName: String?
+    /// F044-R04: tagged vibespace ID exported to spawned shells as
+    /// `CRISPY_VIBESPACE`. Set by `ProjectSession` via the
+    /// `sessionConfigurator` hook on `TerminalViewModel`. Nil for
+    /// detached/standalone terminals not owned by a vibespace.
+    /// F044-R04 / F012: vibespace ID exported via CRISPY_VIBESPACE so the
+    /// agent CLI can route requests to the right vibespace runtime.
+    /// Set once at session construction by `ProjectSession.wireViewModels`'s
+    /// `sessionConfigurator`; not intended to mutate over the session's lifetime.
+    /// Kept `var` (rather than `private(set)`/`let`) only because the
+    /// `sessionConfigurator` closure is invoked from `TerminalViewModelTabs`
+    /// after `init` returns — matching the same pattern used by sibling
+    /// fields like `operationMetricsStore` and `tmuxSessionName`.
+    var vibespaceID: UUID?
     /// Override for remote SSH terminals. When set, replaces the shell executable/args.
     /// Returns (executable, arguments) to launch instead of the local shell.
     var processLaunchOverride: ((TerminalSession) -> (String, [String]))?
@@ -54,6 +68,15 @@ final class TerminalSession: NSObject {
     let offscreenStartupCols = 120
     let offscreenStartupRows = 32
     var insightObserver: TerminalInsightObserver?
+    /// Per-terminal context-summary state. Persists across UI surface transitions
+    /// (board ↔ spotlight ↔ rail). Created when the experimental feature is enabled
+    /// at session-construction time. F041-R11.
+    var contextSummarySession: TerminalContextSummarySession?
+    /// Subscription that mirrors observer-classified visible inputs into the
+    /// shared compose history store. F001-T06: this is the single writer to
+    /// compose history for both keystroke and compose-UI paths — sensitive
+    /// classifications are filtered out at this layer by construction.
+    var composeHistorySubscription: AnyCancellable?
     var composeHistoryStore: ComposeHistoryStore?
 
     enum CommandDispatchPolicy: Sendable {
@@ -123,15 +146,17 @@ final class TerminalSession: NSObject {
         let resolutionProvider = shellResolutionProvider
         let terminalID = self.id.uuidString
         let projectPath = self.initialWorkingDirectory.path
+        let vibespaceID = self.vibespaceID
         pendingStartupTask = Task { [weak self] in
             let prepared = await Task.detached(priority: .userInitiated) {
                 let resolution = resolutionProvider()
                 var environment = Self.launchEnvironment
-                // Per-session Agent CLI context (F044-R04). The vibespace ID
-                // is resolved server-side from focused state; only the caller's
-                // tagged context and project path are injected here.
+                // Per-session Agent CLI context (F044-R04).
                 environment.append("CRISPY_CONTEXT=terminal.\(terminalID)")
                 environment.append("CRISPY_PROJECT_PATH=\(projectPath)")
+                if let vibespaceID {
+                    environment.append("CRISPY_VIBESPACE=vibespace.\(vibespaceID.uuidString)")
+                }
                 return (resolution, environment)
             }.value
 
@@ -167,10 +192,21 @@ final class TerminalSession: NSObject {
             executable = exe
             args = a
         } else if let tmuxSessionName, TmuxService.isEnabled, TmuxService.isAvailable {
+            // Extract CRISPY_* env vars so tmux can refresh them on reattach
+            // (F044-R04 + tmux-session env refresh — see TmuxService.refreshSessionEnvironment).
+            var agentCLIEnv: [String: String] = [:]
+            for entry in environment {
+                let parts = entry.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                guard parts.count == 2 else { continue }
+                let key = String(parts[0])
+                guard key.hasPrefix("CRISPY_") else { continue }
+                agentCLIEnv[key] = String(parts[1])
+            }
             let tmuxLaunch = TmuxService.launchArguments(
                 sessionName: tmuxSessionName,
                 shell: shellPath,
-                workingDirectory: initialWorkingDirectory.path
+                workingDirectory: initialWorkingDirectory.path,
+                agentCLIEnvironment: agentCLIEnv
             )
             executable = tmuxLaunch.executable
             args = tmuxLaunch.args
@@ -254,6 +290,10 @@ final class TerminalSession: NSObject {
         idleResetWorkItem = nil
         firstOutputObservers.removeAll()
         clearPendingCommands()
+        composeHistorySubscription?.cancel()
+        composeHistorySubscription = nil
+        contextSummarySession?.shutdown()
+        insightObserver?.shutdown()
         engine.terminate()
 
         let surfaceStillExists = (engine as? GhosttyTerminalEngine)?.surface != nil
@@ -324,21 +364,13 @@ final class TerminalSession: NSObject {
         engine.send(text: text)
     }
 
-    /// Records user input both to the per-session insight observer (last-input only)
-    /// and to the centralized ComposeHistoryStore (full history, capped).
+    /// Records user input submitted from a SwiftUI compose UI (VibeCast,
+    /// Spotlight compose, inline triggers). The text was authored in a visible
+    /// UI field, so it is classified `.visible` directly by the observer and the
+    /// compose-history subscription appends it without surface inspection.
+    /// F001-T06, F041-R17.
     func recordSentInput(_ text: String) {
-        insightObserver?.recordInput(text)
-        // The insight observer accumulates keystrokes and emits lastInput when Enter is pressed.
-        // Use that as the authoritative finalized command text, since character-by-character
-        // forwarding means `text` alone may just be "\n" when Enter is pressed separately.
-        if let finalized = insightObserver?.lastInput,
-           !finalized.isEmpty {
-            composeHistoryStore?.append(finalized, for: id)
-        } else {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return }
-            composeHistoryStore?.append(trimmed, for: id)
-        }
+        insightObserver?.recordSubmittedFromComposeUI(text)
     }
 
     func sendRawTextWithEnter(_ text: String) {

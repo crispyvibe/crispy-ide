@@ -66,10 +66,13 @@ Terminal Sessions & Tabs manages shell process lifecycle, environment constructi
 
 ### F001-T06: Credential capture in compose history
 
-- **Vector:** `recordSentInput()` records finalized command text to `ComposeHistoryStore`. If a user types a password at a visible prompt (not `stty -echo`), it could be captured in history.
-- **Impact:** Credential disclosure within the app's in-memory state and potentially persisted history.
-- **Likelihood:** Medium — some CLI tools prompt for passwords with echo enabled (e.g., `mysql -p`).
-- **Mitigation:** `TerminalInsightObserver.recordInput()` validates screen visibility before publishing — terminals that disable echo (`stty -echo`, `read -s`) produce no visible text, so hidden input is not recorded. The compose history store is in-memory per session and not persisted to disk. Linked NFR: SEC-Data-Protection.
+- **Vector:** Compose history records finalized command text submitted from either of two paths: (a) **keystroke path** — characters typed directly into the terminal surface and finalized on Enter by `TerminalInsightObserver.recordTypedKeystroke`; (b) **compose-UI path** — whole commands submitted from a SwiftUI compose field (VibeCast, Spotlight compose, inline triggers) via `TerminalSession.recordSentInput` → `TerminalInsightObserver.recordSubmittedFromComposeUI`. If a user types a password at a visible prompt with echo enabled, or pastes a credential into a compose field, it could be captured in history.
+- **Impact:** Credential disclosure within the app's in-memory state.
+- **Likelihood:** Medium — some CLI tools prompt for passwords with echo enabled (e.g., `mysql -p`); developers also paste credentials into compose UIs.
+- **Mitigation:** The two paths have different invariants and different mitigations:
+    - **Keystroke path**: `TerminalInsightObserver.recordTypedKeystroke` defers classification on Enter and verifies that the typed text was rendered on the surface before publishing `.visible(text)`. The check runs immediately and, if the surface has not yet rendered the echoed characters, retries six times at 150 ms intervals up to a 1 s budget. If the surface never showed the text within the budget — the canonical signature of an echo-disabled prompt (`stty -echo`, `read -s`, `sudo` password prompt) — the observer publishes `.sensitive` and the typed bytes are never exposed downstream.
+    - **Compose-UI path**: `TerminalInsightObserver.recordSubmittedFromComposeUI` classifies the submitted command as `.visible` by trust boundary — the user authored the text in a visible SwiftUI field and explicitly pressed Send, so a separate surface-inspection check would only false-positive. This is documented as a deliberate trust assumption: any credential pasted into a compose field is treated as visible-by-intent and may appear in compose history and the AI summary.
+    - Compose history is fed from a single Combine subscription on `TerminalInsightObserver.$lastRecordedInput` held by `TerminalSession`. Sensitive classifications are dropped at the subscription site by construction — there is no raw-text fallback path. The compose history store is in-memory per session and not persisted to disk. Linked NFR: SEC-Data-Protection.
 
 ### F001-T07: Resource exhaustion via unbounded tab creation
 
@@ -96,6 +99,8 @@ Terminal Sessions & Tabs manages shell process lifecycle, environment constructi
 
 - Terminal output is inherently attacker-controllable (any running process can write to stdout). Interactive target detection operates on this untrusted data but requires explicit user click to act.
 - The compose history store records commands in memory. A memory dump or debugging tool could extract recent command history. This is equivalent to shell history file exposure.
+- Compose-UI submissions are treated as visible-by-trust-boundary; users who paste credentials into VibeCast, Spotlight compose, or inline triggers accept that the content reaches compose history and the AI summary feature like any other typed command.
+- A keystroke command that races the streaming-output detection threshold (e.g., a TUI launching with rapid full-redraws within ~0.25 s of Enter) may have its in-flight classification cancelled and therefore miss compose history. Users can retype the command; this trade-off favors the security floor over up-arrow recall completeness.
 - Shell processes run with full user privileges. Crispy does not sandbox child processes beyond standard macOS protections.
 - `sendRawTextWithEnter()` injects text directly into the terminal PTY. Any caller with access to a `TerminalSession` reference can execute commands. Access is restricted to `@MainActor` code paths within the app.
 

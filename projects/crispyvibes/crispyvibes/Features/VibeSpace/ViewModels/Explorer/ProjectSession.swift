@@ -126,9 +126,28 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
         onFileRenamed = nil
         cancellables.removeAll()
         terminalViewModel.shutdown()
+        // Per coding-guidelines "explicit shutdown() for long-lived resources":
+        // the folder explorer owns a DirectoryWatcher and pending main-actor
+        // work items that only stop in `deinit`. Anything still holding a
+        // strong ref to this ProjectSession (e.g., a SwiftUI view mid-unmount
+        // after a remove or park) would otherwise keep the watcher alive,
+        // firing FS events that schedule Task { @MainActor } work and
+        // contributing to UI churn until SwiftUI fully releases the view.
+        folderExplorerViewModel.shutdown()
     }
 
     private func wireViewModels() {
+        // F044-R04: stamp the vibespace ID onto every terminal session this
+        // project's view model creates, so spawned shells get
+        // `CRISPY_VIBESPACE=vibespace.<uuid>` in their env. Composes with any
+        // existing configurator by wrapping it.
+        let vibespaceID = self.vibespaceID
+        let existingConfigurator = terminalViewModel.sessionConfigurator
+        terminalViewModel.sessionConfigurator = { session in
+            session.vibespaceID = vibespaceID
+            existingConfigurator?(session)
+        }
+
         folderExplorerViewModel.$openRequest
             .receive(on: RunLoop.main)
             .sink { [weak self] request in

@@ -60,18 +60,6 @@ struct ContentViewerView: View {
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
             }
-            Button {
-                _ = store.openACPPane(
-                    focusedProject: acpVibeSpaceSessionService.focusedProject,
-                    preferredAgentID: acpVibeSpaceSessionService.preferredAgentID,
-                    vibespaceID: vibespaceID
-                )
-            } label: {
-                Label(AppStrings.ACP.openAgent, systemImage: "sparkles")
-                    .labelStyle(.titleAndIcon)
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 10)
             if projects.count > 1 { scopeToggle.padding(.trailing, 8) }
         }
         .frame(minHeight: CrispyVibesHeaderStyle.panel.minHeight(scale: AppPreferences.chromeScale(forCodeFontSize: codeFontSize)))

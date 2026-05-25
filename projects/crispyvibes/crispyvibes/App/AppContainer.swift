@@ -27,6 +27,9 @@ struct AppContainer {
     let paneWorkerFactory: PaneWorkerFactory
     let browserHistoryStore: BrowserHistoryStore
     let composeHistoryStore: ComposeHistoryStore
+    /// Captures every Foundation Models generation for the terminal context summary
+    /// feature so developer tools can show received → sent → result. F041.
+    let contextSummaryObservabilityStore: ContextSummaryObservabilityStore
 
     func makePaneWorker(pane: PaneWorkerKind) -> any PaneWorkerExecuting {
         paneWorkerFactory(pane)
@@ -234,7 +237,8 @@ struct AppContainer {
             contentViewerStore: contentViewerStore,
             splitViewStore: splitViewStore,
             dockPreviewBridge: dockPreviewBridge,
-            canvasModeProvider: canvasModeProvider
+            canvasModeProvider: canvasModeProvider,
+            dockedBrowserCoordinator: dockedBrowserCoordinator
         )
 
         return ContentViewDependencies(
@@ -400,6 +404,8 @@ struct AppContainer {
         let layoutPersistence = LayoutPersistenceService(persistenceStore: appPersistenceStore)
         let vibespaceInteraction = VibeSpaceInteractionService()
         let composeHistoryStore = ComposeHistoryStore()
+        let experimentalFeaturesService = ExperimentalFeaturesService()
+        let contextSummaryObservabilityStore = ContextSummaryObservabilityStore()
         let terminalServices = TerminalServices(
             focusCoordinator: TerminalFocusCoordinator(),
             diagnosticsSnapshot: TerminalDiagnosticsSnapshot(),
@@ -407,6 +413,47 @@ struct AppContainer {
             vibespaceInteraction: vibespaceInteraction,
             composeHistoryStore: composeHistoryStore
         )
+        // Wire the per-terminal context-summary factory. The factory captures the
+        // experimental flag service so each `TerminalSession` consults the current
+        // value at construction time without instantiating its own copy
+        // (F041-R11, coding-guidelines: no service-locator instantiation in domain
+        // code). Returning nil disables the LLM-driven session for that terminal
+        // while still keeping the lightweight insight observer alive for compose
+        // history.
+        terminalServices.contextSummarySessionFactory = { [weak experimentalFeaturesService] observer in
+            guard experimentalFeaturesService?.isTerminalInsightEnabled == true else { return nil }
+            return TerminalContextSummarySession(
+                insightObserver: observer,
+                summaryGenerator: ContextSummaryGenerator(
+                    observabilityStore: contextSummaryObservabilityStore
+                )
+            )
+        }
+        // Diagnostic recorder: every sensitive classification in any terminal
+        // is written into the same context-summary trace store so the
+        // developer-tools surface can show it alongside live and sandbox
+        // generations. The screen snapshot supplied by the observer is by
+        // construction the surface state that did NOT contain the typed
+        // text, so it's safe to retain. F041-T07.
+        terminalServices.insightObserverConfigurator = { observer in
+            observer.onSensitiveClassification = { [weak contextSummaryObservabilityStore] info in
+                guard let store = contextSummaryObservabilityStore else { return }
+                store.record(
+                    ContextSummaryTrace(
+                        source: .live,
+                        received: "",
+                        sent: nil,
+                        result: .classifiedSensitive(
+                            screenSnapshot: info.screenSnapshot,
+                            typedText: info.typedText,
+                            attempts: info.attempts
+                        ),
+                        latency: 0,
+                        timestamp: info.timestamp
+                    )
+                )
+            }
+        }
         let terminalViewModelDependencies = TerminalViewModelDependencies(
             presetDiagnostics: TerminalPresetAvailabilityDiagnostics(),
             shortcutStore: TerminalShortcutStore(),
@@ -443,7 +490,7 @@ struct AppContainer {
             detachedWindowManager: detachedWindowManager,
             vibespaceManagement: vibespaceManagement,
             themeManager: CrispyVibesThemeManager(),
-            experimentalFeatures: ExperimentalFeaturesService(),
+            experimentalFeatures: experimentalFeaturesService,
             vibespaceInteraction: vibespaceInteraction,
             terminalServices: terminalServices,
             terminalViewModelDependencies: terminalViewModelDependencies,
@@ -460,6 +507,7 @@ struct AppContainer {
             paneWorkerFactory: measuredPaneWorkerFactory,
             browserHistoryStore: BrowserHistoryStore(),
             composeHistoryStore: composeHistoryStore,
+            contextSummaryObservabilityStore: contextSummaryObservabilityStore,
             sshConnectionManager: SSHConnectionManager(),
             cliCommandRouter: cliCommandRouter,
             cliSocketServer: cliSocketServer

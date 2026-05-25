@@ -1,20 +1,20 @@
 import SwiftUI
 
-/// Container that owns the view model as @StateObject, ensuring proper SwiftUI observation.
+/// Container that owns the per-mount view model as `@StateObject` and binds it to the
+/// shared per-terminal `TerminalContextSummarySession`. The session itself is injected
+/// from the host view (it lives on `TerminalSession`), so headline + timeline + LLM
+/// state survive surface transitions. F041-R11.
 struct TerminalContextSummaryOverlayContainer: View {
-    let observer: TerminalInsightObserver
+    let summarySession: TerminalContextSummarySession
     let isHovering: Bool
 
     @StateObject private var viewModel: TerminalContextSummaryViewModel
 
-    nonisolated init(observer: TerminalInsightObserver, isHovering: Bool) {
-        self.observer = observer
+    nonisolated init(summarySession: TerminalContextSummarySession, isHovering: Bool) {
+        self.summarySession = summarySession
         self.isHovering = isHovering
         _viewModel = StateObject(wrappedValue: MainActor.assumeIsolated {
-            TerminalContextSummaryViewModel(
-                insightObserver: observer,
-                summaryGenerator: ContextSummaryGenerator()
-            )
+            TerminalContextSummaryViewModel(session: summarySession)
         })
     }
 

@@ -743,6 +743,7 @@ final class RemoteProjectSessionTests: XCTestCase {
             paneWorkerFactory: measuredPaneWorkerFactory,
             browserHistoryStore: BrowserHistoryStore(),
             composeHistoryStore: ComposeHistoryStore(),
+            contextSummaryObservabilityStore: ContextSummaryObservabilityStore(),
             sshConnectionManager: SSHConnectionManager(),
             cliCommandRouter: cliCommandRouter,
             cliSocketServer: cliSocketServer

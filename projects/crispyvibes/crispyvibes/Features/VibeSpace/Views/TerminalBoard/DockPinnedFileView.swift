@@ -14,6 +14,8 @@ struct DockPinnedFileView: View {
     var boardWindowTransferTargets: [VibeSpaceTerminalBoardSurfaceTransferTarget] = []
     var onSendToNewBoardWindow: (() -> Void)? = nil
     var onSendToBoardWindow: ((UUID) -> Void)? = nil
+    /// F048-R13 context menu: bulk-move all tiles for this file's project.
+    var onSendAllFromProjectToNewBoardWindow: (() -> Void)? = nil
     var interactionController: BoardInteractionController?
 
     var body: some View {
@@ -51,7 +53,8 @@ struct DockPinnedFileView: View {
             BoardWindowTransferContextMenuItems(
                 targets: boardWindowTransferTargets,
                 onSendToNewBoardWindow: onSendToNewBoardWindow,
-                onSendToBoardWindow: onSendToBoardWindow
+                onSendToBoardWindow: onSendToBoardWindow,
+                onSendAllFromProjectToNewBoardWindow: onSendAllFromProjectToNewBoardWindow
             )
         }
     }
@@ -103,9 +106,10 @@ struct DockPinnedFileView: View {
                 onClose()
             }
         }
+        .contentShape(Rectangle())
         .onTapGesture(count: 2) { onSpotlight() }
         .onTapGesture { onSelect() }
-        .gesture(
+        .simultaneousGesture(
             DragGesture(minimumDistance: 4, coordinateSpace: .named("terminalBoard"))
                 .onChanged { value in
                     guard let controller = interactionController else { return }

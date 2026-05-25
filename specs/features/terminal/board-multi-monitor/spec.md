@@ -61,6 +61,42 @@ Detached board windows must have a toolbar with actions to add VibeCast, Agent, 
 
 Detached board windows must support renaming via titlebar context menu.
 
+### F048-R13: Bulk move shortcut
+
+A keyboard shortcut MUST move every tile on the current board surface that
+belongs to the focused project to a new detached board window in a single
+operation. This is the bulk equivalent of single-tile transfer (F048-R07).
+Default binding: `⌘⌥M`. Source surface is resolved from the key window:
+the active detached board window if one is focused, otherwise the primary
+surface.
+
+The same operation MUST also be available as a per-tile context menu
+entry "Send All From This Project to New Window", appearing alongside the
+existing "Send to New Board Window" item. The context-menu variant uses
+the right-clicked tile's `projectPath` to determine which project's tiles
+to bulk-move (the right-clicked tile may not be from the focused project)
+and is hidden when the tile has no resolved project ownership.
+
+### F048-R14: Board mode only
+
+The bulk-move and bulk-recall shortcuts MUST operate in terminal board mode
+only. Detailed mode invocations are a no-op (silent, no error).
+
+### F048-R15: Source surface reorganization
+
+After bulk move, remaining tiles on the source board surface MUST be
+reorganized to fill empty space. This is automatic via the existing layout
+reflow that runs on every store mutation; no additional logic is required.
+
+### F048-R16: Reverse bulk move
+
+A keyboard shortcut MUST move every tile on a focused detached board
+window back to the primary surface, then close the detached window.
+Default binding: `⌘⌥B`. Invocation from the primary window is a no-op.
+Tile overflow (when the primary surface's 16-tile cap is reached) is
+handled by the existing reattach pathway, which folds excess tiles into
+`minimizedTiles`.
+
 ## Scenarios
 
 ### Scenario F048-S01: Open a detached board window
@@ -120,6 +156,55 @@ Detached board windows must support renaming via titlebar context menu.
 **Then** a rename prompt appears  
 **And** the window title updates after confirmation
 
+### Scenario F048-S10: Bulk move project tiles to a new monitor
+
+**Given** the user is in terminal board mode with multiple projects' tiles on the primary surface  
+**And** project A is the focused project  
+**When** the user invokes the bulk-move shortcut (`⌘⌥M`)  
+**Then** every tile on the primary surface where `projectPath == projectA` moves to a new detached board window in a single mutation  
+**And** other projects' tiles remain on the primary surface  
+**And** the layout on the primary surface compacts to fill the freed space (F048-R15)  
+**And** the new detached window opens at the system-default placement, ready to be dragged to another monitor
+
+### Scenario F048-S11: Bulk move from a detached window to another new window
+
+**Given** a detached board window is the key window and contains tiles from project A and project B  
+**And** project A is the focused project  
+**When** the user invokes the bulk-move shortcut from that detached window  
+**Then** project A's tiles move to a NEW detached window  
+**And** project B's tiles remain on the original detached surface
+
+### Scenario F048-S12: Bulk recall to primary
+
+**Given** a detached board window is the key window  
+**When** the user invokes the bulk-recall shortcut (`⌘⌥B`)  
+**Then** every tile on that detached surface moves back to the primary surface  
+**And** the detached window closes automatically  
+**And** if the primary surface's 16-tile cap is exceeded, overflow tiles roll into the minimized tab strip
+
+### Scenario F048-S13: Bulk shortcuts in detailed mode are no-ops
+
+**Given** the vibespace primary window is in detailed mode  
+**When** the user presses `⌘⌥M` or `⌘⌥B`  
+**Then** nothing happens (no error, no notification, no UI change)  
+**Because** F048-R14 restricts these shortcuts to terminal board mode
+
+### Scenario F048-S14: Bulk move with no matching tiles is a no-op
+
+**Given** the user is in terminal board mode  
+**And** the focused project has no tiles on the source surface  
+**When** the user invokes `⌘⌥M`  
+**Then** no detached window is created  
+**And** the source surface is unchanged
+
+### Scenario F048-S15: Bulk move via tile context menu
+
+**Given** the user is in terminal board mode with multiple projects' tiles on the same surface  
+**And** project B is the focused project  
+**When** the user right-clicks a tile owned by project A and selects "Send All From This Project to New Window"  
+**Then** every tile on the current surface where `projectPath == projectA` (the right-clicked tile's project — NOT the focused project) moves to a new detached window  
+**And** the menu item is hidden when the right-clicked tile has no resolved `projectPath` (e.g., a standalone-terminal tile)
+
 ## Acceptance Criteria
 
 - User can place terminal-board windows on multiple monitors without creating a second vibespace shell.
@@ -131,6 +216,19 @@ Detached board windows must support renaming via titlebar context menu.
 - Persistent terminal creation from plus, split, and spotlight actions appears on the initiating board surface.
 - Context-menu tile transfer moves one selected tile only, leaves no blank source placeholders, and closes emptied detached source windows.
 - Transfer target menu shows current surface content labels.
+- Bulk-move shortcut (`⌘⌥M`, F048-R13) relocates every tile on the source surface owned by the focused project to a new detached board window in a single store mutation; remaining tiles compact via the existing layout reflow (F048-R15). The same action is invokable from any tile's right-click menu via "Send All From This Project to New Window", which uses the right-clicked tile's project (not the focused project).
+- Bulk-recall shortcut (`⌘⌥B`, F048-R16) returns every tile on a focused detached surface to the primary surface and closes the detached window; tile-cap overflow rolls into the minimized strip.
+- Bulk shortcuts are no-ops outside terminal board mode (F048-R14) and when no tiles match the focused project on the source surface.
+
+## Test Coverage
+
+| Requirement | Test |
+|------|------|
+| F048-R13 (bulk detach + new surface) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testBulkDetachTilesForProjectRemovesOnlyMatching`, `testCreateDetachedSurfaceWithTilesPopulatesAndSetsActive` |
+| F048-R13 (visible + minimized) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testTileIDsForProjectIncludesMinimizedTiles`, `testBulkDetachTilesForProjectIncludesMinimized` |
+| F048-R13 (single mutation) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testBulkDetachIsSingleMutation` |
+| F048-R13 (no match no-op) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testBulkDetachTilesForProjectNoMatchIsNoOp` |
+| F048-R16 (recall merges back) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testRecallMergesAllDetachedTilesBackToPrimary` |
 
 ## Open Questions
 
@@ -141,3 +239,5 @@ None — feature is implemented.
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-05-20 | Initial spec from implemented feature | Kiro |
+| 2026-05-23 | Added F048-R13 to R16 (multi-monitor bulk pane move) with scenarios S10 to S14 and Test Coverage table | Kiro |
+| 2026-05-23 | Added "Send All From This Project to New Window" tile context menu entry alongside the keyboard shortcut (scenario S15) | Kiro |

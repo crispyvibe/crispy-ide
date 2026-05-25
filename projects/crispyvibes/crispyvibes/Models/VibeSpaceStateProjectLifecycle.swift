@@ -23,6 +23,15 @@ extension VibeSpaceState {
                 continue
             }
 
+            // F021-R09: if the path is parked, activate (unpark) it instead of
+            // treating it as a duplicate-skip or creating a separate entry.
+            if parkedProjectPaths.contains(normalized.path) {
+                if let unparked = unparkProject(path: normalized.path) {
+                    addedOrMatched = unparked
+                }
+                continue
+            }
+
             guard seenPaths.insert(normalized.path).inserted else { continue }
             unresolvedProjectPaths.removeAll(where: { $0 == normalized.path })
 
@@ -58,6 +67,87 @@ extension VibeSpaceState {
         storedProjectPaths = projects.map(\.projectIdentifier) + unresolvedProjectPaths
         storedFocusedProjectPath = focusedProject?.projectIdentifier
         normalizeProjectShortcuts()
+    }
+
+    /// F021-R10 Park Lifecycle.
+    ///
+    /// Parks the project with the given session ID:
+    /// - shuts down the live `ProjectSession` (terminates terminals, file watchers, etc.)
+    /// - removes the session from `projects`
+    /// - appends the project's normalized path to `parkedProjectPaths`
+    /// - if the project was focused, focus falls back to the last remaining live project
+    ///
+    /// Per-project state (color tag, shortcuts, overrides) is preserved — parked
+    /// projects retain their `ProjectConfigFile` for restoration via `unparkProject`.
+    /// Browser cleanup and snapshot capture are handled by the calling coordinator
+    /// (Phase 3) before invoking this method.
+    ///
+    /// - Returns: the normalized project path that was parked, or `nil` if no live
+    ///   session matched the given id.
+    @discardableResult
+    mutating func parkProject(id: UUID) -> String? {
+        guard let removingIndex = projects.firstIndex(where: { $0.id == id }) else { return nil }
+        let parking = projects.remove(at: removingIndex)
+        let parkedPath = parking.projectIdentifier
+        parking.shutdown()
+
+        if !parkedProjectPaths.contains(parkedPath) {
+            parkedProjectPaths.append(parkedPath)
+        }
+
+        if focusedProjectID == id {
+            focusedProjectID = projects.last?.id
+        }
+        storedProjectPaths = projects.map(\.projectIdentifier) + unresolvedProjectPaths
+        storedFocusedProjectPath = focusedProject?.projectIdentifier
+        return parkedPath
+    }
+
+    /// F021-R11 Unpark Restoration.
+    ///
+    /// Activates a parked project at the given normalized path:
+    /// - removes the path from `parkedProjectPaths`
+    /// - creates a fresh `ProjectSession` via the session factory
+    /// - appends the new session to `projects`
+    /// - sets the new session as focused
+    ///
+    /// The new session activates lazily — the existing `ProjectSession` activation
+    /// flow (`activateIfNeeded` → `restoreLocalSessionState`) reads the persisted
+    /// `terminalEntries` from `ProjectConfigFile`, so terminals are recreated from
+    /// the saved snapshot. Browser restoration is handled by the calling coordinator
+    /// using `browserSessionEntries` (Phase 3).
+    ///
+    /// - Returns: the new live session, or `nil` if the path is not parked or the
+    ///   directory no longer exists on disk.
+    @discardableResult
+    mutating func unparkProject(path: String) -> AnyProjectSession? {
+        let normalized = Self.normalizedPath(from: path)
+        guard let parkIndex = parkedProjectPaths.firstIndex(of: normalized) else { return nil }
+
+        // For local paths, verify the directory still exists. SSH paths bypass the check.
+        let isRemote = normalized.hasPrefix("ssh://")
+        if !isRemote, !Self.isExistingDirectory(path: normalized) {
+            return nil
+        }
+
+        parkedProjectPaths.remove(at: parkIndex)
+
+        let session: AnyProjectSession
+        if isRemote, let remoteSession = makeIdentifierSession(identifier: normalized) {
+            session = remoteSession
+        } else {
+            session = makeProjectSession(rootURL: URL(fileURLWithPath: normalized))
+        }
+        projects.append(session)
+        focusedProjectID = session.id
+        storedProjectPaths = projects.map(\.projectIdentifier) + unresolvedProjectPaths
+        storedFocusedProjectPath = session.projectIdentifier
+        return session
+    }
+
+    /// True if the given normalized path is currently parked.
+    func isProjectParked(path: String) -> Bool {
+        parkedProjectPaths.contains(Self.normalizedPath(from: path))
     }
 
     mutating func moveProjects(fromOffsets sourceOffsets: IndexSet, toOffset destinationOffset: Int) {

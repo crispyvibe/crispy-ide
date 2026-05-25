@@ -64,7 +64,7 @@ extension GhosttyTerminalRuntime {
                 guard let engine, let surface = engine.surface else { return }
                 let value = GhosttyTerminalRuntime.readClipboardString(for: location)
                 if !value.isEmpty {
-                    (engine.delegate as? TerminalSession)?.insightObserver?.recordInput(value)
+                    (engine.delegate as? TerminalSession)?.insightObserver?.recordTypedKeystroke(value)
                 }
                 value.withCString { pointer in
                     ghostty_surface_complete_clipboard_request(surface, pointer, stateBox.value, false)

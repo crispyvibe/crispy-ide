@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import os.signpost
 
@@ -100,11 +101,41 @@ extension TerminalSession: TerminalSessionEngineDelegate {
         engine.registerOscHandler(code: 697) { _ in }
         applySystemAppearance()
 
-        if ExperimentalFeaturesService().isTerminalInsightEnabled {
-            insightObserver = TerminalInsightObserver()
-            insightObserver?.readVisibleScreen = { [weak self] in
-                (self?.engine as? GhosttyTerminalEngine)?.lastVisibleContents ?? ""
+        let observer = TerminalInsightObserver()
+        observer.readVisibleScreen = { [weak self] in
+            // Read live from Ghostty's surface every check. The engine's
+            // `lastVisibleContents` is only refreshed on a ~1 s lightweight
+            // polling heartbeat after the first interactive prompt, which is
+            // too stale to race the deferred classification budget. The live
+            // read is a single `ghostty_surface_read_text` call — cheap enough
+            // to invoke up to seven times per Enter (immediate + retries).
+            guard let engine = self?.engine as? GhosttyTerminalEngine else { return "" }
+            return engine.terminalView.visibleContents()
+        }
+        // Install diagnostic hooks (e.g., sensitive-classification recorder)
+        // before publishing the observer. F041-T07.
+        terminalServices.insightObserverConfigurator?(observer)
+        insightObserver = observer
+
+        // Compose history is fed by the observer's classification stream so that
+        // sensitive keystroke-path input (echo-disabled prompts) is never
+        // appended. F001-T06, F041-T07.
+        composeHistorySubscription = observer.$lastRecordedInput
+            .compactMap { $0 }
+            .sink { [weak self] event in
+                guard let self else { return }
+                if case .visible(let text) = event, !text.isEmpty {
+                    self.composeHistoryStore?.append(text, for: self.id)
+                }
             }
+
+        // Per-terminal AI summary session is opt-in via the experimental flag, encoded
+        // in the factory provided by `AppContainer.makeDefault()`. When disabled the
+        // factory returns nil and only the observer (which feeds compose-history) is
+        // wired. F041-R11.
+        if let summarySession = terminalServices.contextSummarySessionFactory?(observer) {
+            summarySession.start()
+            contextSummarySession = summarySession
         }
     }
 

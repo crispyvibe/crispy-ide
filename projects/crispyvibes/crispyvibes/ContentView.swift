@@ -206,14 +206,7 @@ struct ContentView: View {
     private var styledContent: some View {
         shellContent
             .background(activeThemePalette.windowBackgroundColor)
-            .applyingAppThemePalette(activeThemePalette)
             .applyingAppAccentTheme(activeThemePalette.accentColor)
-            .applyingCrispyVibesUIScale(CrispyVibesUIScale(codeFontSize: codeFontSize))
-            .buttonBorderShape(themeManager.theme.borderShape.buttonBorderShape)
-            .environment(\.crispyvibesTheme, themeManager.theme)
-            .environment(\.composeHistoryStore, appContainer.composeHistoryStore)
-            .environmentObject(themeManager)
-            .preferredColorScheme(preferredAppColorScheme)
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 handleExternalFileDrop(providers)
             }
@@ -285,6 +278,27 @@ struct ContentView: View {
             .standardizedFileURL
     }
 
+    /// F021-R15: resolve the owning project path for a content-viewer tab.
+    /// Returns nil for tab kinds that have no project association (vibeCast,
+    /// acpPane). For file tabs, finds the longest project-root prefix match.
+    private func resolveOwningProjectPath(for tab: ContentViewerTab) -> String? {
+        let projects = activeVibeSpaceSession.projects
+        switch tab.kind {
+        case .file(let reference):
+            let normalizedFilePath = reference.url.standardizedFileURL.path
+            let candidates = projects.map { $0.projectIdentifier }
+            return candidates
+                .filter { normalizedFilePath == $0 || normalizedFilePath.hasPrefix($0 + "/") }
+                .max(by: { $0.count < $1.count })
+        case .webPage(let reference):
+            return reference.projectPath
+        case .terminal(let projectID, _):
+            return projects.first(where: { $0.id == projectID })?.projectIdentifier
+        case .vibeCast, .acpPane:
+            return nil
+        }
+    }
+
     private var lifecycleAwareContent: some View {
         styledContent
             .onAppear {
@@ -311,6 +325,12 @@ struct ContentView: View {
                 handleVibeSpaceLifecycleChange()
             }
             .onChange(of: activeVibeSpaceSession.vibespace?.name) { _, _ in
+                syncWindowTitleWithVibeSpace()
+            }
+            .onChange(of: selectedVibeSpaceCanvasMode) { _, _ in
+                syncWindowTitleWithVibeSpace()
+            }
+            .onChange(of: activeVibeSpaceSession.focusedProject?.id) { _, _ in
                 syncWindowTitleWithVibeSpace()
             }
             .onChange(of: contentViewerStore.markdownViewModel.fileURL) { _, fileURL in
@@ -442,7 +462,16 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openNewBrowserRequested)) { notification in
                 let url = notification.userInfo?["url"] as? URL ?? URL(string: "about:blank")!
-                let projectPath = notification.userInfo?["projectPath"] as? String
+                // F012-R17: each browser is owned by exactly one project. If the
+                // caller did not supply a `projectPath`, auto-associate the new
+                // browser with the currently focused project. If no project is
+                // focused, block creation — there is no valid owner.
+                let resolvedProjectPath = (notification.userInfo?["projectPath"] as? String)
+                    ?? activeVibeSpaceSession.focusedProject?.projectIdentifier
+                guard let projectPath = resolvedProjectPath else {
+                    agentCLILogger.notice("browser open suppressed: no focused project to own browser")
+                    return
+                }
                 let browserID = notification.userInfo?["browserID"] as? UUID ?? UUID()
 
                 // Resolve the user's current canvas mode. CLI-initiated opens MUST NOT
@@ -500,6 +529,39 @@ struct ContentView: View {
                 dockedBrowserCoordinator.removeViewModel(for: browserID)
                 dockedBrowserCoordinator.removeDetailedBrowser(browserID: browserID)
                 agentCLILogger.notice("browser closed (orphan vm): \(browserID.uuidString, privacy: .public)")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .contentViewerTabActivated)) { notification in
+                // F021-R15 / R16 / R17: when a content-viewer tab becomes active,
+                // resolve its owning project and switch focus. Idempotent — the
+                // focus call is suppressed if the resolved project is already
+                // focused, so programmatic activations from `focusProject` itself
+                // do not recurse.
+                guard let tab = notification.userInfo?[AppCommandUserInfoKey.tab] as? ContentViewerTab else { return }
+                guard let owningProjectPath = resolveOwningProjectPath(for: tab) else { return }
+                let projects = activeVibeSpaceSession.projects
+                guard let owner = projects.first(where: { $0.projectIdentifier == owningProjectPath }) else { return }
+                if activeVibeSpaceSession.focusedProject?.id == owner.id { return }
+                vibespaceCanvasActionsCoordinator.focusProject(owner)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .boardTileActivated)) { notification in
+                // F021-R17: when a board tile becomes active, switch focused
+                // project to the tile's owning project. Same idempotency guard
+                // as the content-viewer tab listener.
+                guard let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String else { return }
+                let projects = activeVibeSpaceSession.projects
+                guard let owner = projects.first(where: { $0.projectIdentifier == projectPath }) else { return }
+                if activeVibeSpaceSession.focusedProject?.id == owner.id { return }
+                vibespaceCanvasActionsCoordinator.focusProject(owner)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .parkProjectRequested)) { notification in
+                // F021-R13: park the requested project (right-click → "Park Project").
+                guard let projectID = notification.userInfo?[AppCommandUserInfoKey.projectID] as? UUID else { return }
+                vibespaceCanvasActionsCoordinator.parkProject(id: projectID)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .activateProjectRequested)) { notification in
+                // F021-R13: activate (unpark) the requested project.
+                guard let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String else { return }
+                _ = vibespaceCanvasActionsCoordinator.unparkProject(path: projectPath)
             }
             .onReceive(NotificationCenter.default.publisher(for: .ghosttyOpenLinkTargetRequested)) { notification in
                 guard let url = notification.userInfo?[AppCommandUserInfoKey.url] as? URL else { return }
@@ -559,6 +621,14 @@ struct ContentView: View {
                 guard terminalSpotlightCoordinator.spotlight != nil else { return }
                 switchSpotlight(by: -1)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .boardMoveProjectToNewWindowRequested)) { notification in
+                guard let surfaceID = notification.userInfo?[AppCommandUserInfoKey.sourceSurfaceID] as? UUID else { return }
+                bulkMoveCurrentProjectToNewWindow(sourceSurfaceID: surfaceID)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .boardRecallProjectFromWindowRequested)) { notification in
+                guard let surfaceID = notification.userInfo?[AppCommandUserInfoKey.sourceSurfaceID] as? UUID else { return }
+                recallProjectFromWindow(sourceSurfaceID: surfaceID)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .openDetailedVibeSpaceView)) { _ in
                 vibespaceCanvasActionsCoordinator.openDetailedVibeSpaceView()
             }
@@ -567,6 +637,9 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .toggleVibeCast)) { _ in
                 vibespaceCanvasActionsCoordinator.toggleVibeCast()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .createTerminalRequested)) { notification in
+                createTerminalFromToolbar(notification: notification)
             }
             .onReceive(NotificationCenter.default.publisher(for: .openAppSettings)) { _ in
                 appShellStore.presentAppSettings(.general)
@@ -633,5 +706,28 @@ struct ContentView: View {
                     )
                 )
             }
+            // Apply env values at body level (outside `.toolbar { }`) so the
+            // toolbar items, popovers presented from them, and any future
+            // sheets/menus all inherit the configured theme palette, UI scale,
+            // and crispyvibesTheme. Previously these lived on `styledContent`
+            // (inside `notificationAwareContent`), which meant `.toolbar` was
+            // outside the env-injected hierarchy and toolbar items resolved
+            // env values to their hard-coded defaults (e.g. the `.ph`
+            // palette's orange accent, default UI scale).
+            //
+            // NOTE: `.applyingAppAccentTheme` is intentionally NOT here — it
+            // sets `.tint`, which `Menu` views automatically apply to their
+            // label icons. Applying it at body level would tint every toolbar
+            // Menu's icon with the accent color. It stays on `styledContent`
+            // so the canvas content gets accent-tinted but the toolbar does
+            // not. Popovers presented from toolbar items re-inject the
+            // accent tint themselves where they need it.
+            .applyingAppThemePalette(activeThemePalette)
+            .applyingCrispyVibesUIScale(CrispyVibesUIScale(codeFontSize: codeFontSize))
+            .buttonBorderShape(themeManager.theme.borderShape.buttonBorderShape)
+            .environment(\.crispyvibesTheme, themeManager.theme)
+            .environment(\.composeHistoryStore, appContainer.composeHistoryStore)
+            .environmentObject(themeManager)
+            .preferredColorScheme(preferredAppColorScheme)
     }
 }

@@ -38,7 +38,7 @@ Next available prefix: F049. Numbers are never reused.
 | F016 | Keyboard Shortcuts | D1 | `app-shell/shortcuts` | draft |
 | F017 | Onboarding | D1 | `app-shell/onboarding` | draft |
 | F020 | VibeSpace Lifecycle | D2 | `vibespace/lifecycle` | draft |
-| F021 | VibeSpace Projects | D2 | `vibespace/projects` | draft |
+| F021 | VibeSpace Projects | D2 | `vibespace/projects` | implemented |
 | F022 | VibeSpace Settings | D2 | `vibespace/settings` | draft |
 | F023 | Project Color Coding | D2 | `vibespace/color-coding` | draft |
 | F024 | File Explorer | D5 | `explorer/file-explorer` | draft |

@@ -28,12 +28,12 @@ final class DockedBrowserCoordinator: ObservableObject {
     /// Provides projectPath for a given tile ID. Set at composition root.
     var projectPathForTile: ((UUID) -> String?)?
 
-    private func makePersistentViewModel(initialURL: URL? = nil) -> BrowserPanelViewModel {
-        BrowserPanelViewModel(initialURL: initialURL)
+    private func makePersistentViewModel(initialURL: URL? = nil, projectPath: String? = nil) -> BrowserPanelViewModel {
+        BrowserPanelViewModel(initialURL: initialURL, projectPath: projectPath)
     }
 
-    private func makePreviewViewModel(initialURL: URL? = nil) -> BrowserPanelViewModel {
-        BrowserPanelViewModel(initialURL: initialURL, usesEphemeralDataStore: true)
+    private func makePreviewViewModel(initialURL: URL? = nil, projectPath: String? = nil) -> BrowserPanelViewModel {
+        BrowserPanelViewModel(initialURL: initialURL, usesEphemeralDataStore: true, projectPath: projectPath)
     }
 
     private func wireNewBrowserCallback(
@@ -123,7 +123,7 @@ final class DockedBrowserCoordinator: ObservableObject {
         if let existing = detailedViewGroups[browserID] { return existing }
 
         if let snapshot = detailedViewSessionSnapshots[browserID] {
-            let vm = makePersistentViewModel()
+            let vm = makePersistentViewModel(projectPath: reference.projectPath)
             wireNewBrowserCallback(vm, detailedBrowserID: browserID)
             vm.restoreSession(snapshot)
             detailedViewGroups[browserID] = vm
@@ -134,7 +134,7 @@ final class DockedBrowserCoordinator: ObservableObject {
            let tileViewModel = groups[linkedTileID] {
             let snapshot = tileViewModel.sessionSnapshot()
             detailedViewSessionSnapshots[browserID] = snapshot
-            let vm = makePersistentViewModel()
+            let vm = makePersistentViewModel(projectPath: reference.projectPath)
             wireNewBrowserCallback(vm, detailedBrowserID: browserID)
             vm.restoreSession(snapshot)
             detailedViewGroups[browserID] = vm
@@ -142,7 +142,10 @@ final class DockedBrowserCoordinator: ObservableObject {
         }
 
         let url = reference.seedURL ?? URL(string: "about:blank")!
-        let vm = makePersistentViewModel(initialURL: url.absoluteString == "about:blank" ? nil : url)
+        let vm = makePersistentViewModel(
+            initialURL: url.absoluteString == "about:blank" ? nil : url,
+            projectPath: reference.projectPath
+        )
         wireNewBrowserCallback(vm, detailedBrowserID: browserID)
         detailedViewGroups[browserID] = vm
         captureDetailedSnapshot(from: vm, browserID: browserID, fallbackURL: url)
@@ -156,14 +159,17 @@ final class DockedBrowserCoordinator: ObservableObject {
         detailedViewReferences[reference.browserID] = reference
         if let snapshot {
             detailedViewSessionSnapshots[reference.browserID] = snapshot
-            let vm = makePersistentViewModel()
+            let vm = makePersistentViewModel(projectPath: reference.projectPath)
             wireNewBrowserCallback(vm, detailedBrowserID: reference.browserID)
             vm.restoreSession(snapshot)
             detailedViewGroups[reference.browserID] = vm
             return
         }
         if let url = reference.seedURL {
-            let vm = makePersistentViewModel(initialURL: url.absoluteString == "about:blank" ? nil : url)
+            let vm = makePersistentViewModel(
+                initialURL: url.absoluteString == "about:blank" ? nil : url,
+                projectPath: reference.projectPath
+            )
             wireNewBrowserCallback(vm, detailedBrowserID: reference.browserID)
             detailedViewGroups[reference.browserID] = vm
             captureDetailedSnapshot(from: vm, browserID: reference.browserID, fallbackURL: url)
@@ -203,7 +209,10 @@ final class DockedBrowserCoordinator: ObservableObject {
     // MARK: - Floating Preview
 
     func showPreview(for url: URL, projectPath: String? = nil) {
-        let vm = makePreviewViewModel(initialURL: url.absoluteString == "about:blank" ? nil : url)
+        let vm = makePreviewViewModel(
+            initialURL: url.absoluteString == "about:blank" ? nil : url,
+            projectPath: projectPath
+        )
         setPreviewViewModel(vm, url: url, projectPath: projectPath)
     }
 
@@ -246,7 +255,7 @@ final class DockedBrowserCoordinator: ObservableObject {
             return existing
         }
 
-        let vm = makePreviewViewModel()
+        let vm = makePreviewViewModel(projectPath: projectPath)
         wireNewBrowserCallback(vm)
         vm.restoreSession(snapshot)
         previewViewModel = vm
@@ -279,7 +288,8 @@ final class DockedBrowserCoordinator: ObservableObject {
             dismissPreview()
             return
         }
-        let vm = makePersistentViewModel()
+        let resolvedProjectPath = previewProjectPath ?? projectPathForTile?(tileID)
+        let vm = makePersistentViewModel(projectPath: resolvedProjectPath)
         wireNewBrowserCallback(vm, tileID: tileID)
         vm.restoreSession(snapshot)
         groups[tileID] = vm
@@ -295,14 +305,16 @@ final class DockedBrowserCoordinator: ObservableObject {
 
     func viewModel(for tileID: UUID, url: URL) -> BrowserPanelViewModel {
         if let existing = groups[tileID] { return existing }
-        let vm = makePersistentViewModel(initialURL: url)
+        let projectPath = projectPathForTile?(tileID)
+        let vm = makePersistentViewModel(initialURL: url, projectPath: projectPath)
         wireNewBrowserCallback(vm, tileID: tileID)
         groups[tileID] = vm
         return vm
     }
 
     func restoreTile(id: UUID, snapshot: BrowserSessionSnapshot) {
-        let vm = makePersistentViewModel()
+        let projectPath = projectPathForTile?(id)
+        let vm = makePersistentViewModel(projectPath: projectPath)
         wireNewBrowserCallback(vm, tileID: id)
         vm.restoreSession(snapshot)
         groups[id] = vm
@@ -344,6 +356,9 @@ final class DockedBrowserCoordinator: ObservableObject {
         let id: UUID
         let title: String
         let url: URL?
+        /// F012-R17: normalized path of the owning project, or nil for browsers
+        /// without project ownership (preview-only, pre-restore).
+        let projectPath: String?
     }
 
     func agentAPI(for tileID: UUID) -> BrowserAgentAPI? {
@@ -358,7 +373,7 @@ final class DockedBrowserCoordinator: ObservableObject {
             let title = vm.displayTitle
             let url = vm.currentURL
             if q.isEmpty || title.lowercased().contains(q) || (url?.absoluteString.lowercased().contains(q) == true) {
-                return BrowserTabInfo(id: id, title: title, url: url)
+                return BrowserTabInfo(id: id, title: title, url: url, projectPath: vm.projectPath)
             }
             return nil
         }
@@ -370,7 +385,7 @@ final class DockedBrowserCoordinator: ObservableObject {
             let title = vm.displayTitle
             let url = vm.currentURL
             if q.isEmpty || title.lowercased().contains(q) || (url?.absoluteString.lowercased().contains(q) == true) {
-                return BrowserTabInfo(id: id, title: title, url: url)
+                return BrowserTabInfo(id: id, title: title, url: url, projectPath: vm.projectPath)
             }
             return nil
         }
@@ -390,5 +405,95 @@ final class DockedBrowserCoordinator: ObservableObject {
             }
         }
         return nil
+    }
+
+    // MARK: - F012-R17/R18/R20: Project-Aware Lifecycle
+
+    /// Returns true if any browser instance — board tile or detailed-view tab —
+    /// is currently associated with the given normalized project path.
+    func hasBrowsers(forProjectPath path: String) -> Bool {
+        if groups.values.contains(where: { $0.projectPath == path }) { return true }
+        if detailedViewGroups.values.contains(where: { $0.projectPath == path }) { return true }
+        if detailedViewReferences.values.contains(where: { $0.projectPath == path }) { return true }
+        return false
+    }
+
+    /// F012-R20: capture browser session entries for all browsers owned by the
+    /// given project path. Used by the parking flow to persist browser state
+    /// before tearing down the project's browsers.
+    func snapshotBrowserSessions(forProjectPath path: String) -> [BrowserSessionEntry] {
+        var entries: [BrowserSessionEntry] = []
+        var seenIDs = Set<UUID>()
+
+        // Detailed-view browsers (live VMs)
+        for (browserID, vm) in detailedViewGroups where vm.projectPath == path {
+            guard seenIDs.insert(browserID).inserted else { continue }
+            let reference = detailedViewReferences[browserID]
+            entries.append(BrowserSessionEntry(
+                browserID: browserID,
+                snapshot: vm.sessionSnapshot(),
+                pinnedTileID: reference?.linkedTileID
+            ))
+        }
+
+        // Detailed-view references whose VMs aren't materialized yet
+        for (browserID, reference) in detailedViewReferences
+        where reference.projectPath == path && !seenIDs.contains(browserID) {
+            if let snapshot = detailedViewSessionSnapshots[browserID] {
+                entries.append(BrowserSessionEntry(
+                    browserID: browserID,
+                    snapshot: snapshot,
+                    pinnedTileID: reference.linkedTileID
+                ))
+                seenIDs.insert(browserID)
+            }
+        }
+
+        // Board tiles
+        for (tileID, vm) in groups where vm.projectPath == path {
+            guard seenIDs.insert(tileID).inserted else { continue }
+            entries.append(BrowserSessionEntry(
+                browserID: tileID,
+                snapshot: vm.sessionSnapshot(),
+                pinnedTileID: tileID
+            ))
+        }
+
+        return entries
+    }
+
+    /// F012-R18: enumerate all browsers owned by the given project path and
+    /// dispatch close requests via the standard `.closeBrowserRequested`
+    /// notification. Used by project-remove and project-park flows so the
+    /// existing close-handling pipeline (which removes both board tiles and
+    /// content-viewer tabs) drives teardown consistently.
+    ///
+    /// - Parameter path: normalized project path
+    /// - Returns: the count of browsers that were dispatched for close
+    @discardableResult
+    func closeBrowsers(forProjectPath path: String) -> Int {
+        // Collect IDs first to avoid mutation during enumeration.
+        var browserIDs: [UUID] = []
+
+        for (tileID, vm) in groups where vm.projectPath == path {
+            browserIDs.append(tileID)
+        }
+        for (browserID, vm) in detailedViewGroups
+        where vm.projectPath == path && !browserIDs.contains(browserID) {
+            browserIDs.append(browserID)
+        }
+        for (browserID, reference) in detailedViewReferences
+        where reference.projectPath == path && !browserIDs.contains(browserID) {
+            browserIDs.append(browserID)
+        }
+
+        for browserID in browserIDs {
+            NotificationCenter.default.post(
+                name: .closeBrowserRequested,
+                object: nil,
+                userInfo: ["browserID": browserID]
+            )
+        }
+        return browserIDs.count
     }
 }

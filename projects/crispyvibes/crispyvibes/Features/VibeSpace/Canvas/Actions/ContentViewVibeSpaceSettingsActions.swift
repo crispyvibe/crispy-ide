@@ -140,7 +140,8 @@ extension ContentView {
             acpObservabilityStore: appContainer.acpObservabilityStore,
             experimentalFeatures: appContainer.experimentalFeatures,
             acpVibeSpaceContextStore: appContainer.acpVibeSpaceContextStore,
-            acpDeveloperToolsService: appContainer.acpDeveloperToolsService
+            acpDeveloperToolsService: appContainer.acpDeveloperToolsService,
+            contextSummaryObservabilityStore: appContainer.contextSummaryObservabilityStore
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .applyingAppThemePalette(activeThemePalette)
