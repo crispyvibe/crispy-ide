@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import os.signpost
 
@@ -67,6 +68,15 @@ final class TerminalSession: NSObject {
     let offscreenStartupCols = 120
     let offscreenStartupRows = 32
     var insightObserver: TerminalInsightObserver?
+    /// Per-terminal context-summary state. Persists across UI surface transitions
+    /// (board ↔ spotlight ↔ rail). Created when the experimental feature is enabled
+    /// at session-construction time. F041-R11.
+    var contextSummarySession: TerminalContextSummarySession?
+    /// Subscription that mirrors observer-classified visible inputs into the
+    /// shared compose history store. F001-T06: this is the single writer to
+    /// compose history for both keystroke and compose-UI paths — sensitive
+    /// classifications are filtered out at this layer by construction.
+    var composeHistorySubscription: AnyCancellable?
     var composeHistoryStore: ComposeHistoryStore?
 
     enum CommandDispatchPolicy: Sendable {
@@ -280,6 +290,10 @@ final class TerminalSession: NSObject {
         idleResetWorkItem = nil
         firstOutputObservers.removeAll()
         clearPendingCommands()
+        composeHistorySubscription?.cancel()
+        composeHistorySubscription = nil
+        contextSummarySession?.shutdown()
+        insightObserver?.shutdown()
         engine.terminate()
 
         let surfaceStillExists = (engine as? GhosttyTerminalEngine)?.surface != nil
@@ -350,21 +364,13 @@ final class TerminalSession: NSObject {
         engine.send(text: text)
     }
 
-    /// Records user input both to the per-session insight observer (last-input only)
-    /// and to the centralized ComposeHistoryStore (full history, capped).
+    /// Records user input submitted from a SwiftUI compose UI (VibeCast,
+    /// Spotlight compose, inline triggers). The text was authored in a visible
+    /// UI field, so it is classified `.visible` directly by the observer and the
+    /// compose-history subscription appends it without surface inspection.
+    /// F001-T06, F041-R17.
     func recordSentInput(_ text: String) {
-        insightObserver?.recordInput(text)
-        // The insight observer accumulates keystrokes and emits lastInput when Enter is pressed.
-        // Use that as the authoritative finalized command text, since character-by-character
-        // forwarding means `text` alone may just be "\n" when Enter is pressed separately.
-        if let finalized = insightObserver?.lastInput,
-           !finalized.isEmpty {
-            composeHistoryStore?.append(finalized, for: id)
-        } else {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return }
-            composeHistoryStore?.append(trimmed, for: id)
-        }
+        insightObserver?.recordSubmittedFromComposeUI(text)
     }
 
     func sendRawTextWithEnter(_ text: String) {

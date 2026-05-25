@@ -7,6 +7,7 @@ struct DeveloperToolsView: View {
     @ObservedObject var experimentalFeatures: ExperimentalFeaturesService
     @ObservedObject var acpVibeSpaceContextStore: ACPVibeSpaceContextStore
     @ObservedObject var acpDeveloperToolsService: ACPDeveloperToolsService
+    let contextSummaryObservabilityStore: ContextSummaryObservabilityStore
 
     @State private var selectedTab = 0
     @State private var records: [OperationRecord] = []
@@ -26,6 +27,7 @@ struct DeveloperToolsView: View {
                 Text("Remote").tag(4)
                 Text("Auth").tag(5)
                 Text("External").tag(6)
+                Text("Context Summary").tag(7)
             }
             .pickerStyle(.segmented)
             .padding(8)
@@ -40,6 +42,7 @@ struct DeveloperToolsView: View {
             case 4: remoteDiagnostics
             case 5: authDiagnostics
             case 6: externalSessionDiagnostics
+            case 7: contextSummaryDiagnostics
             default: operationsFeed
             }
         }
@@ -65,6 +68,7 @@ struct DeveloperToolsView: View {
         remoteEvents = AppDiagnostics.eventStore.snapshot().filter { $0.category == "remote" }
         authEvents = AppDiagnostics.eventStore.snapshot().filter { $0.category == "auth" }
         externalSessionEvents = AppDiagnostics.eventStore.snapshot().filter { $0.category == "external.sessions" }
+        contextSummaryTraces = contextSummaryObservabilityStore.snapshot().reversed()
     }
 
     // MARK: - Operations Feed (REQ-008)
@@ -497,6 +501,16 @@ struct DeveloperToolsView: View {
     @State private var remoteEvents: [DiagnosticsEventRecord] = []
     @State private var authEvents: [DiagnosticsEventRecord] = []
     @State private var externalSessionEvents: [DiagnosticsEventRecord] = []
+    @State private var contextSummaryTraces: [ContextSummaryTrace] = []
+    @State private var expandedContextSummaryTraceID: UUID?
+    @State private var sandboxSystemInstruction: String = ContextSummaryGenerator.systemInstruction
+    @State private var sandboxUserMessage: String = """
+        Recent context:
+          hi there
+        Latest input:
+          what is the color of sky?
+        """
+    @State private var sandboxIsRunning: Bool = false
 
     private var remoteDiagnostics: some View {
         diagnosticsEventList(
@@ -525,6 +539,312 @@ struct DeveloperToolsView: View {
         )
         .onAppear {
             externalSessionEvents = AppDiagnostics.eventStore.snapshot().filter { $0.category == "external.sessions" }
+        }
+    }
+
+    // MARK: - Context Summary (F041)
+
+    private var contextSummaryDiagnostics: some View {
+        VStack(spacing: 0) {
+            contextSummarySandboxPanel
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+
+            Divider()
+                .padding(.top, 8)
+
+            HStack {
+                Text("\(contextSummaryTraces.count) generations recorded")
+                    .font(AppTypographyTokens.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Clear") {
+                    contextSummaryObservabilityStore.clear()
+                    contextSummaryTraces = []
+                }
+                .disabled(contextSummaryTraces.isEmpty)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+
+            Divider()
+
+            if contextSummaryTraces.isEmpty {
+                VStack(spacing: 6) {
+                    Spacer()
+                    Text("No context summary generations yet.")
+                        .foregroundStyle(.secondary)
+                        .font(AppTypographyTokens.callout)
+                    Text("Type commands in a terminal with the experimental Terminal Insight setting enabled, or use the sandbox above.")
+                        .foregroundStyle(.secondary)
+                        .font(AppTypographyTokens.caption)
+                        .multilineTextAlignment(.center)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // ScrollView + LazyVStack rather than List so the inner Text views
+                // accept click-drag selection on macOS — List rows intercept the
+                // gesture and `.textSelection(.enabled)` ends up unreachable.
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(contextSummaryTraces) { trace in
+                            contextSummaryRow(trace)
+                                .padding(.horizontal, 12)
+                            Divider()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var contextSummarySandboxPanel: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("System Instruction")
+                    .font(AppTypographyTokens.caption2)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                TextEditor(text: $sandboxSystemInstruction)
+                    .font(AppTypographyTokens.captionMonospaced)
+                    .frame(minHeight: 80, maxHeight: 160)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                    )
+
+                Text("User Message")
+                    .font(AppTypographyTokens.caption2)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                TextEditor(text: $sandboxUserMessage)
+                    .font(AppTypographyTokens.captionMonospaced)
+                    .frame(minHeight: 60, maxHeight: 120)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                    )
+
+                HStack(spacing: 8) {
+                    Button("Run") {
+                        Task { await runContextSummarySandbox() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(sandboxIsRunning || sandboxSystemInstruction.isEmpty || sandboxUserMessage.isEmpty)
+
+                    if sandboxIsRunning {
+                        ProgressView().controlSize(.small)
+                    }
+
+                    Button("Reset Instruction") {
+                        sandboxSystemInstruction = ContextSummaryGenerator.systemInstruction
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(sandboxIsRunning)
+
+                    Spacer()
+
+                    Text("Sandbox runs use a fresh session — no prior history.")
+                        .font(AppTypographyTokens.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.top, 8)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "flask")
+                    .foregroundStyle(.secondary)
+                Text("Sandbox: send a custom prompt")
+                    .font(AppTypographyTokens.callout)
+            }
+        }
+    }
+
+    private func runContextSummarySandbox() async {
+        sandboxIsRunning = true
+        defer { sandboxIsRunning = false }
+        _ = await ContextSummaryGenerator.runSandbox(
+            systemInstruction: sandboxSystemInstruction,
+            userMessage: sandboxUserMessage,
+            observabilityStore: contextSummaryObservabilityStore
+        )
+        // Refresh the trace list immediately so the sandbox row appears at the top.
+        contextSummaryTraces = contextSummaryObservabilityStore.snapshot().reversed()
+    }
+
+    private func contextSummaryRow(_ trace: ContextSummaryTrace) -> some View {
+        let isExpanded = expandedContextSummaryTraceID == trace.id
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: contextSummaryIcon(for: trace.result))
+                    .foregroundStyle(contextSummaryColor(for: trace.result))
+                    .frame(width: 14)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(contextSummaryHeadline(for: trace))
+                            .font(AppTypographyTokens.callout)
+                            .lineLimit(1)
+                        if trace.source == .sandbox {
+                            Text("sandbox")
+                                .font(AppTypographyTokens.caption2)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(Color.primary.opacity(0.1), in: Capsule())
+                        }
+                    }
+                    Text(contextSummarySubtitle(for: trace))
+                        .font(AppTypographyTokens.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(AppTypographyTokens.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                expandedContextSummaryTraceID = isExpanded ? nil : trace.id
+            }
+
+            if isExpanded {
+                contextSummaryDetail(trace)
+                    .padding(.top, 6)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func contextSummaryIcon(for outcome: ContextSummaryTrace.Outcome) -> String {
+        switch outcome {
+        case .success: return "checkmark.circle.fill"
+        case .timeout: return "clock"
+        case .unavailable: return "questionmark.circle"
+        case .error: return "exclamationmark.triangle.fill"
+        case .classifiedSensitive: return "lock.fill"
+        }
+    }
+
+    private func contextSummaryColor(for outcome: ContextSummaryTrace.Outcome) -> Color {
+        switch outcome {
+        case .success: return .green
+        case .timeout: return .orange
+        case .unavailable: return .secondary
+        case .error: return .red
+        case .classifiedSensitive: return .purple
+        }
+    }
+
+    private func contextSummaryHeadline(for trace: ContextSummaryTrace) -> String {
+        switch trace.result {
+        case .success(let headline, _): return headline
+        case .timeout: return "Timed out"
+        case .unavailable: return "Apple Intelligence unavailable"
+        case .error(let message): return "Error: \(message)"
+        case .classifiedSensitive(_, let typedText, let attempts):
+            return "Classified sensitive · \(typedText.count) chars · \(attempts) attempts"
+        }
+    }
+
+    private func contextSummarySubtitle(for trace: ContextSummaryTrace) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        let time = formatter.string(from: trace.timestamp)
+        let latencyMs = Int(trace.latency * 1000)
+        switch trace.result {
+        case .success(_, let phase):
+            return "\(time) · \(latencyMs) ms · \(phase)"
+        case .classifiedSensitive:
+            return "\(time) · no LLM call"
+        case .timeout, .unavailable, .error:
+            return "\(time) · \(latencyMs) ms"
+        }
+    }
+
+    private func contextSummaryDetail(_ trace: ContextSummaryTrace) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !trace.received.isEmpty {
+                contextSummarySection(label: "Received") {
+                    Text(trace.received)
+                        .font(AppTypographyTokens.captionMonospaced)
+                        .textSelection(.enabled)
+                }
+            }
+            if let sent = trace.sent {
+                contextSummarySection(label: "Sent") {
+                    Text(contextSummarySentText(for: sent))
+                        .font(AppTypographyTokens.captionMonospaced)
+                        .textSelection(.enabled)
+                }
+            }
+            contextSummarySection(label: "Result") {
+                Text(contextSummaryResultText(for: trace.result))
+                    .font(AppTypographyTokens.captionMonospaced)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(.leading, 22)
+        .padding(.trailing, 8)
+    }
+
+    /// Formats the full LLM input as a single copy-friendly block: the system
+    /// instruction (set once on session creation) followed by the user message
+    /// (sent on this turn). Both are concatenated so the developer can copy the
+    /// whole input in one selection.
+    private func contextSummarySentText(for sent: ContextSummaryTrace.Sent) -> String {
+        """
+        [system]
+        \(sent.systemInstruction)
+
+        [user]
+        \(sent.userMessage)
+        """
+    }
+
+    private func contextSummarySection<Content: View>(
+        label: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(AppTypographyTokens.caption2)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 4))
+        }
+    }
+
+    private func contextSummaryResultText(for outcome: ContextSummaryTrace.Outcome) -> String {
+        switch outcome {
+        case .success(let headline, let phase):
+            return "headline: \(headline)\nphase: \(phase)"
+        case .timeout:
+            return "Generation exceeded the timeout budget."
+        case .unavailable:
+            return "SystemLanguageModel.default.availability is not .available — Foundation Models cannot run."
+        case .error(let message):
+            return "error: \(message)"
+        case .classifiedSensitive(let snapshot, let typedText, let attempts):
+            return """
+            Classified sensitive: the surface never showed the typed text within the budget.
+              attempts: \(attempts) (immediate + retries)
+
+            Typed text (\(typedText.count) chars):
+            ----------
+            \(typedText)
+            ----------
+
+            Screen snapshot at classification time (does not contain the typed text):
+            ----------
+            \(snapshot.isEmpty ? "(empty)" : snapshot)
+            ----------
+            """
         }
     }
 

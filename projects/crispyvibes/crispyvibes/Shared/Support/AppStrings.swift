@@ -339,6 +339,14 @@ enum AppStrings {
                 localized: "terminal.contextSummary.copySummary",
                 defaultValue: "Copy summary"
             )
+            /// Placeholder text shown in the timeline / headline when the user submitted
+            /// input that was suppressed from the terminal display (e.g., a password
+            /// prompt with echo disabled). The literal text never enters the LLM prompt
+            /// or the summary history. F041-R17.
+            static let sensitiveInformationPlaceholder = String(
+                localized: "terminal.contextSummary.sensitiveInformation",
+                defaultValue: "sensitive information"
+            )
         }
 
         // Board

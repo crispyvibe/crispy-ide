@@ -238,7 +238,8 @@ struct CrispyVibesApp: App {
                 acpObservabilityStore: appContainer.acpObservabilityStore,
                 experimentalFeatures: appContainer.experimentalFeatures,
                 acpVibeSpaceContextStore: appContainer.acpVibeSpaceContextStore,
-                acpDeveloperToolsService: appContainer.acpDeveloperToolsService
+                acpDeveloperToolsService: appContainer.acpDeveloperToolsService,
+                contextSummaryObservabilityStore: appContainer.contextSummaryObservabilityStore
             )
             .frame(minWidth: 600, minHeight: 400)
         }

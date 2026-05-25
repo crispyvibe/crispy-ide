@@ -21,8 +21,6 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
     var trackingAreaRef: NSTrackingArea?
     var desiredPixelSize = CGSize(width: 960, height: 520)
     var keyTextAccumulator: [String]? = nil
-    /// Accumulates typed characters across keyDown events for compose history recording.
-    var composeHistoryInputBuffer = ""
     var markedTextStorage: NSAttributedString?
     var markedSelectionRange = NSRange(location: NSNotFound, length: 0)
     var lastSyncedSurfaceGeometry: SurfaceGeometry?

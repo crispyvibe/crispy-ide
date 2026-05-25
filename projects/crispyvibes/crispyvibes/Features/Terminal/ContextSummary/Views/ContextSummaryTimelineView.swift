@@ -11,6 +11,33 @@ struct ContextSummaryTimelineView: View {
     let entries: [TimelineEntry]
     @State private var showOriginal = false
 
+    /// Entries visible in the current toggle mode.
+    ///
+    /// The session stores both `.command` rows (raw user input) and `.message`
+    /// rows (AI-generated summaries paired with their originating command). The
+    /// toggle therefore filters by *kind*, not just by per-row text:
+    ///
+    /// - Summary mode → AI-summary rows (`.message`).
+    /// - Original mode → raw-input rows (`.command`).
+    ///
+    /// Sensitive placeholders (kind `.command` with `isSensitivePlaceholder == true`)
+    /// appear in both modes — there is no AI-summary version of them and the
+    /// content cannot be recovered. F041-R13.
+    private var visibleEntries: [TimelineEntry] {
+        entries.filter { entry in
+            if entry.isSensitivePlaceholder { return true }
+            switch entry.kind {
+            case .command:
+                return showOriginal
+            case .message:
+                return !showOriginal
+            case .toolCall, .status:
+                // Reserved for future agent-integration kinds — show in both.
+                return true
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             viewToggle
@@ -22,7 +49,7 @@ struct ContextSummaryTimelineView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(entries) { entry in
+                    ForEach(visibleEntries) { entry in
                         timelineRow(entry)
                     }
                 }

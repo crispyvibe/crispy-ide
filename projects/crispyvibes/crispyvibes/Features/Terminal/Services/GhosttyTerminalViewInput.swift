@@ -229,7 +229,7 @@ extension GhosttyTerminalView {
                     keyEvent.text = pointer
                     _ = ghostty_surface_key(surface, keyEvent)
                 }
-                composeHistoryInputBuffer.append(text)
+                forwardToInsightObserver(text)
             } else {
                 keyEvent.text = nil
                 _ = ghostty_surface_key(surface, keyEvent)
@@ -239,21 +239,19 @@ extension GhosttyTerminalView {
             _ = ghostty_surface_key(surface, keyEvent)
         }
 
-        // Forward to Terminal Insight observer
+        // Forward to Terminal Insight observer. Path 1 (accumulatedText) already
+        // forwarded each text fragment via `deliveredAccumulatedText`. Path 2
+        // forwards inline above. On Enter, finalize the observer's buffer; the
+        // observer publishes `.visible(...)` or `.sensitive` and the
+        // TerminalSession's compose-history subscription picks it up — there is
+        // no separate raw-text fallback here. F001-T06.
         if !deliveredAccumulatedText.isEmpty {
             for text in deliveredAccumulatedText { forwardToInsightObserver(text) }
-            for text in deliveredAccumulatedText { composeHistoryInputBuffer.append(text) }
             if event.keyCode == 36 || event.keyCode == 76 {
-                let command = composeHistoryInputBuffer
-                composeHistoryInputBuffer = ""
                 forwardToInsightObserver("\n")
-                forwardRecordSentInput(command)
             }
         } else if event.keyCode == 36 || event.keyCode == 76 {
-            let command = composeHistoryInputBuffer
-            composeHistoryInputBuffer = ""
             forwardToInsightObserver("\n")
-            forwardRecordSentInput(command)
         }
     }
 
@@ -541,21 +539,6 @@ extension GhosttyTerminalView {
 
     private func forwardToInsightObserver(_ text: String) {
         guard let session = engine?.delegate as? TerminalSession else { return }
-        session.insightObserver?.recordInput(text)
-    }
-
-    private func forwardRecordSentInput(_ text: String) {
-        guard let session = engine?.delegate as? TerminalSession else { return }
-        // insightObserver validates screen visibility (filters passwords).
-        // If observer is active, use its validated lastInput. Otherwise fall back to raw text.
-        let command: String
-        if let observer = session.insightObserver, let finalized = observer.lastInput, !finalized.isEmpty {
-            command = finalized
-        } else {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return }
-            command = trimmed
-        }
-        session.composeHistoryStore?.append(command, for: session.id)
+        session.insightObserver?.recordTypedKeystroke(text)
     }
 }

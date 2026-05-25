@@ -598,7 +598,8 @@
 		INS0000000000000000000B /* TerminalGridDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00000000000000000002 /* TerminalGridDiff.swift */; };
 		INS0000000000000000000C /* TerminalGridSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00000000000000000003 /* TerminalGridSnapshot.swift */; };
 		INS0000000000000000000D /* TerminalInsightObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00000000000000000004 /* TerminalInsightObserver.swift */; };
-		INS0000000000000000000E /* TerminalInsightOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00000000000000000005 /* TerminalInsightOverlay.swift */; };
+		F04100000000000000000002 /* TerminalContextSummarySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04100000000000000000001 /* TerminalContextSummarySession.swift */; };
+		F04100000000000000000004 /* ContextSummaryObservabilityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04100000000000000000003 /* ContextSummaryObservabilityStore.swift */; };
 		SEC00002000000000000TEST /* ShellEscapingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SEC00002000000000000FILE /* ShellEscapingTests.swift */; };
 		SEC00003000000000000TEST /* EditorHTMLSecurityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SEC00003000000000000FILE /* EditorHTMLSecurityTests.swift */; };
 /* End PBXBuildFile section */
@@ -1214,7 +1215,8 @@
 		INS00000000000000000002 /* TerminalGridDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalGridDiff.swift; sourceTree = "<group>"; };
 		INS00000000000000000003 /* TerminalGridSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalGridSnapshot.swift; sourceTree = "<group>"; };
 		INS00000000000000000004 /* TerminalInsightObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInsightObserver.swift; sourceTree = "<group>"; };
-		INS00000000000000000005 /* TerminalInsightOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInsightOverlay.swift; sourceTree = "<group>"; };
+		F04100000000000000000001 /* TerminalContextSummarySession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalContextSummarySession.swift; sourceTree = "<group>"; };
+		F04100000000000000000003 /* ContextSummaryObservabilityStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContextSummaryObservabilityStore.swift; sourceTree = "<group>"; };
 		SEC00002000000000000FILE /* ShellEscapingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShellEscapingTests.swift; sourceTree = "<group>"; };
 		SEC00003000000000000FILE /* EditorHTMLSecurityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorHTMLSecurityTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -1913,6 +1915,8 @@
 			children = (
 				C4BEE53B3AFE95AC5CB99A55 /* ContextSummaryGenerating.swift */,
 				591DFC0B1F5E3693732B8F36 /* ContextSummaryGenerator.swift */,
+				F04100000000000000000001 /* TerminalContextSummarySession.swift */,
+				F04100000000000000000003 /* ContextSummaryObservabilityStore.swift */,
 			);
 			name = Services;
 			path = Services;
@@ -3206,7 +3210,6 @@
 				INS00000000000000000002 /* TerminalGridDiff.swift */,
 				INS00000000000000000003 /* TerminalGridSnapshot.swift */,
 				INS00000000000000000004 /* TerminalInsightObserver.swift */,
-				INS00000000000000000005 /* TerminalInsightOverlay.swift */,
 			);
 			path = Insight;
 			sourceTree = "<group>";
@@ -3613,7 +3616,8 @@
 				INS0000000000000000000B /* TerminalGridDiff.swift in Sources */,
 				INS0000000000000000000C /* TerminalGridSnapshot.swift in Sources */,
 				INS0000000000000000000D /* TerminalInsightObserver.swift in Sources */,
-				INS0000000000000000000E /* TerminalInsightOverlay.swift in Sources */,
+				F04100000000000000000002 /* TerminalContextSummarySession.swift in Sources */,
+				F04100000000000000000004 /* ContextSummaryObservabilityStore.swift in Sources */,
 				A1000000000000000000100 /* TerminalFocusCoordinator.swift in Sources */,
 				A1000000000000000000000E /* TerminalSessionHostView.swift in Sources */,
 				A10000000000000000000017 /* PaneWorkerInfrastructure.swift in Sources */,
