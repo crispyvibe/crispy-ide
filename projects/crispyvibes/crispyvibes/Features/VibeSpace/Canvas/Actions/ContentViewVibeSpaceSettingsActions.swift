@@ -89,6 +89,16 @@ extension ContentView {
             )
         }
 
+        let vibespacesContext = AppSettingsVibeSpacesContext(
+            vibespaceManagement: vibespaceManagement,
+            onOpenVibeSpace: { config in
+                homeCatalogCoordinator.restoreVibeSpaceConfig(config)
+            },
+            onDeleteVibeSpaces: { ids in
+                homeCatalogCoordinator.deleteVibeSpaces(ids: ids)
+            }
+        )
+
         AppSettingsSheetView(
             appearancePreference: $appearancePreference,
             defaultTerminalShellRaw: $terminalShellPreference,
@@ -104,6 +114,7 @@ extension ContentView {
             customThemePaletteJSON: $appCustomThemePaletteJSON,
             selectedCategory: vibespaceShell.appSettingsCategoryBinding,
             vibespaceShortcutContext: activeVibeSpaceShortcutContext,
+            vibespacesContext: vibespacesContext,
             onResetLocalState: {
                 homeCatalogCoordinator.resetLocalAppState(
                     clearExpandedVibeSpaceSidebarProjectPaths: {

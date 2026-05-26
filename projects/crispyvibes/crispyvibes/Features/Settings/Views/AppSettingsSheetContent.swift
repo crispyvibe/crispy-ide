@@ -63,6 +63,7 @@ struct AppSettingsSheetView: View {
     @AppStorage(AppPreferences.nerdTerminalEngineKey)
     var nerdTerminalEngine = AppPreferences.nerdTerminalEngineDefault
     let vibespaceShortcutContext: AppShortcutVibeSpaceContext?
+    let vibespacesContext: AppSettingsVibeSpacesContext?
     let onClose: () -> Void
     let onResetLocalState: () -> Void
 
@@ -93,6 +94,7 @@ struct AppSettingsSheetView: View {
         customThemePaletteJSON: Binding<String>,
         selectedCategory: Binding<AppSettingsCategory>,
         vibespaceShortcutContext: AppShortcutVibeSpaceContext? = nil,
+        vibespacesContext: AppSettingsVibeSpacesContext? = nil,
         authCognitoDomain: Binding<String>? = nil,
         authCognitoMacClientId: Binding<String>? = nil,
         autoUpdateChecksEnabled: Binding<Bool>? = nil,
@@ -108,6 +110,7 @@ struct AppSettingsSheetView: View {
         _customThemePaletteJSON = customThemePaletteJSON
         _selectedCategory = selectedCategory
         self.vibespaceShortcutContext = vibespaceShortcutContext
+        self.vibespacesContext = vibespacesContext
         self.onResetLocalState = onResetLocalState
         self.onClose = onClose
 
@@ -399,6 +402,8 @@ struct AppSettingsSheetView: View {
             accountCategoryContent
         case .general:
             generalCategoryContent
+        case .vibespaces:
+            vibespacesCategoryContent
         case .shortcuts:
             shortcutsCategoryContent
         case .terminal:

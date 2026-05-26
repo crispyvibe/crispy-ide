@@ -270,6 +270,28 @@ final class HomeCatalogCoordinator {
         appContainer.operationMetricsStore.recordOperation(name: "vibespace.close", projectContext: vibespaceID.uuidString, startTime: startTime)
     }
 
+    /// Permanently deletes one or more vibespaces and their persisted state.
+    ///
+    /// If the active vibespace is among the IDs, the active session is closed
+    /// first so in-memory state matches disk. After the persistence layer
+    /// removes the vibespaces, the recents catalog token is bumped so views
+    /// reading `vibespaceManagement.recentVibeSpaceConfigs(...)` re-fetch.
+    func deleteVibeSpaces(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        let startTime = Date()
+        if let activeID = activeVibeSpaceID, ids.contains(activeID) {
+            closeActiveVibeSpaceSession()
+        }
+        for id in ids {
+            vibespaceManagement.deleteVibeSpace(id: id)
+        }
+        appContainer.operationMetricsStore.recordOperation(
+            name: "vibespace.delete",
+            projectContext: ids.count == 1 ? ids.first?.uuidString : nil,
+            startTime: startTime
+        )
+    }
+
     func nextTemporaryVibeSpaceName() -> String {
         importUseCase.nextTemporaryVibeSpaceName(
             defaultName: AppStrings.Home.defaultVibeSpaceBaseName,
