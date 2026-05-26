@@ -33,6 +33,16 @@ Use **Appearance** for visual and chrome settings:
 - border shape and border visibility
 - default rail position and app side menu dock
 
+### VibeSpaces
+
+Use **VibeSpaces** to open vibespaces from your full library or remove ones you no longer need.
+
+- The table lists every vibespace currently on disk. Recents sort to the top in MRU order.
+- **Search** by name or any project path (case-insensitive substring match).
+- Each row's **Project Folders** column shows clickable directory names — click one to open that folder in Finder; hover to see the full path.
+- Open a vibespace by clicking the row's **Open icon**, double-clicking the row, or selecting one row and clicking **Open** in the toolbar. Settings closes and you land in the chosen vibespace.
+- Delete vibespaces with the row's **trash icon**, by selecting one or more rows and clicking **Delete**, or via the right-click context menu. Deletion always requires confirmation and is **irreversible** — persisted state (terminal sessions, browsers, layout, project configs) is pruned permanently. If you delete the currently active vibespace, its session is closed first.
+
 ### Keyboard Shortcuts
 
 Use **Keyboard Shortcuts** to customize app-wide shortcuts and the terminal inline trigger. VibeSpace command shortcuts and project shortcut slots are managed in VibeSpace Settings.
@@ -61,6 +71,7 @@ Use **Connections** for SSH profile management.
 |----------|------------------|
 | Account | Sign in/out |
 | Appearance | Theme, typography, borders, and app chrome defaults |
+| VibeSpaces | Open vibespaces from the full library and bulk-delete unwanted ones |
 | Keyboard Shortcuts | App-wide shortcut bindings and terminal inline trigger |
 | Terminal | Shell, engine, and tmux controls |
 | AI Services | Text action CLI defaults and prompt templates |

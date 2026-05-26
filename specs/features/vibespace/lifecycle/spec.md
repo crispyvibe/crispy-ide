@@ -203,6 +203,18 @@ Then no HMAC signing or verification is applied
 And the file is treated as trusted by default
 ```
 
+### F020-S20 · VibeSpace removal via App Settings is bulk-capable and confirmed
+
+```gherkin
+Given the user has multiple vibespaces on disk
+When the user opens App Settings → VibeSpaces
+And selects one or more rows and clicks `Delete`
+Then a confirmation alert is shown with single/many message variants
+And on confirm, every selected vibespace's persisted state is pruned
+And any active session bound to a deleted vibespace is closed first
+And the operation is irreversible
+```
+
 ---
 
 ## Requirements
@@ -222,6 +234,7 @@ And the file is treated as trusted by default
 | F020-R11 | VibeSpace restore preserves remote project URIs and degrades failed remotes |
 | F020-R12 | Config files are HMAC-SHA256 signed; tampered files disable startup commands |
 | F020-R13 | Signing is centralized in AppPersistenceDataStore; layout files are exempt |
+| F020-R14 | VibeSpaces are removable in bulk via App Settings → VibeSpaces (F036-R07); deletion closes the active session if matched, prunes persisted state, and requires explicit confirmation |
 
 ---
 
@@ -247,3 +260,4 @@ And the file is treated as trusted by default
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-04-15 | Initial draft — extracted from F014 Navigation | — |
+| 2026-05-26 | Added F020-S20 + F020-R14 covering vibespace bulk removal via App Settings → VibeSpaces (cross-references F036-R07) | — |
