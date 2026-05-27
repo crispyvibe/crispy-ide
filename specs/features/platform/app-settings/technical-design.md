@@ -21,6 +21,7 @@ App Settings is a split-view sheet with a sidebar listing app-level categories a
 |---|---|---|
 | Account | Sign in to enable cloud-backed features | Apple sign-in via Cognito, sign-out |
 | Appearance | Visual, typography, and chrome defaults | Display mode, theme presets (28), custom palette editing, font family, font size, rail font scale, text color, border shape, border visibility, default rail position, app side menu dock |
+| VibeSpaces | Open and remove vibespaces from the full library | Multi-select Table, search by name or path, per-row Open + Delete icons, comma-separated Finder-link directory names, async batched load |
 | Keyboard Shortcuts | App-wide keyboard shortcut customization | Shortcut bindings, terminal inline trigger |
 | Terminal | Shell defaults, rendering backend, and tmux behavior | Default shell (zsh/bash), terminal engine (Ghostty/SwiftTerm), tmux enablement and behavior |
 | Updates | Automatic checks and update feed configuration | Auto-check toggle, feed URL, check now, reset feed |
@@ -99,6 +100,16 @@ If no explicit user selection (`terminalShellPreferenceExplicitSelection` flag),
 - Direct integrations expose trust mode, model, and reasoning defaults.
 - Custom agents can be added or deleted from app-level storage.
 
+### VibeSpaces
+
+The VibeSpaces panel is built around three pieces:
+
+- `AppSettingsVibeSpacesContext` (Features/Settings/Support) — bundles `VibeSpaceManaging`, `onOpenVibeSpace: (VibeSpaceConfigFile) -> Void`, and `onDeleteVibeSpaces: (Set<UUID>) -> Void`. Threaded through `AppSettingsSheetView.init` like the existing `AppShortcutVibeSpaceContext`. Constructed in `ContentViewVibeSpaceSettingsActions.appSettingsSheet()`.
+- `ManageVibeSpacesViewModel` (Features/Settings/ViewModels) — `@MainActor ObservableObject`. `@Published entries`, `isLoading`, `selection: Set<UUID>`, `searchQuery`. `filteredEntries` matches name + any project path. Public API: `load`, `open(_:)`, `openSelected`, `deleteSelected`, `deleteIDs(_:)`. Async load batches per-vibespace JSON+HMAC reads in groups of 25 with `Task.yield()` between batches; a `loadGeneration` token cancels stale loads.
+- `AppSettingsSheetViewVibeSpaces.swift` (Features/Settings/Views) — extension on `AppSettingsSheetView` providing `vibespacesCategoryContent`. The panel is a `SettingsCard` containing search + toolbar + SwiftUI `Table(_, selection:)` with three columns (Name, Project Folders, Actions) + footer. The Project Folders cell renders each path as a `Button(.link)` whose `.help(_:)` exposes the full path; tap calls `NSWorkspace.shared.open(URL(fileURLWithPath:))`. The Actions cell hosts borderless Open / Delete icons. `contextMenu(forSelectionType: UUID.self)` provides right-click + double-click handlers via `primaryAction`. All metrics (`spacing`, `chromeSize`, `controlSize`) flow through `crispyvibesUIScale`; all text uses `AppTypographyTokens.scaledChromeSystem(13)`.
+
+Bulk delete routes through `HomeCatalogCoordinator.deleteVibeSpaces(ids:)`, which closes the active session if its ID is in the set, then calls `VibeSpaceManagementService.deleteVibeSpace(id:)` per entry.
+
 ## API / Command Contracts
 
 ### Reset (Start Fresh)
@@ -158,3 +169,9 @@ Currently disabled (`isWalkthroughEnabled = false`). 6-step onboarding overlay c
 ## Migration / Rollout Notes
 
 _None._
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-05-26 | Added VibeSpaces management category architecture (panel, view model, context) | — |

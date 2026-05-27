@@ -58,10 +58,25 @@ App Settings manages user preferences via `@AppStorage` (UserDefaults) and a cus
 - **Likelihood:** Low.
 - **Mitigation:** Shortcut recording SHOULD reject reserved system key combinations (Cmd+Q, Cmd+H, Cmd+Tab). Conflicts with existing app shortcuts MUST be detected and reported to the user. Linked NFR: SEC-Input-Sanitization.
 
+### F036-T06: Accidental destructive vibespace deletion via Settings → VibeSpaces
+
+- **Vector:** A user opens Settings → VibeSpaces, multi-selects rows (Cmd-click) and clicks Delete, or clicks a row's trash icon, intending only a different action. The bulk delete is irreversible: persisted state, terminal entries, browser sessions, project configs, and shortcut overrides are all pruned. If a deleted vibespace is currently active, its in-memory session is closed first.
+- **Impact:** Irreversible loss of vibespace state. No undo, no trash bin.
+- **Likelihood:** Medium — destructive bulk action is one click + one alert away from a multi-select gesture that's also used for non-destructive operations.
+- **Mitigation:** The Delete toolbar button MUST be disabled when selection is empty. Both toolbar Delete and per-row trash MUST present an explicit confirmation alert with single/many message variants before any state is touched. The alert's destructive button MUST be tagged `role: .destructive`; the cancel button MUST be the default. The confirmation message MUST clearly state the action is permanent. Linked NFR: SEC-Data-Protection.
+
+### F036-T07: Project-folder Finder link opens unintended directory
+
+- **Vector:** A vibespace's project paths are stored as plain strings; if storage is tampered with, a path could resolve to a sensitive directory. Clicking the Finder link in the VibeSpaces panel calls `NSWorkspace.shared.open(URL(fileURLWithPath:))` on the stored value.
+- **Impact:** Disclosure of an unexpected directory in Finder. No code execution; `NSWorkspace.open` opens the directory listing only.
+- **Likelihood:** Low — requires same-user tampering with vibespace persistence files.
+- **Mitigation:** Vibespace config files use HMAC-signed JSON (REL-Persistence). Untrusted configs MUST surface a trust prompt before opening. The cell SHOULD also expose the full path via `.help(_:)` so the user can inspect before clicking. Linked NFR: SEC-Data-Protection.
+
 ## Residual Risks
 
 - Any process running as the same macOS user can modify UserDefaults. This is an OS-level trust boundary that cannot be mitigated at the application layer without sandboxing.
 - The CLI command field inherently allows executing arbitrary binaries — this is by design for user-configured AI services. The risk is limited to the user's own privilege level.
+- Bulk vibespace delete is irreversible by design. Confirmation is the only safeguard; there is no trash/undo. Users who confirm in error must restore from a backup.
 
 ## NFR Compliance
 
