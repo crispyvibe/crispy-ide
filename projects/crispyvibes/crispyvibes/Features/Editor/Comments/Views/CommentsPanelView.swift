@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// F049-R06: side panel docked to the right edge of the file viewer pane.
@@ -25,6 +26,8 @@ struct CommentsPanelView: View {
 
         return VStack(spacing: 0) {
             header(visibleCount: visible.count, activeCount: activeCount)
+            Divider()
+            bulkActionsRow(threads: store.threads(forFile: filePath))
             Divider()
             searchAndFilterRow
             Divider()
@@ -107,6 +110,107 @@ struct CommentsPanelView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
     }
+
+    // MARK: - Bulk Actions
+
+    private func bulkActionsRow(threads: [CommentThread]) -> some View {
+        HStack(spacing: 6) {
+            Menu {
+                Button("Copy All") {
+                    copyToClipboard(threads: threads)
+                }
+                Button("Copy Unresolved") {
+                    copyToClipboard(threads: threads.filter { $0.status != .resolved })
+                }
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+
+            Menu {
+                Button("Delete Resolved", role: .destructive) {
+                    let resolved = threads.filter { $0.status == .resolved }
+                    Task { @MainActor in
+                        for thread in resolved {
+                            await panel.deleteThread(thread, store: store)
+                        }
+                    }
+                }
+                Button("Delete All", role: .destructive) {
+                    Task { @MainActor in
+                        for thread in threads {
+                            await panel.deleteThread(thread, store: store)
+                        }
+                    }
+                }
+            } label: {
+                Label("Delete", systemImage: "trash")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.red.opacity(0.8))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+    }
+
+    private func copyToClipboard(threads: [CommentThread]) {
+        guard !threads.isEmpty else { return }
+        var lines: [String] = []
+        lines.append("# Comments: \(filePath)")
+        lines.append("")
+
+        for (threadIdx, thread) in threads.enumerated() {
+            let root = thread.root
+            let heading: String
+            if root.surfaceKind == .browser {
+                heading = "#\(threadIdx + 1) \(root.filePath)"
+                if let selector = root.anchor.domSelector {
+                    lines.append("## \(heading)")
+                    lines.append("Selector: `\(selector)`")
+                } else {
+                    lines.append("## \(heading)")
+                }
+            } else {
+                let loc: String
+                if root.anchor.startLine == root.anchor.endLine {
+                    loc = "L\(root.anchor.startLine)"
+                } else {
+                    loc = "L\(root.anchor.startLine)-\(root.anchor.endLine)"
+                }
+                let status = root.isResolved ? " [RESOLVED]" : (root.isStale ? " [STALE]" : "")
+                lines.append("## #\(threadIdx + 1) \(loc)\(status)")
+            }
+
+            if !root.anchor.anchorText.isEmpty {
+                lines.append("> \(root.anchor.anchorText.prefix(300))")
+            }
+
+            let author = root.authorLabel ?? (root.authorKind == .agent ? "Agent" : "Comment")
+            lines.append("- \(author): \(root.body)")
+
+            for reply in thread.replies {
+                let replyAuthor = reply.authorLabel ?? (reply.authorKind == .agent ? "Agent" : "Reply")
+                lines.append("  - \(replyAuthor): \(reply.body)")
+            }
+            lines.append("")
+        }
+
+        let text = lines.joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime]
+        return f
+    }()
 
     private var emptyState: some View {
         VStack(spacing: 8) {
