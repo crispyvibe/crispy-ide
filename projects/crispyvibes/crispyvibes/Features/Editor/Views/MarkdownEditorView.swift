@@ -411,6 +411,10 @@ struct MarkdownEditorView: View {
             guard let newID, let store = commentStore, let path else { return }
             commentBridge.scrollToThread(id: newID, in: store, filePath: path)
         }
+        .onChange(of: commentsPanel?.navigationRequest) { _, request in
+            guard let request, let store = commentStore, let path else { return }
+            commentBridge.scrollToThread(id: request.threadID, in: store, filePath: path)
+        }
         .task(id: commentRefreshTaskID) {
             // Auto-load this file's comments on first appear so highlights
             // show immediately without requiring the panel to be opened.

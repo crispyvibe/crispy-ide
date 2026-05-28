@@ -38,6 +38,10 @@ struct BrowserContentWithCommentsPanel<BrowserContent: View>: View {
                 }
             }
             .animation(.easeInOut(duration: 0.18), value: panel.isOpen)
+            .onChange(of: panel.navigationRequest) { _, request in
+                guard let request else { return }
+                viewModel.scrollToCommentThread(id: request.threadID)
+            }
         }
     }
 }

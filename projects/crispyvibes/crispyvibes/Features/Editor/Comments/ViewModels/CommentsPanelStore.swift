@@ -13,6 +13,11 @@ import Foundation
 @MainActor
 final class CommentsPanelStore: ObservableObject {
 
+    struct NavigationRequest: Equatable, Identifiable {
+        let id = UUID()
+        let threadID: String
+    }
+
     // MARK: - Constants
 
     /// Minimum panel width as a fraction of the parent pane width.
@@ -27,6 +32,10 @@ final class CommentsPanelStore: ObservableObject {
 
     /// Currently-selected thread (drives the active highlight + scroll).
     @Published private(set) var selectedThreadID: String?
+
+    /// One-shot row-click navigation. This is separate from `selectedThreadID`
+    /// so clicking the already-selected thread still scrolls back to its anchor.
+    @Published private(set) var navigationRequest: NavigationRequest?
 
     /// Active draft selection range for a brand-new comment (set when the
     /// user clicks "Add Comment" on a selection in the editor).
@@ -67,6 +76,9 @@ final class CommentsPanelStore: ObservableObject {
     /// Update the focused thread without changing panel visibility.
     func select(threadID: String?) {
         selectedThreadID = threadID
+        if let threadID {
+            navigationRequest = NavigationRequest(threadID: threadID)
+        }
     }
 
     /// Open the panel and focus a specific thread.

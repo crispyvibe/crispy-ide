@@ -12,6 +12,11 @@ import WebKit
 @MainActor
 final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
 
+    private enum ActiveSurface {
+        case text
+        case rich
+    }
+
     /// Context bytes captured before/after the anchored range. Keep in sync
     /// with the Rust persistence helper's `MAX_CONTEXT_BYTES = 64`.
     static let maxContextBytes = 64
@@ -26,6 +31,7 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
 
     private var scrollObservation: NSObjectProtocol?
     private var boundsObservation: NSObjectProtocol?
+    private var activeSurface: ActiveSurface = .text
 
     // MARK: - CommentSurfaceBridge
 
@@ -130,6 +136,17 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
     /// and place the caret at its start. Sync entry point used by call
     /// sites that already run on the main actor.
     func scrollAndSelectSync(anchor: CommentAnchor) {
+        switch activeSurface {
+        case .rich:
+            if scrollRichMode(anchor: anchor) { return }
+            _ = scrollTextMode(anchor: anchor)
+        case .text:
+            if scrollTextMode(anchor: anchor) { return }
+            _ = scrollRichMode(anchor: anchor)
+        }
+    }
+
+    private func scrollTextMode(anchor: CommentAnchor) -> Bool {
         if let tv = textView {
             let nsString = tv.string as NSString
             guard let range = nsRange(
@@ -138,14 +155,18 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
                 startColumn: anchor.startColumn,
                 endLine: anchor.endLine,
                 endColumn: anchor.endColumn
-            ) else { return }
+            ) else { return false }
             tv.setSelectedRange(range)
             tv.scrollRangeToVisible(range)
             if tv.window?.firstResponder !== tv {
                 tv.window?.makeFirstResponder(tv)
             }
-            return
+            return true
         }
+        return false
+    }
+
+    private func scrollRichMode(anchor: CommentAnchor) -> Bool {
         if let wv = richModeWebView {
             // Rich mode: dispatch to JS scrollToAnchor — sends the full
             // anchor so HTML mode can use `domSelector` and markdown can
@@ -161,7 +182,9 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
                 .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
             let js = "if(window.crispyvibesComments){window.crispyvibesComments.scrollToAnchor(\(json));}"
             wv.evaluateJavaScript(js, completionHandler: nil)
+            return true
         }
+        return false
     }
 
     /// Scroll to the thread with the given id within the file at `filePath`,
@@ -211,6 +234,7 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
     /// Register the rich-mode WKWebView with the bridge.
     func observeRichMode(webView: WKWebView) {
         self.richModeWebView = webView
+        activeSurface = .rich
         // Bump tick so any observers know the editor surface has switched.
         geometryTick &+= 1
     }
@@ -299,6 +323,7 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
 
         self.textView = textView
         self.enclosingScroll = scrollView
+        activeSurface = .text
 
         if scrollObservation == nil {
             scrollView.contentView.postsBoundsChangedNotifications = true

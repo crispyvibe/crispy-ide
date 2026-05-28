@@ -233,6 +233,21 @@ final class BrowserPanelViewModel: ObservableObject {
         }
     }
 
+    func scrollToCommentThread(id threadID: String) {
+        guard let url = currentURL,
+              let store = commentsStore else { return }
+        let canonical = BrowserCommentURLNormalizer.canonicalize(url)
+        guard let thread = store.threads(forFile: canonical).first(where: { $0.id == threadID }) else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.commentsBridge.scrollAndSelect(anchor: thread.root.anchor)
+            self.commentsBridge.syncDecorations(
+                threads: store.threads(forFile: canonical),
+                selectedThreadID: threadID
+            )
+        }
+    }
+
     /// F049-v2: re-fetch comments for the active canonical URL and push
     /// them through the bridge. Runs on every navigation finish + SPA
     /// route change.
