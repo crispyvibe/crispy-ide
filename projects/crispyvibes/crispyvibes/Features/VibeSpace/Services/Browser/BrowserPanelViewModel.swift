@@ -86,6 +86,34 @@ final class BrowserPanelViewModel: ObservableObject {
     var onSessionStateChanged: (() -> Void)?
     var historyStore: BrowserHistoryStore?
 
+    // MARK: - F049-v2 comments integration
+
+    /// Per-pane panel state — independent visibility/selection for each
+    /// browser instance (split panes, multiple windows, etc.).
+    let commentsPanel = CommentsPanelStore()
+
+    /// Bridge to the page's comment-decoration JS bundle.
+    let commentsBridge = BrowserSurfaceBridge()
+
+    /// Comment store reference for write/read operations on the active
+    /// vibespace. Set by the host (BrowserContentView env or AppContainer
+    /// wiring) — kept weak to avoid retain cycles.
+    weak var commentsStore: VibeSpaceCommentStore? {
+        didSet {
+            wireCommentsStoreSubscription()
+            // Trigger an initial decoration sync for the already-loaded page.
+            // Without this, pages that finish loading before the SwiftUI view
+            // sets the store (restored sessions) would never show decorations.
+            Task { @MainActor [weak self] in await self?.refreshCommentsForCurrentPage() }
+        }
+    }
+
+    /// F049-v2: Combine subscription that re-decorates the page whenever
+    /// the comment store reports a change (add/update/resolve/delete).
+    /// Without this, new comments created on the same URL wouldn't appear
+    /// until the user navigates away and back.
+    private var commentsStoreSubscription: AnyCancellable?
+
     init(id: UUID = UUID(), initialURL: URL? = nil, usesEphemeralDataStore: Bool = false, projectPath: String? = nil) {
         self.id = id
         self.projectPath = projectPath
@@ -103,6 +131,10 @@ final class BrowserPanelViewModel: ObservableObject {
             (self?.historyStore)?.recordVisit(url: url, title: title)
             self?.refreshFavicon()
             self?.onSessionStateChanged?()
+            // F049-v2: re-inject the comments bundle and re-decorate for the
+            // newly-loaded URL.
+            self?.commentsBridge.pageDidLoad(url: url)
+            Task { @MainActor [weak self] in await self?.refreshCommentsForCurrentPage() }
         }
         navDelegate.onWebContentProcessTerminated = { [weak self] terminatedWebView in
             self?.replaceWebViewAfterTermination(terminatedWebView)
@@ -146,9 +178,89 @@ final class BrowserPanelViewModel: ObservableObject {
 
         setupObservers()
 
+        // F049-v2: attach the comments bridge to the live webView and wire
+        // its callbacks. Re-attaches automatically when the webView is
+        // replaced after a content-process termination.
+        attachCommentsBridge()
+
         if let url = initialURL {
             navigate(to: url)
         }
+    }
+
+    private func attachCommentsBridge() {
+        commentsBridge.attach(webView: webView)
+        commentsBridge.onGutterClick = { [weak self] threadID in
+            self?.commentsPanel.revealForReply(threadID: threadID)
+        }
+        commentsBridge.onRequestAdd = { [weak self] anchor in
+            self?.commentsPanel.startComposer(for: anchor)
+        }
+        commentsBridge.onURLChanged = { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.refreshCommentsForCurrentPage() }
+        }
+        // F049-v2: subscribe to cross-file navigation so a row tap in the
+        // "All Comments" window navigates this browser to the correct URL
+        // and scrolls to the thread once loaded.
+        NotificationCenter.default.addObserver(
+            forName: .commentsNavigateToBrowserURL,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            Task { @MainActor [weak self] in self?.handleBrowserNavigateNotification(note) }
+        }
+    }
+
+    private func handleBrowserNavigateNotification(_ note: Notification) {
+        guard let info = note.userInfo as? [String: String],
+              let urlString = info["url"],
+              let threadID = info["threadID"],
+              let target = URL(string: urlString) else { return }
+        let canonicalTarget = BrowserCommentURLNormalizer.canonicalize(target)
+        let canonicalCurrent = currentURL.map { BrowserCommentURLNormalizer.canonicalize($0) }
+        if canonicalCurrent == canonicalTarget {
+            commentsPanel.reveal(threadID: threadID)
+            Task { @MainActor [weak self] in
+                guard let self, let store = self.commentsStore else { return }
+                if let thread = store.threads(forFile: canonicalTarget).first(where: { $0.id == threadID }) {
+                    await self.commentsBridge.scrollAndSelect(anchor: thread.root.anchor)
+                }
+            }
+        } else {
+            // Navigate, then reveal once the load finishes.
+            commentsPanel.reveal(threadID: threadID)
+            navigate(to: target)
+        }
+    }
+
+    /// F049-v2: re-fetch comments for the active canonical URL and push
+    /// them through the bridge. Runs on every navigation finish + SPA
+    /// route change.
+    private func refreshCommentsForCurrentPage() async {
+        guard let url = currentURL,
+              let store = commentsStore,
+              let vsID = store.currentVibeSpaceID() else { return }
+        let canonical = BrowserCommentURLNormalizer.canonicalize(url)
+        await store.refreshFile(vibespaceID: vsID, filePath: canonical)
+        let threads = store.threads(forFile: canonical)
+        commentsBridge.syncDecorations(threads: threads, selectedThreadID: commentsPanel.selectedThreadID)
+    }
+
+    /// F049-v2: subscribe to the comment store's `changes` Combine subject
+    /// so a comment created or edited on the *currently-loaded* page
+    /// re-renders decorations without requiring a navigation. Replaces
+    /// any previous subscription when the store reference changes.
+    private func wireCommentsStoreSubscription() {
+        commentsStoreSubscription?.cancel()
+        guard let store = commentsStore else {
+            commentsStoreSubscription = nil
+            return
+        }
+        commentsStoreSubscription = store.changes
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in await self?.refreshCommentsForCurrentPage() }
+            }
     }
 
     static func makeWebView(usesEphemeralDataStore: Bool = false) -> CrispyVibesBrowserWebView {
@@ -162,6 +274,12 @@ final class BrowserPanelViewModel: ObservableObject {
 
         let consoleScript = WKUserScript(source: consoleCapureJS, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         config.userContentController.addUserScript(consoleScript)
+
+        // F049-v2: inject the comments bundle as a user script so it runs
+        // reliably on every committed navigation — not dependent on
+        // evaluateJavaScript timing races.
+        let commentsScript = WKUserScript(source: BrowserSurfaceBridge.bundleSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        config.userContentController.addUserScript(commentsScript)
 
         let webView = CrispyVibesBrowserWebView(frame: .zero, configuration: config)
         webView.allowsBackForwardNavigationGestures = true
@@ -617,6 +735,8 @@ final class BrowserPanelViewModel: ObservableObject {
             self?.onOpenNewBrowser?(url)
         }
         setupObservers()
+        // F049-v2: re-bind the comments bridge to the new webView.
+        attachCommentsBridge()
         restoreSession(snapshot)
     }
 

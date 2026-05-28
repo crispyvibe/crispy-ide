@@ -490,6 +490,78 @@ enum AppStrings {
         static let noTerminalDescription = String(localized: "vibeCast.noTerminal.description")
     }
 
+    // MARK: - Comments (F049)
+
+    enum Comments {
+        static let panelTitle = String(localized: "comments.panel.title", defaultValue: "Comments")
+        static let closePanel = String(localized: "comments.panel.close", defaultValue: "Close comments panel")
+        static let searchPlaceholder = String(localized: "comments.search.placeholder", defaultValue: "Search comments")
+        static let filterActive = String(localized: "comments.filter.active", defaultValue: "Active")
+        static let filterResolved = String(localized: "comments.filter.resolved", defaultValue: "Resolved")
+        static let filterStale = String(localized: "comments.filter.stale", defaultValue: "Stale")
+        static let filterAll = String(localized: "comments.filter.all", defaultValue: "All")
+        static let emptyStateTitle = String(localized: "comments.empty.title", defaultValue: "No comments")
+        static let emptyStateBody = String(localized: "comments.empty.body", defaultValue: "Click the + button to add a comment, or post one from the CLI.")
+        static let composerPlaceholder = String(localized: "comments.composer.placeholder", defaultValue: "Write a comment…")
+        static let replyPlaceholder = String(localized: "comments.reply.placeholder", defaultValue: "Write a reply…")
+        static let replyAction = String(localized: "comments.reply.action", defaultValue: "Reply")
+        static let reply = String(localized: "comments.reply.submit", defaultValue: "Reply")
+        static let submit = String(localized: "comments.submit", defaultValue: "Submit")
+        static let resolve = String(localized: "comments.resolve", defaultValue: "Resolve")
+        static let reopen = String(localized: "comments.reopen", defaultValue: "Reopen")
+        static let editedBadge = String(localized: "comments.edited.badge", defaultValue: "edited")
+        static let staleLabel = String(localized: "comments.stale.label", defaultValue: "Stale — anchor lost")
+        static let staleOriginalAnchor = String(localized: "comments.stale.originalAnchor", defaultValue: "Originally anchored to:")
+        static let userAnonymous = String(localized: "comments.author.user", defaultValue: "You")
+        static let agentAnonymous = String(localized: "comments.author.agent", defaultValue: "Agent")
+        static let gutterActiveTooltip = String(localized: "comments.gutter.activeTooltip", defaultValue: "Active comment")
+        static let gutterResolvedTooltip = String(localized: "comments.gutter.resolvedTooltip", defaultValue: "Resolved comment")
+        static let gutterStaleTooltip = String(localized: "comments.gutter.staleTooltip", defaultValue: "Stale comment — anchor lost")
+        static let crossFileTitle = String(localized: "comments.crossFile.title", defaultValue: "All Comments in Vibespace")
+        static let crossFileEmptyTitle = String(localized: "comments.crossFile.empty.title", defaultValue: "No comments yet")
+        static let crossFileEmptyBody = String(localized: "comments.crossFile.empty.body", defaultValue: "Add comments from the file viewer or via the CLI.")
+        static let crossFileSectionFiles = String(localized: "comments.crossFile.section.files", defaultValue: "Files")
+        static let crossFileSectionBrowsers = String(localized: "comments.crossFile.section.browsers", defaultValue: "Browsers")
+        static let toolbarToggleHelp = String(localized: "comments.toolbar.toggle.help", defaultValue: "Toggle comments panel")
+        static let toolbarAddHelp = String(localized: "comments.toolbar.add.help", defaultValue: "Add a comment")
+
+        /// Format string: "%lld replies"
+        static let repliesCount = String(localized: "comments.replies.count", defaultValue: "%lld replies")
+
+        static func composerHeading(forLine line: Int) -> String {
+            let format = String(localized: "comments.composer.heading", defaultValue: "New comment at line %lld")
+            return String(format: format, locale: Locale.current, line)
+        }
+
+        /// Localized "L%lld" line label used in the cross-file thread row.
+        static func lineLabel(_ line: Int) -> String {
+            let format = String(localized: "comments.lineLabel", defaultValue: "L%lld")
+            return String(format: format, locale: Locale.current, line)
+        }
+
+        /// Localized "+%lld" overflow indicator for the gutter strip.
+        static func gutterOverflow(_ count: Int) -> String {
+            let format = String(localized: "comments.gutter.overflow", defaultValue: "+%lld")
+            return String(format: format, locale: Locale.current, count)
+        }
+
+        /// Localized "%lld" or "%lld / %lld" panel header count label.
+        static func threadCountLabel(active: Int, total: Int) -> String {
+            if active == total {
+                let format = String(localized: "comments.panel.countSingle", defaultValue: "%lld")
+                return String(format: format, locale: Locale.current, total)
+            }
+            let format = String(localized: "comments.panel.countSplit", defaultValue: "%lld / %lld")
+            return String(format: format, locale: Locale.current, active, total)
+        }
+
+        /// Localized file-row label "lastComponent — fullPath".
+        static func crossFileFileLabel(name: String, path: String) -> String {
+            let format = String(localized: "comments.crossFile.fileLabel", defaultValue: "%@ — %@")
+            return String(format: format, locale: Locale.current, name, path)
+        }
+    }
+
     // MARK: - Content Viewer
 
     enum ContentViewer {

@@ -13,7 +13,7 @@ final class VibeSpaceCanvasActionsCoordinator {
     private let splitViewStore: SplitViewStore
     private let contentViewerStore: ContentViewerStore
     private let layoutPersistence: LayoutPersistenceService
-    private let vibespaceCanvasFileOpenUseCase = VibeSpaceCanvasFileOpenUseCase()
+    private let vibespaceCanvasFileOpenUseCase: VibeSpaceCanvasFileOpenUseCase
     private let vibespaceProjectFocusUseCase = VibeSpaceProjectFocusUseCase()
 
     var dockPreviewBridge: DockPreviewBridge?
@@ -32,7 +32,8 @@ final class VibeSpaceCanvasActionsCoordinator {
         vibespaceInteraction: VibeSpaceInteractionService,
         splitViewStore: SplitViewStore,
         contentViewerStore: ContentViewerStore,
-        layoutPersistence: LayoutPersistenceService
+        layoutPersistence: LayoutPersistenceService,
+        commentLifecycle: CommentLifecycleCoordinator? = nil
     ) {
         self.appShellStore = appShellStore
         self.vibespaceCatalogStore = vibespaceCatalogStore
@@ -42,6 +43,7 @@ final class VibeSpaceCanvasActionsCoordinator {
         self.splitViewStore = splitViewStore
         self.contentViewerStore = contentViewerStore
         self.layoutPersistence = layoutPersistence
+        self.vibespaceCanvasFileOpenUseCase = VibeSpaceCanvasFileOpenUseCase(commentLifecycle: commentLifecycle)
     }
 
     func toggleVibeCast() {

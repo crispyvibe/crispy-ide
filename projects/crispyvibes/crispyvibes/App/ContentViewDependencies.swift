@@ -76,7 +76,8 @@ final class ContentViewStableDependencies: ObservableObject {
             vibespaceInteraction: appContainer.vibespaceInteraction,
             splitViewStore: splitViewStore,
             contentViewerStore: contentViewerStore,
-            layoutPersistence: layoutPersistence
+            layoutPersistence: layoutPersistence,
+            commentLifecycle: appContainer.commentLifecycleCoordinator
         )
         self.vibespaceCanvasActionsCoordinator.dockPreviewBridge = dockPreviewBridge
         self.vibespaceCanvasActionsCoordinator.canvasModeProvider = canvasModeProvider

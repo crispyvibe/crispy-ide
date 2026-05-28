@@ -9,7 +9,7 @@ final class VibeSpaceHydrationCoordinator: ObservableObject {
     let splitViewStore: SplitViewStore
     let contentViewerStore: ContentViewerStore
     let vibespaceHydrationUseCase = VibeSpaceHydrationUseCase()
-    let vibespaceCanvasFileOpenUseCase = VibeSpaceCanvasFileOpenUseCase()
+    let vibespaceCanvasFileOpenUseCase: VibeSpaceCanvasFileOpenUseCase
 
     private var vibespaceHydrationTask: Task<Void, Never>?
     private var editorSessionSaveWorkItem: DispatchWorkItem?
@@ -36,13 +36,15 @@ final class VibeSpaceHydrationCoordinator: ObservableObject {
         vibespaceCatalogStore: VibeSpaceCatalogStore,
         layoutPersistence: LayoutPersistenceService,
         splitViewStore: SplitViewStore,
-        contentViewerStore: ContentViewerStore
+        contentViewerStore: ContentViewerStore,
+        commentLifecycle: CommentLifecycleCoordinator? = nil
     ) {
         self.appShellStore = appShellStore
         self.vibespaceCatalogStore = vibespaceCatalogStore
         self.layoutPersistence = layoutPersistence
         self.splitViewStore = splitViewStore
         self.contentViewerStore = contentViewerStore
+        self.vibespaceCanvasFileOpenUseCase = VibeSpaceCanvasFileOpenUseCase(commentLifecycle: commentLifecycle)
     }
 
     func cancelVibeSpaceHydration() {

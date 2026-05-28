@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use libsql::Connection;
 
-const CURRENT_VERSION: i64 = 1;
+const CURRENT_VERSION: i64 = 3;
 
 pub async fn run_migrations(conn: &Connection) -> Result<i64> {
     conn.execute(
@@ -15,6 +15,12 @@ pub async fn run_migrations(conn: &Connection) -> Result<i64> {
 
     if version < 1 {
         migrate_v1(conn).await.context("V1 migration")?;
+    }
+    if version < 2 {
+        migrate_v2(conn).await.context("V2 migration")?;
+    }
+    if version < 3 {
+        migrate_v3(conn).await.context("V3 migration")?;
     }
 
     Ok(CURRENT_VERSION)
@@ -184,6 +190,99 @@ async fn migrate_v1(conn: &Connection) -> Result<()> {
 
         // -- Record version --
         "INSERT INTO schema_version (version) VALUES (1)",
+    ];
+
+    for stmt in stmts {
+        conn.execute(stmt, ()).await.with_context(|| {
+            let preview: String = stmt.chars().take(60).collect();
+            format!("execute: {preview}...")
+        })?;
+    }
+
+    Ok(())
+}
+
+
+/// F049 — File comments. Per-vibespace scoped via the `vibespace_id` column.
+/// Anchors stored in a sibling `comment_anchors` table; FTS5 over comment bodies.
+async fn migrate_v2(conn: &Connection) -> Result<()> {
+    let stmts = [
+        "CREATE TABLE IF NOT EXISTS comments (
+            id            TEXT PRIMARY KEY,
+            vibespace_id  TEXT NOT NULL,
+            file_path     TEXT NOT NULL,
+            parent_id     TEXT REFERENCES comments(id) ON DELETE CASCADE,
+            body          TEXT NOT NULL,
+            author_kind   TEXT NOT NULL CHECK (author_kind IN ('user','agent')),
+            author_label  TEXT,
+            created_at    TEXT NOT NULL,
+            updated_at    TEXT NOT NULL,
+            resolved_at   TEXT,
+            is_stale      INTEGER NOT NULL DEFAULT 0
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_comments_vs_file ON comments(vibespace_id, file_path, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id)",
+        "CREATE INDEX IF NOT EXISTS idx_comments_resolved ON comments(vibespace_id, resolved_at)",
+        "CREATE INDEX IF NOT EXISTS idx_comments_stale ON comments(vibespace_id, is_stale)",
+
+        "CREATE TABLE IF NOT EXISTS comment_anchors (
+            comment_id        TEXT PRIMARY KEY REFERENCES comments(id) ON DELETE CASCADE,
+            start_line        INTEGER NOT NULL,
+            start_column      INTEGER NOT NULL,
+            end_line          INTEGER NOT NULL,
+            end_column        INTEGER NOT NULL,
+            anchor_hash       TEXT NOT NULL,
+            anchor_text       TEXT NOT NULL,
+            leading_context   TEXT NOT NULL,
+            trailing_context  TEXT NOT NULL
+        )",
+
+        "CREATE VIRTUAL TABLE IF NOT EXISTS comment_fts USING fts5(body, content='comments', content_rowid='rowid')",
+        "CREATE TRIGGER IF NOT EXISTS comments_ai AFTER INSERT ON comments BEGIN
+            INSERT INTO comment_fts(rowid, body) VALUES (new.rowid, new.body);
+        END",
+        "CREATE TRIGGER IF NOT EXISTS comments_ad AFTER DELETE ON comments BEGIN
+            INSERT INTO comment_fts(comment_fts, rowid, body) VALUES ('delete', old.rowid, old.body);
+        END",
+        "CREATE TRIGGER IF NOT EXISTS comments_au AFTER UPDATE OF body ON comments BEGIN
+            INSERT INTO comment_fts(comment_fts, rowid, body) VALUES ('delete', old.rowid, old.body);
+            INSERT INTO comment_fts(rowid, body) VALUES (new.rowid, new.body);
+        END",
+
+        "INSERT INTO schema_version (version) VALUES (2)",
+    ];
+
+    for stmt in stmts {
+        conn.execute(stmt, ()).await.with_context(|| {
+            let preview: String = stmt.chars().take(60).collect();
+            format!("execute: {preview}...")
+        })?;
+    }
+
+    Ok(())
+}
+
+
+/// F049-v2 — extend comments + comment_anchors with surface-kind discrimination
+/// (file / browser) and CSS-selector-based DOM anchoring fields used by HTML
+/// previews and browser windows.
+async fn migrate_v3(conn: &Connection) -> Result<()> {
+    let stmts = [
+        // surface_kind: 'file' (existing) or 'browser' (new). file_path doubles
+        // as canonical-URL storage when surface_kind='browser'.
+        "ALTER TABLE comments ADD COLUMN surface_kind TEXT NOT NULL DEFAULT 'file'",
+
+        // CSS-selector-based anchor for HTML/browser surfaces. NULL = legacy
+        // line-based anchor; presence = use selector path with text-content
+        // fingerprint fallback.
+        "ALTER TABLE comment_anchors ADD COLUMN dom_selector TEXT",
+        "ALTER TABLE comment_anchors ADD COLUMN dom_text_offset INTEGER",
+        "ALTER TABLE comment_anchors ADD COLUMN dom_text_length INTEGER",
+        "ALTER TABLE comment_anchors ADD COLUMN dom_fingerprint TEXT",
+
+        "CREATE INDEX IF NOT EXISTS idx_comments_surface ON comments(vibespace_id, surface_kind, file_path)",
+
+        "INSERT INTO schema_version (version) VALUES (3)",
     ];
 
     for stmt in stmts {

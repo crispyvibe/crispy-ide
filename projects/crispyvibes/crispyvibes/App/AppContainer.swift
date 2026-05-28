@@ -21,6 +21,11 @@ struct AppContainer {
     let acpVibeSpaceSessionService: ACPVibeSpaceSessionService
     let acpDeveloperToolsService: ACPDeveloperToolsService
     let agentConversationStore: AgentConversationStore
+    /// F049: central comment store for the active vibespace. Wraps the
+    /// existing `agentConversationStore` for RPC.
+    let vibespaceCommentStore: VibeSpaceCommentStore
+    /// F049-R05 + F049-R13: orchestrates anchor relocation + file lifecycle.
+    let commentLifecycleCoordinator: CommentLifecycleCoordinator
     let externalAgentSessionService: ExternalAgentSessionService
     let acpSessionRegistry: ACPSessionRegistry
     let dockedAgentPreviewCoordinator: DockedAgentPreviewCoordinator
@@ -101,7 +106,11 @@ struct AppContainer {
 
     @MainActor
     func makeEditorGroupStore(id: UUID = UUID(), bufferStore: DocumentBufferStore) -> EditorGroupStore {
-        EditorGroupStore(id: id, markdownViewModel: makeMarkdownViewModel(bufferStore: bufferStore))
+        EditorGroupStore(
+            id: id,
+            markdownViewModel: makeMarkdownViewModel(bufferStore: bufferStore),
+            commentsPanel: CommentsPanelStore()
+        )
     }
 
     @MainActor
@@ -146,6 +155,15 @@ struct AppContainer {
         let vibespaceCatalogStore = makeVibeSpaceCatalogStore()
         cliCommandRouter.attachVibeSpaceCatalogStore(vibespaceCatalogStore)
         cliCommandRouter.attachVibeSpaceManagement(vibespaceManagement)
+        // F049: bind comment store to the active vibespace so writes/reads
+        // are scoped to the focused space. The closure captures the catalog
+        // store weakly via the AppContainer reference held by the binding.
+        vibespaceCommentStore.bindActiveVibeSpace(provider: vibespaceCatalogStore) { [weak vibespaceCatalogStore, weak appShellStore] in
+            guard let catalog = vibespaceCatalogStore, let activeID = appShellStore?.activeVibeSpaceID else {
+                return vibespaceCatalogStore?.vibespaces.first?.id.uuidString
+            }
+            return catalog.vibespaces.first(where: { $0.id == activeID })?.id.uuidString
+        }
         let walkthroughController = makeFeatureWalkthroughController()
         let vibespaceSourceControlViewModel = makeVibeSpaceSourceControlViewModel()
         let sharedBufferStore = DocumentBufferStore()
@@ -157,7 +175,8 @@ struct AppContainer {
             vibespaceCatalogStore: vibespaceCatalogStore,
             layoutPersistence: layoutPersistence,
             splitViewStore: splitViewStore,
-            contentViewerStore: contentViewerStore
+            contentViewerStore: contentViewerStore,
+            commentLifecycle: commentLifecycleCoordinator
         )
         let dockPreviewBridge = DockPreviewBridge()
         let dockedFileViewerCoordinator = DockedFileViewerCoordinator { [self] id in
@@ -343,6 +362,8 @@ struct AppContainer {
         let acpSessionManager = ACPSessionManager(observabilityStore: acpObservabilityStore)
         let acpVibeSpaceContextStore = ACPVibeSpaceContextStore()
         let agentConversationStore = AgentConversationStore()
+        let vibespaceCommentStore = VibeSpaceCommentStore(conversationStore: agentConversationStore)
+        let commentLifecycleCoordinator = CommentLifecycleCoordinator(store: vibespaceCommentStore)
         let externalAgentSessionService = ExternalAgentSessionService()
         let makeACPStandaloneStore: @MainActor (UUID, UUID?) -> ACPStandaloneSessionStore = { id, vibespaceID in
             let chatVM = ACPChatViewModel(
@@ -479,6 +500,7 @@ struct AppContainer {
         layoutPersistence.setVibeSpacePersistenceStore(vibespacePersistenceStore)
         let shelfStore = ShelfStore(persistenceStore: appPersistenceStore)
         let cliCommandRouter = CLICommandRouter(shelfStore: shelfStore)
+        cliCommandRouter.attachVibeSpaceCommentStore(vibespaceCommentStore)
         let cliSocketServer = CLISocketServer(router: cliCommandRouter)
         return AppContainer(
             appPersistenceStore: appPersistenceStore,
@@ -501,6 +523,8 @@ struct AppContainer {
             acpVibeSpaceSessionService: acpVibeSpaceSessionService,
             acpDeveloperToolsService: acpDeveloperToolsService,
             agentConversationStore: agentConversationStore,
+            vibespaceCommentStore: vibespaceCommentStore,
+            commentLifecycleCoordinator: commentLifecycleCoordinator,
             externalAgentSessionService: externalAgentSessionService,
             acpSessionRegistry: acpSessionRegistry,
             dockedAgentPreviewCoordinator: dockedAgentPreviewCoordinator,

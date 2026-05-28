@@ -28,6 +28,28 @@ struct MarkdownEditorView: View {
     @State private var commandRequest: EditorCommandRequest?
     @FocusState var isFindFieldFocused: Bool
 
+    /// F049: per-editor-instance bridge to the underlying `NSTextView`.
+    /// Owning the bridge here means each MarkdownEditorView mount (regular
+    /// content viewer, split pane, file spotlight, detached window, etc.)
+    /// has its own bridge tied to its own NSTextView — no cross-surface
+    /// contention over a shared bridge.
+    ///
+    /// Uses `@State` (not `@StateObject`) so SwiftUI preserves the same
+    /// bridge instance across re-renders WITHOUT subscribing to its
+    /// `@Published` changes. The bridge increments `geometryTick` on every
+    /// scroll event; subscribing here would re-render the whole editor on
+    /// every scroll. Only the inner `CommentsCodeEditorOverlay` needs to
+    /// observe the bridge — and it already does via `@ObservedObject`.
+    @State private var commentBridge = CodeEditorCommentBridge()
+
+    /// F049: comment chrome — these env values, when all non-nil, drive the
+    /// overlay (gutter dots + content highlights) and the floating "Add
+    /// Comment" glass button on top of the editor. Set by the surrounding
+    /// view (content viewer, spotlight, etc.).
+    @Environment(\.vibespaceCommentStoreEnvironment) private var commentStore: VibeSpaceCommentStore?
+    @Environment(\.commentsPanelEnvironment) private var commentsPanel: CommentsPanelStore?
+    @Environment(\.commentsFilePathEnvironment) private var commentsFilePath: String?
+
     private var windowBackgroundColor: Color {
         appThemePalette.windowBackgroundColor
     }
@@ -111,7 +133,7 @@ struct MarkdownEditorView: View {
                 markupToolbar
                 Divider()
             }
-            content
+            commentDecoratedContent
         }
         .onReceive(NotificationCenter.default.publisher(for: .saveCurrentMarkdown)) { _ in
             viewModel.save()
@@ -348,10 +370,75 @@ struct MarkdownEditorView: View {
         .background(windowBackgroundColor.opacity(0.92))
     }
 
+    /// F049: wraps the underlying editor `content` with the comments
+    /// overlay (gutter + highlights), floating toggle button, and the
+    /// per-editor `codeEditorCommentBridge` env value. Pure no-op when no
+    /// comment env is set.
+    @ViewBuilder
+    private var commentDecoratedContent: some View {
+        let path = viewModel.fileURL?.standardizedFileURL.path ?? commentsFilePath
+        let isAvailable = (commentStore != nil) && (commentsPanel != nil) && (path != nil)
+        ZStack(alignment: .topLeading) {
+            content
+                .environment(\.codeEditorCommentBridge, commentBridge)
+                .environment(\.commentsFilePathEnvironment, path)
+
+            if isAvailable, let store = commentStore, let panel = commentsPanel, let path {
+                CommentsCodeEditorOverlay(
+                    bridge: commentBridge,
+                    commentStore: store,
+                    panel: panel,
+                    filePath: path
+                )
+                .allowsHitTesting(panel.isOpen)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if isAvailable, let panel = commentsPanel, let path {
+                CommentsFloatingButton(
+                    panel: panel,
+                    activeCount: commentStore?.activeCount(forFile: path) ?? 0,
+                    isAvailable: true
+                )
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .commentsNavigateToThread)) { note in
+            handleCommentsNavigate(note)
+        }
+        .onChange(of: commentsPanel?.selectedThreadID) { _, newID in
+            // F049-R06 bidirectional linking: panel-selection → editor-scroll.
+            // The bridge owns the lookup + scroll; this view only forwards.
+            guard let newID, let store = commentStore, let path else { return }
+            commentBridge.scrollToThread(id: newID, in: store, filePath: path)
+        }
+        .task(id: commentRefreshTaskID) {
+            // Auto-load this file's comments on first appear so highlights
+            // show immediately without requiring the panel to be opened.
+            guard let store = commentStore, let path else { return }
+            guard let vsID = store.currentVibeSpaceID() else { return }
+            await store.refreshFile(vibespaceID: vsID, filePath: path)
+        }
+    }
+
+    private var commentRefreshTaskID: String {
+        viewModel.fileURL?.standardizedFileURL.path ?? "(none)"
+    }
+
+    /// Handle a cross-window thread-navigation notification by routing it
+    /// to the bridge once we've confirmed the file path matches this view.
+    private func handleCommentsNavigate(_ note: Notification) {
+        guard let info = note.userInfo as? [String: String],
+              let path = info["filePath"],
+              let threadID = info["threadID"] else { return }
+        let myPath = viewModel.fileURL?.standardizedFileURL.path ?? commentsFilePath
+        guard path == myPath, let store = commentStore else { return }
+        commentsPanel?.reveal(threadID: threadID)
+        commentBridge.scrollToThread(id: threadID, in: store, filePath: path)
+    }
+
     @ViewBuilder
     private var content: some View {
-        if let message = viewModel.unsupportedFileMessage {
-            ContentUnavailableView(
+        if let message = viewModel.unsupportedFileMessage {            ContentUnavailableView(
                 "Unsupported File Type",
                 systemImage: "exclamationmark.triangle",
                 description: Text(message)
