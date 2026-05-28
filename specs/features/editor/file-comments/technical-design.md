@@ -52,8 +52,8 @@ F049 adds comment storage, CLI commands, and UI affordances for inline file comm
               │  │  - comment.relocate      │  │
               │  │  - comment.search        │  │
               │  └──────────────────────────┘  │
-              │  schema v2: comments,          │
-              │             comment_anchors    │
+              │  schema v2 + v3: comments,    │
+              │    comment_anchors, FTS5       │
               │  encrypted libSQL (AES-256-CBC)│
               └────────────────────────────────┘
 ```
@@ -62,12 +62,13 @@ F049 adds comment storage, CLI commands, and UI affordances for inline file comm
 
 ### Add comment (UI path)
 
-1. User selects text in `MarkdownEditorView` and triggers "Add Comment".
-2. `EditorGroupStore` captures the selection and asks `VibeSpaceCommentStore` to open a composer in the side panel for the active file.
-3. Composer submit calls `VibeSpaceCommentStore.add(file:, anchor:, body:)`.
-4. The store calls `agentConversationStore.send(method: "comment.add", params: …)`.
-5. Persistence helper writes the comment in a single transaction, returns the new row.
-6. Store emits a `commentsChanged(file:)` event consumed by views; gutter, highlight, and panel re-render.
+1. User selects text and clicks "💬 Add Comment".
+2. **Rich preview / browser**: the JS inline composer expands at the selection. User types and submits (⌘↩). JS posts `commentsRichRequestAdd` with `{ ...anchor, body }` to native.
+3. **Code mode**: context menu "Add Comment to Selection" posts a notification → `CommentsPanelStore.startComposer(for:)` opens the panel with a composer.
+4. Native handler calls `VibeSpaceCommentStore.add(file:, anchor:, body:)`.
+5. The store calls `agentConversationStore.send(method: "comment.add", params: …)`.
+6. Persistence helper writes the comment in a single transaction, returns the new row.
+7. Store emits via `changes` subject; gutter, highlight, and panel re-render.
 
 ### Add comment (CLI path)
 
@@ -110,22 +111,27 @@ Same set, plus:
 
 - `comment.relocate` — `{id, start_line, start_col, end_line, end_col, is_stale, anchor_hash, anchor_text}`
 - `comment.search` — `{vibespace_id, query, status, file_prefix, since, until}`
+- `comment.movePath` — `{vibespace_id, old_path, new_path, surface_kind}` — bulk-migrates comments on file rename
 
 ## State Management
 
 `VibeSpaceCommentStore` (@MainActor, ObservableObject) owns:
 
-- `@Published var threadsByFile: [FileKey: [CommentThread]]`
-- `@Published var orphanedComments: [CommentThread]`
-- `@Published var lastChangeID: UUID` — bumps on every write so views observe coalesced refreshes
+- `@Published private(set) var threadsByFile: [String: [CommentThread]]` — dictionary keyed by canonical file path / URL
+- `changes: PassthroughSubject<Void, Never>` — Combine subject for fine-grained observation
+- `resolveActiveVibeSpaceID` closure — returns the active vibespace ID via `AppShellStore`
+- Reads/writes via `AgentConversationStore.send(method:params:)`
 
-Per-pane state lives in a small `CommentsPanelState` struct stored on each `EditorGroupStore`:
+Per-pane state lives in `CommentsPanelStore` (@MainActor, ObservableObject) stored on each `EditorGroupStore`:
 
 - `isOpen: Bool`
-- `widthFraction: CGFloat` (default 0.30)
+- `widthFraction: CGFloat` (default 0.30, clamped 0.20–0.50)
 - `selectedThreadID: String?`
-- `composerSelection: SelectionRange?` (active when composing)
-- `filter: CommentStatusFilter`
+- `navigationRequest: NavigationRequest?` — one-shot scroll trigger
+- `pendingComposerAnchor: CommentAnchor?` — panel composer
+- `popoverComposerAnchor: CommentAnchor?` — inline popover (code mode)
+- `statusFilter: CommentStatusFilter`
+- `searchQuery: String`
 
 This honors R06's per-pane independence requirement.
 
@@ -172,7 +178,19 @@ CREATE TRIGGER comments_au AFTER UPDATE OF body ON comments
         INSERT INTO comment_fts(rowid, body) VALUES (new.rowid, new.body); END;
 ```
 
-The migration is additive — no changes to v1 tables.
+### Migration v3 (browser/HTML surface support)
+
+```sql
+ALTER TABLE comments ADD COLUMN surface_kind TEXT NOT NULL DEFAULT 'file'
+  CHECK (surface_kind IN ('file', 'browser'));
+
+ALTER TABLE comment_anchors ADD COLUMN dom_selector TEXT;
+ALTER TABLE comment_anchors ADD COLUMN dom_text_offset INTEGER;
+ALTER TABLE comment_anchors ADD COLUMN dom_text_length INTEGER;
+ALTER TABLE comment_anchors ADD COLUMN dom_fingerprint TEXT;
+```
+
+Both migrations are additive — no changes to prior tables.
 
 ## Dependencies
 

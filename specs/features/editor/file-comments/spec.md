@@ -1,7 +1,7 @@
 # F049 File Comments — Spec
 
 **Domain:** Editor
-Status: draft
+Status: implemented
 
 ---
 
@@ -22,7 +22,7 @@ File-level commenting system that lets users (and agents via the CLI) attach com
 
 ### F049-R01: Supported File Types
 
-Comments MUST be supported on all files openable in the content viewer (text, markdown, code, config). For non-text content viewers (images, PDF, office documents, HTML preview), only file-level comments are supported (see F049-R14).
+Comments MUST be supported on all files openable in the content viewer (text, markdown, code, config). HTML files support both line-based anchoring (in source mode) and DOM-selector-based anchoring (in rich preview mode) per R19. For non-text content viewers (images, PDF, office documents), only file-level comments are supported (see F049-R14).
 
 ### F049-R02: Comment Storage
 
@@ -111,7 +111,7 @@ When a file with comments is renamed or moved within the vibespace, comments MUS
 
 ### F049-R14: Supported Anchor Targets
 
-Character-range anchoring (R05) applies only to text-based content viewers. For non-text viewers, comments attach at file level only.
+Character-range anchoring (R05) applies to text-based content viewers. DOM-selector anchoring (R19) applies to HTML preview and browser surfaces. For non-text, non-HTML viewers (images, PDF, office documents), comments attach at file level only.
 
 ### F049-R15: Cross-File View
 
@@ -310,4 +310,6 @@ None at this stage.
 
 ## Change History
 
-- 2026-05-26: Initial spec.
+- 2026-05-26: Initial spec (R01–R18, S01–S10).
+- 2026-05-27: v2 — HTML preview + browser surface support (R19–R21).
+- 2026-05-28: UX improvements — inline composer, anchor context, compact layout, bulk ops, resize (R22–R26). Status → implemented.

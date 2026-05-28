@@ -23,8 +23,8 @@ Comments live in a side panel docked to the right of each file viewer pane. Each
 
 1. Open a file in the content viewer.
 2. Select the lines or characters you want to comment on.
-3. Press **⌃⇧C** or click the comment button in the editor toolbar.
-4. The comments panel opens on the right with a composer focused on your selection. Type your comment and submit.
+3. In **rich preview or browser**: click the "💬 Add Comment" button that appears near your selection. An inline composer expands — type your comment and press **⌘↩** to submit.
+4. In **source/code mode**: right-click and choose "Add Comment to Selection", or press **⌃⇧C**. The comments panel opens on the right with a composer focused on your selection.
 
 A blue dot appears in the gutter at the start of the comment range, and a subtle highlight underlines the anchored text.
 
@@ -36,15 +36,15 @@ Click a comment thread in the panel and type in the reply box at the bottom. Rep
 
 ### Resolving
 
-Click the **Resolve** button on the thread header. Resolved threads disappear from the active list — you can show them again from the panel filter (**Active / Resolved / Stale / All**).
+Click the **Resolve** button (green checkmark) in the thread's action bar. Resolved threads fade to reduced opacity and disappear from the active list — you can show them again from the panel filter (**Active / Resolved / Stale / All**).
 
 ### Deleting
 
-Click the trash icon. If the thread has replies, you'll be asked to confirm — deletion cascades through the entire reply chain.
+Click the trash icon (red) in the thread's action bar. The thread and all its replies are deleted immediately.
 
 ### Editing
 
-Click the edit (pencil) icon on a comment you authored. Submit to save. Edited comments show an "edited" badge with the latest update time.
+Double-click a comment body to enter edit mode, or use the thread's overflow menu. Submit to save. Edited comments show an "(edited)" badge.
 
 ### Stale comments
 
