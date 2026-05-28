@@ -196,6 +196,14 @@ final class BrowserPanelViewModel: ObservableObject {
         commentsBridge.onRequestAdd = { [weak self] anchor in
             self?.commentsPanel.startComposer(for: anchor)
         }
+        commentsBridge.onRequestAddWithBody = { [weak self] anchor, body in
+            guard let self, let store = self.commentsStore, let url = self.currentURL else { return }
+            let canonical = BrowserCommentURLNormalizer.canonicalize(url)
+            Task { @MainActor in
+                _ = await store.add(filePath: canonical, anchor: anchor, body: body, surfaceKind: .browser)
+                await self.refreshCommentsForCurrentPage()
+            }
+        }
         commentsBridge.onURLChanged = { [weak self] _ in
             Task { @MainActor [weak self] in await self?.refreshCommentsForCurrentPage() }
         }

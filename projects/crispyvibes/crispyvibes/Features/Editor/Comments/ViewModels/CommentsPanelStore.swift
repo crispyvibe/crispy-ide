@@ -41,6 +41,11 @@ final class CommentsPanelStore: ObservableObject {
     /// user clicks "Add Comment" on a selection in the editor).
     @Published private(set) var pendingComposerAnchor: CommentAnchor?
 
+    /// Anchor for the inline popover composer (shown near the selection
+    /// without opening the full panel). Mutually exclusive with
+    /// `pendingComposerAnchor` — setting one clears the other.
+    @Published private(set) var popoverComposerAnchor: CommentAnchor?
+
     /// Thread ID to auto-open the reply composer for. Used by the gutter
     /// icon click flow to give a one-tap "quick reply" UX.
     @Published private(set) var autoOpenReplyForThreadID: String?
@@ -106,9 +111,35 @@ final class CommentsPanelStore: ObservableObject {
 
     /// Open the panel with a composer pre-seeded for the given anchor.
     func startComposer(for anchor: CommentAnchor) {
+        popoverComposerAnchor = nil
         isOpen = true
         pendingComposerAnchor = anchor
         selectedThreadID = nil
+    }
+
+    /// Show the inline popover composer near the selection (without opening
+    /// the full panel). If the panel is already open, falls through to
+    /// `startComposer` instead.
+    func startPopoverComposer(for anchor: CommentAnchor) {
+        if isOpen {
+            startComposer(for: anchor)
+            return
+        }
+        pendingComposerAnchor = nil
+        popoverComposerAnchor = anchor
+    }
+
+    /// Dismiss the inline popover composer.
+    func cancelPopoverComposer() {
+        popoverComposerAnchor = nil
+    }
+
+    /// Expand from popover to full panel (user clicked the sidebar icon
+    /// in the popover).
+    func expandPopoverToPanel() {
+        guard let anchor = popoverComposerAnchor else { return }
+        popoverComposerAnchor = nil
+        startComposer(for: anchor)
     }
 
     /// Open a "blank" composer at the default anchor (line 1, no text).

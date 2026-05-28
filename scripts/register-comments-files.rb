@@ -83,6 +83,7 @@ entries = [
   [views, "#{base}/Features/Editor/Comments/Views/CommentGutterIndicator.swift"],
   [views, "#{base}/Features/Editor/Comments/Views/CrossFileCommentsView.swift"],
   [views, "#{base}/Features/Editor/Comments/Views/CommentsFloatingButton.swift"],
+  [views, "#{base}/Features/Editor/Comments/Views/CommentInlinePopoverComposer.swift"],
   [views, "#{base}/Features/Editor/Comments/Views/CommentsCodeEditorOverlay.swift"],
   [views, "#{base}/Features/Editor/Comments/Views/FileContentWithCommentsPanel.swift"],
   [views, "#{base}/Features/Editor/Comments/Views/BrowserContentWithCommentsPanel.swift"],

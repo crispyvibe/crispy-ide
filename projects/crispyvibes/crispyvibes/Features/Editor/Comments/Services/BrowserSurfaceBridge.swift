@@ -35,6 +35,7 @@ final class BrowserSurfaceBridge: NSObject, ObservableObject, CommentSurfaceBrid
     /// Forwarded by `BrowserPanelViewModel` when the user clicks the
     /// floating "Add Comment" button on a selection.
     var onRequestAdd: ((CommentAnchor) -> Void)?
+    var onRequestAddWithBody: ((CommentAnchor, String) -> Void)?
     /// Posted when the page's `pushState` / `popstate` reports a route
     /// change so the panel can re-query for the new canonical URL.
     var onURLChanged: ((String) -> Void)?
@@ -181,7 +182,11 @@ final class BrowserSurfaceBridge: NSObject, ObservableObject, CommentSurfaceBrid
         case "commentsRichRequestAdd":
             guard let info = body as? [String: Any] else { return }
             let anchor = CommentAnchor.fromNotificationPayload(info)
-            onRequestAdd?(anchor)
+            if let commentBody = info["body"] as? String, !commentBody.isEmpty {
+                onRequestAddWithBody?(anchor, commentBody)
+            } else {
+                onRequestAdd?(anchor)
+            }
 
         case "commentsRichGutterClick":
             guard let info = body as? [String: Any], let id = info["threadID"] as? String else { return }
@@ -446,14 +451,150 @@ final class BrowserSurfaceBridge: NSObject, ObservableObject, CommentSurfaceBrid
             addBtn.addEventListener("mousedown", function(e) { e.preventDefault(); });
             addBtn.addEventListener("click", function() {
               if (!lastAnchor) return;
-              if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.commentsRichRequestAdd) {
-                window.webkit.messageHandlers.commentsRichRequestAdd.postMessage(lastAnchor);
-              }
               addBtn.style.display = "none";
+              showBrowserComposer();
             });
             document.body.appendChild(addBtn);
             return addBtn;
           }
+
+          // Inline composer for browser surface
+          var browserComposer = null;
+          function ensureBrowserComposer() {
+            if (browserComposer) return browserComposer;
+            if (!document.body) return null;
+            browserComposer = document.createElement("div");
+            browserComposer.id = "crispyvibes-comment-composer";
+            forceStyle(browserComposer, {
+              "all": "initial",
+              "position": "fixed",
+              "z-index": "2147483647",
+              "display": "none",
+              "width": "280px",
+              "padding": "8px",
+              "background": "rgba(30,30,30,0.96)",
+              "border": "0.5px solid rgba(255,255,255,0.18)",
+              "border-radius": "8px",
+              "box-shadow": "0 4px 16px rgba(0,0,0,0.5)",
+              "font-family": "system-ui, -apple-system, sans-serif",
+              "font-size": "13px"
+            });
+            var preview = document.createElement("div");
+            forceStyle(preview, {
+              "all": "initial",
+              "max-height": "40px",
+              "overflow": "hidden",
+              "margin-bottom": "6px",
+              "padding": "4px 6px",
+              "background": "rgba(255,255,255,0.06)",
+              "border-radius": "4px",
+              "border-left": "2px solid rgba(120,120,255,0.6)",
+              "color": "rgba(255,255,255,0.6)",
+              "font-size": "11px",
+              "font-family": "ui-monospace, monospace",
+              "line-height": "1.3",
+              "white-space": "pre-wrap",
+              "word-break": "break-word",
+              "display": "block"
+            });
+            browserComposer.appendChild(preview);
+            browserComposer._preview = preview;
+            var input = document.createElement("textarea");
+            forceStyle(input, {
+              "all": "initial",
+              "width": "100%",
+              "min-height": "44px",
+              "max-height": "80px",
+              "resize": "vertical",
+              "padding": "6px 8px",
+              "background": "rgba(255,255,255,0.08)",
+              "border": "0.5px solid rgba(255,255,255,0.15)",
+              "border-radius": "6px",
+              "color": "white",
+              "font-size": "13px",
+              "font-family": "system-ui, sans-serif",
+              "line-height": "1.4",
+              "outline": "none",
+              "box-sizing": "border-box",
+              "display": "block"
+            });
+            input.placeholder = "Write a comment...";
+            browserComposer.appendChild(input);
+            browserComposer._input = input;
+            var actions = document.createElement("div");
+            forceStyle(actions, {
+              "all": "initial",
+              "display": "flex",
+              "justify-content": "flex-end",
+              "gap": "6px",
+              "margin-top": "6px"
+            });
+            var cancelB = document.createElement("button");
+            cancelB.textContent = "Cancel";
+            forceStyle(cancelB, {
+              "all": "initial",
+              "padding": "3px 10px",
+              "background": "rgba(255,255,255,0.1)",
+              "border": "0.5px solid rgba(255,255,255,0.2)",
+              "border-radius": "4px",
+              "color": "rgba(255,255,255,0.8)",
+              "font-size": "12px",
+              "cursor": "pointer",
+              "display": "inline-block"
+            });
+            var submitB = document.createElement("button");
+            submitB.textContent = "Comment";
+            forceStyle(submitB, {
+              "all": "initial",
+              "padding": "3px 10px",
+              "background": "rgba(80,120,255,0.9)",
+              "border": "none",
+              "border-radius": "4px",
+              "color": "white",
+              "font-size": "12px",
+              "font-weight": "600",
+              "cursor": "pointer",
+              "display": "inline-block"
+            });
+            actions.appendChild(cancelB);
+            actions.appendChild(submitB);
+            browserComposer.appendChild(actions);
+            cancelB.addEventListener("click", function(e) { e.preventDefault(); hideBrowserComposer(); });
+            submitB.addEventListener("click", function(e) {
+              e.preventDefault();
+              var body = input.value.trim();
+              if (!body || !lastAnchor) return;
+              var payload = {};
+              for (var k in lastAnchor) payload[k] = lastAnchor[k];
+              payload.body = body;
+              if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.commentsRichRequestAdd) {
+                window.webkit.messageHandlers.commentsRichRequestAdd.postMessage(payload);
+              }
+              hideBrowserComposer();
+            });
+            input.addEventListener("keydown", function(e) {
+              if (e.key === "Escape") { hideBrowserComposer(); e.preventDefault(); }
+              if (e.key === "Enter" && e.metaKey) { submitB.click(); e.preventDefault(); }
+            });
+            browserComposer.addEventListener("mousedown", function(e) { e.preventDefault(); });
+            document.body.appendChild(browserComposer);
+            return browserComposer;
+          }
+          function showBrowserComposer() {
+            var c = ensureBrowserComposer();
+            if (!c) return;
+            c._preview.textContent = (lastAnchor && lastAnchor.anchorText) ? lastAnchor.anchorText.substring(0, 100) : "";
+            c._preview.style.display = (lastAnchor && lastAnchor.anchorText) ? "block" : "none";
+            c._input.value = "";
+            c.style.setProperty("top", addBtn.style.getPropertyValue("top"), "important");
+            c.style.setProperty("left", addBtn.style.getPropertyValue("left"), "important");
+            c.style.setProperty("display", "block", "important");
+            setTimeout(function() { c._input.focus(); }, 50);
+          }
+          function hideBrowserComposer() {
+            if (browserComposer) browserComposer.style.setProperty("display", "none", "important");
+          }
+
           ensureAddButton();
           function repositionAddButton() {
             var button = ensureAddButton();

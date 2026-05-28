@@ -26,7 +26,7 @@ struct BrowserContentWithCommentsPanel<BrowserContent: View>: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if let store, panel.isOpen, let url = canonicalURL {
-                    Divider()
+                    panelResizeHandle(totalWidth: proxy.size.width)
                     CommentsPanelView(
                         store: store,
                         panel: panel,
@@ -43,5 +43,32 @@ struct BrowserContentWithCommentsPanel<BrowserContent: View>: View {
                 viewModel.scrollToCommentThread(id: request.threadID)
             }
         }
+    }
+
+    private func panelResizeHandle(totalWidth: CGFloat) -> some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 6)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                if hovering { NSCursor.resizeLeftRight.push() }
+                else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        let panelWidth = totalWidth - value.location.x
+                        let fraction = panelWidth / totalWidth
+                        panel.widthFraction = min(
+                            CommentsPanelStore.maxWidthFraction,
+                            max(CommentsPanelStore.minWidthFraction, fraction)
+                        )
+                    }
+            )
+            .overlay(
+                Rectangle()
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(width: 1)
+            )
     }
 }

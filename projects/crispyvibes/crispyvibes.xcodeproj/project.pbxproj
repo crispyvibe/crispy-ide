@@ -173,6 +173,7 @@
 		822E1636A77348618D5ECBCE /* DockPinnedFileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF7D79F15364EE58DF4F8D1 /* DockPinnedFileView.swift */; };
 		82992CD38F6A88E43ECAE627 /* ContextSummaryGeneratorIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD35DBB00AD4DD604BEF0E0A /* ContextSummaryGeneratorIntegrationTests.swift */; };
 		8352E169A78CAD2862E8EABE /* VibeSpaceConfigModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C074D30346BA4C294F7D99F /* VibeSpaceConfigModels.swift */; };
+		84E6893FC3DFC547D9472468 /* CommentInlinePopoverComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83CF57205435C79F0DEF204 /* CommentInlinePopoverComposer.swift */; };
 		85DCB48F3B107C5B5D47AE50 /* BrowserPanelViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0C96874C1E64A720CEE20B /* BrowserPanelViewModel.swift */; };
 		86E38594955C9B47043F1A37 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D2A6E434F948D8B68CAC439F /* Carbon.framework */; };
 		872F1A051B7E1DFB258E50F5 /* CommentThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 377A365975C80859DF17E71B /* CommentThreadView.swift */; };
@@ -1251,6 +1252,7 @@
 		F4AAE33D95547E086D4EA872 /* VibeSpaceStateInternals.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateInternals.swift; sourceTree = "<group>"; };
 		F690A12F261C88910EFB66E4 /* BrowserSessionSnapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserSessionSnapshot.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserSessionSnapshot.swift; sourceTree = "<group>"; };
 		F7DA8CEC673D186321CAF2E8 /* BoardSpatialNavigationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BoardSpatialNavigationTests.swift; sourceTree = "<group>"; };
+		F83CF57205435C79F0DEF204 /* CommentInlinePopoverComposer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentInlinePopoverComposer.swift; sourceTree = "<group>"; };
 		F877D8A93D205ADA375BFE6D /* TerminalScrollbackSearchOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalScrollbackSearchOverlay.swift; sourceTree = "<group>"; };
 		F929E1E343D4388CC4D3B983 /* CrossFileCommentsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CrossFileCommentsView.swift; sourceTree = "<group>"; };
 		F9D04C023ECA7860320E2454 /* AppStringsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppStringsTests.swift; sourceTree = "<group>"; };
@@ -1595,6 +1597,7 @@
 				41D507F69B95A06D5ECD74E4 /* CommentsCodeEditorOverlay.swift */,
 				B6AA19904C977CF683CBA76A /* FileContentWithCommentsPanel.swift */,
 				4940EB928207AB21AFC121F8 /* BrowserContentWithCommentsPanel.swift */,
+				F83CF57205435C79F0DEF204 /* CommentInlinePopoverComposer.swift */,
 			);
 			name = Views;
 			path = Views;
@@ -4015,6 +4018,7 @@
 				15B1CEC6E81F5313AC278FA9 /* BrowserCommentURLNormalizer.swift in Sources */,
 				EBA2C28DAAC39919A046EB63 /* BrowserSurfaceBridge.swift in Sources */,
 				312029A2909C2BD59101A417 /* BrowserContentWithCommentsPanel.swift in Sources */,
+				84E6893FC3DFC547D9472468 /* CommentInlinePopoverComposer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

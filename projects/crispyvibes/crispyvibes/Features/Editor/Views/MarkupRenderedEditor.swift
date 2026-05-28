@@ -163,11 +163,23 @@ struct MarkupRenderedEditor: NSViewRepresentable {
                 // adapter survive the round-trip into persistence.
                 guard let info = message.body as? [String: Any] else { return }
                 let anchor = CommentAnchor.fromNotificationPayload(info)
-                NotificationCenter.default.post(
-                    name: .commentsRequestAddForSelection,
-                    object: nil,
-                    userInfo: anchor.notificationPayload(filePath: parent.commentsFilePath)
-                )
+
+                // If the JS inline composer already captured the body, submit
+                // directly without opening the panel/popover.
+                if let body = info["body"] as? String, !body.isEmpty {
+                    Task { @MainActor [weak self] in
+                        guard let self,
+                              let store = self.parent.commentStoreEnv,
+                              let path = self.parent.commentsFilePath else { return }
+                        _ = await store.add(filePath: path, anchor: anchor, body: body, surfaceKind: .file)
+                    }
+                } else {
+                    NotificationCenter.default.post(
+                        name: .commentsRequestAddForSelection,
+                        object: nil,
+                        userInfo: anchor.notificationPayload(filePath: parent.commentsFilePath)
+                    )
+                }
 
             case "commentsRichGutterClick":
                 // F049: gutter-button click in rich-mode markdown — open

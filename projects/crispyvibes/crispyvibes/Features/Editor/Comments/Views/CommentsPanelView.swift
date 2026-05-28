@@ -29,7 +29,7 @@ struct CommentsPanelView: View {
             searchAndFilterRow
             Divider()
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
+                LazyVStack(alignment: .leading, spacing: 6) {
                     if let pendingAnchor = panel.pendingComposerAnchor {
                         composerCard(anchor: pendingAnchor)
                     }

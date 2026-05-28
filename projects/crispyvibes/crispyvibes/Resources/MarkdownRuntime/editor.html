@@ -2234,12 +2234,141 @@
       btn.addEventListener("click", function() {
         var sel = crispyvibesCommentsLastSelection;
         if (!sel) return;
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.commentsRichRequestAdd) {
-          window.webkit.messageHandlers.commentsRichRequestAdd.postMessage(sel);
-        }
         btn.style.display = "none";
+        showInlineComposer(sel);
       });
       document.body.appendChild(btn);
+
+      // Inline composer — expands in place of the button
+      var composer = document.createElement("div");
+      composer.id = "crispyvibes-comment-composer";
+      Object.assign(composer.style, {
+        position: "fixed",
+        zIndex: "10000",
+        display: "none",
+        width: "280px",
+        padding: "8px",
+        background: "rgba(30,30,30,0.96)",
+        border: "0.5px solid rgba(255,255,255,0.18)",
+        borderRadius: "8px",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "13px",
+      });
+      var composerPreview = document.createElement("div");
+      Object.assign(composerPreview.style, {
+        maxHeight: "40px",
+        overflow: "hidden",
+        marginBottom: "6px",
+        padding: "4px 6px",
+        background: "rgba(255,255,255,0.06)",
+        borderRadius: "4px",
+        borderLeft: "2px solid rgba(120,120,255,0.6)",
+        color: "rgba(255,255,255,0.6)",
+        fontSize: "11px",
+        fontFamily: "ui-monospace, monospace",
+        lineHeight: "1.3",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+      });
+      composer.appendChild(composerPreview);
+      var composerInput = document.createElement("textarea");
+      Object.assign(composerInput.style, {
+        width: "100%",
+        minHeight: "44px",
+        maxHeight: "80px",
+        resize: "vertical",
+        padding: "6px 8px",
+        background: "rgba(255,255,255,0.08)",
+        border: "0.5px solid rgba(255,255,255,0.15)",
+        borderRadius: "6px",
+        color: "white",
+        fontSize: "13px",
+        fontFamily: "system-ui, sans-serif",
+        lineHeight: "1.4",
+        outline: "none",
+        boxSizing: "border-box",
+      });
+      composerInput.placeholder = "Write a comment...";
+      composer.appendChild(composerInput);
+      var composerActions = document.createElement("div");
+      Object.assign(composerActions.style, {
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: "6px",
+        marginTop: "6px",
+      });
+      var cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Cancel";
+      Object.assign(cancelBtn.style, {
+        padding: "3px 10px",
+        background: "rgba(255,255,255,0.1)",
+        border: "0.5px solid rgba(255,255,255,0.2)",
+        borderRadius: "4px",
+        color: "rgba(255,255,255,0.8)",
+        fontSize: "12px",
+        cursor: "pointer",
+      });
+      var submitBtn = document.createElement("button");
+      submitBtn.textContent = "Comment";
+      Object.assign(submitBtn.style, {
+        padding: "3px 10px",
+        background: "rgba(80,120,255,0.9)",
+        border: "none",
+        borderRadius: "4px",
+        color: "white",
+        fontSize: "12px",
+        fontWeight: "600",
+        cursor: "pointer",
+      });
+      composerActions.appendChild(cancelBtn);
+      composerActions.appendChild(submitBtn);
+      composer.appendChild(composerActions);
+      document.body.appendChild(composer);
+
+      var composerAnchorData = null;
+
+      function showInlineComposer(sel) {
+        composerAnchorData = sel;
+        composerPreview.textContent = (sel.anchorText || "").substring(0, 100);
+        composerPreview.style.display = sel.anchorText ? "block" : "none";
+        composerInput.value = "";
+        // Position at the same spot the button was
+        composer.style.top = btn.style.top;
+        composer.style.left = btn.style.left;
+        composer.style.display = "block";
+        setTimeout(function() { composerInput.focus(); }, 50);
+      }
+
+      function hideInlineComposer() {
+        composer.style.display = "none";
+        composerAnchorData = null;
+        composerInput.value = "";
+      }
+
+      cancelBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        hideInlineComposer();
+      });
+
+      submitBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        var body = composerInput.value.trim();
+        if (!body || !composerAnchorData) return;
+        var payload = Object.assign({}, composerAnchorData, { body: body });
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.commentsRichRequestAdd) {
+          window.webkit.messageHandlers.commentsRichRequestAdd.postMessage(payload);
+        }
+        hideInlineComposer();
+      });
+
+      composerInput.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") { hideInlineComposer(); e.preventDefault(); }
+        if (e.key === "Enter" && e.metaKey) { submitBtn.click(); e.preventDefault(); }
+      });
+
+      // Prevent clicks inside composer from dismissing selection
+      composer.addEventListener("mousedown", function(e) { e.preventDefault(); });
 
       /// Returns the iframe (if any) whose contentDocument.getSelection()
       /// has a non-collapsed selection.
