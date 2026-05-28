@@ -7,6 +7,7 @@ struct HomeWelcomeActions {
     let onOpenRecentVibeSpace: (VibeSpaceConfigFile) -> Void
     let onVibeSpaceCreationResult: (VibeSpaceCreationResult) -> Void
     let onContinueTerminalVibeSpace: () -> Void
+    let onShowManageVibeSpaces: () -> Void
     let onShowSettings: () -> Void
 }
 
@@ -320,6 +321,7 @@ struct HomeWelcomeDashboardView: View {
 
         HomeWelcomeUtilityDockView(
             onContinueTerminalVibeSpace: actions.onContinueTerminalVibeSpace,
+            onShowManageVibeSpaces: actions.onShowManageVibeSpaces,
             onShowSettings: actions.onShowSettings
         )
     }
@@ -542,6 +544,7 @@ struct HomeWelcomeUtilityDockView: View {
     @Environment(\.appThemePalette) private var appThemePalette
 
     let onContinueTerminalVibeSpace: () -> Void
+    let onShowManageVibeSpaces: () -> Void
     let onShowSettings: () -> Void
 
     private var borderColor: Color {
@@ -560,6 +563,15 @@ struct HomeWelcomeUtilityDockView: View {
             utilityDivider
 
             utilityButton(
+                title: AppStrings.Home.manageVibeSpacesButton,
+                symbolName: "square.stack.3d.up",
+                accessibilityIdentifier: "welcome.action.manage-vibespaces",
+                action: onShowManageVibeSpaces
+            )
+
+            utilityDivider
+
+            utilityButton(
                 title: "Settings",
                 symbolName: "gearshape",
                 accessibilityIdentifier: "welcome.action.settings",
@@ -567,7 +579,7 @@ struct HomeWelcomeUtilityDockView: View {
             )
         }
         .padding(6)
-        .frame(maxWidth: 470)
+        .frame(maxWidth: 620)
         .background(
             Capsule()
                 .fill(appThemePalette.canvasSecondaryBackgroundColor.opacity(appThemePalette.prefersDarkWindowChrome ? 0.76 : 0.92))
@@ -659,6 +671,9 @@ extension ContentView {
                 },
                 onContinueTerminalVibeSpace: {
                     homeCatalogCoordinator.continueWithTerminalVibeSpaceFromWelcome()
+                },
+                onShowManageVibeSpaces: {
+                    homeShell.presentAppSettings(.vibespaces)
                 },
                 onShowSettings: {
                     showAppSettingsFromAppMenu(category: .general)

@@ -75,7 +75,43 @@ Visible only when Custom theme preset is selected.
 
 ---
 
-## 3. Keyboard Shortcuts
+## 3. VibeSpaces
+
+Icon: `square.stack.3d.up`
+Subtitle: Open vibespaces from the full library and remove ones you no longer need
+
+Always lists every vibespace on disk (recent + non-recent). Recents sort to the top in MRU order; non-recent vibespaces sort alphabetically. The list loads progressively in batches of 25 with `Task.yield()` between batches so large libraries don't block the UI.
+
+### Toolbar
+
+| Setting | Control | Description |
+|---------|---------|-------------|
+| Search | TextField with magnifying-glass affordance | Case-insensitive substring match against vibespace name or any project path. |
+| Open Selected | Button | Enabled with exactly one selection. Opens the vibespace and dismisses Settings. |
+| Delete Selected | Destructive button | Enabled with one or more selections. Opens confirmation alert with single/many message variants before pruning state. |
+
+### Table columns
+
+| Column | Content | Behavior |
+|--------|---------|----------|
+| Name | Vibespace name | Plain scaled text. |
+| Project Folders | Comma-separated clickable directory names | Each link opens that folder in Finder via `NSWorkspace.shared.open(_:)`. Hover reveals the full path as a system tooltip. |
+| Actions | Open icon + Delete icon | Open routes through the same flow as the toolbar Open. Delete sets the row's ID as the confirmation target and opens the alert. |
+
+### Interactions
+
+| Trigger | Effect |
+|---------|--------|
+| Cmd-click row | Adds/removes from selection. |
+| Double-click row | Opens that vibespace and dismisses Settings. |
+| Right-click row | Context menu with `Open` (single selection) and `Delete`. |
+| Confirm delete | Closes any active session bound to a deleted ID, prunes persisted state, refreshes the list and selection. |
+
+Footer shows a live count, selection count, or `Loading vibespaces…` with a progress spinner while the batched load is in flight.
+
+---
+
+## 4. Keyboard Shortcuts
 
 Icon: `keyboard`
 Subtitle: Customize app-wide keyboard shortcuts and navigation keys
@@ -93,7 +129,7 @@ VibeSpace and project command shortcuts are managed in VibeSpace Settings, not A
 
 ---
 
-## 4. Terminal
+## 5. Terminal
 
 Icon: `terminal`
 Subtitle: Shell defaults, input behavior, and rendering
@@ -115,7 +151,7 @@ Conditionally visible when tmux integration is enabled.
 
 ---
 
-## 5. AI Services
+## 6. AI Services
 
 Icon: `text.bubble`
 Subtitle: CLI command defaults and reusable prompt templates
@@ -141,7 +177,7 @@ Subtitle: CLI command defaults and reusable prompt templates
 
 ---
 
-## 6. Agents
+## 7. Agents
 
 Icon: `sparkles`
 Subtitle: Default agent selection and custom agent commands
@@ -169,7 +205,7 @@ Agent discovery runs on appear and after adding/removing custom agents.
 
 ---
 
-## 7. Updates
+## 8. Updates
 
 Icon: `arrow.trianglehead.2.clockwise.rotate.90`
 Subtitle: Automatic checks and update feed configuration
@@ -183,7 +219,7 @@ Subtitle: Automatic checks and update feed configuration
 
 ---
 
-## 8. Experimental
+## 9. Experimental
 
 Icon: `flask`
 Subtitle: Opt-in features that may change or be removed
@@ -195,7 +231,7 @@ Subtitle: Opt-in features that may change or be removed
 
 ---
 
-## 9. Connections
+## 10. Connections
 
 Icon: `network`
 Subtitle: SSH connection profiles and key management
@@ -211,7 +247,7 @@ Always visible.
 
 ---
 
-## 10. Reset
+## 11. Reset
 
 Icon: `arrow.counterclockwise`
 Subtitle: Clear local overrides and start from a fresh machine state
@@ -244,3 +280,4 @@ Refreshes on a 2-second timer. Dependencies: `OperationMetricsStore`, `TerminalD
 |------|--------|--------|
 | 2026-04-20 | Initial comprehensive settings inventory — all 12 sections documented | — |
 | 2026-04-27 | Consolidated visual/chrome controls under Appearance and moved terminal engine into Terminal | — |
+| 2026-05-26 | Added VibeSpaces management category (section 3); renumbered subsequent sections accordingly | — |

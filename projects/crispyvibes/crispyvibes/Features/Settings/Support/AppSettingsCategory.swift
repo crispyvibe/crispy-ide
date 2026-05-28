@@ -3,6 +3,7 @@ import Foundation
 enum AppSettingsCategory: String, CaseIterable, Identifiable {
     case account
     case general
+    case vibespaces
     case shortcuts
     case layout
     case terminal
@@ -18,6 +19,7 @@ enum AppSettingsCategory: String, CaseIterable, Identifiable {
         [
             .account,
             .general,
+            .vibespaces,
             .shortcuts,
             .terminal,
             .services,
@@ -48,6 +50,8 @@ enum AppSettingsCategory: String, CaseIterable, Identifiable {
             return "Account"
         case .general:
             return "Appearance"
+        case .vibespaces:
+            return "VibeSpaces"
         case .shortcuts:
             return "Keyboard Shortcuts"
         case .layout:
@@ -77,6 +81,8 @@ enum AppSettingsCategory: String, CaseIterable, Identifiable {
             return "Sign in to enable cloud-backed features"
         case .general:
             return "Theme, typography, borders, rail position, and app chrome"
+        case .vibespaces:
+            return "Open vibespaces from the full library and remove ones you no longer need"
         case .shortcuts:
             return "Customize app-wide shortcuts and terminal inline trigger"
         case .layout:
@@ -106,6 +112,8 @@ enum AppSettingsCategory: String, CaseIterable, Identifiable {
             return "person.crop.circle"
         case .general:
             return "paintbrush"
+        case .vibespaces:
+            return "square.stack.3d.up"
         case .shortcuts:
             return "keyboard"
         case .layout:

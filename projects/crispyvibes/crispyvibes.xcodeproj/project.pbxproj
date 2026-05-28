@@ -201,6 +201,7 @@
 		9D6B53B31B44D970839BAAF9 /* IOSurface.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D29548E45635BC4A2C7E3DD /* IOSurface.framework */; };
 		9D9E97AEF9B55DCF760B96F8 /* AppShellModelTestsVibeSpaceAndTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = E826F8E8F690FD18AFCDC36B /* AppShellModelTestsVibeSpaceAndTerminal.swift */; };
 		9E7AF289134CAC49D7A610A2 /* VibeSpaceCreationResultTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12D51EBA7514F74FBD39501 /* VibeSpaceCreationResultTests.swift */; };
+		A1D0DA0000000000DA00BB03 /* ManageVibeSpacesViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */; };
 		A10000000000000000000001 /* CrispyVibesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000002 /* CrispyVibesApp.swift */; };
 		A10000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000003 /* AppDelegate.swift */; };
 		A10000000000000000000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000004 /* ContentView.swift */; };
@@ -228,6 +229,9 @@
 		A1000000000000000000001A /* VibeSpaceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001B /* VibeSpaceState.swift */; };
 		A1000000000000000000001B /* FocusedProjectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001C /* FocusedProjectView.swift */; };
 		A1000000000000000000001C /* StackedProjectCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001D /* StackedProjectCardView.swift */; };
+		A1D0DA0000000000DA00BB02 /* ManageVibeSpacesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B2 /* ManageVibeSpacesViewModel.swift */; };
+		A1D0DA0000000000DA00BB04 /* AppSettingsSheetViewVibeSpaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B4 /* AppSettingsSheetViewVibeSpaces.swift */; };
+		A1D0DA0000000000DA00BB05 /* AppSettingsVibeSpacesContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B5 /* AppSettingsVibeSpacesContext.swift */; };
 		A1000000000000000000001D /* NativeSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001E /* NativeSplitView.swift */; };
 		A1000000000000000000001E /* LayoutPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001F /* LayoutPersistenceService.swift */; };
 		A10000000000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000021 /* Assets.xcassets */; };
@@ -834,6 +838,7 @@
 		9F1559F53B1144C2961079C5 /* DocumentBufferTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DocumentBufferTests.swift; path = DocumentBufferTests.swift; sourceTree = "<group>"; };
 		9FE3899E41EA3ED6345C6BC8 /* SettingsNavigationPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsNavigationPrimitives.swift; sourceTree = "<group>"; };
 		A12D51EBA7514F74FBD39501 /* VibeSpaceCreationResultTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceCreationResultTests.swift; sourceTree = "<group>"; };
+		B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ManageVibeSpacesViewModelTests.swift; sourceTree = "<group>"; };
 		A1A6559E6C9FD7520C810F00 /* TerminalContextSummary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalContextSummary.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* AppKitTreeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppKitTreeView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F5 /* AppKitTreeSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitTreeSupportViews.swift; sourceTree = "<group>"; };
@@ -948,6 +953,9 @@
 		B10000000000000000000001B /* VibeSpaceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceState.swift; sourceTree = "<group>"; };
 		B10000000000000000000001C /* FocusedProjectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusedProjectView.swift; sourceTree = "<group>"; };
 		B10000000000000000000001D /* StackedProjectCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackedProjectCardView.swift; sourceTree = "<group>"; };
+		B10DA0000000000000DA00B2 /* ManageVibeSpacesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageVibeSpacesViewModel.swift; sourceTree = "<group>"; };
+		B10DA0000000000000DA00B4 /* AppSettingsSheetViewVibeSpaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewVibeSpaces.swift; sourceTree = "<group>"; };
+		B10DA0000000000000DA00B5 /* AppSettingsVibeSpacesContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsVibeSpacesContext.swift; sourceTree = "<group>"; };
 		B10000000000000000000001E /* NativeSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSplitView.swift; sourceTree = "<group>"; };
 		B10000000000000000000001F /* LayoutPersistenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutPersistenceService.swift; sourceTree = "<group>"; };
 		B100000000000000000000021 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -1821,6 +1829,7 @@
 			isa = PBXGroup;
 			children = (
 				FEA00000000000000000000B /* Views */,
+				FEA000000000000000000098 /* ViewModels */,
 				FEA00000000000000000000D /* Services */,
 				FEA00000000000000000000C /* Support */,
 			);
@@ -1980,6 +1989,15 @@
 			);
 			name = Comments;
 			path = Comments;
+			sourceTree = "<group>";
+		};
+		C9442EB9FE82D110F9A788B0 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */,
+			);
+			name = ViewModels;
+			path = ViewModels;
 			sourceTree = "<group>";
 		};
 		84765AF10D9D7029824390B2 /* Support */ = {
@@ -2908,6 +2926,7 @@
 			isa = PBXGroup;
 			children = (
 				46C3A6EC61D64CBF9CBC6EA3 /* Services */,
+				C9442EB9FE82D110F9A788B0 /* ViewModels */,
 			);
 			name = Settings;
 			path = Settings;
@@ -3119,6 +3138,7 @@
 				18A3A7D34EB7845DFA10934B /* AppSettingsSheetViewExperimental.swift */,
 				FC80C95D8DA94C7F8595A668 /* AppSettingsSheetViewNerd.swift */,
 				69D8F23A94579CEBE723EC48 /* AppSettingsSheetViewRemoteSSH.swift */,
+				B10DA0000000000000DA00B4 /* AppSettingsSheetViewVibeSpaces.swift */,
 				2838982B250D876FB0885673 /* DeveloperToolsView.swift */,
 			);
 			path = Views;
@@ -3129,11 +3149,20 @@
 			children = (
 				83F370FF6AEC8118E61569E3 /* AppSettingsCategory.swift */,
 				2890F320B60E8D7A11AA3302 /* AppShortcutSettings.swift */,
+				B10DA0000000000000DA00B5 /* AppSettingsVibeSpacesContext.swift */,
 				C1B9CCF2E2BA8AB7F99D4190 /* SettingsLayoutPrimitives.swift */,
 				9FE3899E41EA3ED6345C6BC8 /* SettingsNavigationPrimitives.swift */,
 				4CAFF374AB8A27082386A013 /* SettingsPrimitives.swift */,
 			);
 			path = Support;
+			sourceTree = "<group>";
+		};
+		FEA000000000000000000098 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				B10DA0000000000000DA00B2 /* ManageVibeSpacesViewModel.swift */,
+			);
+			path = ViewModels;
 			sourceTree = "<group>";
 		};
 		FEA00000000000000000000D /* Services */ = {
@@ -3755,6 +3784,9 @@
 				A1000000000000000000001A /* VibeSpaceState.swift in Sources */,
 				A1000000000000000000001B /* FocusedProjectView.swift in Sources */,
 				A1000000000000000000001C /* StackedProjectCardView.swift in Sources */,
+				A1D0DA0000000000DA00BB02 /* ManageVibeSpacesViewModel.swift in Sources */,
+				A1D0DA0000000000DA00BB04 /* AppSettingsSheetViewVibeSpaces.swift in Sources */,
+				A1D0DA0000000000DA00BB05 /* AppSettingsVibeSpacesContext.swift in Sources */,
 				F1D000000000000000000011 /* VibeSpaceSourceControlTypes.swift in Sources */,
 				F1D000000000000000000012 /* VibeSpaceSourceControlRepositoryViewModel.swift in Sources */,
 				F1D000000000000000000013 /* VibeSpaceSourceControlRepositoryViewModelHelpers.swift in Sources */,
@@ -4089,6 +4121,7 @@
 				F3A42259CDABBC4188102A69 /* BoardSpatialNavigationTests.swift in Sources */,
 				C477873228D31248136564F0 /* TerminalSessionRestorerTests.swift in Sources */,
 				9E7AF289134CAC49D7A610A2 /* VibeSpaceCreationResultTests.swift in Sources */,
+				A1D0DA0000000000DA00BB03 /* ManageVibeSpacesViewModelTests.swift in Sources */,
 				A8F790ECE80DEB47B6A98615 /* TextServiceCLIPresetCatalogTests.swift in Sources */,
 				64D5024F37E76E20279F2299 /* VibeSpaceManagementServiceTests.swift in Sources */,
 				219F3C59245123C904F726D3 /* SplitPaneLayoutTests.swift in Sources */,

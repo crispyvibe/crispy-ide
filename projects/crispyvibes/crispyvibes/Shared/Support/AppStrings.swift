@@ -87,6 +87,10 @@ enum AppStrings {
         static let justYouAndYourVibe = String(localized: "home.welcome.justYouAndYourVibe")
         static let defaultVibeSpaceBaseName = String(localized: "home.welcome.defaultVibeSpaceBaseName")
         static let terminalVibeSpaceName = String(localized: "home.welcome.terminalVibeSpaceName")
+        static let manageVibeSpacesButton = String(
+            localized: "home.welcome.manageVibeSpacesButton",
+            defaultValue: "Manage VibeSpaces"
+        )
     }
 
     // MARK: - Onboarding
@@ -674,6 +678,108 @@ enum AppStrings {
         }
 
         static let cannotBeUndone = String(localized: "settings.reset.cannotBeUndone")
+
+        // VibeSpaces panel
+        enum VibeSpaces {
+            static let cardTitle = String(
+                localized: "settings.vibespaces.card.title",
+                defaultValue: "Your VibeSpaces"
+            )
+            static let cardDescription = String(
+                localized: "settings.vibespaces.card.description",
+                defaultValue: "Open vibespaces from your full library or remove ones you no longer need. Double-click a row to open it."
+            )
+            static let searchPlaceholder = String(
+                localized: "settings.vibespaces.searchPlaceholder",
+                defaultValue: "Search vibespaces"
+            )
+            static let columnName = String(
+                localized: "settings.vibespaces.column.name",
+                defaultValue: "Name"
+            )
+            static let columnProjectFolders = String(
+                localized: "settings.vibespaces.column.projectFolders",
+                defaultValue: "Project Folders"
+            )
+            static let columnActions = String(
+                localized: "settings.vibespaces.column.actions",
+                defaultValue: "Actions"
+            )
+            static let openRowTooltip = String(
+                localized: "settings.vibespaces.openRowTooltip",
+                defaultValue: "Open vibespace"
+            )
+            static let deleteRowTooltip = String(
+                localized: "settings.vibespaces.deleteRowTooltip",
+                defaultValue: "Delete vibespace"
+            )
+            static let emptyTitle = String(
+                localized: "settings.vibespaces.empty.title",
+                defaultValue: "No vibespaces yet"
+            )
+            static let emptySubtitle = String(
+                localized: "settings.vibespaces.empty.subtitle",
+                defaultValue: "Create a vibespace from the welcome screen and it will show up here."
+            )
+            static let emptySearchTitle = String(
+                localized: "settings.vibespaces.emptySearch.title",
+                defaultValue: "No matches"
+            )
+            static let openSelected = String(
+                localized: "settings.vibespaces.openSelected",
+                defaultValue: "Open"
+            )
+            static let deleteSelected = String(
+                localized: "settings.vibespaces.deleteSelected",
+                defaultValue: "Delete"
+            )
+            static let deleteAlertTitle = String(
+                localized: "settings.vibespaces.deleteAlert.title",
+                defaultValue: "Delete VibeSpaces?"
+            )
+            static let deleteAlertConfirm = String(
+                localized: "settings.vibespaces.deleteAlert.confirm",
+                defaultValue: "Delete"
+            )
+            static let deleteAlertCancel = String(
+                localized: "settings.vibespaces.deleteAlert.cancel",
+                defaultValue: "Cancel"
+            )
+            static let loadingFooter = String(
+                localized: "settings.vibespaces.loadingFooter",
+                defaultValue: "Loading vibespaces…"
+            )
+
+            static func countFooter(_ count: Int) -> String {
+                let template = String(
+                    localized: "settings.vibespaces.countFooter",
+                    defaultValue: "%lld vibespaces"
+                )
+                return String(format: template, locale: .current, count)
+            }
+
+            static func selectionFooter(_ selected: Int, _ total: Int) -> String {
+                let template = String(
+                    localized: "settings.vibespaces.selectionFooter",
+                    defaultValue: "%1$lld of %2$lld selected"
+                )
+                return String(format: template, locale: .current, selected, total)
+            }
+
+            static func deleteAlertMessage(_ count: Int) -> String {
+                if count == 1 {
+                    return String(
+                        localized: "settings.vibespaces.deleteAlert.messageSingle",
+                        defaultValue: "This vibespace and its persisted state will be permanently deleted. This cannot be undone."
+                    )
+                }
+                let template = String(
+                    localized: "settings.vibespaces.deleteAlert.messageMany",
+                    defaultValue: "%lld vibespaces and their persisted state will be permanently deleted. This cannot be undone."
+                )
+                return String(format: template, locale: .current, count)
+            }
+        }
 
         // Experimental
         enum Experimental {
