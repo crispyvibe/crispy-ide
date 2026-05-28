@@ -661,6 +661,22 @@
       doc.addEventListener("keyup", scheduleSync);
       doc.addEventListener("paste", () => setTimeout(scheduleSync, 0));
       doc.addEventListener("blur", syncToNative, true);
+
+      // F049: re-attach the comments selection listener whenever the
+      // iframe document is rewritten (`frameDoc.write` recreates the
+      // contentDocument). Setup runs only once per fresh document.
+      if (typeof window.crispyvibesAttachIframeSelectionListener === "function") {
+        window.crispyvibesAttachIframeSelectionListener();
+      }
+
+      // F049-v2: inject comment styles into the fresh iframe document and
+      // re-apply decorations. The iframe's contentDocument is recreated on
+      // every renderHTML call, so any previously-injected styles and
+      // decoration attributes are lost.
+      crispyvibesHTMLAdapter.injectStyles(doc);
+      if (window.crispyvibesComments && window.__crispyvibesLastThreads) {
+        crispyvibesHTMLAdapter.setComments(doc, window.__crispyvibesLastThreads, window.__crispyvibesLastSelectedID);
+      }
     }
 
     function currentHTMLFromFrame() {
@@ -1845,6 +1861,650 @@
     editor.addEventListener("paste", () => setTimeout(scheduleSync, 0));
     editor.addEventListener("blur", syncToNative, true);
     window.addEventListener("resize", resizeHTMLFrame);
+
+    /// F049-v2: shared CSS-selector path helper. Bounded depth (≤6),
+    /// prefers `#id`, falls back to `nth-of-type` for sibling
+    /// disambiguation. Used by the HTML iframe adapter — markdown still
+    /// uses `data-comment-source-line` because source-line mapping is
+    /// natural for markdown blocks.
+    function crispyvibesCssPath(el, root) {
+      var parts = [];
+      while (el && el !== root && el.nodeType === 1 && parts.length < 6) {
+        var s = el.tagName.toLowerCase();
+        if (el.id) {
+          var safe = (window.CSS && window.CSS.escape) ? window.CSS.escape(el.id) : el.id;
+          parts.unshift("#" + safe);
+          break;
+        }
+        var p = el.parentElement;
+        if (p) {
+          var sibs = Array.prototype.filter.call(p.children, function(c) { return c.tagName === el.tagName; });
+          if (sibs.length > 1) s += ":nth-of-type(" + (sibs.indexOf(el) + 1) + ")";
+        }
+        parts.unshift(s);
+        el = p;
+      }
+      return parts.join(" > ") || "body";
+    }
+
+    function crispyvibesBlockAncestor(node, root) {
+      var el = node && node.nodeType === 1 ? node : (node && node.parentElement);
+      while (el && el !== root) {
+        var d = (el.ownerDocument && el.ownerDocument.defaultView)
+          ? el.ownerDocument.defaultView.getComputedStyle(el).display
+          : "block";
+        if (d === "block" || d === "list-item" || d === "table" || d === "table-cell" || d === "flex" || d === "grid") return el;
+        el = el.parentElement;
+      }
+      return el || root;
+    }
+
+    /// HTML adapter — runs decoration and selection capture inside the
+    /// preview iframe (`htmlFrame.contentDocument`). Idempotent style
+    /// injection per fresh iframe document.
+    var crispyvibesHTMLAdapter = (function() {
+      function injectStyles(doc) {
+        if (!doc || doc.__crispyvibesStylesInjected) return;
+        var style = doc.createElement("style");
+        style.textContent =
+          "[data-crispyvibes-comment]{outline:1px solid rgba(42,144,255,0.55);outline-offset:2px;background:rgba(42,144,255,0.08);transition:background .2s;position:relative;}" +
+          "[data-crispyvibes-comment-status='resolved']{outline-color:rgba(150,150,150,0.5);background:rgba(150,150,150,0.04);}" +
+          "[data-crispyvibes-comment-status='stale']{outline:1.5px dashed rgba(255,165,0,0.7);background:transparent;}" +
+          ".crispyvibes-comment-selected{background:rgba(42,144,255,0.2)!important;outline-width:2px!important;}" +
+          ".crispyvibes-gutter-btn{position:absolute;left:-22px;top:0;width:18px;height:18px;padding:0;margin:0;border:none;background:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%232a90ff' d='M3 2h10a2 2 0 012 2v6a2 2 0 01-2 2H8l-3 3v-3H3a2 2 0 01-2-2V4a2 2 0 012-2z'/></svg>\") no-repeat center / 16px 16px;cursor:pointer;opacity:0.85;}";
+        doc.head.appendChild(style);
+        doc.__crispyvibesStylesInjected = true;
+      }
+
+      function setComments(doc, threads, selectedID) {
+        if (!doc) return;
+        injectStyles(doc);
+        var prev = doc.querySelectorAll("[data-crispyvibes-comment]");
+        for (var i = 0; i < prev.length; i++) {
+          prev[i].removeAttribute("data-crispyvibes-comment");
+          prev[i].removeAttribute("data-crispyvibes-comment-status");
+          prev[i].classList.remove("crispyvibes-comment-selected");
+        }
+        var oldBtns = doc.querySelectorAll(".crispyvibes-gutter-btn");
+        for (var b = 0; b < oldBtns.length; b++) oldBtns[b].remove();
+
+        if (!Array.isArray(threads)) return;
+        for (var t = 0; t < threads.length; t++) {
+          var th = threads[t];
+          if (!th.selector) continue;
+          var el = null;
+          try { el = doc.querySelector(th.selector); } catch (_) { el = null; }
+          if (!el) continue;
+          el.setAttribute("data-crispyvibes-comment", th.id || "");
+          el.setAttribute("data-crispyvibes-comment-status", th.status || "active");
+          if (selectedID && th.id === selectedID) el.classList.add("crispyvibes-comment-selected");
+
+          var btn = doc.createElement("button");
+          btn.type = "button";
+          btn.className = "crispyvibes-gutter-btn";
+          btn.setAttribute("data-thread-id", th.id || "");
+          btn.title = "Comment thread";
+          btn.addEventListener("mousedown", function(e) { e.preventDefault(); e.stopPropagation(); });
+          btn.addEventListener("click", (function(threadID) {
+            return function(e) {
+              e.preventDefault(); e.stopPropagation();
+              if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.commentsRichGutterClick) {
+                window.webkit.messageHandlers.commentsRichGutterClick.postMessage({ threadID: threadID });
+              }
+            };
+          })(th.id || ""));
+          el.appendChild(btn);
+        }
+      }
+
+      function scrollToAnchor(doc, selector) {
+        if (!doc || !selector) return;
+        var el = null;
+        try { el = doc.querySelector(selector); } catch (_) { el = null; }
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("crispyvibes-comment-selected");
+        setTimeout(function() { el.classList.remove("crispyvibes-comment-selected"); }, 1200);
+      }
+
+      function captureSelection(doc) {
+        if (!doc) return null;
+        var sel = doc.getSelection ? doc.getSelection() : null;
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+        var range = sel.getRangeAt(0);
+        var block = crispyvibesBlockAncestor(range.commonAncestorContainer, doc.body);
+        if (!block) return null;
+        var selector = crispyvibesCssPath(block, doc.body);
+        var blockRange = doc.createRange();
+        blockRange.selectNodeContents(block);
+        try { blockRange.setEnd(range.startContainer, range.startOffset); } catch (_) { return null; }
+        var offset = blockRange.toString().length;
+        var anchorText = sel.toString().slice(0, 4096);
+        return {
+          startLine: 1, startColumn: 1, endLine: 1, endColumn: 1,
+          anchorText: anchorText, leadingContext: "", trailingContext: "",
+          domSelector: selector, domTextOffset: offset, domTextLength: anchorText.length,
+        };
+      }
+
+      return { setComments: setComments, scrollToAnchor: scrollToAnchor, captureSelection: captureSelection, injectStyles: injectStyles };
+    })();
+
+    /* ===========================================================
+       F049: file-comments integration for rich-mode markdown/HTML.
+
+       Markdown path — attribute top-level rendered blocks with
+       `data-comment-source-line` so threads anchored by line resolve
+       to their host element via `elementForSourceLine(line)`.
+
+       HTML path — operate inside the iframe, anchor by CSS selector
+       (`anchor.domSelector` from the Swift side).
+
+       Posts script messages:
+         - commentsRichSelectionChanged: { startLine, endLine, anchorText, ... }
+         - commentsRichRequestAdd:       same payload + domSelector for HTML mode
+         - commentsRichGutterClick:      gutter-button taps inside the page
+       =========================================================== */
+
+    var crispyvibesCommentsLastSelection = null;
+
+    /// Walk the rendered DOM children of `editor` in order, and assign each
+    /// top-level block a `data-comment-source-line` attribute corresponding
+    /// to its starting line in `markdownSource`. This is paragraph-precision:
+    /// for tables, lists, blockquotes the attribute lives on the wrapping
+    /// element. Inline-only changes within a paragraph share the same line.
+    function annotateMarkdownSourceLines(markdownSource) {
+      if (!editor) return;
+      // Split source by blank-line block separators while keeping line numbers.
+      var lines = (markdownSource || "").split("\n");
+      var blocks = []; // [{ startLine, endLine }]
+      var blockStart = null;
+      for (var i = 0; i < lines.length; i++) {
+        var trimmed = lines[i].trim();
+        if (trimmed === "") {
+          if (blockStart != null) {
+            blocks.push({ startLine: blockStart + 1, endLine: i });
+            blockStart = null;
+          }
+        } else if (blockStart == null) {
+          blockStart = i;
+        }
+      }
+      if (blockStart != null) {
+        blocks.push({ startLine: blockStart + 1, endLine: lines.length });
+      }
+
+      // Walk top-level rendered blocks and assign source lines in order.
+      var children = editor.children;
+      var blockIdx = 0;
+      for (var c = 0; c < children.length; c++) {
+        var el = children[c];
+        if (!el || el.nodeType !== 1) continue;
+        if (el.id === "crispyvibes-comments-overlay") continue;
+        if (blockIdx < blocks.length) {
+          el.setAttribute("data-comment-source-line", String(blocks[blockIdx].startLine));
+          el.setAttribute("data-comment-source-line-end", String(blocks[blockIdx].endLine));
+        }
+        blockIdx++;
+      }
+    }
+
+    /// Find the rendered block whose source-line range contains `line`.
+    function elementForSourceLine(line) {
+      var children = editor.children;
+      var fallback = null;
+      for (var c = 0; c < children.length; c++) {
+        var el = children[c];
+        if (!el || el.nodeType !== 1) continue;
+        if (el.id === "crispyvibes-comments-overlay") continue;
+        var s = parseInt(el.getAttribute("data-comment-source-line") || "0", 10);
+        var e = parseInt(el.getAttribute("data-comment-source-line-end") || "0", 10);
+        if (s > 0 && e > 0 && line >= s && line <= e) return el;
+        if (s > 0 && s <= line) fallback = el;
+      }
+      return fallback;
+    }
+
+    /// Resolve the source-line range covering the current selection.
+    function selectionSourceLineRange() {
+      var sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+      var range = sel.getRangeAt(0);
+      var startEl = range.startContainer.nodeType === 1
+        ? range.startContainer
+        : range.startContainer.parentElement;
+      var endEl = range.endContainer.nodeType === 1
+        ? range.endContainer
+        : range.endContainer.parentElement;
+      function blockAncestor(el) {
+        while (el && el !== editor && !el.hasAttribute("data-comment-source-line")) {
+          el = el.parentElement;
+        }
+        return el && el !== editor ? el : null;
+      }
+      var sb = blockAncestor(startEl);
+      var eb = blockAncestor(endEl);
+      if (!sb && !eb) return null;
+      var startLine = parseInt((sb || eb).getAttribute("data-comment-source-line") || "0", 10);
+      var endLine = parseInt((eb || sb).getAttribute("data-comment-source-line-end") || "0", 10);
+      if (startLine <= 0 || endLine <= 0) return null;
+      return {
+        startLine: startLine,
+        endLine: Math.max(startLine, endLine),
+        anchorText: sel.toString().slice(0, 4096),
+      };
+    }
+
+    /// Mode-aware dispatch — markdown threads route through the source-line
+    /// adapter on the outer document; HTML preview threads route through
+    /// `crispyvibesHTMLAdapter` operating on the iframe contentDocument.
+    /// Each thread carries either a line (markdown) or a `selector` (HTML)
+    /// resolved on the Swift side from the persisted anchor.
+    window.crispyvibesComments = {
+      setComments: function(threads, selectedThreadID) {
+        // Cache for re-application after iframe rewrites (HTML mode).
+        window.__crispyvibesLastThreads = threads;
+        window.__crispyvibesLastSelectedID = selectedThreadID;
+
+        if (editorMode === "html") {
+          var doc = htmlFrame && htmlFrame.contentDocument;
+          crispyvibesHTMLAdapter.setComments(doc, threads, selectedThreadID);
+          return;
+        }
+        // Markdown path — clear, re-decorate, inject gutter buttons.
+        var decorated = editor.querySelectorAll("[data-comment-thread]");
+        for (var d = 0; d < decorated.length; d++) {
+          decorated[d].removeAttribute("data-comment-thread");
+          decorated[d].classList.remove(
+            "crispyvibes-comment-active",
+            "crispyvibes-comment-resolved",
+            "crispyvibes-comment-stale",
+            "crispyvibes-comment-selected"
+          );
+        }
+        var oldButtons = editor.querySelectorAll(".crispyvibes-gutter-btn");
+        for (var b = 0; b < oldButtons.length; b++) {
+          oldButtons[b].parentNode && oldButtons[b].parentNode.removeChild(oldButtons[b]);
+        }
+
+        if (!Array.isArray(threads)) return;
+
+        for (var t = 0; t < threads.length; t++) {
+          var th = threads[t];
+          var line = th.startLine || 1;
+          var el = elementForSourceLine(line);
+          if (!el) continue;
+          el.setAttribute("data-comment-thread", th.id || "");
+          if (th.status === "resolved") el.classList.add("crispyvibes-comment-resolved");
+          else if (th.status === "stale") el.classList.add("crispyvibes-comment-stale");
+          else el.classList.add("crispyvibes-comment-active");
+          if (selectedThreadID && th.id === selectedThreadID) {
+            el.classList.add("crispyvibes-comment-selected");
+          }
+
+          // Inject a clickable gutter button into the block.
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "crispyvibes-gutter-btn crispyvibes-gutter-btn-" + (th.status || "active");
+          btn.setAttribute("data-thread-id", th.id || "");
+          btn.title = "Comment thread";
+          btn.addEventListener("mousedown", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+          });
+          btn.addEventListener("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var threadID = this.getAttribute("data-thread-id");
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.commentsRichGutterClick) {
+              window.webkit.messageHandlers.commentsRichGutterClick.postMessage({
+                threadID: threadID,
+              });
+            }
+          });
+          el.appendChild(btn);
+        }
+      },
+      scrollToAnchor: function(anchor) {
+        if (!anchor) return;
+        if (editorMode === "html") {
+          var doc = htmlFrame && htmlFrame.contentDocument;
+          crispyvibesHTMLAdapter.scrollToAnchor(doc, anchor.domSelector || anchor);
+          return;
+        }
+        var line = (typeof anchor === "number") ? anchor : (anchor.startLine || 1);
+        var el = elementForSourceLine(line);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("crispyvibes-comment-selected");
+        setTimeout(function() {
+          el.classList.remove("crispyvibes-comment-selected");
+        }, 1200);
+      },
+      // Backwards-compat: native callers that haven't migrated yet still
+      // call `scrollToLine(n)`. Keep working until those call sites are gone.
+      scrollToLine: function(line) {
+        this.scrollToAnchor({ startLine: line });
+      },
+      clearSelection: function() {
+        crispyvibesCommentsLastSelection = null;
+        var btn = document.getElementById("crispyvibes-comment-add-button");
+        if (btn) btn.style.display = "none";
+      },
+    };
+
+    // Wrap renderMarkdown to also annotate source lines.
+    var __crispyvibes_renderMarkdownOriginal = renderMarkdown;
+    renderMarkdown = function(markdown, baseHref) {
+      __crispyvibes_renderMarkdownOriginal.call(null, markdown, baseHref);
+      try {
+        annotateMarkdownSourceLines(markdown);
+      } catch (e) { /* swallow — annotation is best-effort */ }
+    };
+
+    // Floating "Add Comment" button — fades in near the user's selection in
+    // the markdown editor or HTML preview iframe, fires
+    // `commentsRichRequestAdd` on click. Markdown selections resolve to
+    // exact source-line ranges via `data-comment-source-line` attributes;
+    // HTML selections fall back to a textContent-newline-counted best-
+    // effort line number plus the selected text as the anchor.
+    (function setupCommentsAddButton() {
+      var btn = document.createElement("button");
+      btn.id = "crispyvibes-comment-add-button";
+      btn.type = "button";
+      btn.textContent = "💬 Add Comment";
+      Object.assign(btn.style, {
+        position: "fixed",
+        zIndex: "9999",
+        display: "none",
+        padding: "4px 9px",
+        font: "12px system-ui, sans-serif",
+        background: "rgba(40,40,40,0.92)",
+        color: "white",
+        border: "0.5px solid rgba(255,255,255,0.18)",
+        borderRadius: "6px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+        cursor: "pointer",
+        userSelect: "none",
+      });
+      btn.addEventListener("mousedown", function(e) {
+        // Prevent button click from collapsing the selection.
+        e.preventDefault();
+      });
+      btn.addEventListener("click", function() {
+        var sel = crispyvibesCommentsLastSelection;
+        if (!sel) return;
+        btn.style.display = "none";
+        showInlineComposer(sel);
+      });
+      document.body.appendChild(btn);
+
+      // Inline composer — expands in place of the button
+      var composer = document.createElement("div");
+      composer.id = "crispyvibes-comment-composer";
+      Object.assign(composer.style, {
+        position: "fixed",
+        zIndex: "10000",
+        display: "none",
+        width: "280px",
+        padding: "8px",
+        background: "rgba(30,30,30,0.96)",
+        border: "0.5px solid rgba(255,255,255,0.18)",
+        borderRadius: "8px",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "13px",
+      });
+      var composerPreview = document.createElement("div");
+      Object.assign(composerPreview.style, {
+        maxHeight: "40px",
+        overflow: "hidden",
+        marginBottom: "6px",
+        padding: "4px 6px",
+        background: "rgba(255,255,255,0.06)",
+        borderRadius: "4px",
+        borderLeft: "2px solid rgba(120,120,255,0.6)",
+        color: "rgba(255,255,255,0.6)",
+        fontSize: "11px",
+        fontFamily: "ui-monospace, monospace",
+        lineHeight: "1.3",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+      });
+      composer.appendChild(composerPreview);
+      var composerInput = document.createElement("textarea");
+      Object.assign(composerInput.style, {
+        width: "100%",
+        minHeight: "44px",
+        maxHeight: "80px",
+        resize: "vertical",
+        padding: "6px 8px",
+        background: "rgba(255,255,255,0.08)",
+        border: "0.5px solid rgba(255,255,255,0.15)",
+        borderRadius: "6px",
+        color: "white",
+        fontSize: "13px",
+        fontFamily: "system-ui, sans-serif",
+        lineHeight: "1.4",
+        outline: "none",
+        boxSizing: "border-box",
+      });
+      composerInput.placeholder = "Write a comment...";
+      composer.appendChild(composerInput);
+      var composerActions = document.createElement("div");
+      Object.assign(composerActions.style, {
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: "6px",
+        marginTop: "6px",
+      });
+      var cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Cancel";
+      Object.assign(cancelBtn.style, {
+        padding: "3px 10px",
+        background: "rgba(255,255,255,0.1)",
+        border: "0.5px solid rgba(255,255,255,0.2)",
+        borderRadius: "4px",
+        color: "rgba(255,255,255,0.8)",
+        fontSize: "12px",
+        cursor: "pointer",
+      });
+      var submitBtn = document.createElement("button");
+      submitBtn.textContent = "Comment";
+      Object.assign(submitBtn.style, {
+        padding: "3px 10px",
+        background: "rgba(80,120,255,0.9)",
+        border: "none",
+        borderRadius: "4px",
+        color: "white",
+        fontSize: "12px",
+        fontWeight: "600",
+        cursor: "pointer",
+      });
+      composerActions.appendChild(cancelBtn);
+      composerActions.appendChild(submitBtn);
+      composer.appendChild(composerActions);
+      document.body.appendChild(composer);
+
+      var composerAnchorData = null;
+
+      function showInlineComposer(sel) {
+        composerAnchorData = sel;
+        composerPreview.textContent = (sel.anchorText || "").substring(0, 100);
+        composerPreview.style.display = sel.anchorText ? "block" : "none";
+        composerInput.value = "";
+        // Position at the same spot the button was
+        composer.style.top = btn.style.top;
+        composer.style.left = btn.style.left;
+        composer.style.display = "block";
+        setTimeout(function() { composerInput.focus(); }, 50);
+      }
+
+      function hideInlineComposer() {
+        composer.style.display = "none";
+        composerAnchorData = null;
+        composerInput.value = "";
+      }
+
+      cancelBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        hideInlineComposer();
+      });
+
+      submitBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        var body = composerInput.value.trim();
+        if (!body || !composerAnchorData) return;
+        var payload = Object.assign({}, composerAnchorData, { body: body });
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.commentsRichRequestAdd) {
+          window.webkit.messageHandlers.commentsRichRequestAdd.postMessage(payload);
+        }
+        hideInlineComposer();
+      });
+
+      composerInput.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") { hideInlineComposer(); e.preventDefault(); }
+        if (e.key === "Enter" && e.metaKey) { submitBtn.click(); e.preventDefault(); }
+      });
+
+      // Prevent clicks inside composer from dismissing selection
+      composer.addEventListener("mousedown", function(e) { e.preventDefault(); });
+
+      /// Returns the iframe (if any) whose contentDocument.getSelection()
+      /// has a non-collapsed selection.
+      function activeIframeWithSelection() {
+        var frames = document.getElementsByTagName("iframe");
+        for (var i = 0; i < frames.length; i++) {
+          var f = frames[i];
+          var doc = null;
+          try { doc = f.contentDocument; } catch (_) { /* cross-origin */ }
+          if (!doc) continue;
+          var sel = doc.getSelection ? doc.getSelection() : null;
+          if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+            return { iframe: f, doc: doc, sel: sel };
+          }
+        }
+        return null;
+      }
+
+      function repositionButton() {
+        // Markdown path (selection on outer document).
+        var sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+          var range = selectionSourceLineRange();
+          if (range) {
+            crispyvibesCommentsLastSelection = range;
+            var rect = sel.getRangeAt(0).getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) {
+              btn.style.display = "none";
+              return;
+            }
+            placeButton(rect);
+            postSelectionChange(range);
+            return;
+          }
+        }
+
+        // HTML iframe path — defer to the HTML adapter for selector capture.
+        var hit = activeIframeWithSelection();
+        if (hit) {
+          var iframeAnchor = crispyvibesHTMLAdapter.captureSelection(hit.doc);
+          if (iframeAnchor) {
+            crispyvibesCommentsLastSelection = iframeAnchor;
+            var iframeRect = hit.iframe.getBoundingClientRect();
+            var selRect = hit.sel.getRangeAt(0).getBoundingClientRect();
+            // Translate iframe-local coords → outer viewport coords.
+            var translated = {
+              top: iframeRect.top + selRect.top,
+              left: iframeRect.left + selRect.left,
+              width: selRect.width,
+              height: selRect.height,
+            };
+            if (translated.width === 0 && translated.height === 0) {
+              btn.style.display = "none";
+              return;
+            }
+            placeButton(translated);
+            postSelectionChange(iframeAnchor);
+            return;
+          }
+        }
+
+        // No selection anywhere.
+        btn.style.display = "none";
+        crispyvibesCommentsLastSelection = null;
+      }
+
+      function placeButton(rect) {
+        var top = Math.max(8, rect.top - 30);
+        var left = Math.min(window.innerWidth - 130, Math.max(8, rect.left));
+        btn.style.top = top + "px";
+        btn.style.left = left + "px";
+        btn.style.display = "block";
+      }
+
+      function postSelectionChange(range) {
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.commentsRichSelectionChanged) {
+          window.webkit.messageHandlers.commentsRichSelectionChanged.postMessage(range);
+        }
+      }
+
+      function scheduleRepositionButton() {
+        setTimeout(repositionButton, 0);
+      }
+
+      function attachSelectionFallbacks(target) {
+        if (!target || target.__crispyvibesCommentSelectionFallbacksAttached) return;
+        target.addEventListener("selectionchange", scheduleRepositionButton);
+        target.addEventListener("mouseup", scheduleRepositionButton, true);
+        target.addEventListener("keyup", scheduleRepositionButton, true);
+        target.addEventListener("pointerup", scheduleRepositionButton, true);
+        target.__crispyvibesCommentSelectionFallbacksAttached = true;
+      }
+
+      attachSelectionFallbacks(document);
+      document.addEventListener("scroll", function() {
+        if (btn.style.display === "block") repositionButton();
+      }, true);
+
+      // Re-attach selection-change listener inside the HTML preview iframe
+      // every time the host doc rewrites it. The iframe's contentDocument
+      // is recreated on every `frameDoc.write()` so listeners must be
+      // re-installed after each render.
+      window.crispyvibesAttachIframeSelectionListener = function() {
+        var frames = document.getElementsByTagName("iframe");
+        for (var i = 0; i < frames.length; i++) {
+          var doc = null;
+          try { doc = frames[i].contentDocument; } catch (_) {}
+          if (!doc || doc.__crispyvibesCommentListenerAttached) continue;
+          attachSelectionFallbacks(doc);
+          doc.addEventListener("scroll", function() {
+            if (btn.style.display === "block") repositionButton();
+          }, true);
+          doc.__crispyvibesCommentListenerAttached = true;
+        }
+      };
+    })();
+
+    // Comment decoration styles.
+    (function injectCommentStyles() {
+      var bubbleActive = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%232a90ff' d='M3 2h10a2 2 0 012 2v6a2 2 0 01-2 2H8l-3 3v-3H3a2 2 0 01-2-2V4a2 2 0 012-2zm2.4 3.5c-.6 0-1.1.5-1.1 1.1 0 .5.3.9.7 1l-.4 1.4h.7l.6-1.5c.4-.2.6-.6.6-1 0-.5-.5-1-1.1-1zm4 0c-.6 0-1.1.5-1.1 1.1 0 .5.3.9.7 1l-.4 1.4h.7l.6-1.5c.4-.2.6-.6.6-1 0-.5-.5-1-1.1-1z'/></svg>\")";
+      var bubbleResolved = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='%23888' stroke-width='1.5' d='M3 2h10a2 2 0 012 2v6a2 2 0 01-2 2H8l-3 3v-3H3a2 2 0 01-2-2V4a2 2 0 012-2z'/></svg>\")";
+      var bubbleStale = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%23ff8800' d='M3 2h10a2 2 0 012 2v6a2 2 0 01-2 2H8l-3 3v-3H3a2 2 0 01-2-2V4a2 2 0 012-2zm5 2v4h-1v1h1v1h1v-1h1v-1h-1V4z'/></svg>\")";
+      var style = document.createElement("style");
+      style.textContent =
+        "[data-comment-thread] { position: relative; transition: background-color 0.2s; }" +
+        ".crispyvibes-comment-active { background-color: rgba(42, 144, 255, 0.08); }" +
+        ".crispyvibes-comment-resolved { background-color: rgba(150, 150, 150, 0.04); }" +
+        ".crispyvibes-comment-stale { border-bottom: 1.5px dashed rgba(255, 165, 0, 0.7); }" +
+        ".crispyvibes-comment-selected { background-color: rgba(42, 144, 255, 0.18) !important; outline: 1px solid rgba(42, 144, 255, 0.5); outline-offset: 2px; }" +
+        ".crispyvibes-gutter-btn { position: absolute; left: -22px; top: 2px; width: 18px; height: 18px; padding: 0; margin: 0; border: none; background: transparent no-repeat center / 16px 16px; cursor: pointer; opacity: 0.85; transition: opacity 0.15s, transform 0.15s; }" +
+        ".crispyvibes-gutter-btn:hover { opacity: 1; transform: scale(1.1); }" +
+        ".crispyvibes-gutter-btn-active { background-image: " + bubbleActive + "; }" +
+        ".crispyvibes-gutter-btn-resolved { background-image: " + bubbleResolved + "; }" +
+        ".crispyvibes-gutter-btn-stale { background-image: " + bubbleStale + "; }";
+      document.head.appendChild(style);
+    })();
 
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.editorReady) {
       window.webkit.messageHandlers.editorReady.postMessage("ready");

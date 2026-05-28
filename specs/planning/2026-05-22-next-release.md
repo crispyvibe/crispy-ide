@@ -61,8 +61,21 @@ When the file changes:
 
 Comments MUST be visible in the content viewer UI:
 - Gutter indicators showing lines with comments
-- Comment panel/overlay showing comment threads for the selected anchor
+- Comment panel docked to the right edge of the file viewer pane itself (NOT a global app-level panel, NOT the workspace sidebar). The panel is scoped to the active file in that pane and shows that file's comment threads only.
+- The panel MUST be:
+  - Toggleable (show/hide via toolbar button or keyboard shortcut)
+  - Resizable (drag the divider)
+  - Per-pane: in split-pane layouts, each pane has its own independent panel state for its own file
 - Visual distinction between active, resolved, and stale comments
+- Content highlight overlay on the anchored character range:
+  - Passive state: subtle underline or light background tint (theme tokens) on the anchored range — visible but non-distracting
+  - Active state (comment selected in panel or gutter clicked): intensified highlight (stronger background) making the connection between thread and code unmistakable
+  - Stale state: dashed underline or faded highlight at last-known position
+- Bidirectional linking between highlight and panel:
+  - Click highlight in editor → panel scrolls to that thread
+  - Click thread in panel → editor scrolls to line and activates the highlight
+
+The workspace-wide cross-file view (R15) is a separate surface and does NOT replace this per-pane panel.
 
 ### F049-R07: Agent Interaction
 
@@ -72,6 +85,74 @@ AI agents MUST be able to:
 - Reply to existing comments (e.g., explaining a change)
 - Resolve comments after addressing them
 - Comments added by agents MUST be attributed with agent identity
+
+### F049-R08: Comment Metadata
+
+Each comment MUST include:
+- `created_at` and `updated_at` timestamps (ISO 8601, UTC)
+- `resolved_at` timestamp when a thread is resolved (null otherwise)
+- An "edited" indicator surfaced in the UI when `updated_at > created_at`
+
+Full edit history is NOT required — only the latest content and timestamps are stored.
+
+### F049-R09: Comment Content Format
+
+Comment content MUST support a safe subset of markdown (bold, italic, inline code, code blocks, links, lists). Raw HTML and inline scripts MUST be stripped during rendering. Plain text MUST also render correctly without markdown processing.
+
+### F049-R10: Delete Semantics
+
+Comments are hard-deleted (no soft delete, no tombstones, no recovery). When a parent comment with replies is deleted, the entire reply subtree MUST be cascade-deleted in the same transaction. The UI MUST warn the user before deleting a thread that contains replies.
+
+### F049-R11: CLI/UI Synchronization
+
+When the CLI writes a comment (add/update/resolve/delete), the app UI MUST reflect the change without manual refresh. The Rust layer MUST expose a change-notification mechanism (file watcher or pub-sub) that the Swift UI layer consumes. UI updates from CLI writes MUST appear within 500ms.
+
+### F049-R12: Concurrency Semantics
+
+The UI and CLI are independent processes operating on the same database. The Rust layer MUST serialize writes through a single transaction queue to prevent torn writes. Conflicting updates to the same comment MUST follow last-write-wins by `updated_at`.
+
+### F049-R13: File Lifecycle Handling
+
+When a file with comments is renamed or moved within the vibespace, comments MUST follow the file. When a file is deleted from the vibespace, its comments MUST be retained as orphaned (file unavailable) and made accessible via the cross-file view (R15) only — not via per-file `comments.list`.
+
+### F049-R14: Supported Anchor Targets
+
+Character-range anchoring (R05) applies only to text-based content viewers (text, markdown, code, config).
+
+For non-text content viewers (images, PDF, office documents, HTML preview), comments MUST attach at the file level only (whole-file comments) for v1. Region- or element-level anchoring on non-text content is out of scope for this release.
+
+### F049-R15: Cross-File View
+
+The UI MUST provide a workspace-wide comment view showing all comments across the vibespace. The view MUST support:
+- Grouping by file
+- Filtering by status (active / resolved / stale / orphaned)
+- Click-to-navigate to the anchored location (or surface the orphaned-file message)
+
+### F049-R16: Search & Filtering
+
+The UI and CLI MUST support filtering comments by:
+- Status (active / resolved / stale / orphaned)
+- File or folder path
+- Date range (created or updated)
+- Full-text content search
+
+### F049-R17: Practical Limits
+
+The system MUST enforce:
+- Maximum 1,000 active comments per file (additional writes rejected with a clear error)
+- Maximum 10,000 characters per comment
+- Maximum thread depth of 50 levels (replies beyond depth 50 attach to depth 50)
+
+These limits prevent runaway agent loops and pathological data growth. Limit violations MUST surface as structured errors via CLI and as a non-blocking notification in the UI.
+
+### F049-R18: Observability Events
+
+The Rust layer MUST emit structured events for:
+- Comment lifecycle: `comment.created`, `comment.updated`, `comment.resolved`, `comment.deleted`
+- Anchor lifecycle: `anchor.relocated` (with confidence score), `anchor.stale`
+- Limit violations: `limit.exceeded` (with limit type)
+
+Events MUST include comment ID, file path, agent identity (if applicable), and timestamp.
 
 ---
 

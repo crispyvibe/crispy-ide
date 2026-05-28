@@ -5,11 +5,30 @@ import SwiftUI
 struct BrowserContentView: View {
     @Environment(\.appThemePalette) private var palette
     @Environment(\.crispyvibesUIScale) private var uiScale
+    /// F049-v2: comment store comes from RootView-level env. When non-nil
+    /// the browser dock includes the comments toolbar toggle + side panel.
+    @Environment(\.vibespaceCommentStoreEnvironment) private var commentStore: VibeSpaceCommentStore?
     @ObservedObject var viewModel: BrowserPanelViewModel
     @StateObject private var suggestionsController = BrowserSuggestionsController()
     var presentation: BrowserHostPresentation = .detailed
 
     var body: some View {
+        // F049-v2: bind the store on every body evaluation so it's never
+        // nil when a page-load triggers refreshCommentsForCurrentPage().
+        // The element picker works because it doesn't depend on any
+        // external store — it's self-contained JS. Comments need the store
+        // to know which threads to decorate.
+        let _ = { viewModel.commentsStore = commentStore }()
+
+        return BrowserContentWithCommentsPanel(
+            panel: viewModel.commentsPanel,
+            viewModel: viewModel,
+            store: commentStore,
+            browserContent: { contentBody }
+        )
+    }
+
+    private var contentBody: some View {
         VStack(spacing: 0) {
             addressBar
             if viewModel.isLoading, viewModel.estimatedProgress > 0, viewModel.estimatedProgress < 1 {
@@ -111,6 +130,22 @@ struct BrowserContentView: View {
                             accessibilityLabel: "Select Element") { viewModel.toggleElementPicker() }
                 .help(viewModel.isElementPickerActive ? "Deactivate Picker" : "Select Element")
                 .accessibilityIdentifier("browser.element-picker")
+
+            // F049-v2: comments toggle for browser surfaces. Appears only
+            // when the comment store is reachable (the env value is set).
+            if commentStore != nil {
+                CrispyVibesIconButton(
+                    systemName: viewModel.commentsPanel.isOpen ? "quote.bubble.fill" : "quote.bubble",
+                    size: 12,
+                    padding: 5,
+                    color: viewModel.commentsPanel.isOpen ? palette.accentColor : palette.secondaryTextColor,
+                    accessibilityLabel: AppStrings.Comments.toolbarToggleHelp
+                ) { viewModel.commentsPanel.togglePanel() }
+                    .help(viewModel.commentsPanel.isOpen
+                          ? AppStrings.Comments.closePanel
+                          : AppStrings.Comments.toolbarToggleHelp)
+                    .accessibilityIdentifier("browser.comments-toggle")
+            }
 
             browserOverflowMenu
         }

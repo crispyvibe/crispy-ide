@@ -79,10 +79,10 @@ final class EditorGroupStoreTests: XCTestCase {
 
     override func setUpWithError() throws {
         container = AppContainer.makeDefault()
-        group = EditorGroupStore(markdownViewModel: container.makeMarkdownViewModel(bufferStore: DocumentBufferStore()))
+        group = EditorGroupStore(markdownViewModel: container.makeMarkdownViewModel(bufferStore: DocumentBufferStore()), commentsPanel: CommentsPanelStore())
         dockedFileViewerCoordinator = DockedFileViewerCoordinator(
             editorGroupFactory: { [container] id in
-                EditorGroupStore(id: id, markdownViewModel: container!.makeMarkdownViewModel(bufferStore: DocumentBufferStore()))
+                EditorGroupStore(id: id, markdownViewModel: container!.makeMarkdownViewModel(bufferStore: DocumentBufferStore()), commentsPanel: CommentsPanelStore())
             }
         )
     }
@@ -216,7 +216,7 @@ final class EditorGroupStoreTests: XCTestCase {
             gitFileContents: ["Sources/deleted.swift": "previous revision"]
         )
         let markdownViewModel = MarkdownViewModel(worker: worker, bufferStore: DocumentBufferStore())
-        let localGroup = EditorGroupStore(markdownViewModel: markdownViewModel)
+        let localGroup = EditorGroupStore(markdownViewModel: markdownViewModel, commentsPanel: CommentsPanelStore())
 
         localGroup.previewGitFileContent(
             rootURL: URL(fileURLWithPath: "/tmp/repo"),

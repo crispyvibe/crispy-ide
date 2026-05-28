@@ -4,6 +4,9 @@ struct DockPinnedFileView: View {
     @Environment(\.appThemePalette) private var appThemePalette
     @Environment(\.crispyvibesTheme) private var crispyvibesTheme
     @AppStorage(AppPreferences.codeFontSizeKey) private var codeFontSize = AppPreferences.defaultCodeFontSize
+    /// F049: comment store comes from RootView-level env. When non-nil, the
+    /// file tile docks the comments panel + floating button + overlays.
+    @Environment(\.vibespaceCommentStoreEnvironment) private var commentStore: VibeSpaceCommentStore?
     let fileURL: URL
     let isActive: Bool
     @ObservedObject var editorGroup: EditorGroupStore
@@ -19,10 +22,20 @@ struct DockPinnedFileView: View {
     var interactionController: BoardInteractionController?
 
     var body: some View {
-        MarkdownEditorView(
-            viewModel: editorGroup.markdownViewModel,
-            showsTopBar: false,
-            headerLayout: .embedded
+        FileContentWithCommentsPanel(
+            panel: editorGroup.commentsPanel,
+            store: commentStore,
+            filePath: fileURL.standardizedFileURL.path,
+            editorContent: {
+                MarkdownEditorView(
+                    viewModel: editorGroup.markdownViewModel,
+                    showsTopBar: false,
+                    headerLayout: .embedded
+                )
+                .environment(\.vibespaceCommentStoreEnvironment, commentStore)
+                .environment(\.commentsPanelEnvironment, editorGroup.commentsPanel)
+                .environment(\.commentsFilePathEnvironment, fileURL.standardizedFileURL.path)
+            }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 30)

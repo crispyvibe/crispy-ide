@@ -26,6 +26,11 @@ final class CLICommandRouter {
     /// UI-layer coordinator.
     weak var vibespaceActionsCoordinator: VibeSpaceCanvasActionsCoordinator?
 
+    /// F049-R02 / R03: late-bound reference to the central comment store so
+    /// CLI handlers can read/write comments via the same Rust-backed store
+    /// the UI uses.
+    weak var vibespaceCommentStore: VibeSpaceCommentStore?
+
     init(
         appBundleName: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Crispy",
         appVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0",
@@ -85,6 +90,16 @@ final class CLICommandRouter {
         }
         self.vibespaceActionsCoordinator = coordinator
         agentCLILogger.notice("vibespace actions coordinator attached")
+    }
+
+    /// F049: late-bound idempotent injection of the central comment store.
+    func attachVibeSpaceCommentStore(_ store: VibeSpaceCommentStore) {
+        if vibespaceCommentStore != nil {
+            agentCLILogger.notice("vibespace comment store attach skipped (already attached)")
+            return
+        }
+        self.vibespaceCommentStore = store
+        agentCLILogger.notice("vibespace comment store attached")
     }
 
     func dispatch(_ request: CLIRequest) async -> CLIResponse {
@@ -483,6 +498,107 @@ final class CLICommandRouter {
                 errors: ["invalid_params", "file_not_found", "vibespace_not_found", "not_connected"]
             ),
             handler: { [unowned self] req in self.handleVibeSpaceParkProject(req) }
+        ),
+        // MARK: Comments (F049)
+        CommandRegistration(
+            method: "comments.add",
+            descriptor: CommandDescriptor(
+                summary: "Add a file comment at a specific line range (F049-R03).",
+                params: [
+                    .init(name: "file", type: "string", required: true, description: "File path (absolute or project-relative)."),
+                    .init(name: "start_line", type: "integer", required: true, description: "1-based start line."),
+                    .init(name: "start_column", type: "integer", required: false, description: "1-based start column.", defaultValue: .int(1)),
+                    .init(name: "end_line", type: "integer", required: false, description: "1-based end line (defaults to start line)."),
+                    .init(name: "end_column", type: "integer", required: false, description: "1-based end column."),
+                    .init(name: "body", type: "string", required: true, description: "Comment body (markdown)."),
+                    .init(name: "parent_id", type: "string", required: false, description: "Parent comment ID for threaded replies."),
+                ],
+                result: [.init(name: "id", type: "string", description: "ID of the created comment.")],
+                errors: ["invalid_params", "file_not_found", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleCommentsAdd(req) }
+        ),
+        CommandRegistration(
+            method: "comments.list",
+            descriptor: CommandDescriptor(
+                summary: "List comments for a file or across the active vibespace.",
+                params: [
+                    .init(name: "file", type: "string", required: false, description: "File path filter; omit to list all."),
+                    .init(name: "status", type: "string", required: false, description: "Status filter: active, resolved, stale, all.", defaultValue: .string("active")),
+                ],
+                result: [.init(name: "comments", type: "array", description: "Flat array of comments (replies inline).")],
+                errors: ["invalid_params", "file_not_found", "vibespace_not_found", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleCommentsList(req) }
+        ),
+        CommandRegistration(
+            method: "comments.reply",
+            descriptor: CommandDescriptor(
+                summary: "Reply to an existing comment thread.",
+                params: [
+                    .init(name: "id", type: "string", required: true, description: "Parent comment ID."),
+                    .init(name: "body", type: "string", required: true, description: "Reply body."),
+                ],
+                result: [.init(name: "id", type: "string", description: "ID of the created reply.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleCommentsReply(req) }
+        ),
+        CommandRegistration(
+            method: "comments.update",
+            descriptor: CommandDescriptor(
+                summary: "Update the body of an existing comment.",
+                params: [
+                    .init(name: "id", type: "string", required: true, description: "Comment ID."),
+                    .init(name: "body", type: "string", required: true, description: "New body."),
+                ],
+                result: [.init(name: "id", type: "string", description: "ID of the updated comment.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleCommentsUpdate(req) }
+        ),
+        CommandRegistration(
+            method: "comments.resolve",
+            descriptor: CommandDescriptor(
+                summary: "Mark a comment thread as resolved (or pass `unresolve: true` to reopen).",
+                params: [
+                    .init(name: "id", type: "string", required: true, description: "Comment ID."),
+                    .init(name: "unresolve", type: "boolean", required: false, description: "Reopen a previously-resolved thread.", defaultValue: .bool(false)),
+                ],
+                result: [
+                    .init(name: "id", type: "string", description: "ID of the comment."),
+                    .init(name: "resolvedAt", type: "string", description: "ISO 8601 timestamp, or null when reopened.", nullable: true),
+                ],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleCommentsResolve(req) }
+        ),
+        CommandRegistration(
+            method: "comments.delete",
+            descriptor: CommandDescriptor(
+                summary: "Delete a comment (cascades to all replies).",
+                params: [.init(name: "id", type: "string", required: true, description: "Comment ID.")],
+                result: [
+                    .init(name: "id", type: "string", description: "ID of the deleted root."),
+                    .init(name: "deletedCount", type: "integer", description: "Number of comments removed (root + replies)."),
+                ],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleCommentsDelete(req) }
+        ),
+        CommandRegistration(
+            method: "comments.search",
+            descriptor: CommandDescriptor(
+                summary: "Full-text search comments in the active vibespace.",
+                params: [
+                    .init(name: "query", type: "string", required: false, description: "Search text."),
+                    .init(name: "file_prefix", type: "string", required: false, description: "Restrict to files under this path prefix."),
+                    .init(name: "status", type: "string", required: false, description: "Status filter.", defaultValue: .string("active")),
+                ],
+                result: [.init(name: "comments", type: "array", description: "Matching comments.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleCommentsSearch(req) }
         ),
     ] + Self.browserForwardedRegistrations
 

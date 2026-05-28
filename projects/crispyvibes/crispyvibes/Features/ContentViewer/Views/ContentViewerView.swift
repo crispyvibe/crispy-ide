@@ -19,6 +19,9 @@ struct ContentViewerView: View {
     var dockedBrowserCoordinator: DockedBrowserCoordinator? = nil
     var onLinkTargetActivated: ((URL) -> Void)? = nil
     var onFileSystemTargetActivated: ((TerminalFileSystemTarget) -> Void)? = nil
+    /// F049: optional central comment store. When non-nil and the active tab
+    /// is a file, the comments side-panel docks on the right.
+    var commentStore: VibeSpaceCommentStore? = nil
     @State private var dropZone: EditorDropZone?
     @State private var isDropTargeted = false
 
@@ -123,6 +126,7 @@ struct ContentViewerView: View {
                         splitStore: splitStore,
                         group: splitStore.group(for: paneID),
                         contentViewerStore: store,
+                        vibespaceID: vibespaceID,
                         projects: projects,
                         viewerScope: store.viewerScope,
                         focusedProjectRootPath: focusedProjectRootPath,
@@ -133,6 +137,7 @@ struct ContentViewerView: View {
                         dockedBrowserCoordinator: dockedBrowserCoordinator,
                         onLinkTargetActivated: onLinkTargetActivated,
                         onFileSystemTargetActivated: onFileSystemTargetActivated,
+                        commentStore: commentStore,
                         onActivate: { splitStore.activePaneID = paneID }
                     )
                 )
@@ -157,13 +162,8 @@ struct ContentViewerView: View {
     private var singleContentArea: some View {
         if let activeTab = visibleActiveTab {
             switch activeTab.kind {
-            case .file:
-                MarkdownEditorView(
-                    viewModel: activeGroup.markdownViewModel,
-                    showsTopBar: false,
-                    embeddedDropBridge: embeddedDropBridge
-                )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .file(let reference):
+                fileContentArea(activeTab: activeTab, filePath: reference.url.path)
             case .vibeCast:
                 if !projects.isEmpty { vibeCastContent }
                 else {
@@ -220,6 +220,28 @@ struct ContentViewerView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// F049-R06: file content area, optionally docked with the comments side
+    /// panel. The editor view itself owns the in-editor overlay + floating
+    /// button. This wrapper just docks the panel.
+    @ViewBuilder
+    private func fileContentArea(activeTab: ContentViewerTab, filePath: String) -> some View {
+        FileContentWithCommentsPanel(
+            panel: activeGroup.commentsPanel,
+            store: commentStore,
+            filePath: filePath,
+            editorContent: {
+                MarkdownEditorView(
+                    viewModel: activeGroup.markdownViewModel,
+                    showsTopBar: false,
+                    embeddedDropBridge: embeddedDropBridge
+                )
+                .environment(\.vibespaceCommentStoreEnvironment, commentStore)
+                .environment(\.commentsPanelEnvironment, activeGroup.commentsPanel)
+                .environment(\.commentsFilePathEnvironment, filePath)
+            }
+        )
     }
 
     private var vibeCastContent: some View {

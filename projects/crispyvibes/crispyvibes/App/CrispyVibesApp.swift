@@ -23,6 +23,7 @@ extension Notification.Name {
     static let openTerminalOnlyVibeSpaceView = Notification.Name("openTerminalOnlyVibeSpaceView")
     static let openAppSettings = Notification.Name("openAppSettings")
     static let openDeveloperTools = Notification.Name("openDeveloperTools")
+    static let openAllComments = Notification.Name("openAllComments")
     static let boardNavigateLeft = Notification.Name("boardNavigateLeft")
     static let boardNavigateRight = Notification.Name("boardNavigateRight")
     /// F048-R13: posted when the user invokes the bulk-move keyboard shortcut.
@@ -143,6 +144,12 @@ private struct OptionsMenuCommands: Commands {
             Button("Developer Tools") {
                 NotificationCenter.default.post(name: .openDeveloperTools, object: nil)
             }
+
+            Divider()
+
+            Button("All Comments in Vibespace") {
+                NotificationCenter.default.post(name: .openAllComments, object: nil)
+            }
         }
     }
 }
@@ -242,6 +249,28 @@ struct CrispyVibesApp: App {
                 contextSummaryObservabilityStore: appContainer.contextSummaryObservabilityStore
             )
             .frame(minWidth: 600, minHeight: 400)
+        }
+
+        // F049-R15: workspace-wide comments view.
+        Window("All Comments", id: "all-comments") {
+            CrossFileCommentsView(
+                store: appContainer.vibespaceCommentStore,
+                onNavigateFile: { filePath, threadID in
+                    NotificationCenter.default.post(
+                        name: .commentsNavigateToThread,
+                        object: nil,
+                        userInfo: ["filePath": filePath, "threadID": threadID]
+                    )
+                },
+                onNavigateBrowser: { url, threadID in
+                    NotificationCenter.default.post(
+                        name: .commentsNavigateToBrowserURL,
+                        object: nil,
+                        userInfo: ["url": url, "threadID": threadID]
+                    )
+                }
+            )
+            .frame(minWidth: 540, minHeight: 480)
         }
     }
 }

@@ -23,6 +23,9 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
     let layoutPersistence: LayoutPersistenceService
     let stackedRailOverlayCoordinator: StackedRailExpansionOverlayCoordinator
     let terminalBoardStandaloneRegistry: VibeSpaceTerminalBoardStandaloneRegistry
+    /// F049: optional comment store. When non-nil, the content viewer renders
+    /// the per-pane comments side-panel for file tabs.
+    var commentStore: VibeSpaceCommentStore? = nil
     let isSpotlightPresented: Bool
     let contentHeaderCornerRadii: RectangleCornerRadii
     let contentPanelCornerRadii: RectangleCornerRadii
@@ -203,7 +206,8 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
             },
             onFileSystemTargetActivated: { target in
                 onFileSystemTargetActivated(target, vibespaceView.focusedProject?.rootURL)
-            }
+            },
+            commentStore: commentStore
         )
         .onHover { isHovering in
             if isHovering {
@@ -444,6 +448,7 @@ extension ContentView {
             layoutPersistence: layoutPersistence,
             stackedRailOverlayCoordinator: stackedRailOverlayCoordinator,
             terminalBoardStandaloneRegistry: appContainer.terminalBoardStandaloneRegistry,
+            commentStore: appContainer.vibespaceCommentStore,
             isSpotlightPresented: terminalSpotlightCoordinator.spotlight != nil,
             contentHeaderCornerRadii: contentHeaderCornerRadii,
             contentPanelCornerRadii: contentPanelCornerRadii,
@@ -928,7 +933,7 @@ extension ContentView {
                 boardStore?.setSurfaceTitle(title, for: surfaceID)
             }
         ) {
-            DetachedTerminalBoardWindowRoot(themeManager: themeManager) {
+            DetachedTerminalBoardWindowRoot(themeManager: themeManager, commentStore: appContainer.vibespaceCommentStore) {
                 DetachedTerminalBoardWindowContent(
                     vibespaceID: vibespaceID,
                     surfaceID: surfaceID,
@@ -2015,12 +2020,15 @@ private struct DetachedTerminalBoardWindowRoot<Content: View>: View {
     private var appCustomThemePaletteJSON = AppPreferences.defaultAppCustomThemePaletteJSON
 
     let content: Content
+    var commentStore: VibeSpaceCommentStore?
 
     init(
         themeManager: CrispyVibesThemeManager,
+        commentStore: VibeSpaceCommentStore? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.themeManager = themeManager
+        self.commentStore = commentStore
         self.content = content()
     }
 
@@ -2049,6 +2057,7 @@ private struct DetachedTerminalBoardWindowRoot<Content: View>: View {
             .applyingAppAccentTheme(activeThemePalette.accentColor)
             .buttonBorderShape(themeManager.theme.borderShape.buttonBorderShape)
             .environment(\.crispyvibesTheme, themeManager.theme)
+            .environment(\.vibespaceCommentStoreEnvironment, commentStore)
             .environmentObject(themeManager)
             .environment(\.terminalHostOwnershipPriorityBoost, 40)
             .environment(\.browserHostOwnershipPriorityBoost, 40)

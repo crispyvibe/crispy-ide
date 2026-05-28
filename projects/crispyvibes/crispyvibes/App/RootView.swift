@@ -6,8 +6,12 @@ struct RootView: View {
 
     var body: some View {
         ContentView(container: appContainer)
+            .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
             .onReceive(NotificationCenter.default.publisher(for: .openDeveloperTools)) { _ in
                 openWindow(id: "developer-tools")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openAllComments)) { _ in
+                openWindow(id: "all-comments")
             }
     }
 }

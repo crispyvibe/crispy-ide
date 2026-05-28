@@ -72,12 +72,12 @@ final class ContentViewerStoreTests: XCTestCase {
         let store = ContentViewerStore(
             conversationStore: container.agentConversationStore,
             editorGroupFactory: { _ in
-            EditorGroupStore(markdownViewModel: MarkdownViewModel(worker: worker, bufferStore: DocumentBufferStore()))
+            EditorGroupStore(markdownViewModel: MarkdownViewModel(worker: worker, bufferStore: DocumentBufferStore()), commentsPanel: CommentsPanelStore())
             },
             sessionRegistry: container.acpSessionRegistry
         )
         let splitStore = SplitViewStore { _ in
-            EditorGroupStore(markdownViewModel: MarkdownViewModel(worker: worker, bufferStore: DocumentBufferStore()))
+            EditorGroupStore(markdownViewModel: MarkdownViewModel(worker: worker, bufferStore: DocumentBufferStore()), commentsPanel: CommentsPanelStore())
         }
         store.splitStore = splitStore
         return (store, splitStore)

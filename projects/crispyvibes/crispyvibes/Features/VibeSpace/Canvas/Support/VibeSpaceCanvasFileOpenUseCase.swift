@@ -9,6 +9,11 @@ enum TerminalFileSystemTargetResolution {
 @MainActor
 struct VibeSpaceCanvasFileOpenUseCase {
     private let projectRoutingUseCase = VibeSpaceProjectRoutingUseCase()
+    private let commentLifecycle: CommentLifecycleCoordinator?
+
+    init(commentLifecycle: CommentLifecycleCoordinator? = nil) {
+        self.commentLifecycle = commentLifecycle
+    }
 
     func wireProjectFileOpenHandler(
         _ project: AnyProjectSession,
@@ -80,8 +85,9 @@ struct VibeSpaceCanvasFileOpenUseCase {
         }
 
         if project.onFileRenamed == nil {
-            project.onFileRenamed = { event in
+            project.onFileRenamed = { [commentLifecycle] event in
                 contentViewerStore.retargetFileSystemLocation(from: event.oldURL, to: event.newURL)
+                commentLifecycle?.handleFileRenamed(oldURL: event.oldURL, newURL: event.newURL)
             }
         }
 

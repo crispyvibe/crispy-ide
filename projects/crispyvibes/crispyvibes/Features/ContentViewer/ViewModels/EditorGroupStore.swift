@@ -16,6 +16,12 @@ final class EditorGroupStore: ObservableObject, Identifiable {
     @Published var tabs: [ContentViewerTab] = []
     @Published var activeTabID: String?
 
+    /// F049-R06: per-pane comments side-panel state. Each split pane owns
+    /// one of these so panel visibility and selection are independent.
+    /// Injected via init so `AppContainer` controls the lifecycle (per
+    /// composition-root rule) rather than the store creating it itself.
+    let commentsPanel: CommentsPanelStore
+
     private var fileContentProviderByTabID: [String: any FileContentProviding] = [:]
     private var gitPresentationByTabID: [String: GitFileTabPresentation] = [:]
     private var previewTabID: String?
@@ -25,9 +31,14 @@ final class EditorGroupStore: ObservableObject, Identifiable {
         return tabs.first(where: { $0.id == activeTabID })
     }
 
-    init(id: UUID = UUID(), markdownViewModel: MarkdownViewModel) {
+    init(
+        id: UUID = UUID(),
+        markdownViewModel: MarkdownViewModel,
+        commentsPanel: CommentsPanelStore
+    ) {
         self.id = id
         self.markdownViewModel = markdownViewModel
+        self.commentsPanel = commentsPanel
     }
 
     // MARK: - File Operations

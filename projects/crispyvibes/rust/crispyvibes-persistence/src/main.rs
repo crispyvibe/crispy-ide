@@ -1,4 +1,5 @@
 mod handlers_board;
+mod handlers_comments;
 mod handlers_message;
 mod handlers_session;
 mod handlers_thread;
@@ -147,6 +148,16 @@ async fn dispatch(conn: &libsql::Connection, req: Request) -> Response {
 
         // Maintenance
         "maintenance.cleanup" => handlers_session::maintenance_cleanup(conn, id, params).await,
+
+        // F049 — File comments
+        "comment.add" => handlers_comments::comment_add(conn, id, params).await,
+        "comment.list" => handlers_comments::comment_list(conn, id, params).await,
+        "comment.update" => handlers_comments::comment_update(conn, id, params).await,
+        "comment.resolve" => handlers_comments::comment_resolve(conn, id, params).await,
+        "comment.delete" => handlers_comments::comment_delete(conn, id, params).await,
+        "comment.relocate" => handlers_comments::comment_relocate(conn, id, params).await,
+        "comment.search" => handlers_comments::comment_search(conn, id, params).await,
+        "comment.movePath" => handlers_comments::comment_move_path(conn, id, params).await,
 
         // Board stubs
         m if m.starts_with("board.") => handlers_board::stub(id, m),

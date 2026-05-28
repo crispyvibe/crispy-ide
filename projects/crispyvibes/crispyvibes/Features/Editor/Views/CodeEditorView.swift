@@ -18,6 +18,10 @@ struct CodeEditorView: NSViewRepresentable {
     private var codeFontSize = AppPreferences.defaultCodeFontSize
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appThemePalette) private var appThemePalette
+    /// F049: optional bridge from the editor's NSTextView to the SwiftUI
+    /// comments overlay + panel. When provided, the bridge is wired in
+    /// `updateNSView` so the overlay can draw geometry-accurate decorations.
+    @Environment(\.codeEditorCommentBridge) private var commentBridge: CodeEditorCommentBridge?
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = ContentViewerDropAwareTextView.scrollableTextView()
@@ -112,6 +116,15 @@ struct CodeEditorView: NSViewRepresentable {
         // Update theme if color scheme changed
         context.coordinator.updateThemeIfNeeded(textView: textView, colorScheme: colorScheme)
         applyPendingSourceSelectionIfNeeded(in: textView)
+
+        // F049: register the textView with the comment bridge so the SwiftUI
+        // overlay can compute pixel-accurate rects for gutter + highlights.
+        if let commentBridge {
+            commentBridge.observe(scrollView: nsView, textView: textView)
+        }
+        if let dropAware = textView as? ContentViewerDropAwareTextView {
+            dropAware.commentFilePath = fileURL.standardizedFileURL.path
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -344,7 +357,85 @@ final class ContentViewerDropAwareTextView: NSTextView {
     override func menu(for event: NSEvent) -> NSMenu? {
         guard let menu = super.menu(for: event) else { return nil }
         retargetContextualEditingItems(in: menu)
+        addCommentMenuItemIfNeeded(in: menu)
         return menu
+    }
+
+    /// F049-R03 / R06: add an "Add Comment to Selection" item to the
+    /// editor's context menu. Posts `commentsRequestAddForSelection` so the
+    /// active pane's `CommentsPanelView` opens its composer pre-seeded with
+    /// the current selection.
+    private func addCommentMenuItemIfNeeded(in menu: NSMenu) {
+        // Avoid duplicating if already injected on this menu instance.
+        if menu.items.contains(where: { $0.identifier == .commentsAdd }) { return }
+
+        menu.addItem(NSMenuItem.separator())
+        let item = NSMenuItem(
+            title: "Add Comment to Selection",
+            action: #selector(addCommentForSelection(_:)),
+            keyEquivalent: ""
+        )
+        item.identifier = .commentsAdd
+        item.target = self
+        menu.addItem(item)
+    }
+
+    @objc private func addCommentForSelection(_ sender: Any?) {
+        let nsString = self.string as NSString
+        let selected = self.selectedRange()
+        let range: NSRange
+        if selected.length == 0 {
+            // Use whole line at caret as fallback
+            let safeLoc = max(0, min(selected.location, nsString.length))
+            range = nsString.lineRange(for: NSRange(location: safeLoc, length: 0))
+        } else {
+            range = selected
+        }
+        let safeLen = max(0, min(range.length, nsString.length - range.location))
+        let safeRange = NSRange(location: range.location, length: safeLen)
+        let anchorText = nsString.substring(with: safeRange)
+        let (startLine, startCol) = lineColumnPair(at: safeRange.location, in: nsString)
+        let endLoc = safeRange.location + safeRange.length
+        let (endLine, endCol) = lineColumnPair(at: endLoc, in: nsString)
+        let leadingStart = max(0, safeRange.location - CodeEditorCommentBridge.maxContextBytes)
+        let leading = nsString.substring(with: NSRange(location: leadingStart, length: safeRange.location - leadingStart))
+        let trailingLen = min(CodeEditorCommentBridge.maxContextBytes, max(0, nsString.length - endLoc))
+        let trailing = trailingLen > 0
+            ? nsString.substring(with: NSRange(location: endLoc, length: trailingLen))
+            : ""
+
+        // Build a CommentAnchor and delegate payload construction so the
+        // notification schema lives in exactly one place.
+        let anchor = CommentAnchor(
+            startLine: startLine,
+            startColumn: startCol,
+            endLine: endLine,
+            endColumn: endCol,
+            anchorHash: CommentAnchor.hash(anchorText),
+            anchorText: anchorText,
+            leadingContext: leading,
+            trailingContext: trailing
+        )
+        NotificationCenter.default.post(
+            name: .commentsRequestAddForSelection,
+            object: nil,
+            userInfo: anchor.notificationPayload(filePath: commentFilePath)
+        )
+    }
+
+    private func lineColumnPair(at offset: Int, in string: NSString) -> (Int, Int) {
+        var line = 1
+        var lineStart = 0
+        var i = 0
+        let target = max(0, min(offset, string.length))
+        while i < target {
+            if string.character(at: i) == 0x0A {
+                line += 1
+                lineStart = i + 1
+            }
+            i += 1
+        }
+        return (line, target - lineStart + 1)
     }
 
     override class func scrollableTextView() -> NSScrollView {
@@ -372,6 +463,11 @@ final class ContentViewerDropAwareTextView: NSTextView {
     var embeddedDropBridge: ContentViewerEmbeddedDropBridge? {
         didSet { updateRegisteredDraggedTypes() }
     }
+
+    /// F049: file path of the open document, set by `CodeEditorView` so the
+    /// "Add Comment to Selection" menu item can include it in its
+    /// notification payload.
+    var commentFilePath: String?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -461,4 +557,10 @@ final class ContentViewerDropAwareTextView: NSTextView {
             item.target = self
         }
     }
+}
+
+
+extension NSUserInterfaceItemIdentifier {
+    /// F049: identifier for the "Add Comment to Selection" context-menu item.
+    static let commentsAdd = NSUserInterfaceItemIdentifier("comments.add-to-selection")
 }

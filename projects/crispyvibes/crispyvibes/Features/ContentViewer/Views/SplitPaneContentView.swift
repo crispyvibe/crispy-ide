@@ -9,6 +9,8 @@ struct SplitPaneContentView: View {
     @ObservedObject var splitStore: SplitViewStore
     @ObservedObject var group: EditorGroupStore
     @ObservedObject var contentViewerStore: ContentViewerStore
+    /// F049: vibespaceID needed by the comment store to scope queries.
+    var vibespaceID: UUID? = nil
     var projects: [AnyProjectSession] = []
     let viewerScope: ViewerScope
     let focusedProjectRootPath: String?
@@ -19,6 +21,10 @@ struct SplitPaneContentView: View {
     var dockedBrowserCoordinator: DockedBrowserCoordinator? = nil
     var onLinkTargetActivated: ((URL) -> Void)? = nil
     var onFileSystemTargetActivated: ((TerminalFileSystemTarget) -> Void)? = nil
+    /// F049: optional comment store. When non-nil and the active tab is a
+    /// file, the per-pane comments side-panel docks on the right and the
+    /// floating glass button appears bottom-trailing on the editor.
+    var commentStore: VibeSpaceCommentStore? = nil
     let onActivate: () -> Void
     @State private var dropZone: EditorDropZone?
     @State private var isDropTargeted = false
@@ -152,12 +158,8 @@ struct SplitPaneContentView: View {
     private var paneBody: some View {
         if let activeTab = visibleActiveTab {
             switch activeTab.kind {
-            case .file:
-                MarkdownEditorView(
-                    viewModel: group.markdownViewModel,
-                    showsTopBar: false,
-                    embeddedDropBridge: embeddedDropBridge
-                )
+            case .file(let reference):
+                fileContentArea(filePath: reference.url.path)
             case .vibeCast:
                 if let vibeCastView { vibeCastView() }
                 else { vibeCastUnavailable }
@@ -238,6 +240,28 @@ struct SplitPaneContentView: View {
                 dropZone = nil
                 handleEmbeddedDrop(item: item, zone: zone)
                 return true
+            }
+        )
+    }
+
+    /// F049-R06: file content with optional comments panel + floating button.
+    /// Per-pane state lives on `group.commentsPanel`. The editor itself
+    /// renders its own in-editor comment chrome.
+    @ViewBuilder
+    private func fileContentArea(filePath: String) -> some View {
+        FileContentWithCommentsPanel(
+            panel: group.commentsPanel,
+            store: commentStore,
+            filePath: filePath,
+            editorContent: {
+                MarkdownEditorView(
+                    viewModel: group.markdownViewModel,
+                    showsTopBar: false,
+                    embeddedDropBridge: embeddedDropBridge
+                )
+                .environment(\.vibespaceCommentStoreEnvironment, commentStore)
+                .environment(\.commentsPanelEnvironment, group.commentsPanel)
+                .environment(\.commentsFilePathEnvironment, filePath)
             }
         )
     }

@@ -60,6 +60,92 @@ enum Command {
     /// VibeSpace project operations.
     #[command(subcommand)]
     Vibespace(VibespaceCommand),
+    /// File comment operations (F049).
+    #[command(subcommand)]
+    Comments(CommentsCommand),
+}
+
+/// F049: file commenting CRUD.
+#[derive(Subcommand, Debug)]
+enum CommentsCommand {
+    /// Add a comment to a file at a specific line range.
+    Add {
+        /// File path (absolute or project-relative).
+        #[arg(long)]
+        file: String,
+        /// 1-based line number where the comment starts.
+        #[arg(long)]
+        line: u32,
+        /// 1-based start column (default 1).
+        #[arg(long)]
+        column: Option<u32>,
+        /// 1-based end line (defaults to start line — line-only comment).
+        #[arg(long)]
+        end_line: Option<u32>,
+        /// 1-based end column (defaults to end of start line).
+        #[arg(long)]
+        end_column: Option<u32>,
+        /// Comment body (markdown supported).
+        #[arg(long)]
+        comment: String,
+        /// Parent comment ID for replies.
+        #[arg(long)]
+        parent: Option<String>,
+    },
+    /// List comments for a file (or all comments in the vibespace).
+    List {
+        /// File path (absolute or project-relative). Omit to list all in vibespace.
+        #[arg(long)]
+        file: Option<String>,
+        /// Filter by status: active, resolved, stale, all.
+        #[arg(long, default_value = "active")]
+        status: String,
+    },
+    /// Reply to an existing comment thread.
+    Reply {
+        /// Parent comment ID.
+        #[arg(long)]
+        id: String,
+        /// Reply body.
+        #[arg(long)]
+        comment: String,
+    },
+    /// Update the body of a comment.
+    Update {
+        /// Comment ID.
+        #[arg(long)]
+        id: String,
+        /// New body.
+        #[arg(long)]
+        comment: String,
+    },
+    /// Mark a comment thread as resolved (or pass --unresolve to reopen).
+    Resolve {
+        /// Comment ID.
+        #[arg(long)]
+        id: String,
+        /// Reopen a resolved thread.
+        #[arg(long)]
+        unresolve: bool,
+    },
+    /// Delete a comment (cascades to all replies).
+    Delete {
+        /// Comment ID.
+        #[arg(long)]
+        id: String,
+    },
+    /// Search comments by content / file / status.
+    Search {
+        /// FTS5 query string (matches comment body).
+        #[arg(long)]
+        query: Option<String>,
+        /// File-path prefix filter.
+        #[arg(long)]
+        file_prefix: Option<String>,
+        /// Status filter.
+        #[arg(long, default_value = "active")]
+        status: String,
+    },
 }
 
 /// F044-R80–R82: project lifecycle in the focused vibespace.
@@ -464,6 +550,42 @@ fn run(cli: Cli) -> Result<(), String> {
             "vibespace.parkProject",
             json!({ "path": path }),
         ),
+        Command::Comments(CommentsCommand::Add { file, line, column, end_line, end_column, comment, parent }) => (
+            "comments.add",
+            json!({
+                "file": file,
+                "start_line": line,
+                "start_column": column.unwrap_or(1),
+                "end_line": end_line.unwrap_or(line),
+                "end_column": end_column,
+                "body": comment,
+                "parent_id": parent,
+            }),
+        ),
+        Command::Comments(CommentsCommand::List { file, status }) => (
+            "comments.list",
+            json!({ "file": file, "status": status }),
+        ),
+        Command::Comments(CommentsCommand::Reply { id, comment }) => (
+            "comments.reply",
+            json!({ "id": id, "body": comment }),
+        ),
+        Command::Comments(CommentsCommand::Update { id, comment }) => (
+            "comments.update",
+            json!({ "id": id, "body": comment }),
+        ),
+        Command::Comments(CommentsCommand::Resolve { id, unresolve }) => (
+            "comments.resolve",
+            json!({ "id": id, "unresolve": unresolve }),
+        ),
+        Command::Comments(CommentsCommand::Delete { id }) => (
+            "comments.delete",
+            json!({ "id": id }),
+        ),
+        Command::Comments(CommentsCommand::Search { query, file_prefix, status }) => (
+            "comments.search",
+            json!({ "query": query, "file_prefix": file_prefix, "status": status }),
+        ),
     };
 
     let response = send_request(&socket_path, method, params, &env)?;
@@ -805,6 +927,56 @@ fn print_human(method: &str, result: &Value) {
         m if m.starts_with("browser.") => {
             // Generic OK for all other browser commands
             println!("OK");
+        }
+        "comments.list" | "comments.search" => {
+            if let Some(comments) = result.get("comments").and_then(Value::as_array) {
+                if comments.is_empty() {
+                    println!("(no comments)");
+                } else {
+                    for c in comments {
+                        let id = c.get("id").and_then(Value::as_str).unwrap_or("?");
+                        let file = c.get("filePath").and_then(Value::as_str).unwrap_or("?");
+                        let body = c.get("body").and_then(Value::as_str).unwrap_or("");
+                        let kind = c.get("authorKind").and_then(Value::as_str).unwrap_or("user");
+                        let stale = c.get("isStale").and_then(Value::as_bool).unwrap_or(false);
+                        let resolved = c.get("resolvedAt").and_then(Value::as_str).is_some();
+                        let line = c
+                            .get("anchor")
+                            .and_then(|a| a.get("startLine"))
+                            .and_then(Value::as_i64)
+                            .unwrap_or(0);
+                        let mut tags = String::new();
+                        if resolved { tags.push_str(" [resolved]"); }
+                        if stale { tags.push_str(" [stale]"); }
+                        if kind == "agent" { tags.push_str(" [agent]"); }
+                        println!("{id}  {file}:{line}{tags}");
+                        for line_text in body.lines().take(3) {
+                            println!("    {line_text}");
+                        }
+                    }
+                }
+            }
+        }
+        "comments.add" | "comments.reply" => {
+            let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
+            println!("created: {id}");
+        }
+        "comments.update" => {
+            let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
+            println!("updated: {id}");
+        }
+        "comments.resolve" => {
+            let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
+            let resolved = result.get("resolvedAt").and_then(Value::as_str);
+            match resolved {
+                Some(_) => println!("resolved: {id}"),
+                None => println!("reopened: {id}"),
+            }
+        }
+        "comments.delete" => {
+            let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
+            let count = result.get("deletedCount").and_then(Value::as_i64).unwrap_or(0);
+            println!("deleted {count} comment(s) starting at {id}");
         }
         _ => {
             let pretty = serde_json::to_string_pretty(result).unwrap_or_default();

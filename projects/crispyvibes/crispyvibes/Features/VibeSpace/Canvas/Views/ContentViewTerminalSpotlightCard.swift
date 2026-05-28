@@ -333,11 +333,21 @@ extension ContentView {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        case let .filePreview(_, group):
-            MarkdownEditorView(
-                viewModel: group.markdownViewModel,
-                showsTopBar: false,
-                headerLayout: .embedded
+        case let .filePreview(target, group):
+            FileContentWithCommentsPanel(
+                panel: group.commentsPanel,
+                store: appContainer.vibespaceCommentStore,
+                filePath: target.standardizedFileURL.path,
+                editorContent: {
+                    MarkdownEditorView(
+                        viewModel: group.markdownViewModel,
+                        showsTopBar: false,
+                        headerLayout: .embedded
+                    )
+                    .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
+                    .environment(\.commentsPanelEnvironment, group.commentsPanel)
+                    .environment(\.commentsFilePathEnvironment, target.standardizedFileURL.path)
+                }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .file(tileID, fileURL):
@@ -351,10 +361,20 @@ extension ContentView {
                 documentReference: fileContext.reference,
                 fileContentProvider: fileContext.fileContentProvider
             )
-            MarkdownEditorView(
-                viewModel: group.markdownViewModel,
-                showsTopBar: false,
-                headerLayout: .embedded
+            FileContentWithCommentsPanel(
+                panel: group.commentsPanel,
+                store: appContainer.vibespaceCommentStore,
+                filePath: fileURL.standardizedFileURL.path,
+                editorContent: {
+                    MarkdownEditorView(
+                        viewModel: group.markdownViewModel,
+                        showsTopBar: false,
+                        headerLayout: .embedded
+                    )
+                    .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
+                    .environment(\.commentsPanelEnvironment, group.commentsPanel)
+                    .environment(\.commentsFilePathEnvironment, fileURL.standardizedFileURL.path)
+                }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .browserPreview(snapshot):
