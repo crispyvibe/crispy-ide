@@ -196,3 +196,69 @@ The migration is additive — no changes to v1 tables.
 - Existing vibespaces simply gain an empty comments table — no data backfill
 - No feature flag; ships directly per planning doc
 
+## UI Architecture — UX Layer
+
+### Inline Composer (JS-based)
+
+For WKWebView surfaces (markdown preview, HTML preview, browser windows), the "Add Comment" button expands into an inline composer rendered entirely in JavaScript within the page:
+
+```
+User selects text
+  → JS `repositionButton()` shows "💬 Add Comment" at selection rect
+  → User clicks button
+  → Button hides, inline composer div appears at same position
+  → Composer contains: anchor text preview, textarea, Cancel/Comment buttons
+  → User types + submits (click or ⌘↩)
+  → JS posts to `window.webkit.messageHandlers.commentsRichRequestAdd`
+    with `{ ...anchorFields, body: "user's comment" }`
+  → Native handler detects `body` field → calls store.add() directly
+  → No panel open needed
+```
+
+The composer is styled with `!important` inline styles and `all: initial` to resist host page CSS (same defensive pattern as the element picker).
+
+For code-mode (NSTextView), the context menu "Add Comment to Selection" posts a notification that opens the panel composer — no JS layer available.
+
+### Panel Thread Layout
+
+`CommentThreadView` renders each thread as a card:
+
+```
+┌─────────────────────────────────────────┐
+│ ┃ L42                                   │  ← Anchor context (accent left border)
+│ ┃ guard let config = self.cfg           │
+│                                         │
+│ [●] Alice · 2h ago                      │  ← 20px avatar + header
+│ Should we throw here?                   │  ← Body (13px)
+│                                         │
+│ [●] Bob · 30m ago                       │  ← Reply
+│ Agreed, silent returns hide bugs.       │
+│                                         │
+│ [Reply] [✓ Resolve] ··········· [🗑]    │  ← Always-visible action pills
+└─────────────────────────────────────────┘
+```
+
+Action pills use `ActionPill` — a custom button with:
+- Hover: tinted background (10% of button color)
+- Press: darker background (18%) + scale-down (0.94×)
+- Animated transitions (120ms hover, 80ms press)
+
+Same-author grouping: consecutive messages from the same author within 5 minutes hide the avatar/name row and use 2px vertical gap.
+
+### Panel Resize
+
+`FileContentWithCommentsPanel` and `BrowserContentWithCommentsPanel` include a 6px drag handle between the editor and panel. The handle:
+- Shows `NSCursor.resizeLeftRight` on hover
+- Updates `panel.widthFraction` on drag (clamped to 0.20–0.50)
+- Uses `DragGesture(minimumDistance: 1)` for immediate response
+
+### Bulk Operations
+
+`CommentsPanelView.bulkActionsRow` provides two menus:
+- **Copy**: formats threads as markdown via `copyToClipboard(threads:)`, writes to `NSPasteboard.general`
+- **Delete**: iterates threads and calls `panel.deleteThread(_:store:)` for each
+
+Copy format differentiates by `surfaceKind`:
+- File: `## #N L{line}` + blockquoted anchor text
+- Browser: `## #N {url}` + `Selector: \`{css}\`` + blockquoted text
+

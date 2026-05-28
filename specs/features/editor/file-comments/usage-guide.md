@@ -104,6 +104,67 @@ The comments panel remembers its open state and width per pane, persisted with t
 - No real-time multi-cursor collaboration. Comments are persistent but the app is single-user.
 - Cross-origin iframes inside browser pages cannot be commented on (browser same-origin policy).
 
+## Inline Commenting (Quick Comments)
+
+In markdown preview and browser windows, clicking "💬 Add Comment" expands into a small inline composer right at the selection — no panel needed. Type your comment, press **⌘↩** to submit (or click "Comment"), and it's saved immediately. Press **Escape** or click "Cancel" to dismiss.
+
+The inline composer shows a preview of the selected text so you can confirm you're commenting on the right thing. If you need the full panel (to browse threads, search, or reply), click the sidebar icon in the composer to expand.
+
+In code mode (source view), right-click and choose "Add Comment to Selection" — this opens the panel composer since the code editor doesn't have an inline JS layer.
+
+## Panel Layout
+
+The comments panel shows each thread as a compact card:
+
+- **Anchor context** at the top: the code or text you commented on, with a colored left border (blue = active, orange = stale). File comments show the line number; browser comments show the quoted text.
+- **Author + timestamp** on one line (e.g., "You · 2h ago")
+- **Comment body** below
+- **Action buttons** always visible at the bottom: Reply (purple), Resolve (green), Delete (red). Buttons highlight on hover and compress slightly on click for clear feedback.
+
+Replies appear below the root comment. If the same person posts multiple replies within 5 minutes, they're grouped (no repeated avatar/name).
+
+## Resizing the Panel
+
+Drag the left edge of the panel to resize it. The panel width ranges from 20% to 50% of the editor pane. Your preferred width is remembered per pane.
+
+## Bulk Operations
+
+At the top of the panel, two menus provide bulk actions:
+
+**Copy** (clipboard icon):
+- **Copy All** — copies every thread to your clipboard as formatted markdown
+- **Copy Unresolved** — copies only active and stale threads
+
+**Delete** (trash icon):
+- **Delete Resolved** — removes all resolved threads at once
+- **Delete All** — removes everything (use with caution)
+
+### Copied Format
+
+The copy format is designed for pasting into AI agent conversations:
+
+```
+# Comments: /path/to/file.swift
+
+## #1 L42
+> guard let config = self.cfg else { return }
+- Comment: Should we throw here instead of silently returning?
+  - Reply: Agreed, silent returns hide bugs.
+
+## #2 L89 [STALE]
+> let timeout = 30
+- Comment: This timeout seems too aggressive
+```
+
+For browser comments, the format includes the URL and CSS selector:
+
+```
+## #1 https://example.com/settings
+Selector: `#main > section:nth-of-type(2) > p`
+> Enable notifications for all devices
+- Comment: This copy is confusing for new users
+```
+
 ## Commenting on HTML Previews
 
 When you preview an HTML file (`.html` opened in the editor), comments anchor to **DOM elements** rather than source lines. Selecting text in the rendered preview shows the same "💬 Add Comment" button. The comment stores a CSS-selector path to the containing element plus the selected text — when the file re-renders, the comment finds its target via `querySelector`, falling back to text matching if the structure changed.

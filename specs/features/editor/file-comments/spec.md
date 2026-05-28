@@ -155,6 +155,62 @@ The workspace-wide comments view MUST group threads by surface kind (Files / Bro
 - Clicking a file row posts `commentsNavigateToThread` with the file path.
 - Clicking a browser row posts `commentsNavigateToBrowserURL` with the canonical URL; subscribed browser panes match against their own canonical URL and either scroll-to-anchor (match) or navigate first then scroll (mismatch).
 
+### F049-R22: Inline Comment Composer
+
+When the user clicks "Add Comment" on a selection in rich preview or browser surfaces, the system MUST show an inline text composer at the selection location (not open the side panel). The composer:
+
+- Appears at the same position as the "Add Comment" button
+- Shows a preview of the selected/anchored text
+- Contains a text field (auto-focused), Cancel and Comment buttons
+- Supports ⌘↩ to submit, Escape to cancel
+- On submit, persists the comment directly without opening the panel
+- Provides an "expand to panel" action for users who want the full panel
+
+For code-mode (NSTextView), the "Add Comment" context menu action opens the panel composer (no inline JS available).
+
+### F049-R23: Anchor Context in Panel
+
+Each thread in the comments panel MUST display the anchored text above the comment body:
+
+- File comments: line number badge + monospace code excerpt (up to 2-3 lines)
+- Browser comments: italic quoted text excerpt with the CSS selector
+- Visual: accent-colored left border (orange when stale)
+- Stale indicator badge ("⚠ modified") when the anchor has drifted
+- Clicking the context block navigates to the source location
+
+### F049-R24: Compact Thread Layout
+
+The comments panel MUST use a compact layout optimized for the 280-320px panel width:
+
+- 20px circular avatars with tinted background
+- Single-line headers: avatar + author name (semibold) + relative timestamp
+- Same-author message grouping: consecutive messages from the same author within 5 minutes collapse (hide avatar/name, minimal gap)
+- Always-visible action buttons (Reply, Resolve/Reopen, Delete) with hover highlight and press feedback
+- Thread cards with subtle background, no heavy borders
+- Resolved threads at reduced opacity
+
+### F049-R25: Bulk Operations
+
+The comments panel MUST provide bulk operations accessible from the panel toolbar:
+
+- **Copy All**: copies all threads to clipboard as formatted markdown
+- **Copy Unresolved**: copies only active/stale threads
+- **Delete Resolved**: bulk-deletes all resolved threads
+- **Delete All**: bulk-deletes all threads for the current file/URL
+
+The copy format MUST be optimized for sharing with AI agents:
+- File comments: `## #N L{line}` heading, blockquoted anchor text, threaded replies
+- Browser comments: `## #N {url}` heading, CSS selector, blockquoted text, replies
+- Replies indented under root comments
+
+### F049-R26: Panel Resize
+
+The comments panel MUST be resizable via a drag handle on its left edge:
+
+- Drag handle shows a resize cursor on hover
+- Width clamps between 20% and 50% of the parent pane width
+- Width persists per pane across panel open/close cycles
+
 ---
 
 ## Scenarios
