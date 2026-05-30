@@ -748,7 +748,8 @@ final class RemoteProjectSessionTests: XCTestCase {
             contextSummaryObservabilityStore: ContextSummaryObservabilityStore(),
             sshConnectionManager: SSHConnectionManager(),
             cliCommandRouter: cliCommandRouter,
-            cliSocketServer: cliSocketServer
+            cliSocketServer: cliSocketServer,
+            jupyterServerService: JupyterServerService()
         )
     }
 }

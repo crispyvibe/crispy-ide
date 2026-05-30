@@ -169,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             appContainer?.terminalBoardDetachedWindowManager.closeAll()
             appContainer?.terminalBoardStandaloneRegistry.shutdownAll()
             appContainer?.cliSocketServer.shutdown()
+            appContainer?.jupyterServerService.shutdownAll()
         }
     }
 

@@ -135,7 +135,7 @@ struct CrossFileCommentsView: View {
                             .font(.caption)
                             .foregroundStyle(palette.secondaryTextColor)
                         if group.surfaceKind == .file {
-                            Text(AppStrings.Comments.lineLabel(thread.root.anchor.startLine))
+                            Text(thread.root.anchor.locationLabel(filePath: thread.root.filePath))
                                 .font(.caption2)
                                 .foregroundStyle(palette.tertiaryTextColor)
                         }

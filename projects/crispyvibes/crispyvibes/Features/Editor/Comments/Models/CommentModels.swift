@@ -134,6 +134,18 @@ struct CommentAnchor: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+extension CommentAnchor {
+    /// F049: short, human-meaningful location label. Notebook (`.ipynb`)
+    /// comments anchor by cell, so `startLine` carries the 1-based cell number
+    /// and we render "Cell N"; other files render the file line(s).
+    func locationLabel(filePath: String) -> String {
+        if filePath.hasSuffix(".ipynb") {
+            return startLine == endLine ? "Cell \(startLine)" : "Cells \(startLine)–\(endLine)"
+        }
+        return startLine == endLine ? "L\(startLine)" : "L\(startLine)-\(endLine)"
+    }
+}
+
 // MARK: - Status filter
 
 /// F049-R16 status filter shared by the side panel, cross-file view, and CLI.

@@ -177,12 +177,7 @@ struct CommentsPanelView: View {
                     lines.append("## \(heading)")
                 }
             } else {
-                let loc: String
-                if root.anchor.startLine == root.anchor.endLine {
-                    loc = "L\(root.anchor.startLine)"
-                } else {
-                    loc = "L\(root.anchor.startLine)-\(root.anchor.endLine)"
-                }
+                let loc = root.anchor.locationLabel(filePath: root.filePath)
                 let status = root.isResolved ? " [RESOLVED]" : (root.isStale ? " [STALE]" : "")
                 lines.append("## #\(threadIdx + 1) \(loc)\(status)")
             }
@@ -245,7 +240,9 @@ struct CommentsPanelView: View {
 
     private func composerCard(anchor: CommentAnchor) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(AppStrings.Comments.composerHeading(forLine: anchor.startLine))
+            Text(filePath.hasSuffix(".ipynb")
+                 ? "Commenting on \(anchor.locationLabel(filePath: filePath))"
+                 : AppStrings.Comments.composerHeading(forLine: anchor.startLine))
                 .font(.caption)
                 .foregroundStyle(palette.secondaryTextColor)
             CommentComposerView(

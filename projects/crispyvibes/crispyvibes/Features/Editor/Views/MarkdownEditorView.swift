@@ -72,6 +72,8 @@ struct MarkdownEditorView: View {
             return "doc.richtext"
         case .plainText, .python, .json, .r:
             return "doc.text"
+        case .notebook:
+            return "book.closed"
         case .image:
             return "photo"
         case .pdf:

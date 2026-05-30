@@ -23,7 +23,8 @@ enum EditorPluginRegistry {
         ImagePreviewPlugin(),
         PDFPreviewPlugin(),
         OfficePreviewPlugin(),
-        GitDiffPreviewPlugin()
+        GitDiffPreviewPlugin(),
+        NotebookEditorPlugin()
     ]
 
     static func render(
@@ -324,6 +325,20 @@ private struct GitDiffPreviewPlugin: EditorContentPlugin {
         AnyView(
             GitDiffPreview(content: context.viewModel.rawContent)
                 .accessibilityIdentifier("editor.preview.gitdiff")
+        )
+    }
+}
+
+@MainActor
+private struct NotebookEditorPlugin: EditorContentPlugin {
+    let supportedTypes: Set<MarkdownViewModel.DocumentType> = [.notebook]
+
+    func makeView(context: EditorPluginContext) -> AnyView {
+        AnyView(
+            NotebookEditorView(fileURL: context.viewModel.fileURL ?? URL(fileURLWithPath: "/"))
+                .id("notebook-editor-\(context.viewModel.fileURL?.path ?? "")")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityIdentifier("editor.notebook")
         )
     }
 }

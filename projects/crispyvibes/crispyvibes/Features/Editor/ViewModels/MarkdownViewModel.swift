@@ -78,6 +78,9 @@ final class MarkdownViewModel: ObservableObject {
         case json
         case r
         case html
+        /// F049: Jupyter notebook (`.ipynb`) — rendered by a dedicated editor
+        /// surface backed by a locally-spawned Jupyter server, not the text buffer.
+        case notebook
         case image
         case pdf
         case office
