@@ -163,6 +163,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard !isPaneWorkerProcess else { return }
+        // Self-heal: if the Agent CLI listener died (e.g. a fatal accept error
+        // left the socket orphaned), this rebinds it. No-op when already
+        // serving, since start() guards on the running flag.
+        startAgentCLISocketServerIfEnabled()
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         guard !isPaneWorkerProcess else { return }
         MainActor.assumeIsolated {

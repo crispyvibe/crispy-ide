@@ -42,6 +42,14 @@ extension AppDelegate {
                     "socket_path": server.resolvedSocketPath.path
                 ]
             )
+        } catch CLISocketServerError.alreadyServing {
+            // A healthy listener already owns the socket (e.g. another live
+            // instance, or this server is already running). Not an error.
+            AppDiagnostics.record(
+                category: .vibespaceLifecycle,
+                level: .info,
+                event: "agent_cli_already_serving"
+            )
         } catch {
             AppDiagnostics.record(
                 category: .vibespaceLifecycle,

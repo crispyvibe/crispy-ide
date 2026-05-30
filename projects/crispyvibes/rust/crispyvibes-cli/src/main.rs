@@ -610,18 +610,51 @@ fn resolve_socket_path(explicit: Option<&PathBuf>) -> Result<PathBuf, String> {
     let home = std::env::var("HOME")
         .map_err(|_| "HOME not set; cannot resolve default socket path".to_string())?;
     // Crispy injects CRISPY_SOCKET (and CRISPY_BUNDLE_ID) into every terminal
-    // it spawns, so this fallback only fires when the CLI is invoked from a
-    // non-Crispy context — where the F044-R02 ancestry check would reject the
-    // connection regardless. Default to the production bundle ID so the error
-    // message points at the conventional location.
+    // it spawns. When those are absent (CLI invoked from a context that didn't
+    // inherit the env), derive the bundle ID from this binary's own location so
+    // the bundled `crispy` always targets ITS app: the local build talks to the
+    // local socket and the released build to the released socket, with no
+    // hardcoded cross-build bias. Only fall back to the production ID if the
+    // owning bundle can't be resolved at all.
     let bundle = std::env::var("CRISPY_BUNDLE_ID")
         .ok()
         .filter(|s| !s.is_empty())
+        .or_else(bundle_id_from_own_location)
         .unwrap_or_else(|| "com.crispyvibe.app".to_string());
     Ok(PathBuf::from(home)
         .join("Library/Application Support")
         .join(&bundle)
         .join("crispy.sock"))
+}
+
+/// Resolves the owning app's bundle identifier from this binary's own path.
+///
+/// The bundled CLI lives at `<App>.app/Contents/Resources/bin/crispy`, so the
+/// `Info.plist` is three directories up from the executable's parent. `plutil`
+/// is used because app-bundle plists are typically binary-encoded. Returns
+/// `None` if the binary isn't inside an app bundle (e.g. a standalone build).
+fn bundle_id_from_own_location() -> Option<String> {
+    let exe = std::fs::canonicalize(std::env::current_exe().ok()?).ok()?;
+    // exe -> bin -> Resources -> Contents
+    let contents = exe.parent()?.parent()?.parent()?;
+    let info_plist = contents.join("Info.plist");
+    if !info_plist.exists() {
+        return None;
+    }
+    let output = std::process::Command::new("/usr/bin/plutil")
+        .args(["-extract", "CFBundleIdentifier", "raw", "-o", "-"])
+        .arg(&info_plist)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let id = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
 }
 
 #[derive(Debug, Default)]

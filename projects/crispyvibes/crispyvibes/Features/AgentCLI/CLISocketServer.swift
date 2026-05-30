@@ -70,8 +70,16 @@ final class CLISocketServer {
             attributes: nil
         )
 
-        // Remove any stale socket from a previous run (F044-T10 mitigation).
-        try? fileManager.removeItem(at: socketPath)
+        // Liveness-guarded cleanup (F044-T10): only remove a socket file that
+        // is NOT backed by a live listener. This prevents a second instance
+        // from clobbering a healthy one, and only reclaims confirmed-stale
+        // sockets left by an unclean exit.
+        if fileManager.fileExists(atPath: socketPath.path) {
+            if Self.isSocketAlive(at: socketPath) {
+                throw CLISocketServerError.alreadyServing
+            }
+            try? fileManager.removeItem(at: socketPath)
+        }
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
@@ -129,7 +137,15 @@ final class CLISocketServer {
                 appPID: appPID,
                 router: router,
                 connectionQueue: connectionQueue,
-                isRunning: { runningFlag.get() }
+                isRunning: { runningFlag.get() },
+                onAbnormalExit: {
+                    // Listener died unexpectedly (not a clean shutdown). Reset
+                    // state and release the descriptor so a later start() can
+                    // rebind and recover instead of leaving an orphaned,
+                    // bound-but-not-listening socket.
+                    runningFlag.set(false)
+                    close(listenFD)
+                }
             )
         }
     }
@@ -148,6 +164,31 @@ final class CLISocketServer {
 
     var resolvedSocketPath: URL { socketPath }
 
+    /// Returns `true` if a process is actively listening on `path` (a
+    /// `connect()` succeeds). Used to avoid clobbering a healthy listener and
+    /// to distinguish a stale socket file from a live one.
+    nonisolated static func isSocketAlive(at path: URL) -> Bool {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = path.path.utf8CString
+        guard pathBytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else { return false }
+        withUnsafeMutableBytes(of: &addr.sun_path) { dest in
+            pathBytes.withUnsafeBytes { src in dest.copyMemory(from: src) }
+        }
+
+        let addrLen = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let result = withUnsafePointer(to: &addr) { ptr -> Int32 in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
+                Darwin.connect(fd, sockPtr, addrLen)
+            }
+        }
+        return result == 0
+    }
+
     // MARK: Accept loop
 
     nonisolated private static func runAcceptLoop(
@@ -155,7 +196,8 @@ final class CLISocketServer {
         appPID: pid_t,
         router: CLICommandRouter,
         connectionQueue: DispatchQueue,
-        isRunning: @escaping () -> Bool
+        isRunning: @escaping () -> Bool,
+        onAbnormalExit: @escaping () -> Void
     ) {
         while isRunning() {
             var clientAddr = sockaddr_un()
@@ -166,8 +208,20 @@ final class CLISocketServer {
                 }
             }
             if clientFD < 0 {
-                if errno == EINTR { continue }
-                // Socket closed (during shutdown) — exit loop.
+                let acceptErrno = errno
+                // Transient errors must not kill the loop — silently exiting
+                // here was the root cause of orphaned bound-but-not-listening
+                // sockets (the listener stayed bound while nothing accepted).
+                if acceptErrno == EINTR || acceptErrno == ECONNABORTED { continue }
+                if acceptErrno == EMFILE || acceptErrno == ENFILE {
+                    // Descriptor exhaustion — back off briefly and retry.
+                    usleep(100_000)
+                    continue
+                }
+                // Listener closed. If we're still "running" this is a fatal,
+                // unexpected exit (not shutdown) — reset state so the server
+                // can be restarted and recover.
+                if isRunning() { onAbnormalExit() }
                 return
             }
 
@@ -250,6 +304,9 @@ final class CLISocketServer {
 }
 
 enum CLISocketServerError: Error {
+    /// A live server is already listening on the socket path; this instance
+    /// must not clobber it.
+    case alreadyServing
     case bindFailed(errno: Int32)
     case pathTooLong(path: String)
 }
