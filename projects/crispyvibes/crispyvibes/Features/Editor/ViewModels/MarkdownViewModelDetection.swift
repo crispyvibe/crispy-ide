@@ -6,7 +6,7 @@ extension MarkdownViewModel {
     static let htmlExtensions: Set<String> = ["html", "htm"]
     static let pythonExtensions: Set<String> = ["py", "pyw", "pyi"]
     static let jsonExtensions: Set<String> = ["json", "jsonl", "jsonc"]
-    /// F049: Jupyter notebook documents. Detected ahead of JSON so `.ipynb`
+    /// F050: Jupyter notebook documents. Detected ahead of JSON so `.ipynb`
     /// routes to the notebook editor rather than the raw JSON code view.
     static let notebookExtensions: Set<String> = ["ipynb"]
     static let rExtensions: Set<String> = ["r", "R", "rmd", "Rmd"]

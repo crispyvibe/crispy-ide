@@ -16,7 +16,7 @@
 
 ## Features
 
-Next available prefix: F049. Numbers are never reused.
+Next available prefix: F051. Numbers are never reused.
 
 | Prefix | Feature | Domain | Folder | Status |
 |--------|---------|--------|--------|--------|
@@ -66,6 +66,8 @@ Next available prefix: F049. Numbers are never reused.
 | F046 | Terminal Scroll Assist | D3 | `terminal/scroll-assist` | draft |
 | F047 | External Agent Sessions | D7 | `ai-agents/external-agent-sessions` | implemented |
 | F048 | Terminal Board Multi-Monitor | D3 | `terminal/board-multi-monitor` | implemented |
+| F049 | File Comments | D4 | `editor/file-comments` | implemented |
+| F050 | Jupyter Notebook Support | D4 | `editor/notebook` | draft |
 
 ## NFR Index
 

@@ -7,12 +7,12 @@ import WebKit
 
 // MARK: - JupyterServerService
 
-/// F049-R08: owns the lifecycle of locally-spawned Jupyter servers. One server
+/// F050-R08: owns the lifecycle of locally-spawned Jupyter servers. One server
 /// is started lazily per root directory and hosts every notebook beneath it.
 /// Modeled on the `ACPTransport` managed-process pattern: Swift owns the
 /// process and chrome; the embedded Notebook 7 UI owns the kernel protocol.
 ///
-/// F049-R09: each server binds `127.0.0.1` only, requires a per-server token,
+/// F050-R09: each server binds `127.0.0.1` only, requires a per-server token,
 /// and that token is never written to logs.
 @MainActor
 final class JupyterServerService {
@@ -62,7 +62,7 @@ final class JupyterServerService {
         return arbiter
     }
 
-    /// F049-R07: whether a `jupyter` executable is resolvable on the user's PATH.
+    /// F050-R07: whether a `jupyter` executable is resolvable on the user's PATH.
     /// Used to surface actionable messaging without spawning a process.
     func isJupyterAvailable() -> Bool {
         resolvedJupyterPath() != nil
@@ -84,7 +84,7 @@ final class JupyterServerService {
         return url.absoluteURL
     }
 
-    /// F049-R08: terminate every server and kernel. Called from the app
+    /// F050-R08: terminate every server and kernel. Called from the app
     /// termination path so no process is leaked on quit.
     func shutdownAll() {
         startTasks.values.forEach { $0.cancel() }
@@ -160,7 +160,7 @@ final class JupyterServerService {
             throw StartError.terminated(error.localizedDescription)
         }
         processes[rootDirectory.path] = process
-        // F049-R09: deliberately log without the URL/token.
+        // F050-R09: deliberately log without the URL/token.
         logger.info("Jupyter server starting on 127.0.0.1:\(port, privacy: .public)")
 
         let baseURL = URL(string: "http://127.0.0.1:\(port)/")!
@@ -253,12 +253,12 @@ extension EnvironmentValues {
 
 // MARK: - NotebookEditorView
 
-/// F049-R01/R10: the dedicated notebook surface. Hosts the embedded Notebook 7
+/// F050-R01/R10: the dedicated notebook surface. Hosts the embedded Notebook 7
 /// UI served by the local Jupyter server inside a `WKWebView`.
 struct NotebookEditorView: View {
     let fileURL: URL
     @Environment(\.jupyterServerService) private var service
-    /// F049: comment env provided by the surrounding content-viewer/editor.
+    /// F050: comment env provided by the surrounding content-viewer/editor.
     @Environment(\.vibespaceCommentStoreEnvironment) private var commentStore
     @Environment(\.commentsPanelEnvironment) private var commentsPanel
     @Environment(\.commentsFilePathEnvironment) private var commentsFilePath
@@ -339,7 +339,7 @@ struct NotebookEditorView: View {
         }
     }
 
-    // MARK: - Comments (F049)
+    // MARK: - Comments (F050)
 
     /// The comment key: the notebook's file path (stable across sessions),
     /// not the localhost URL whose port changes each launch.
@@ -394,7 +394,7 @@ struct NotebookEditorView: View {
 @MainActor
 final class NotebookWebViewArbiter {
     let webView: WKWebView
-    /// F049: in-notebook comment bridge (cell-id anchoring). Lives with the
+    /// F050: in-notebook comment bridge (cell-id anchoring). Lives with the
     /// persistent web view so decorations survive surface moves + reloads.
     let commentBridge = NotebookCommentBridge()
     /// Called after each finished load (initial + reload) so the view can
@@ -421,7 +421,7 @@ final class NotebookWebViewArbiter {
             self.onPageLoaded?()
         }
         webView.load(URLRequest(url: url))
-        // F049-R06: external on-disk edits (e.g. by an agent) won't surface in
+        // F050-R12: external on-disk edits (e.g. by an agent) won't surface in
         // the cached, in-memory Notebook 7 view, so reload when the watcher
         // reports this file changed. Debounced to coalesce burst events.
         fileChangeObserver = NotificationCenter.default.addObserver(
@@ -534,7 +534,7 @@ final class NotebookHostContainerView: NSView {
     }
 }
 
-/// Confines top-level navigation to the local server origin (F049-R09);
+/// Confines top-level navigation to the local server origin (F050-R09);
 /// external links open in the system browser.
 final class NotebookNavigationDelegate: NSObject, WKNavigationDelegate {
     private let allowedHost: String?
@@ -577,7 +577,7 @@ final class NotebookNavigationDelegate: NSObject, WKNavigationDelegate {
 
 // MARK: - NotebookCommentBridge
 
-/// F049: comment surface bridge for the in-notebook `WKWebView`. Anchors
+/// F050: comment surface bridge for the in-notebook `WKWebView`. Anchors
 /// comments to the **nbformat cell id** (carried in `CommentAnchor.domSelector`)
 /// with the cell's source fingerprint (`domFingerprint`) as a reorder/edit
 /// fallback — see the marker design. Injects a cell-aware JS adapter that
