@@ -69,7 +69,7 @@ struct CommentThreadView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     if thread.root.surfaceKind == .file {
                         HStack(spacing: 4) {
-                            Text("L\(thread.root.anchor.startLine)")
+                            Text(thread.root.anchor.locationLabel(filePath: thread.root.filePath))
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                                 .foregroundStyle(palette.tertiaryTextColor)
                             if thread.root.isStale {

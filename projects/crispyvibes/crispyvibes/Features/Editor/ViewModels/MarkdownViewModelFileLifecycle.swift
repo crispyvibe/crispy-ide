@@ -294,7 +294,10 @@ extension MarkdownViewModel {
                 workerStatus = .ready
             }
 
-        case .none, .gitDiff:
+        case .none, .gitDiff, .notebook:
+            // F049: the notebook surface is rendered by the Jupyter server in a
+            // WKWebView; the text buffer is intentionally not loaded so autosave
+            // never overwrites the server-managed `.ipynb`.
             observeActiveBuffer(nil)
             workerStatus = .ready
 

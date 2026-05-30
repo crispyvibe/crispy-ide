@@ -322,6 +322,8 @@ struct AppContainer {
     let sshConnectionManager: SSHConnectionManager
     let cliCommandRouter: CLICommandRouter
     let cliSocketServer: CLISocketServer
+    /// F049-R08: app-wide owner of locally-spawned Jupyter servers.
+    let jupyterServerService: JupyterServerService
 
     @MainActor
     func makeVibeSpaceState(id: UUID = UUID(), name: String, projectURLs: [URL]) -> VibeSpaceState {
@@ -534,7 +536,8 @@ struct AppContainer {
             contextSummaryObservabilityStore: contextSummaryObservabilityStore,
             sshConnectionManager: SSHConnectionManager(),
             cliCommandRouter: cliCommandRouter,
-            cliSocketServer: cliSocketServer
+            cliSocketServer: cliSocketServer,
+            jupyterServerService: JupyterServerService()
         )
     }
 

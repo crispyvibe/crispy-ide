@@ -6,6 +6,9 @@ extension MarkdownViewModel {
     static let htmlExtensions: Set<String> = ["html", "htm"]
     static let pythonExtensions: Set<String> = ["py", "pyw", "pyi"]
     static let jsonExtensions: Set<String> = ["json", "jsonl", "jsonc"]
+    /// F049: Jupyter notebook documents. Detected ahead of JSON so `.ipynb`
+    /// routes to the notebook editor rather than the raw JSON code view.
+    static let notebookExtensions: Set<String> = ["ipynb"]
     static let rExtensions: Set<String> = ["r", "R", "rmd", "Rmd"]
     static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp", "heic", "heif", "svg"]
     /// Microsoft Office document extensions previewed via Quick Look (F045).
@@ -50,6 +53,10 @@ extension MarkdownViewModel {
 
         if markdownExtensions.contains(ext) {
             return .markdown
+        }
+
+        if notebookExtensions.contains(ext) {
+            return .notebook
         }
 
         if pythonExtensions.contains(ext) {

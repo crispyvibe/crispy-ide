@@ -618,6 +618,7 @@
 		F64B81B608FC22C1E7D303E7 /* DiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7999E66ED37905E67181EC /* DiagnosticsTests.swift */; };
 		F64B81B608FC22C1E7D303E8 /* GitHeadWatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7999E66ED37905E67181ED /* GitHeadWatcherTests.swift */; };
 		FAA15B35135AEBD03B88BDDC /* MarkdownEditorPlugins.swift in Sources */ = {isa = PBXBuildFile; fileRef = C058007C6BE57237190D272A /* MarkdownEditorPlugins.swift */; };
+		FEA0000000000000000000B2 /* NotebookEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA0000000000000000000B1 /* NotebookEditorView.swift */; };
 		FB119B1240A0612B8A365F42 /* AppSettingsSheetViewGeneral.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EB1846F17F63B52C6107C8 /* AppSettingsSheetViewGeneral.swift */; };
 		FEB16CONT00000002 /* BrowserContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEB16CONT00000001 /* BrowserContentView.swift */; };
 		FEEA9B453BF8FA015665A631 /* TerminalScrollbackReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8609591BDD5DC51654C9EE /* TerminalScrollbackReader.swift */; };
@@ -1102,6 +1103,7 @@
 		BRWSHOST0001000100010001 /* BrowserSessionHostView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserSessionHostView.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserSessionHostView.swift; sourceTree = "<group>"; };
 		BRWSOWNR0001000100010001 /* BrowserHostOwnershipCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserHostOwnershipCoordinator.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserHostOwnershipCoordinator.swift; sourceTree = "<group>"; };
 		C058007C6BE57237190D272A /* MarkdownEditorPlugins.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownEditorPlugins.swift; sourceTree = "<group>"; };
+		FEA0000000000000000000B1 /* NotebookEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotebookEditorView.swift; sourceTree = "<group>"; };
 		C1829B25562B028CDC237B52 /* SplitPaneLayoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitPaneLayoutTests.swift; sourceTree = "<group>"; };
 		C1B9CCF2E2BA8AB7F99D4190 /* SettingsLayoutPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsLayoutPrimitives.swift; sourceTree = "<group>"; };
 		C2C1E3B2A8770E85559D71C4 /* MeasuredPaneWorker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeasuredPaneWorker.swift; sourceTree = "<group>"; };
@@ -3073,6 +3075,7 @@
 				B10000000000000000000002E /* CodeEditorView.swift */,
 				B100000000000000000000026 /* MarkdownEditorFormatting.swift */,
 				C058007C6BE57237190D272A /* MarkdownEditorPlugins.swift */,
+				FEA0000000000000000000B1 /* NotebookEditorView.swift */,
 				B10000000000000000000000B /* MarkdownEditorView.swift */,
 				D285C6841FBC59920516899B /* MarkupRenderedEditor.swift */,
 				0BA53C083B84B24A49BBBD6F /* PlainTextEditor.swift */,
@@ -3834,6 +3837,7 @@
 				1A2B3C4D5E6F708090A0B0C0 /* NewTerminalPopover.swift in Sources */,
 				A942548C9221DFA33D729189 /* MarkdownEditorViewFindReplace.swift in Sources */,
 				FAA15B35135AEBD03B88BDDC /* MarkdownEditorPlugins.swift in Sources */,
+				FEA0000000000000000000B2 /* NotebookEditorView.swift in Sources */,
 				37109390AC5836A6F279C5C5 /* ContentViewVibeSpaceSettingsActions.swift in Sources */,
 				0497B88F0AF64D49E7BFCB75 /* ContentViewVibeSpaceHydration.swift in Sources */,
 				A1D000000000000000000016 /* VibeSpaceHydrationCoordinator.swift in Sources */,
