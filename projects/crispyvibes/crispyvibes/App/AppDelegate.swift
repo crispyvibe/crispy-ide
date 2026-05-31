@@ -34,6 +34,8 @@ enum ExternalOpenRelay {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor var appContainer: AppContainer?
+    /// F051: owns the remote-CLI exec relay lifecycle.
+    @MainActor var cliExecRelayServer: CLIExecRelayServer?
     static let infoPlistEnableSparkleUpdaterKey = "CrispyVibesEnableSparkleUpdater"
 
     @objc func openWebsite() {
@@ -177,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             appContainer?.terminalBoardDetachedWindowManager.closeAll()
             appContainer?.terminalBoardStandaloneRegistry.shutdownAll()
             appContainer?.cliSocketServer.shutdown()
+            cliExecRelayServer?.shutdown()
             appContainer?.jupyterServerService.shutdownAll()
         }
     }

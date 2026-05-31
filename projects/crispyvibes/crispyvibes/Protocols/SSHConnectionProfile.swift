@@ -12,6 +12,13 @@ struct SSHConnectionProfile: Codable, Identifiable, Sendable, Hashable {
     var user: String
     var authMethod: SSHAuthMethod
     var importedFromConfig: Bool
+    /// F051: whether the Agent CLI relay (`crispy`) is set up for terminals on
+    /// this connection. Optional so legacy profiles (key absent) decode cleanly;
+    /// nil is treated as enabled. Toggle it off for shared/untrusted hosts.
+    var agentCLIEnabled: Bool?
+
+    /// Resolved Agent CLI enablement; defaults to enabled when unset.
+    var isAgentCLIEnabled: Bool { agentCLIEnabled ?? true }
 
     enum SSHAuthMethod: Codable, Hashable, Sendable {
         case agent

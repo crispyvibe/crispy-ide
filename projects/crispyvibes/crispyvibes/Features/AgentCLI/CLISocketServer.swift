@@ -125,7 +125,6 @@ final class CLISocketServer {
         listenFD = fd
         runningFlag.set(true)
 
-        let appPID = getpid()
         let listenFD = fd
         let router = self.router
         let connectionQueue = self.connectionQueue
@@ -134,7 +133,6 @@ final class CLISocketServer {
         acceptQueue.async {
             CLISocketServer.runAcceptLoop(
                 listenFD: listenFD,
-                appPID: appPID,
                 router: router,
                 connectionQueue: connectionQueue,
                 isRunning: { runningFlag.get() },
@@ -193,7 +191,6 @@ final class CLISocketServer {
 
     nonisolated private static func runAcceptLoop(
         listenFD: Int32,
-        appPID: pid_t,
         router: CLICommandRouter,
         connectionQueue: DispatchQueue,
         isRunning: @escaping () -> Bool,
@@ -225,19 +222,11 @@ final class CLISocketServer {
                 return
             }
 
-            // Ancestry check before reading any bytes (F044-R02 / F044-T01).
-            let peerPID = CLIProcessAncestry.peerPID(of: clientFD) ?? -1
-            let allowed = CLIProcessAncestry.isDescendantOfApp(peerPID: peerPID, appPID: appPID)
-            CLIProcessAncestry.logConnectionAttempt(
-                peerPID: peerPID,
-                appPID: appPID,
-                allowed: allowed
-            )
-            guard allowed || CLIProcessAncestry.isAncestryCheckBypassed else {
-                // Reject silently. No bytes written.
-                close(clientFD)
-                continue
-            }
+            // Authorization is the socket's owner-only (0600) permission: only
+            // the same OS user can connect. There is intentionally no
+            // process-ancestry or token gate, so any same-user process — shells
+            // under tmux/ssh, ACP agents, and other tooling — can drive the CLI
+            // like any ordinary local CLI.
 
             // Bound how long a single connection can hold a worker thread
             // (F044-T07 mitigation). 30s is more than enough for any

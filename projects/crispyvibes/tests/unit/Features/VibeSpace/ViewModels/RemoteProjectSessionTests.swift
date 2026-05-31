@@ -380,7 +380,8 @@ final class RemoteProjectSessionTests: XCTestCase {
         XCTAssertTrue(invocation.1.contains("\(profile.user)@\(profile.host)"))
         XCTAssertTrue(
             invocation.1.contains(where: { argument in
-                argument.contains("tmux new-session -A -s crispyvibes-abcd1234")
+                argument.contains("tmux has-session -t crispyvibes-abcd1234")
+                    && argument.contains("tmux new-session -s crispyvibes-abcd1234")
             })
         )
     }

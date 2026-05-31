@@ -128,7 +128,11 @@ extension VibeSpaceTerminalOnlyView {
                 )
             } else if tile.isFile, let fileURL = tile.fileURL,
                       let coordinator = dockedFileViewerCoordinator {
-                let group = coordinator.editorGroup(for: tile.id, fileURL: fileURL)
+                let group = coordinator.editorGroup(
+                    for: tile.id,
+                    fileURL: fileURL,
+                    fileContentProvider: fileContentProvider(forDockedFileURL: fileURL)
+                )
                 DockPinnedFileView(
                     fileURL: fileURL,
                     isActive: isActive,
