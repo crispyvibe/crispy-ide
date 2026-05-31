@@ -11,7 +11,7 @@ This document enumerates trust boundaries, attack surfaces, and mitigations.
 | Boundary | Inside (trusted) | Outside (untrusted) |
 |---|---|---|
 | **Crispy process** | Swift services, `CLISocketServer`, `CLICommandRouter` | Anything reading the socket |
-| **App descendants** | Processes spawned in Crispy terminals (shells and their children) | All other local processes |
+| **Same OS user** | Any process running as the user who launched Crispy | Other OS users (blocked by the `0600` socket) |
 | **Project root** | Files under `CRISPY_PROJECT_PATH` after symlink resolution | Files outside the project for `file.*` commands |
 | **Channel client env** | `CRISPY_*` env vars set by Crispy when spawning the terminal | Env vars set by agents themselves or downstream processes |
 | **JSON-RPC payload** | Request fields whose schema is validated | Free-form strings (`text`, `path`, `js`, `selector`) |
@@ -26,12 +26,12 @@ This document enumerates trust boundaries, attack surfaces, and mitigations.
 
 ## Threats
 
-### F044-T01: External process connects to socket
+### F044-T01: Same-user process connects to socket
 
-- **Vector**: A non-Crispy local process finds the socket file and connects, attempting to exfiltrate terminal contents or inject keystrokes.
-- **Impact**: Full IDE control by an unrelated process. Equivalent to keyboard access to all open terminals and editors.
-- **Likelihood**: Medium — local malware regularly probes well-known socket paths.
-- **Mitigation**: Socket file mode `0600`. Process-ancestry check on `accept()` — reject connections whose peer process tree does not include the running Crispy app PID. Verified via `LOCAL_PEERPID` + `proc_pidinfo` ancestry walk. Reject before any request bytes are read; never echo error responses to unauthorized peers.
+- **Vector**: A same-user local process not spawned by Crispy connects to the socket to drive the IDE.
+- **Impact**: Agent CLI control by a same-user process — bounded by what that process could already do as the user.
+- **Likelihood**: Low–Medium — requires same-user local code execution.
+- **Mitigation**: Socket file mode `0600` restricts access to the same OS user; cross-user access is blocked by the OS. The prior process-ancestry gate was **removed** (2026-05-30): it broke legitimate use (tmux, ssh, detached shells, ACP agents) while adding little real protection — a same-user process already has the user's full authority, so the CLI is not a privilege escalation against it. The residual concern is confused-deputy use of Crispy's TCC grants or app sessions; this is accepted under the same-user trust model and bounded by per-command authorization (project boundary, etc.).
 
 ### F044-T02: Compromised agent escapes project boundary
 
@@ -106,7 +106,7 @@ This document enumerates trust boundaries, attack surfaces, and mitigations.
 
 | NFR | Reference | Compliance |
 |---|---|---|
-| **SEC-1** Authentication | `nfr/security.md` | Met via process ancestry (F044-T01). |
+| **SEC-1** Authentication | `nfr/security.md` | Met via owner-only `0600` socket (same-user); process-ancestry gate removed (F044-T01). |
 | **SEC-2** Input validation | `nfr/security.md` | All commands validate params; malformed JSON closes connection. |
 | **SEC-3** Authorization | `nfr/security.md` | Project boundary on file ops; bundle-isolated socket; not trusted-by-default. |
 | **OBS-1** Logging | `nfr/observability.md` | All connection rejections, mutations, and cross-terminal targets logged via `AppDiagnostics`. |

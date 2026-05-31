@@ -6,7 +6,7 @@ Status: implemented
 
 Agent CLI provides a programmatic control surface for AI agents running inside Crispy terminals. Agents invoke the bundled `crispy` command-line tool, which connects to a Unix domain socket served by the running app and dispatches commands to existing services through a JSON-RPC v2 protocol. This lets agents read terminal state, send input to terminals, open files, manage the shelf, control browser panels, and inspect VibeSpace topology — all without spawning a separate agent process or duplicating IDE logic.
 
-The CLI is consumed primarily by AI coding agents (Claude Code, Codex, Kiro, OpenCode, etc.) that run inside Crispy terminal sessions, and is exposed to those processes via PATH injection and discovery environment variables. External processes — those not descended from the running Crispy app — cannot connect.
+The CLI is consumed primarily by AI coding agents (Claude Code, Codex, Kiro, OpenCode, etc.) that run inside Crispy terminal sessions, and is exposed to those processes via PATH injection and discovery environment variables. Authorization is the socket's owner-only (`0600`) permission: any process running as the same OS user can connect — including shells under tmux/ssh and ACP agents — while other OS users are blocked by the filesystem. (Revised from the original app-descendant-only model; see Change History and F044-R02.)
 
 ## Implementation Status
 
@@ -51,9 +51,9 @@ The CLI ships in stages. Foundation (transport, authorization, env injection, PA
 
 The app MUST listen on a Unix domain socket at a bundle-ID-scoped path under `~/Library/Application Support/<bundle-id>/crispy.sock`. Connections MUST use newline-delimited JSON. Socket file permissions MUST be `0600`.
 
-#### F044-R02: Process Ancestry Authorization
+#### F044-R02: Owner-Only Socket Authorization
 
-The app MUST verify each accepted connection's peer process is a descendant of the running app process via `LOCAL_PEERPID` and process-ancestry walk. Connections from non-descendant processes MUST be rejected.
+Authorization MUST be the socket file's owner-only (`0600`) permission: only the same OS user can connect. The CLI MUST be usable by any same-user process — shells under tmux/ssh, ACP agents, and other tooling — without a process-ancestry or token gate. (Supersedes the prior process-ancestry check; see Change History and threat-model F044-T01.)
 
 #### F044-R03: Bundle Isolation
 
@@ -159,12 +159,13 @@ Cross-cutting transport and authorization scenarios are defined here. Per-comman
 **Then** the CLI connects to the socket at `$CRISPY_SOCKET`
 **And** receives a successful response containing `version` and `app`
 
-### Scenario F044-S02: External process attempts to connect
+### Scenario F044-S02: Same-user vs other-user access
 
-**Given** the Crispy app is running and the socket file exists
-**When** a process not descended from the Crispy app attempts to connect to the socket
-**Then** the connection is closed by the server before any request is processed
-**And** the rejection is logged with the peer PID and command path
+**Given** the Crispy app is running and the socket file exists with `0600` permissions
+**When** a process owned by a *different* OS user attempts to connect
+**Then** the OS denies access at the socket file permission level
+**And When** a same-user process that Crispy did not spawn (e.g. a shell under tmux, or an ACP agent) connects
+**Then** the connection is accepted and served
 
 ### Scenario F044-S03: Channel client omits terminal_id parameter
 
@@ -220,7 +221,7 @@ Cross-cutting transport and authorization scenarios are defined here. Per-comman
 - Build succeeds on `crispyvibes-local` scheme with the new `CLISocketServer` service wired through `AppContainer`
 - A reference Rust CLI (`crispyvibes-cli` crate) builds and successfully invokes `ping` and `identify` against the running app
 - `terminal.read`, `terminal.send`, `file.open`, `shelf.add`, and `browser.open` work end-to-end from a real agent process
-- Process-ancestry rejection verified by an integration test using a sibling (non-descendant) process
+- Same-user access verified: a non-app-spawned same-user process connects and is served; cross-user access is blocked by the `0600` socket permission
 
 ## Open Questions
 
@@ -232,3 +233,4 @@ None at this time.
 |------|--------|--------|
 | 2026-05-14 | Initial draft extracted from prior planning notes | Manu |
 | 2026-05-17 | Marked feature implemented; added per-category implementation status table; retired planning docs | Manu |
+| 2026-05-30 | Replaced process-ancestry authorization (F044-R02) with owner-only `0600` socket access so any same-user process (incl. ACP agents, tmux/ssh shells) can use the CLI; removed `CLIProcessAncestry` and the bypass flag. See F051 (Remote Agent CLI). | Manu |

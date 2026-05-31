@@ -16,7 +16,7 @@
 
 ## Features
 
-Next available prefix: F051. Numbers are never reused.
+Next available prefix: F052. Numbers are never reused.
 
 | Prefix | Feature | Domain | Folder | Status |
 |--------|---------|--------|--------|--------|
@@ -68,6 +68,7 @@ Next available prefix: F051. Numbers are never reused.
 | F048 | Terminal Board Multi-Monitor | D3 | `terminal/board-multi-monitor` | implemented |
 | F049 | File Comments | D4 | `editor/file-comments` | implemented |
 | F050 | Jupyter Notebook Support | D4 | `editor/notebook` | draft |
+| F051 | Remote Agent CLI | D8 | `remote/remote-agent-cli` | draft |
 
 ## NFR Index
 
