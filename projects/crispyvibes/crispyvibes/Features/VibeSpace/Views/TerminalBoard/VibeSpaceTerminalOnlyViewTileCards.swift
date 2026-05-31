@@ -60,7 +60,8 @@ extension VibeSpaceTerminalOnlyView {
             title = fileURL.lastPathComponent
             accent = appThemePalette.accentColor
         } else {
-            title = context?.projectTitle ?? "Terminal"
+            let tabTitle = context?.terminalTab.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            title = tabTitle.isEmpty ? (context?.projectTitle ?? "Terminal") : tabTitle
             accent = projectAccentColor ?? appThemePalette.accentColor
         }
 
