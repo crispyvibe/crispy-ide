@@ -174,45 +174,16 @@ final class RemoteProjectSession: ProjectProviding {
     ) -> String {
         let escapedDirectory = shellEscape(workingDirectory)
         let escapedSessionName = shellEscape(sessionName)
-        let tmuxSetupCommands = [
-            // tmux 2.1+ uses 'mouse on'; older versions use mode-mouse/mouse-select-*
-            "tmux set-option -g mouse on 2>/dev/null || { tmux set-option -g mode-mouse on 2>/dev/null; tmux set-option -g mouse-select-pane on 2>/dev/null; tmux set-option -g mouse-resize-pane on 2>/dev/null; tmux set-option -g mouse-select-window on 2>/dev/null; }",
-            "tmux set-option -g history-limit 50000 2>/dev/null",
-            "tmux set-option -g status off 2>/dev/null",
-            "tmux set-option -g escape-time 0 2>/dev/null",
-            // Enable truecolor (24-bit RGB) passthrough so modern TUIs (vim, nvim,
-            // lazygit, btop, etc.) render with full color fidelity. Append rather
-            // than replace so any user-provided overrides are preserved.
-            "tmux set-option -ga terminal-overrides \",*:RGB\" 2>/dev/null",
-            // Promote default-terminal away from tmux's bare 'screen' default so
-            // inner programs see a 256-color capable terminfo. Only override when
-            // the user has not configured something themselves (still at default).
-            "__crispy_default_term=$(tmux show-option -gqv default-terminal 2>/dev/null); if [ -z \"$__crispy_default_term\" ] || [ \"$__crispy_default_term\" = \"screen\" ]; then tmux set-option -g default-terminal \"$__crispy_term\" 2>/dev/null; fi"
-        ]
-        // Pick the best terminfo entry actually installed on the remote so we
-        // never advertise a terminfo the system can't resolve. Falls back to
-        // tmux's own default ('screen') if neither modern entry is available.
-        let pickTermFunction = """
-        __crispy_pick_term() {
-            if command -v infocmp >/dev/null 2>&1; then
-                if infocmp tmux-256color >/dev/null 2>&1; then echo tmux-256color; return; fi
-                if infocmp screen-256color >/dev/null 2>&1; then echo screen-256color; return; fi
-            fi
-            echo screen
-        }
-        __crispy_term=$(__crispy_pick_term)
-        """
         // If the session already exists (e.g. on reconnect, with an agent still
-        // running in it), attach cleanly and DON'T re-run the global set-option
-        // setup — re-applying it perturbs the live session. Setup runs only when
+        // running in it), attach cleanly and DON'T re-run the priming setup —
+        // re-applying it perturbs the live session. Setup runs only when
         // creating a new session.
         return """
         cd \(escapedDirectory) || exit 1
         export TERM=xterm-256color
         export COLORTERM=truecolor
         if tmux has-session -t \(escapedSessionName) 2>/dev/null; then exec tmux attach-session -t \(escapedSessionName); fi
-        \(pickTermFunction)
-        tmux start-server 2>/dev/null; \(tmuxSetupCommands.joined(separator: "; "))
+        \(TmuxService.remotePrimingCommand)
         exec tmux new-session -s \(escapedSessionName) || exec $SHELL -l
         """
     }
