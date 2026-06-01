@@ -68,6 +68,10 @@ Each detached board window MUST own its own board-scoped spotlight presentation.
 
 Detached board surfaces MUST persist with the owning vibespace, including their per-surface tile layout and best-effort window placement metadata. Reopening the vibespace MUST restore open detached board surfaces as detached board windows. Missing or changed displays MUST NOT automatically merge detached surfaces into the primary board.
 
+### F002-R13: Minimized Tab Labels Prefer Terminal Tab Title
+
+The minimized tab bar MUST label a terminal tile with its terminal tab title, falling back to the owning project title when the tab title is empty, then a generic `Terminal` label when neither is available. This matches the tab-title source defined in F001-R17 and the Spotlight carousel chip labeling.
+
 ## Scenarios
 
 ### Scenario F002-S01: Terminal board renders independent terminal tiles
@@ -191,6 +195,13 @@ Detached board surfaces MUST persist with the owning vibespace, including their 
 **And** window placement is restored on a best-effort basis
 **And** detached surfaces are not merged into the primary board solely because display topology changed
 
+### Scenario F002-S13: Minimized terminal tab shows the terminal name
+
+**Given** a terminal tile is minimized into the minimized tab bar
+**When** the minimized chip renders
+**Then** the chip label shows the terminal tab title
+**And** when the tab title is empty the chip falls back to the owning project title
+
 ## Acceptance Criteria
 
 - Tile add/remove/move operations complete within 100ms (PERF-3).
@@ -215,6 +226,7 @@ Detached board surfaces MUST persist with the owning vibespace, including their 
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-05-31 | Added R13/S13: minimized tab labels prefer the terminal tab title (project-title fallback), aligning with F001-R17 and Spotlight chip labeling. | — |
 | 2026-04-27 | Clarified that board-window transfer preserves tile identity but recalculates destination-surface position. | — |
 | 2026-04-26 | Marked implemented; added multi-window board support, local spotlight, surface-targeted terminal creation, context-menu transfer, and non-terminal tile transfer requirements. | Codex |
 | 2026-04-15 | Migrated from docs/features/terminal/feature.md (TRM-034–036, TRM-039, TRM-069, TRM-070) | — |
