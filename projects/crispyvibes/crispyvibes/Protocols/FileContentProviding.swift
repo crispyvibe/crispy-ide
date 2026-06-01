@@ -13,6 +13,11 @@ protocol FileContentProviding: Sendable {
     /// Used for large-file prompts on remote files.
     func fileSize(at path: String) async throws -> UInt64?
 
+    /// An opaque change token (e.g. "size mtime") for the file, or nil if the
+    /// provider can't cheaply determine one. Used to detect external content
+    /// changes by polling. Local providers return nil (they use FSEvents).
+    func modificationToken(at path: String) async throws -> String?
+
     /// Indicates whether previews need a staged local file URL instead of the source path.
     /// Remote SSH-backed providers return `true`; local providers can render directly.
     var requiresMaterializedLocalPreview: Bool { get }
@@ -20,5 +25,6 @@ protocol FileContentProviding: Sendable {
 
 extension FileContentProviding {
     func fileSize(at path: String) async throws -> UInt64? { nil }
+    func modificationToken(at path: String) async throws -> String? { nil }
     var requiresMaterializedLocalPreview: Bool { false }
 }

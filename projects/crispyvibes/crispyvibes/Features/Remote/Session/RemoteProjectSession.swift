@@ -70,7 +70,8 @@ final class RemoteProjectSession: ProjectProviding {
                     profile: profile,
                     workingDirectory: rPath,
                     hasTmux: conn.hasTmux,
-                    tmuxSessionName: session.tmuxSessionName
+                    tmuxSessionName: session.tmuxSessionName,
+                    relaySocketPath: profile.isAgentCLIEnabled ? CLIExecRelayPathResolver.defaultPath().path : nil
                 )
             }
         }
@@ -173,42 +174,17 @@ final class RemoteProjectSession: ProjectProviding {
     ) -> String {
         let escapedDirectory = shellEscape(workingDirectory)
         let escapedSessionName = shellEscape(sessionName)
-        let tmuxSetupCommands = [
-            // tmux 2.1+ uses 'mouse on'; older versions use mode-mouse/mouse-select-*
-            "tmux set-option -g mouse on 2>/dev/null || { tmux set-option -g mode-mouse on 2>/dev/null; tmux set-option -g mouse-select-pane on 2>/dev/null; tmux set-option -g mouse-resize-pane on 2>/dev/null; tmux set-option -g mouse-select-window on 2>/dev/null; }",
-            "tmux set-option -g history-limit 50000 2>/dev/null",
-            "tmux set-option -g status off 2>/dev/null",
-            "tmux set-option -g escape-time 0 2>/dev/null",
-            // Enable truecolor (24-bit RGB) passthrough so modern TUIs (vim, nvim,
-            // lazygit, btop, etc.) render with full color fidelity. Append rather
-            // than replace so any user-provided overrides are preserved.
-            "tmux set-option -ga terminal-overrides \",*:RGB\" 2>/dev/null",
-            // Promote default-terminal away from tmux's bare 'screen' default so
-            // inner programs see a 256-color capable terminfo. Only override when
-            // the user has not configured something themselves (still at default).
-            "__crispy_default_term=$(tmux show-option -gqv default-terminal 2>/dev/null); if [ -z \"$__crispy_default_term\" ] || [ \"$__crispy_default_term\" = \"screen\" ]; then tmux set-option -g default-terminal \"$__crispy_term\" 2>/dev/null; fi"
-        ]
-        // Pick the best terminfo entry actually installed on the remote so we
-        // never advertise a terminfo the system can't resolve. Falls back to
-        // tmux's own default ('screen') if neither modern entry is available.
-        let pickTermFunction = """
-        __crispy_pick_term() {
-            if command -v infocmp >/dev/null 2>&1; then
-                if infocmp tmux-256color >/dev/null 2>&1; then echo tmux-256color; return; fi
-                if infocmp screen-256color >/dev/null 2>&1; then echo screen-256color; return; fi
-            fi
-            echo screen
-        }
-        __crispy_term=$(__crispy_pick_term)
-        """
-        // Start server first to ensure set-option works, then create/attach.
+        // If the session already exists (e.g. on reconnect, with an agent still
+        // running in it), attach cleanly and DON'T re-run the priming setup —
+        // re-applying it perturbs the live session. Setup runs only when
+        // creating a new session.
         return """
         cd \(escapedDirectory) || exit 1
         export TERM=xterm-256color
         export COLORTERM=truecolor
-        \(pickTermFunction)
-        tmux start-server 2>/dev/null; \(tmuxSetupCommands.joined(separator: "; "))
-        exec tmux new-session -A -s \(escapedSessionName) || exec $SHELL -l
+        if tmux has-session -t \(escapedSessionName) 2>/dev/null; then exec tmux attach-session -t \(escapedSessionName); fi
+        \(TmuxService.remotePrimingCommand)
+        exec tmux new-session -s \(escapedSessionName) || exec $SHELL -l
         """
     }
 
@@ -216,7 +192,8 @@ final class RemoteProjectSession: ProjectProviding {
         profile: SSHConnectionProfile,
         workingDirectory: String,
         hasTmux: Bool,
-        tmuxSessionName: String?
+        tmuxSessionName: String?,
+        relaySocketPath: String? = nil
     ) -> (String, [String]) {
         // Forward COLORTERM so remote programs running outside tmux can detect
         // truecolor support. The remote sshd silently drops env vars it does not
@@ -225,18 +202,74 @@ final class RemoteProjectSession: ProjectProviding {
         if case .keyFile(let path) = profile.authMethod {
             args += ["-i", NSString(string: path).expandingTildeInPath]
         }
+        // F051: reverse-forward the local exec-relay socket so a remote `crispy`
+        // shim can drive the local app. Forwarding failure is non-fatal — we do
+        // NOT set ExitOnForwardFailure — so hosts that forbid forwarding degrade
+        // gracefully (the shim then prints a clear error when invoked).
+        var relaySetup = ""
+        if let relaySocketPath {
+            let remoteSock = remoteRelaySocketPath(profile: profile, workingDirectory: workingDirectory)
+            args += ["-o", "StreamLocalBindUnlink=yes", "-R", "\(remoteSock):\(relaySocketPath)"]
+            relaySetup = remoteRelaySetup(remoteSocketPath: remoteSock, projectPath: workingDirectory)
+        }
         args += ["\(profile.user)@\(profile.host)"]
-        let remoteCommand: String
+        let launch: String
         if let tmuxSessionName {
-            remoteCommand = remoteTmuxLaunchCommand(
+            launch = remoteTmuxLaunchCommand(
                 workingDirectory: workingDirectory,
                 sessionName: tmuxSessionName
             )
         } else {
-            remoteCommand = "cd \(shellEscape(workingDirectory)) && exec $SHELL -l"
+            launch = "cd \(shellEscape(workingDirectory)) && exec $SHELL -l"
         }
+        // Relay setup is best-effort and isolated so it can never abort the shell.
+        let remoteCommand = relaySetup.isEmpty ? launch : "{\n\(relaySetup)\n} 2>/dev/null\n\(launch)"
         args += [remoteCommand]
         return ("/usr/bin/ssh", args)
+    }
+
+    /// Deterministic per-profile/project remote socket path for the F051 relay
+    /// reverse forward. Lives in `/tmp` (transient across reboots);
+    /// `StreamLocalBindUnlink=yes` removes it when the forward closes.
+    static func remoteRelaySocketPath(profile: SSHConnectionProfile, workingDirectory: String) -> String {
+        "/tmp/.crispy-relay-\(stableHash("\(profile.sshURI)\(workingDirectory)")).sock"
+    }
+
+    /// Best-effort POSIX-sh that installs a session `crispy` shim on `PATH`. The
+    /// shim relays its argv (NUL-separated, prefixed by cwd + project path) to the
+    /// local app over the reverse-forwarded socket and reproduces stdout/exit. It
+    /// never aborts the launching shell; if `nc`/`socat` are absent it prints a
+    /// clear error only when `crispy` is actually invoked.
+    static func remoteRelaySetup(remoteSocketPath: String, projectPath: String) -> String {
+        let escSock = shellEscape(remoteSocketPath)
+        let escProject = shellEscape(projectPath)
+        // The wrapper is written to ~/.local/bin so it's on the login PATH that
+        // fresh agent shells (`bash -lc "crispy …"`) rebuild — a temp dir on the
+        // launch shell's PATH isn't inherited by those. The relay socket and
+        // project path are baked in as fallbacks so the wrapper still works when
+        // the launch env isn't inherited; the launching shell also exports the
+        // live values, which take precedence.
+        return """
+        mkdir -p "$HOME/.local/bin" 2>/dev/null
+        cat > "$HOME/.local/bin/crispy" <<'CRISPY_EOF'
+        #!/bin/sh
+        : "${CRISPY_RELAY_SOCK:=\(remoteSocketPath)}"
+        : "${CRISPY_PROJECT_PATH:=\(projectPath)}"
+        if command -v nc >/dev/null 2>&1; then __c() { nc -U "$CRISPY_RELAY_SOCK"; }
+        elif command -v socat >/dev/null 2>&1; then __c() { socat - "UNIX-CONNECT:$CRISPY_RELAY_SOCK"; }
+        else echo "crispy: IDE relay needs nc or socat on the remote host" >&2; exit 127; fi
+        __r=$({ printf '%s\\0' "$PWD" "$CRISPY_PROJECT_PATH"; for a in "$@"; do printf '%s\\0' "$a"; done; printf '\\n'; } | __c 2>/dev/null)
+        [ -z "$__r" ] && { echo "crispy: IDE relay unavailable" >&2; exit 127; }
+        __code=$(printf '%s\\n' "$__r" | head -n1)
+        printf '%s' "$__r" | tail -n +2
+        case "$__code" in ""|*[!0-9]*) exit 1 ;; esac
+        exit "$__code"
+        CRISPY_EOF
+        chmod +x "$HOME/.local/bin/crispy" 2>/dev/null
+        PATH="$HOME/.local/bin:$PATH"; export PATH
+        CRISPY_RELAY_SOCK=\(escSock); export CRISPY_RELAY_SOCK
+        CRISPY_PROJECT_PATH=\(escProject); export CRISPY_PROJECT_PATH
+        """
     }
 
     private func handleConnectionStateChange(from previousState: ConnectionState, to state: ConnectionState) {

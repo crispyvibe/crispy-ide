@@ -470,6 +470,18 @@ struct TerminalCommandsMenu: View {
                 Button("Quit (Ctrl+\\)") { onSendSignal("\u{1C}") }
             }
 
+            Menu("tmux") {
+                Button("Apply All Priming Options") {
+                    for option in TmuxService.primingOptions {
+                        onSendSignal(option.command + "\n")
+                    }
+                }
+                Divider()
+                ForEach(TmuxService.primingOptions) { option in
+                    Button(option.label) { onSendSignal(option.command + "\n") }
+                }
+            }
+
             if !shortcuts.isEmpty {
                 Section("Shortcuts") {
                     ForEach(shortcuts) { shortcut in

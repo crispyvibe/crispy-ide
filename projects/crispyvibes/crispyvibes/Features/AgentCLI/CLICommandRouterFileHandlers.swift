@@ -8,8 +8,15 @@ extension CLICommandRouter {
         let env = request._env ?? .empty
         let url = resolvedURL(forPath: pathParam, env: env)
 
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return .error(id: request.id, code: CLIErrorCode.fileNotFound, message: "File not found: \(url.path)")
+        // F051-R07: a file inside a REMOTE project lives on the remote host
+        // (reachable via the project's SFTP content provider), not the local
+        // filesystem — so skip the local existence check and let the
+        // (already remote-aware) open path resolve it through the owning
+        // project. Local files keep the existence check.
+        if !owningProjectIsRemote(forPath: url.path) {
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                return .error(id: request.id, code: CLIErrorCode.fileNotFound, message: "File not found: \(url.path)")
+            }
         }
 
         let line = request.params?["line"]?.intValue
@@ -37,5 +44,20 @@ extension CLICommandRouter {
         var result: [String: CLIJSONValue] = ["path": .string(url.path)]
         if let line { result["line"] = .int(line) }
         return .ok(id: request.id, result: result)
+    }
+
+    /// F051-R07: returns `true` when `path` falls under a remote project's root.
+    /// Such files can't be validated against the local filesystem; the open
+    /// path resolves them through the owning project's SFTP content provider.
+    private func owningProjectIsRemote(forPath path: String) -> Bool {
+        guard let store = vibespaceCatalogStore else { return false }
+        let owner = store.vibespaces
+            .flatMap { $0.projects }
+            .filter { project in
+                let root = project.rootURL.standardizedFileURL.path
+                return path == root || path.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+            }
+            .max(by: { $0.rootURL.standardizedFileURL.path.count < $1.rootURL.standardizedFileURL.path.count })
+        return owner?.sshConnection != nil
     }
 }

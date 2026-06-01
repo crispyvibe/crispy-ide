@@ -51,4 +51,15 @@ struct SFTPFileContentProvider: FileContentProviding {
             }
         }
     }
+
+    /// "size mtime" via remote `stat` (GNU, then BSD fallback). Used to detect
+    /// external content edits to an open remote file by polling.
+    func modificationToken(at path: String) async throws -> String? {
+        let escaped = path.replacingOccurrences(of: "'", with: "'\\''")
+        let command =
+            "stat -c '%s %Y' '\(escaped)' 2>/dev/null || stat -f '%z %m' '\(escaped)' 2>/dev/null"
+        let output = try await connection.executeCommand(command, timeout: 10)
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }

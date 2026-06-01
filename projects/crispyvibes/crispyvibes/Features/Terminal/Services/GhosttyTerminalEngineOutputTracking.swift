@@ -60,8 +60,14 @@ extension GhosttyTerminalEngine {
         }
 
         if !trimmed.isEmpty {
+            // Skip the login-banner clear for tmux-backed sessions: on reconnect
+            // the terminal reattaches to a live session (possibly running an
+            // agent), and typing a screen/scrollback clear would wipe it. tmux
+            // redraws its pane on attach anyway.
+            let isTmuxBacked = (delegate as? TerminalSession)?.tmuxSessionName != nil
             if !hasReportedRenderableOutput,
                !hasAttemptedInitialBannerCleanup,
+               !isTmuxBacked,
                GhosttyTerminalEngineSupport.shouldSuppressInitialLoginBanner(in: snapshot) {
                 hasAttemptedInitialBannerCleanup = true
                 DispatchQueue.main.async { [weak self] in

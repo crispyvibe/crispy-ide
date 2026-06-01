@@ -32,6 +32,44 @@ enum TmuxService {
         sessionPrefix + UUID().uuidString.prefix(12).lowercased()
     }
 
+    /// A single tmux server-priming step, exposed individually so it can be
+    /// applied on its own from the terminal quick menu (rather than as one
+    /// combined script). `command` is a self-contained shell command.
+    struct PrimingOption: Identifiable, Sendable {
+        let id: String
+        let label: String
+        let command: String
+    }
+
+    /// Server-priming options applied to tmux-enabled sessions on connect:
+    /// mouse support, large scrollback, hidden status bar, fast escape, 24-bit
+    /// truecolor passthrough, and best-available terminfo selection. Each entry is
+    /// self-contained so it can be sent individually to a live session.
+    static let primingOptions: [PrimingOption] = [
+        // tmux 2.1+ uses 'mouse on'; older versions use mode-mouse/mouse-select-*
+        PrimingOption(id: "mouse", label: "Mouse Support",
+            command: "tmux set-option -g mouse on 2>/dev/null || { tmux set-option -g mode-mouse on 2>/dev/null; tmux set-option -g mouse-select-pane on 2>/dev/null; tmux set-option -g mouse-resize-pane on 2>/dev/null; tmux set-option -g mouse-select-window on 2>/dev/null; }"),
+        PrimingOption(id: "scrollback", label: "Scrollback (50k lines)",
+            command: "tmux set-option -g history-limit 50000 2>/dev/null"),
+        PrimingOption(id: "status", label: "Hide Status Bar",
+            command: "tmux set-option -g status off 2>/dev/null"),
+        PrimingOption(id: "escape", label: "Fast Escape Time",
+            command: "tmux set-option -g escape-time 0 2>/dev/null"),
+        // Append (-ga) so any user-provided terminal-overrides are preserved.
+        PrimingOption(id: "truecolor", label: "Truecolor (24-bit RGB)",
+            command: "tmux set-option -ga terminal-overrides \",*:RGB\" 2>/dev/null"),
+        // Self-contained: pick the best terminfo actually installed and promote
+        // default-terminal only when the user has not configured one themselves.
+        PrimingOption(id: "terminfo", label: "Best Terminfo (256-color)",
+            command: "__t=$(if command -v infocmp >/dev/null 2>&1; then if infocmp tmux-256color >/dev/null 2>&1; then echo tmux-256color; elif infocmp screen-256color >/dev/null 2>&1; then echo screen-256color; else echo screen; fi; else echo screen; fi); __d=$(tmux show-option -gqv default-terminal 2>/dev/null); if [ -z \"$__d\" ] || [ \"$__d\" = \"screen\" ]; then tmux set-option -g default-terminal \"$__t\" 2>/dev/null; fi"),
+    ]
+
+    /// All priming options joined into one shell line for embedding in the remote
+    /// SSH launch invocation (where a single command string is required).
+    static var remotePrimingCommand: String {
+        "tmux start-server 2>/dev/null; " + primingOptions.map(\.command).joined(separator: "; ")
+    }
+
     static func launchArguments(sessionName: String, shell: String, workingDirectory: String) -> (executable: String, args: [String]) {
         launchArguments(sessionName: sessionName, shell: shell, workingDirectory: workingDirectory, agentCLIEnvironment: [:])
     }

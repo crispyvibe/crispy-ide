@@ -108,6 +108,13 @@ final class MarkdownViewModel: ObservableObject {
     private var activeBufferStateCancellable: AnyCancellable?
     private var observedBufferID: String?
 
+    /// F051: polls the open *remote* file for external content changes (the
+    /// remote FS can't push FSEvents and `inotifywait` isn't assumed present).
+    private var remoteReloadPollTask: Task<Void, Never>?
+    private var lastRemoteModificationToken: String?
+    private var fileURLPollingCancellable: AnyCancellable?
+    private let remoteReloadPollInterval: UInt64 = 4_000_000_000
+
     init(worker: any PaneWorkerExecuting, bufferStore: DocumentBufferStore) {
         self.worker = worker
         self.bufferStore = bufferStore
@@ -136,6 +143,11 @@ final class MarkdownViewModel: ObservableObject {
                 self?.reloadIfFileChanged(changedPaths: paths)
             }
         }
+        fileURLPollingCancellable = $fileURL
+            .removeDuplicates()
+            .sink { [weak self] url in
+                MainActor.assumeIsolated { self?.restartRemoteReloadPolling(for: url) }
+            }
     }
 
     deinit {
@@ -145,6 +157,7 @@ final class MarkdownViewModel: ObservableObject {
         }
         openFileTask?.cancel()
         gitDiffTask?.cancel()
+        remoteReloadPollTask?.cancel()
         if let materializedPreviewURL {
             try? FileManager.default.removeItem(at: materializedPreviewURL)
         }
@@ -158,6 +171,44 @@ final class MarkdownViewModel: ObservableObject {
         guard changedPaths.contains(filePath) || changedPaths.contains(parentPath) else { return }
         guard Date().timeIntervalSince(lastSaveDate) > 1.0 else { return }
         // If buffer is clean, reload from disk. If dirty/saving, preserve user edits (F039-R07).
+        if let buffer = activeBuffer, !buffer.isDirty, !buffer.isSaving, !buffer.isLoading {
+            reloadExternalEditableFile()
+        }
+    }
+
+    /// F051: (re)starts polling the open file's remote modification token. Only
+    /// runs for remote (SFTP) providers; local files rely on FSEvents. The first
+    /// sample establishes a baseline, then a changed token triggers a reload
+    /// (when the buffer is clean), reusing the same path as external-change reload.
+    private func restartRemoteReloadPolling(for url: URL?) {
+        remoteReloadPollTask?.cancel()
+        remoteReloadPollTask = nil
+        lastRemoteModificationToken = nil
+        guard let url,
+              let provider = fileContentProvider,
+              provider.requiresMaterializedLocalPreview else { return }
+        let path = url.path
+        let interval = remoteReloadPollInterval
+        remoteReloadPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: interval)
+                if Task.isCancelled { return }
+                guard let token = try? await provider.modificationToken(at: path) else { continue }
+                await MainActor.run { [weak self] in
+                    guard let self, self.fileURL?.path == path else { return }
+                    let previous = self.lastRemoteModificationToken
+                    self.lastRemoteModificationToken = token
+                    if let previous, previous != token {
+                        self.reloadOpenRemoteFileIfClean()
+                    }
+                }
+            }
+        }
+    }
+
+    private func reloadOpenRemoteFileIfClean() {
+        guard isEditableDocumentType(documentType) else { return }
+        guard Date().timeIntervalSince(lastSaveDate) > 1.0 else { return }
         if let buffer = activeBuffer, !buffer.isDirty, !buffer.isSaving, !buffer.isLoading {
             reloadExternalEditableFile()
         }

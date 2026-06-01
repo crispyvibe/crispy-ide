@@ -54,6 +54,19 @@ struct SSHConnectionSheet: View {
                 }
             }
 
+            Divider()
+
+            Toggle(isOn: $vm.agentCLIEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Allow Agent CLI (crispy) on this connection")
+                        .font(AppTypographyTokens.subheadlineSemibold)
+                    Text("Lets agents and terminals on this host control the IDE via the bundled crispy command. Turn off for shared or untrusted hosts.")
+                        .font(AppTypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+
             Spacer().frame(height: 4)
 
             HStack {

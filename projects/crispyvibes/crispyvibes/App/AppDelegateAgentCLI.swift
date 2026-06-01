@@ -60,5 +60,26 @@ extension AppDelegate {
                 ]
             )
         }
+        startAgentCLIExecRelayIfEnabled()
+    }
+
+    /// F051: starts the remote-CLI exec relay (idempotent; self-heals on
+    /// reactivation like the command socket).
+    @MainActor
+    func startAgentCLIExecRelayIfEnabled() {
+        guard Self.isAgentCLIEnabled else { return }
+        if cliExecRelayServer == nil { cliExecRelayServer = CLIExecRelayServer() }
+        do {
+            try cliExecRelayServer?.start()
+        } catch CLISocketServerError.alreadyServing {
+            // Already serving — fine.
+        } catch {
+            AppDiagnostics.record(
+                category: .vibespaceLifecycle,
+                level: .error,
+                event: "agent_cli_relay_start_failed",
+                metadata: ["error": "\(error)"]
+            )
+        }
     }
 }

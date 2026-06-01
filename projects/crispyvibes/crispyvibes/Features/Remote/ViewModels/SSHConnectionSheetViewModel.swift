@@ -11,6 +11,7 @@ final class SSHConnectionSheetViewModel: ObservableObject {
     @Published var user = NSUserName()
     @Published var useKeyFile = false
     @Published var keyFilePath = ""
+    @Published var agentCLIEnabled = true
     @Published var keyValidationStatus: KeyValidationStatus = .none
 
     enum KeyValidationStatus: Equatable {
@@ -38,6 +39,7 @@ final class SSHConnectionSheetViewModel: ObservableObject {
         if case .keyFile(let path) = profile?.authMethod {
             useKeyFile = true; keyFilePath = path
         }
+        agentCLIEnabled = profile?.isAgentCLIEnabled ?? true
     }
 
     func validateKey() {
@@ -63,7 +65,8 @@ final class SSHConnectionSheetViewModel: ObservableObject {
             port: UInt16(port) ?? 22,
             user: user.trimmingCharacters(in: .whitespaces),
             authMethod: useKeyFile ? .keyFile(keyFilePath.trimmingCharacters(in: .whitespaces)) : .agent,
-            importedFromConfig: importedFromConfig
+            importedFromConfig: importedFromConfig,
+            agentCLIEnabled: agentCLIEnabled
         )
     }
 }
