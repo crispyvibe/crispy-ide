@@ -56,6 +56,15 @@ final class VibeSpaceHydrationCoordinator: ObservableObject {
         cancelVibeSpaceHydration()
         guard let vibespace = vibespaceState(for: vibespaceID) else { return }
 
+        // Bind the service-owned board store to this vibespace. The explicit
+        // hydration path sets `lastHydratedVibeSpaceID`, which makes
+        // `handleActiveVibeSpaceChange` bail before it would call this; and the
+        // board view's `resyncBoard` only fires on a vibespaceID *change*. Without
+        // this, the board store can run with `vibespaceID == nil`, so its layout
+        // persists to "__global__" and is silently dropped (tiles/positions lost
+        // across open/restart).
+        boardStore?.updateVibeSpaceID(vibespaceID)
+
         let preparation = vibespaceHydrationUseCase.prepareHydration(
             for: vibespaceID,
             vibespace: vibespace,
