@@ -456,6 +456,61 @@ final class ProjectSessionStateTests: XCTestCase {
         XCTAssertEqual(boardStore.layout.tiles.count, initialTabIDs.count)
     }
 
+    func testRestoredCustomBoardArrangementSurvivesReconcile() throws {
+        let projectRoot = tempRoot.appendingPathComponent("project", isDirectory: true)
+        let dirB = projectRoot.appendingPathComponent("b", isDirectory: true)
+        try FileManager.default.createDirectory(at: dirB, withIntermediateDirectories: true)
+        let fileURL = projectRoot.appendingPathComponent("TODO.md")
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+        let projectPath = projectRoot.standardizedFileURL.path
+
+        let project = container.makeProjectSession(rootURL: projectRoot, vibespaceID: vibespaceID)
+        project.terminalViewModel.createTab(directoryURL: projectRoot, startImmediately: false)
+        project.terminalViewModel.createTab(directoryURL: projectRoot, startImmediately: false)
+        project.terminalViewModel.createTab(directoryURL: dirB, startImmediately: false)
+
+        // Persist a CUSTOM 2-column arrangement. Terminal tiles reference ids that
+        // differ from the live tabs (as on restore) but match working directories;
+        // a file tile sits at col0 row1 (not a default position).
+        let layoutPersistence = LayoutPersistenceService(fileManager: .default, stateFileURL: layoutStateFileURL)
+        func term(_ dir: URL) -> VibeSpaceTerminalBoardTile {
+            VibeSpaceTerminalBoardTile(
+                projectPath: projectPath,
+                terminalTabID: UUID(),
+                workingDirectoryPath: dir.standardizedFileURL.path
+            )
+        }
+        let fileTile = VibeSpaceTerminalBoardTile(workingDirectoryPath: "", contentKind: .file(fileURL))
+        let layout = VibeSpaceTerminalBoardLayout(
+            columns: [
+                VibeSpaceTerminalBoardColumn(widthWeight: 1, tiles: [term(projectRoot), fileTile]),
+                VibeSpaceTerminalBoardColumn(widthWeight: 1, tiles: [term(dirB), term(projectRoot)]),
+            ],
+            activeTileID: nil
+        )
+        layoutPersistence.setTerminalBoardState(.fromLegacyLayout(layout), for: vibespaceID)
+
+        let boardStore = VibeSpaceTerminalBoardStore(
+            vibespaceID: vibespaceID,
+            layoutPersistence: layoutPersistence,
+            terminalBoardStandaloneRegistry: container.terminalBoardStandaloneRegistry
+        )
+        func structure() -> [[String]] {
+            boardStore.layout.columns.map { col in
+                col.tiles.map { $0.isFile ? "file" : ($0.isTerminal ? "terminal" : "other") }
+            }
+        }
+        let before = structure()
+        XCTAssertEqual(before, [["terminal", "file"], ["terminal", "terminal"]])
+
+        // Restore timing: the project is transiently absent from the snapshot
+        // (e.g. a remote project still resolving/connecting) before it resolves.
+        boardStore.syncProjects([])
+        boardStore.syncProjects([project]) // triggers reconcileTerminalTiles
+
+        XCTAssertEqual(structure(), before, "restored custom board arrangement must survive reconcile")
+    }
+
     private func makeProjectSessionDependencies(
         layoutPersistence: LayoutPersistenceService
     ) -> ProjectSessionDependencies {

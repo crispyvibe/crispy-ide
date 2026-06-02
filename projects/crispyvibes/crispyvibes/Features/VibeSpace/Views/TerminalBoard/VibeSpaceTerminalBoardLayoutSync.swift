@@ -77,7 +77,7 @@ enum VibeSpaceTerminalBoardLayoutSync {
                   desiredTabState.desiredByIdentity[identity] != nil else {
                 // Tab exists but is hidden/filtered → remove. Tab doesn't exist yet → keep (hydration pending).
                 let tabExists = tile.terminalTabID.map { allKnownTabIDs.contains($0) } ?? false
-                if !tabExists, let pp = tile.projectPath, desiredTabState.activeProjectPaths.contains(pp) {
+                if !tabExists, let pp = tile.projectPath {
                     pendingTileCountByProject[pp, default: 0] += 1
                     return false
                 }
@@ -94,7 +94,7 @@ enum VibeSpaceTerminalBoardLayoutSync {
                   let desiredTab = desiredTabState.desiredByIdentity[identity],
                   !seenIdentities.contains(identity) else {
                 let tabExists = existingTile.terminalTabID.map { allKnownTabIDs.contains($0) } ?? false
-                if !tabExists, let pp = existingTile.projectPath, desiredTabState.activeProjectPaths.contains(pp) {
+                if !tabExists, let pp = existingTile.projectPath {
                     pendingTileCountByProject[pp, default: 0] += 1
                 } else {
                     _ = layout.removeTile(withID: existingTile.id)
