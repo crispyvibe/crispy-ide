@@ -456,6 +456,25 @@ final class ProjectSessionStateTests: XCTestCase {
         XCTAssertEqual(boardStore.layout.tiles.count, initialTabIDs.count)
     }
 
+    func testFileSystemEventPostsChangeNotificationForReload() async {
+        let spy = SpyFileSystemWatcher()
+        var deps = makeProjectSessionDependencies(
+            layoutPersistence: LayoutPersistenceService(fileManager: .default, stateFileURL: layoutStateFileURL)
+        )
+        deps.directoryWatcher = spy
+        let session = ProjectSession(rootURL: tempRoot, dependencies: deps)
+        session.activateIfNeeded() // wires the watcher's event handler
+
+        let changedPath = tempRoot.appendingPathComponent("notes.md").standardizedFileURL.path
+        let posted = expectation(forNotification: .fileSystemContentsDidChange, object: nil) { note in
+            (note.userInfo?["changedPaths"] as? Set<String>)?.contains(changedPath) ?? false
+        }
+        // Simulate the (session-owned) watcher firing an event.
+        spy.onEvent?(DirectoryWatcher.Event(path: changedPath, kind: .modified, isDirectory: false, rawFlags: 0))
+        await fulfillment(of: [posted], timeout: 1)
+        session.shutdown()
+    }
+
     func testRestoredCustomBoardArrangementSurvivesReconcile() throws {
         let projectRoot = tempRoot.appendingPathComponent("project", isDirectory: true)
         let dirB = projectRoot.appendingPathComponent("b", isDirectory: true)
