@@ -83,6 +83,8 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
     private var hasActivatedCore = false
     private var hasLoadedExplorer = false
     private var hasShutdown = false
+    private var fileChangeNotifyWorkItem: DispatchWorkItem?
+    private var pendingFileChangePaths: Set<String> = []
 
     init(
         rootURL: URL,
@@ -122,10 +124,34 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
     private func startWatchingProjectRoot() {
         directoryWatcher.setOnEvent { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.folderExplorerViewModel.ingestFileSystemEvent(event)
+                self?.handleFileSystemEvent(event)
             }
         }
         directoryWatcher.updateWatchedPaths([rootURL.standardizedFileURL.path])
+    }
+
+    private func handleFileSystemEvent(_ event: DirectoryWatcher.Event) {
+        // Explorer tree refresh keeps its own (coarser) debounce.
+        folderExplorerViewModel.ingestFileSystemEvent(event)
+        // Fast path for editor/docked-file reload: post the app-wide change
+        // signal on a short coalesce, decoupled from the explorer's 0.30s
+        // tree-refresh debounce so open documents reload promptly.
+        pendingFileChangePaths.insert(URL(fileURLWithPath: event.path).standardizedFileURL.path)
+        fileChangeNotifyWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.flushFileSystemChangeNotification() }
+        fileChangeNotifyWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
+    }
+
+    private func flushFileSystemChangeNotification() {
+        let paths = pendingFileChangePaths
+        pendingFileChangePaths.removeAll()
+        guard !paths.isEmpty else { return }
+        NotificationCenter.default.post(
+            name: .fileSystemContentsDidChange,
+            object: nil,
+            userInfo: ["changedPaths": paths]
+        )
     }
 
     func ensureExplorerLoadedIfNeeded() {
@@ -148,6 +174,7 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
         // `activate()`); stop it here. Per coding-guidelines "explicit
         // shutdown() for long-lived resources", also shut down the explorer,
         // which still owns pending main-actor refresh work items.
+        fileChangeNotifyWorkItem?.cancel()
         directoryWatcher.invalidate()
         folderExplorerViewModel.shutdown()
     }

@@ -263,12 +263,10 @@ extension FolderExplorerViewModel {
         pendingExternalRefreshEvents.removeAll()
 
         if !changedPaths.isEmpty {
+            // The owning ProjectSession posts `.fileSystemContentsDidChange`
+            // (fast, for editor/docked reload). Here we only republish to
+            // source control, which observes `observedFileSystemChanges`.
             observedFileSystemChanges.send(changedPaths)
-            NotificationCenter.default.post(
-                name: .fileSystemContentsDidChange,
-                object: nil,
-                userInfo: ["changedPaths": changedPaths]
-            )
         }
 
         guard activeSidebarTab == .files else {
