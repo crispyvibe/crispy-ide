@@ -41,13 +41,11 @@ final class FolderExplorerViewModel: ObservableObject {
     let worker: any PaneWorkerExecuting
     let renameEvents = PassthroughSubject<ExplorerRenameEvent, Never>()
     let treeLoadTimeout: TimeInterval = 45
-    let directoryWatcher: DirectoryWatcher
     let observedFileSystemChanges = PassthroughSubject<Set<String>, Never>()
     var refreshRequestID = UUID()
     var gitRefreshRequestID = UUID()
     var loadedDirectoryIDs: Set<String> = []
     var pendingExternalRefreshWorkItem: DispatchWorkItem?
-    var pendingWatchedDirectoriesSyncWorkItem: DispatchWorkItem?
     var pendingExternalRefreshPaths: Set<String> = []
     var pendingExternalRefreshEvents: [String: DirectoryWatcher.Event] = [:]
     var isTreeRefreshInFlight = false
@@ -69,20 +67,12 @@ final class FolderExplorerViewModel: ObservableObject {
             defaultSidebarTab = .files
         }
         self.worker = worker
-        self.directoryWatcher = DirectoryWatcher(maxWatchedPaths: 256)
         activeSidebarTab = defaultSidebarTab
-        directoryWatcher.setOnEvent { [weak self] event in
-            Task { @MainActor [weak self] in
-                self?.scheduleExternalRefresh(changedEvent: event)
-            }
-        }
         bindDisplayedItems()
     }
 
     deinit {
-        directoryWatcher.invalidate()
         pendingExternalRefreshWorkItem?.cancel()
-        pendingWatchedDirectoriesSyncWorkItem?.cancel()
         displayedItemsComputationTask?.cancel()
     }
 
@@ -101,11 +91,8 @@ final class FolderExplorerViewModel: ObservableObject {
     func shutdown() {
         guard !hasShutdown else { return }
         hasShutdown = true
-        directoryWatcher.invalidate()
         pendingExternalRefreshWorkItem?.cancel()
         pendingExternalRefreshWorkItem = nil
-        pendingWatchedDirectoriesSyncWorkItem?.cancel()
-        pendingWatchedDirectoriesSyncWorkItem = nil
         displayedItemsComputationTask?.cancel()
         displayedItemsComputationTask = nil
     }

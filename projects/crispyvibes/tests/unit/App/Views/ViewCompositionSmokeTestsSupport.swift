@@ -30,7 +30,8 @@ extension ViewCompositionSmokeTests {
             vibespaceManagement: vibespaceManagement,
             folderExplorerViewModelFactory: container.makeFolderExplorerViewModel,
             terminalViewModelFactory: container.makeTerminalViewModel,
-            detachedWindowManager: container.detachedWindowManager
+            detachedWindowManager: container.detachedWindowManager,
+            directoryWatcher: DirectoryWatcher()
         )
     }
 

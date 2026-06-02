@@ -40,7 +40,8 @@ final class EditorBehavioralTests: XCTestCase {
             vibespaceManagement: vibespaceManagement,
             folderExplorerViewModelFactory: container.makeFolderExplorerViewModel,
             terminalViewModelFactory: container.makeTerminalViewModel,
-            detachedWindowManager: NoopDetachedWindowManager()
+            detachedWindowManager: NoopDetachedWindowManager(),
+            directoryWatcher: DirectoryWatcher()
         )
 
         let session = ProjectSession(rootURL: projectRoot, dependencies: sessionDeps)
@@ -107,7 +108,8 @@ final class EditorBehavioralTests: XCTestCase {
             vibespaceManagement: vibespaceManagement,
             folderExplorerViewModelFactory: container.makeFolderExplorerViewModel,
             terminalViewModelFactory: container.makeTerminalViewModel,
-            detachedWindowManager: NoopDetachedWindowManager()
+            detachedWindowManager: NoopDetachedWindowManager(),
+            directoryWatcher: DirectoryWatcher()
         )
 
         let session = ProjectSession(rootURL: projectRoot, dependencies: sessionDeps)

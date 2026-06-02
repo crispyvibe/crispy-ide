@@ -30,6 +30,22 @@ final class ProjectSessionStateTests: XCTestCase {
         container = nil
     }
 
+    func testActivateStartsProjectRootWatchingWithoutExplorerLoad() {
+        let layoutPersistence = LayoutPersistenceService(fileManager: .default, stateFileURL: layoutStateFileURL)
+        let spy = SpyFileSystemWatcher()
+        var deps = makeProjectSessionDependencies(layoutPersistence: layoutPersistence)
+        deps.directoryWatcher = spy
+        let session = ProjectSession(rootURL: tempRoot, dependencies: deps)
+
+        // Activation (hydration) — NOT ensureExplorerLoaded — must start watching.
+        session.activateIfNeeded()
+        XCTAssertEqual(spy.watchedPaths, [tempRoot.standardizedFileURL.path])
+        XCTAssertNotNil(spy.onEvent, "session should wire the watcher event handler at activate()")
+
+        session.shutdown()
+        XCTAssertTrue(spy.invalidated, "session.shutdown() must invalidate the watcher")
+    }
+
     func testActivateRestoresEscapedPathsAndPaneLayoutFromPersistence() async throws {
         let projectRoot = tempRoot.appendingPathComponent("project", isDirectory: true)
         let nested = projectRoot.appendingPathComponent("nested", isDirectory: true)
@@ -449,7 +465,17 @@ final class ProjectSessionStateTests: XCTestCase {
             vibespaceID: vibespaceID,
             folderExplorerViewModelFactory: container.makeFolderExplorerViewModel,
             terminalViewModelFactory: container.makeTerminalViewModel,
-            detachedWindowManager: container.detachedWindowManager
+            detachedWindowManager: container.detachedWindowManager,
+            directoryWatcher: DirectoryWatcher()
         )
     }
+}
+
+private final class SpyFileSystemWatcher: FileSystemEventWatching {
+    var onEvent: ((DirectoryWatcher.Event) -> Void)?
+    private(set) var watchedPaths: Set<String> = []
+    private(set) var invalidated = false
+    func setOnEvent(_ onEvent: @escaping (DirectoryWatcher.Event) -> Void) { self.onEvent = onEvent }
+    func updateWatchedPaths(_ paths: Set<String>) { watchedPaths = paths }
+    func invalidate() { invalidated = true }
 }

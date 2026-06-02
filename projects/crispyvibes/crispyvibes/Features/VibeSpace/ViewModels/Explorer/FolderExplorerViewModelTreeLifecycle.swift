@@ -26,15 +26,12 @@ extension FolderExplorerViewModel {
         gitHistoryIsLoading = false
         pendingExternalRefreshWorkItem?.cancel()
         pendingExternalRefreshWorkItem = nil
-        pendingWatchedDirectoriesSyncWorkItem?.cancel()
-        pendingWatchedDirectoriesSyncWorkItem = nil
         pendingExternalRefreshPaths.removeAll()
         pendingExternalRefreshEvents.removeAll()
         isTreeRefreshInFlight = false
         queuedTreeRefreshTrigger = nil
         treeMutationRevision = 0
         changedDirectoryIDs = []
-        scheduleWatchedDirectoriesSync(immediately: true)
         refreshTree(trigger: .manual)
     }
 
@@ -58,15 +55,12 @@ extension FolderExplorerViewModel {
             self.gitHistoryIsLoading = false
             self.pendingExternalRefreshWorkItem?.cancel()
             self.pendingExternalRefreshWorkItem = nil
-            self.pendingWatchedDirectoriesSyncWorkItem?.cancel()
-            self.pendingWatchedDirectoriesSyncWorkItem = nil
             self.pendingExternalRefreshPaths.removeAll()
             self.pendingExternalRefreshEvents.removeAll()
             self.isTreeRefreshInFlight = false
             self.queuedTreeRefreshTrigger = nil
             self.treeMutationRevision = 0
             self.changedDirectoryIDs = []
-            self.scheduleWatchedDirectoriesSync(immediately: true)
             self.refreshTree(trigger: .manual)
         }
     }
@@ -124,7 +118,6 @@ extension FolderExplorerViewModel {
                 self.loadedDirectoryIDs = [rootURL.path]
                 self.loadingDirectoryIDs.removeAll()
                 self.workerStatus = .ready
-                self.scheduleWatchedDirectoriesSync(immediately: true)
                 self.refreshGitStateIfNeeded(afterTreeRefresh: trigger)
             } catch {
                 guard self.refreshRequestID == requestID else { return }
@@ -253,33 +246,12 @@ extension FolderExplorerViewModel {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.30, execute: workItem)
     }
 
-    func scheduleWatchedDirectoriesSync(immediately: Bool = false) {
-        pendingWatchedDirectoriesSyncWorkItem?.cancel()
-
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.syncWatchedDirectories()
-        }
-        pendingWatchedDirectoriesSyncWorkItem = workItem
-
-        if immediately {
-            workItem.perform()
-        } else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: workItem)
-        }
-    }
-
-    private func syncWatchedDirectories() {
-        pendingWatchedDirectoriesSyncWorkItem = nil
-        guard let rootURL else {
-            directoryWatcher.updateWatchedPaths([])
-            return
-        }
-
-        var watchedPaths: Set<String> = [rootURL.standardizedFileURL.path]
-        for directoryPath in expandedDirectoryIDs {
-            watchedPaths.insert(URL(fileURLWithPath: directoryPath).standardizedFileURL.path)
-        }
-        directoryWatcher.updateWatchedPaths(watchedPaths)
+    /// Ingests a filesystem event forwarded by the owning `ProjectSession`'s
+    /// `DirectoryWatcher`. The session owns the watcher lifecycle (started in
+    /// `activate()` at hydration); the explorer is purely a consumer that
+    /// refreshes its tree and republishes the change.
+    func ingestFileSystemEvent(_ event: DirectoryWatcher.Event) {
+        scheduleExternalRefresh(changedEvent: event)
     }
 
     func consumeExternalRefreshQueue() {
@@ -302,6 +274,12 @@ extension FolderExplorerViewModel {
         guard activeSidebarTab == .files else {
             return
         }
+
+        // The session starts watching at hydration, so events can arrive before
+        // the explorer tree has ever been loaded (e.g. terminal-only board mode).
+        // The change was already republished above; skip tree work until loaded
+        // to preserve lazy tree loading.
+        guard !loadedDirectoryIDs.isEmpty else { return }
 
         guard !changedPaths.isEmpty else {
             refreshTree(trigger: .watcher)
