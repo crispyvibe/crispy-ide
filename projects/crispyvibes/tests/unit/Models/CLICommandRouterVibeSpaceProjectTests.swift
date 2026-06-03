@@ -203,6 +203,86 @@ final class CLICommandRouterVibeSpaceProjectTests: XCTestCase {
         XCTAssertEqual(errorCode(response), CLIErrorCode.fileNotFound)
     }
 
+    // MARK: - F044-R83: activateProject
+
+    func testActivateProjectUnparksAndFocuses() throws {
+        let extraURL = tempRoot.appendingPathComponent("extra-activate", isDirectory: true)
+        try FileManager.default.createDirectory(at: extraURL, withIntermediateDirectories: true)
+        _ = router.handleVibeSpaceAddProject(request(
+            "vibespace.addProject", params: ["path": .string(extraURL.path)]
+        ))
+        _ = router.handleVibeSpaceParkProject(request(
+            "vibespace.parkProject", params: ["path": .string(extraURL.path)]
+        ))
+        XCTAssertTrue(try XCTUnwrap(catalog.vibespaces.first).parkedProjectPaths.contains(extraURL.standardizedFileURL.path))
+
+        let response = router.handleVibeSpaceActivateProject(request(
+            "vibespace.activateProject", params: ["path": .string(extraURL.path)]
+        ))
+
+        let result = try XCTUnwrap(successResult(response))
+        XCTAssertEqual(result["activated_project_path"]?.stringValue, extraURL.standardizedFileURL.path)
+        let vibespace = try XCTUnwrap(catalog.vibespaces.first)
+        XCTAssertFalse(vibespace.parkedProjectPaths.contains(extraURL.standardizedFileURL.path))
+        XCTAssertTrue(vibespace.projects.contains(where: { $0.projectIdentifier == extraURL.standardizedFileURL.path }))
+    }
+
+    func testActivateProjectErrorsForNonParkedPath() {
+        // Seed is a live (not parked) project.
+        let seedPath = tempRoot.appendingPathComponent("seed", isDirectory: true).path
+        let response = router.handleVibeSpaceActivateProject(request(
+            "vibespace.activateProject", params: ["path": .string(seedPath)]
+        ))
+        XCTAssertEqual(errorCode(response), CLIErrorCode.fileNotFound)
+    }
+
+    // MARK: - F044-R84: listProjects
+
+    func testListProjectsReportsActiveAndParked() throws {
+        let extraURL = tempRoot.appendingPathComponent("extra-list", isDirectory: true)
+        try FileManager.default.createDirectory(at: extraURL, withIntermediateDirectories: true)
+        _ = router.handleVibeSpaceAddProject(request(
+            "vibespace.addProject", params: ["path": .string(extraURL.path)]
+        ))
+        _ = router.handleVibeSpaceParkProject(request(
+            "vibespace.parkProject", params: ["path": .string(extraURL.path)]
+        ))
+
+        let response = router.handleVibeSpaceListProjects(request(
+            "vibespace.listProjects", params: [:]
+        ))
+
+        let result = try XCTUnwrap(successResult(response))
+        let active = try XCTUnwrap(result["active"]?.arrayValue)
+        let parked = try XCTUnwrap(result["parked"]?.arrayValue)
+        XCTAssertEqual(active.count, 1, "only the seed project remains live")
+        XCTAssertEqual(
+            active.first?.objectValue?["path"]?.stringValue,
+            tempRoot.appendingPathComponent("seed", isDirectory: true).standardizedFileURL.path
+        )
+        XCTAssertEqual(parked.compactMap { $0.stringValue }, [extraURL.standardizedFileURL.path])
+    }
+
+    // MARK: - F021-R19: removeParkedProject (coordinator)
+
+    func testCoordinatorRemoveParkedProjectDropsPath() throws {
+        let extraURL = tempRoot.appendingPathComponent("extra-remove-parked", isDirectory: true)
+        try FileManager.default.createDirectory(at: extraURL, withIntermediateDirectories: true)
+        _ = router.handleVibeSpaceAddProject(request(
+            "vibespace.addProject", params: ["path": .string(extraURL.path)]
+        ))
+        _ = router.handleVibeSpaceParkProject(request(
+            "vibespace.parkProject", params: ["path": .string(extraURL.path)]
+        ))
+        XCTAssertTrue(try XCTUnwrap(catalog.vibespaces.first).parkedProjectPaths.contains(extraURL.standardizedFileURL.path))
+
+        actions.removeParkedProject(path: extraURL.path)
+
+        let vibespace = try XCTUnwrap(catalog.vibespaces.first)
+        XCTAssertFalse(vibespace.parkedProjectPaths.contains(extraURL.standardizedFileURL.path))
+        XCTAssertFalse(vibespace.projects.contains(where: { $0.projectIdentifier == extraURL.standardizedFileURL.path }))
+    }
+
     // MARK: - Coordinator-not-attached fallback
 
     func testHandlersRequireActionsCoordinator() throws {

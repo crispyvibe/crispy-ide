@@ -499,6 +499,35 @@ final class CLICommandRouter {
             ),
             handler: { [unowned self] req in self.handleVibeSpaceParkProject(req) }
         ),
+        CommandRegistration(
+            method: "vibespace.activateProject",
+            descriptor: CommandDescriptor(
+                summary: "Activate (unpark) a parked project in the focused vibespace and focus it (F044-R83).",
+                params: [
+                    .init(name: "path", type: "string", required: true, description: "Absolute path of the parked project to activate."),
+                ],
+                result: [
+                    .init(name: "activated_project_path", type: "string", description: "Resolved absolute path of the activated project."),
+                    .init(name: "focused", type: "boolean", description: "True — the activated project becomes focused."),
+                ],
+                errors: ["invalid_params", "file_not_found", "vibespace_not_found", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in self.handleVibeSpaceActivateProject(req) }
+        ),
+        CommandRegistration(
+            method: "vibespace.listProjects",
+            descriptor: CommandDescriptor(
+                summary: "List active, parked, and unresolved projects in the focused vibespace (F044-R84).",
+                params: [],
+                result: [
+                    .init(name: "active", type: "array", description: "Active projects: { path, name, focused }."),
+                    .init(name: "parked", type: "array", description: "Parked project paths."),
+                    .init(name: "unresolved", type: "array", description: "Unresolved (missing) project paths."),
+                ],
+                errors: ["vibespace_not_found"]
+            ),
+            handler: { [unowned self] req in self.handleVibeSpaceListProjects(req) }
+        ),
         // MARK: Comments (F049)
         CommandRegistration(
             method: "comments.add",
