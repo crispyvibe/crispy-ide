@@ -182,6 +182,26 @@ final class VibeSpacePersistenceIntegrationTests: XCTestCase {
         }
     }
 
+    func testHydrationBindsBoardStoreToVibeSpace() throws {
+        let project = tempRoot.appendingPathComponent("bind-project", isDirectory: true)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let vibespace = container.makeVibeSpaceState(name: "Bind", projectURLs: [project])
+
+        let dependencies = container.makeContentViewDependencies()
+        dependencies.vibespaceCatalogStore.replaceDisplayedVibeSpace(with: vibespace)
+        dependencies.appShellStore.showVibeSpace(vibespace.id)
+
+        // The service-owned board store is created before any vibespace is active,
+        // so it starts unbound. Without binding on hydration its layout would
+        // persist to the unparseable "__global__" key and be silently dropped.
+        XCTAssertNotEqual(dependencies.vibespaceHydrationCoordinator.boardStore?.vibespaceID, vibespace.id)
+
+        dependencies.vibespaceHydrationCoordinator.scheduleVibeSpaceTerminalHydration(for: vibespace.id)
+        dependencies.vibespaceHydrationCoordinator.cancelVibeSpaceHydration()
+
+        XCTAssertEqual(dependencies.vibespaceHydrationCoordinator.boardStore?.vibespaceID, vibespace.id)
+    }
+
     func testVibeSpaceHydrationRunsStartupCommandsForBackgroundProjects() async throws {
         let firstProject = tempRoot.appendingPathComponent("focused-project", isDirectory: true)
         let secondProject = tempRoot.appendingPathComponent("background-project", isDirectory: true)

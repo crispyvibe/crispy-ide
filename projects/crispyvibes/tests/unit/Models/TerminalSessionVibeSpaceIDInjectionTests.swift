@@ -37,7 +37,8 @@ final class TerminalSessionVibeSpaceIDInjectionTests: XCTestCase {
             vibespaceManagement: container.vibespaceManagement,
             folderExplorerViewModelFactory: container.makeFolderExplorerViewModel,
             terminalViewModelFactory: container.makeTerminalViewModel,
-            detachedWindowManager: container.detachedWindowManager
+            detachedWindowManager: container.detachedWindowManager,
+            directoryWatcher: DirectoryWatcher()
         )
         dependencies.vibespaceID = vibespaceID
         let project = ProjectSession(rootURL: projectURL, dependencies: dependencies)
@@ -82,7 +83,8 @@ final class TerminalSessionVibeSpaceIDInjectionTests: XCTestCase {
             vibespaceManagement: container.vibespaceManagement,
             folderExplorerViewModelFactory: container.makeFolderExplorerViewModel,
             terminalViewModelFactory: container.makeTerminalViewModel,
-            detachedWindowManager: container.detachedWindowManager
+            detachedWindowManager: container.detachedWindowManager,
+            directoryWatcher: DirectoryWatcher()
         )
         dependencies.vibespaceID = vibespaceID
         let project = ProjectSession(rootURL: projectURL, dependencies: dependencies)

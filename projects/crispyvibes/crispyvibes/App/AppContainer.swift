@@ -291,7 +291,8 @@ struct AppContainer {
             vibespaceID: vibespaceID,
             folderExplorerViewModelFactory: makeFolderExplorerViewModel,
             terminalViewModelFactory: makeTerminalViewModel,
-            detachedWindowManager: detachedWindowManager
+            detachedWindowManager: detachedWindowManager,
+            directoryWatcher: DirectoryWatcher()
         )
     }
 

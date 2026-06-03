@@ -45,7 +45,8 @@ final class VibeSpaceTerminalBoardStoreClickToSelectTests: XCTestCase {
                 vibespaceManagement: container.vibespaceManagement,
                 folderExplorerViewModelFactory: container.makeFolderExplorerViewModel,
                 terminalViewModelFactory: container.makeTerminalViewModel,
-                detachedWindowManager: container.detachedWindowManager
+                detachedWindowManager: container.detachedWindowManager,
+                directoryWatcher: DirectoryWatcher()
             )
         ))
         boardStore.syncProjects([session])

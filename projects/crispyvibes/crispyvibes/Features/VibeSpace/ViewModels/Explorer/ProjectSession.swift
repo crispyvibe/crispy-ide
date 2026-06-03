@@ -15,6 +15,7 @@ struct ProjectSessionDependencies {
     var folderExplorerViewModelFactory: @MainActor () -> FolderExplorerViewModel
     var terminalViewModelFactory: @MainActor () -> TerminalViewModel
     var detachedWindowManager: EditorDetachedWindowManaging
+    var directoryWatcher: any FileSystemEventWatching
 }
 
 struct ProjectPaneLayoutState: Codable, Equatable {
@@ -77,10 +78,13 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
     private let vibespaceManagement: VibeSpaceManagementService
     private let vibespaceID: UUID?
     private let detachedWindowManager: EditorDetachedWindowManaging
+    private let directoryWatcher: any FileSystemEventWatching
     private var cancellables = Set<AnyCancellable>()
     private var hasActivatedCore = false
     private var hasLoadedExplorer = false
     private var hasShutdown = false
+    private var fileChangeNotifyWorkItem: DispatchWorkItem?
+    private var pendingFileChangePaths: Set<String> = []
 
     init(
         rootURL: URL,
@@ -91,6 +95,7 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
         self.vibespaceManagement = dependencies.vibespaceManagement
         self.vibespaceID = dependencies.vibespaceID
         self.detachedWindowManager = dependencies.detachedWindowManager
+        self.directoryWatcher = dependencies.directoryWatcher
         self.folderExplorerViewModel = dependencies.folderExplorerViewModelFactory()
         self.terminalViewModel = dependencies.terminalViewModelFactory()
     }
@@ -108,6 +113,45 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
         wireViewModels()
         restoreLocalSessionState()
         wireLocalPersistence()
+        startWatchingProjectRoot()
+    }
+
+    /// Filesystem watching is a project-session lifecycle resource, not an
+    /// explorer-view concern. Started here at activation (vibespace hydration)
+    /// so external edits — e.g. by an agent — reload open editors and docked
+    /// file tiles in any canvas mode, even when the explorer is never shown.
+    /// Stopped in `shutdown()`. The explorer is one consumer of the events.
+    private func startWatchingProjectRoot() {
+        directoryWatcher.setOnEvent { [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.handleFileSystemEvent(event)
+            }
+        }
+        directoryWatcher.updateWatchedPaths([rootURL.standardizedFileURL.path])
+    }
+
+    private func handleFileSystemEvent(_ event: DirectoryWatcher.Event) {
+        // Explorer tree refresh keeps its own (coarser) debounce.
+        folderExplorerViewModel.ingestFileSystemEvent(event)
+        // Fast path for editor/docked-file reload: post the app-wide change
+        // signal on a short coalesce, decoupled from the explorer's 0.30s
+        // tree-refresh debounce so open documents reload promptly.
+        pendingFileChangePaths.insert(URL(fileURLWithPath: event.path).standardizedFileURL.path)
+        fileChangeNotifyWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.flushFileSystemChangeNotification() }
+        fileChangeNotifyWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
+    }
+
+    private func flushFileSystemChangeNotification() {
+        let paths = pendingFileChangePaths
+        pendingFileChangePaths.removeAll()
+        guard !paths.isEmpty else { return }
+        NotificationCenter.default.post(
+            name: .fileSystemContentsDidChange,
+            object: nil,
+            userInfo: ["changedPaths": paths]
+        )
     }
 
     func ensureExplorerLoadedIfNeeded() {
@@ -126,13 +170,12 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
         onFileRenamed = nil
         cancellables.removeAll()
         terminalViewModel.shutdown()
-        // Per coding-guidelines "explicit shutdown() for long-lived resources":
-        // the folder explorer owns a DirectoryWatcher and pending main-actor
-        // work items that only stop in `deinit`. Anything still holding a
-        // strong ref to this ProjectSession (e.g., a SwiftUI view mid-unmount
-        // after a remove or park) would otherwise keep the watcher alive,
-        // firing FS events that schedule Task { @MainActor } work and
-        // contributing to UI churn until SwiftUI fully releases the view.
+        // The session owns the filesystem `DirectoryWatcher` (started in
+        // `activate()`); stop it here. Per coding-guidelines "explicit
+        // shutdown() for long-lived resources", also shut down the explorer,
+        // which still owns pending main-actor refresh work items.
+        fileChangeNotifyWorkItem?.cancel()
+        directoryWatcher.invalidate()
         folderExplorerViewModel.shutdown()
     }
 

@@ -74,12 +74,10 @@ extension FolderExplorerViewModel {
             let descendantDirectoryIDs = self.expandedDescendantDirectoryIDs(ofPath: item.id)
             expandedDirectoryIDs.remove(item.id)
             expandedDirectoryIDs.subtract(descendantDirectoryIDs)
-            scheduleWatchedDirectoriesSync()
             return
         }
 
         expandedDirectoryIDs.insert(item.id)
-        scheduleWatchedDirectoriesSync()
         loadChildrenIfNeeded(of: item)
     }
 
