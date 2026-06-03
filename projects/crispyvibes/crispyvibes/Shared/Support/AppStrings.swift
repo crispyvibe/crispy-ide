@@ -138,6 +138,8 @@ enum AppStrings {
         static let parkedProjectsHeader = String(localized: "vibespace.parkedProjects.header", defaultValue: "Parked Projects")
         static let parkProjectAction = String(localized: "vibespace.parkProject.action", defaultValue: "Park Project")
         static let activateProjectAction = String(localized: "vibespace.activateProject.action", defaultValue: "Activate Project")
+        // F021-R18 / R19: remove a project (active or parked) via context menu.
+        static let removeProjectAction = String(localized: "vibespace.removeProject.action", defaultValue: "Remove Project")
     }
 
     // MARK: - Sidebar

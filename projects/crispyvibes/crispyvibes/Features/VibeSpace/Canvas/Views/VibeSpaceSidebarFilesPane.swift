@@ -104,6 +104,14 @@ struct VibeSpaceSidebarFilesPane: View {
                     userInfo: [AppCommandUserInfoKey.projectPath: path]
                 )
             }
+            // F021-R19: remove the parked project without activating it.
+            Button(AppStrings.VibeSpace.removeProjectAction, role: .destructive) {
+                NotificationCenter.default.post(
+                    name: .removeParkedProjectRequested,
+                    object: nil,
+                    userInfo: [AppCommandUserInfoKey.projectPath: path]
+                )
+            }
         }
         .accessibilityIdentifier("vibespace.sidebar.files.parked.row.\(path)")
     }

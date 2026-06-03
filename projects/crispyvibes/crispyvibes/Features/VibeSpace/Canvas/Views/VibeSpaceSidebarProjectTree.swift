@@ -96,6 +96,14 @@ struct VibeSpaceProjectFilesSectionView: View {
                         userInfo: [AppCommandUserInfoKey.projectID: project.id]
                     )
                 }
+                // F021-R18: remove the live project from the right-click menu.
+                Button(AppStrings.VibeSpace.removeProjectAction, role: .destructive) {
+                    NotificationCenter.default.post(
+                        name: .removeProjectRequested,
+                        object: nil,
+                        userInfo: [AppCommandUserInfoKey.projectID: project.id]
+                    )
+                }
             }
 
             if isExpanded {

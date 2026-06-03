@@ -257,6 +257,23 @@ final class VibeSpaceCanvasActionsCoordinator {
         return unparked
     }
 
+    /// F021-R19: remove a parked project (drop from `parkedProjectPaths` and
+    /// clear its associated per-project state) without activating it. Mirrors
+    /// `removeProject(id:)` for the parked collection; no live session exists,
+    /// so there are no terminals/browsers to tear down.
+    func removeParkedProject(path: String) {
+        guard let vibespaceID = activeVibeSpaceID else { return }
+        let normalized = VibeSpaceState.normalizedPath(from: path)
+        mutateActiveVibeSpace { vibespace, _ in
+            vibespace.removeParkedProject(path: normalized)
+        }
+        vibespaceHydrationCoordinator.clearStartupExecutionFlag(
+            forProjectPath: normalized,
+            in: vibespaceID
+        )
+        persistVibeSpaceCatalog()
+    }
+
     func colorTag(for project: AnyProjectSession) -> ProjectColorTag? {
         activeVibeSpace?.colorTag(for: project)
     }

@@ -73,6 +73,14 @@ extension Notification.Name {
     /// project.
     /// userInfo: `[AppCommandUserInfoKey.projectPath: String]`.
     static let activateProjectRequested = Notification.Name("activateProjectRequested")
+    /// F021-R18: posted when the user selects "Remove Project" on a live
+    /// (active) project context menu.
+    /// userInfo: `[AppCommandUserInfoKey.projectID: UUID]`.
+    static let removeProjectRequested = Notification.Name("removeProjectRequested")
+    /// F021-R19: posted when the user selects "Remove Project" on a parked
+    /// project context menu.
+    /// userInfo: `[AppCommandUserInfoKey.projectPath: String]`.
+    static let removeParkedProjectRequested = Notification.Name("removeParkedProjectRequested")
 }
 
 enum AppCommandUserInfoKey {
