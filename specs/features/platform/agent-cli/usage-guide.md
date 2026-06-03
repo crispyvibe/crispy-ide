@@ -3,7 +3,7 @@ title: "Agent CLI"
 feature: "F044"
 domain: "platform"
 audience: "agent-author"
-version: "1.0"
+version: "1.1"
 sidebar:
   label: "Agent CLI"
   order: 4
@@ -108,6 +108,27 @@ crispy browser list
 # Opt-in — all browsers in the vibespace, regardless of project
 crispy browser list --scope vibespace
 ```
+
+### Manage vibespace projects
+
+```bash
+# See what's in the focused vibespace
+crispy vibespace list-projects            # active / parked / unresolved
+
+# Add a folder as a project (becomes focused)
+crispy vibespace add-project /Users/manu/projects/api
+
+# Park a project (persists its state, terminates sessions)
+crispy vibespace park-project /Users/manu/projects/api
+
+# Activate (unpark) it again
+crispy vibespace activate-project /Users/manu/projects/api
+
+# Remove a project entirely (no state preserved)
+crispy vibespace remove-project /Users/manu/projects/api
+```
+
+All five commands target the focused vibespace and go through the same orchestration as the UI, so terminals/browsers are torn down or restored identically.
 
 ## Discovery
 

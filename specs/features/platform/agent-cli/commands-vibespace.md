@@ -313,12 +313,91 @@ Validation:
 
 ---
 
+## `vibespace.activateProject`
+
+Activates (unparks) a parked project in the focused vibespace and focuses it.
+
+### Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | yes | Absolute path of the parked project to activate |
+
+### Result
+
+| Field | Type | Description |
+|---|---|---|
+| `activated_project_path` | string | Resolved absolute path of the activated project |
+| `focused` | boolean | Always `true` — the activated project becomes focused |
+
+### Requirements
+
+#### F044-R83: Activate Project
+
+`vibespace.activateProject` MUST verify `path` is currently parked, then invoke `VibeSpaceCanvasActionsCoordinator.unparkProject(path:)`, which recreates the live `ProjectSession`, restores persisted browser sessions, clears `ProjectConfigFile.isParked`, focuses the project, and persists the catalog (mirrors the UI "Activate Project" flow, F021-R11).
+
+Validation:
+- `path` MUST currently be parked in the vibespace; otherwise return `file_not_found`
+- if unpark yields no session (e.g. the directory is gone), return `internal_error`
+
+### Scenarios
+
+#### Scenario F044-S205: Activates a parked project and focuses it
+
+**Given** project `/foo` is parked in the focused vibespace
+**When** the agent invokes `vibespace.activateProject` with `/foo`
+**Then** `/foo` is removed from `parkedProjectPaths` and appended to `projects`
+**And** `/foo` becomes the focused project
+**And** the response result includes `activated_project_path: "/foo"`, `focused: true`
+
+#### Scenario F044-S206: Rejects a non-parked path
+
+**Given** `/foo` is a live (not parked) project, or is unknown to the vibespace
+**When** the agent invokes `vibespace.activateProject` with `/foo`
+**Then** the response is an error with code `file_not_found`
+**And** the vibespace is unmodified
+
+---
+
+## `vibespace.listProjects`
+
+Lists the active, parked, and unresolved projects in the focused vibespace. Read-only.
+
+### Parameters
+
+None.
+
+### Result
+
+| Field | Type | Description |
+|---|---|---|
+| `active` | array of object | Live projects: `{ path, name, focused }` |
+| `parked` | array of string | Parked project paths |
+| `unresolved` | array of string | Unresolved (missing) project paths |
+
+### Requirements
+
+#### F044-R84: List Projects
+
+`vibespace.listProjects` MUST return the focused vibespace's `projects` (with `focused` reflecting `focusedProjectID`), `parkedProjectPaths`, and `unresolvedProjectPaths`. It MUST be free of observable side effects (F044-R12) and require no actions coordinator (catalog read only).
+
+### Scenarios
+
+#### Scenario F044-S207: Lists active and parked projects
+
+**Given** the focused vibespace has a live project `/a` and a parked project `/b`
+**When** the agent invokes `vibespace.listProjects`
+**Then** `active` contains one entry with `path: "/a"`
+**And** `parked` equals `["/b"]`
+
+---
+
 ## Test Coverage
 
 | Scope | Test File |
 |---|---|
-| Handler-level: addProject / removeProject / parkProject success + validation paths; coordinator-not-attached fallback | `tests/unit/Models/CLICommandRouterVibeSpaceProjectTests.swift` |
-| Underlying state-layer behavior (park/unpark cycle, addProjects auto-unpark) | `tests/unit/Models/VibeSpaceStateParkingTests.swift` |
+| Handler-level: addProject / removeProject / parkProject / activateProject / listProjects success + validation paths; coordinator-not-attached fallback; coordinator-level parked-project removal | `tests/unit/Models/CLICommandRouterVibeSpaceProjectTests.swift` |
+| Underlying state-layer behavior (park/unpark cycle, addProjects auto-unpark, remove parked project) | `tests/unit/Models/VibeSpaceStateParkingTests.swift` |
 
 ---
 

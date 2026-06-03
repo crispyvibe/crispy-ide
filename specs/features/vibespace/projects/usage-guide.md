@@ -3,7 +3,7 @@ title: "VibeSpace Projects"
 feature: "F021"
 domain: "vibespace"
 audience: "user"
-version: "1.0"
+version: "1.1"
 sidebar:
   label: "Projects"
   order: 2
@@ -152,6 +152,28 @@ The project becomes the focused project. Terminals are recreated from their save
 | Browser tabs (URL, back/forward history, zoom, theme) | Yes |
 | Color tag, shortcut, startup overrides | Yes |
 | Layout splitter positions | Yes (per-path) |
+
+## Removing Projects
+
+Removing a project takes it out of the vibespace entirely. Unlike parking, no state is preserved — to bring it back you add the folder again with **Add Project**. Removal happens immediately with no confirmation prompt.
+
+### Remove an active project
+
+1. Open the **Files** tab in the sidebar.
+2. Right-click the project header.
+3. Choose **Remove Project**.
+
+The project's terminals and browsers are closed and it leaves the project rail. Focus falls back to the last remaining project.
+
+### Remove a parked project
+
+1. Open the **Files** tab and scroll to the **Parked Projects** section.
+2. Right-click the parked project entry.
+3. Choose **Remove Project**.
+
+The parked entry is dropped from the vibespace without being activated. Its saved snapshot is discarded.
+
+> Removing is also available from the agent CLI — see the Agent CLI guide (`crispy vibespace remove-project <path>`).
 
 ## Click-to-Select Project
 
