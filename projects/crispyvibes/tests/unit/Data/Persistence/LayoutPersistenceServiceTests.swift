@@ -26,6 +26,30 @@ final class LayoutPersistenceServiceTests: XCTestCase {
         return sut
     }
 
+    func testSetterDoesNotClobberPersistedBoardWhenLayoutNotYetLoaded() {
+        let vibespaceID = UUID()
+
+        // Persist a board containing a browser tile.
+        let tile = VibeSpaceTerminalBoardTile(
+            workingDirectoryPath: "",
+            contentKind: .browser(URL(string: "https://example.com")!)
+        )
+        let layout = VibeSpaceTerminalBoardLayout(
+            columns: [VibeSpaceTerminalBoardColumn(widthWeight: 1, tiles: [tile])],
+            activeTileID: tile.id
+        )
+        makeSUT().setTerminalBoardState(.fromLegacyLayout(layout), for: vibespaceID)
+
+        // Fresh instance (simulates relaunch — empty in-memory cache). Mutate a
+        // rail size BEFORE ever reading the board. Must not wipe the saved board.
+        let fresh = makeSUT()
+        fresh.setRailSize(333, for: .left, vibespaceID: vibespaceID)
+
+        let restored = fresh.terminalBoardState(for: vibespaceID).primaryLayout
+        XCTAssertEqual(restored.tiles.count, 1, "a setter must not clobber the persisted board")
+        XCTAssertTrue(restored.tiles.first?.isBrowser ?? false)
+    }
+
     func testVibeSpaceFallsBackToGlobalRailDefaultsWhenVibeSpaceLayoutMissing() {
         let vibespaceID = UUID()
         let sut = makeSUT()

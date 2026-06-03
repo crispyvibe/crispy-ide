@@ -30,6 +30,22 @@ final class ProjectSessionStateTests: XCTestCase {
         container = nil
     }
 
+    func testActivateStartsProjectRootWatchingWithoutExplorerLoad() {
+        let layoutPersistence = LayoutPersistenceService(fileManager: .default, stateFileURL: layoutStateFileURL)
+        let spy = SpyFileSystemWatcher()
+        var deps = makeProjectSessionDependencies(layoutPersistence: layoutPersistence)
+        deps.directoryWatcher = spy
+        let session = ProjectSession(rootURL: tempRoot, dependencies: deps)
+
+        // Activation (hydration) — NOT ensureExplorerLoaded — must start watching.
+        session.activateIfNeeded()
+        XCTAssertEqual(spy.watchedPaths, [tempRoot.standardizedFileURL.path])
+        XCTAssertNotNil(spy.onEvent, "session should wire the watcher event handler at activate()")
+
+        session.shutdown()
+        XCTAssertTrue(spy.invalidated, "session.shutdown() must invalidate the watcher")
+    }
+
     func testActivateRestoresEscapedPathsAndPaneLayoutFromPersistence() async throws {
         let projectRoot = tempRoot.appendingPathComponent("project", isDirectory: true)
         let nested = projectRoot.appendingPathComponent("nested", isDirectory: true)
@@ -440,6 +456,80 @@ final class ProjectSessionStateTests: XCTestCase {
         XCTAssertEqual(boardStore.layout.tiles.count, initialTabIDs.count)
     }
 
+    func testFileSystemEventPostsChangeNotificationForReload() async {
+        let spy = SpyFileSystemWatcher()
+        var deps = makeProjectSessionDependencies(
+            layoutPersistence: LayoutPersistenceService(fileManager: .default, stateFileURL: layoutStateFileURL)
+        )
+        deps.directoryWatcher = spy
+        let session = ProjectSession(rootURL: tempRoot, dependencies: deps)
+        session.activateIfNeeded() // wires the watcher's event handler
+
+        let changedPath = tempRoot.appendingPathComponent("notes.md").standardizedFileURL.path
+        let posted = expectation(forNotification: .fileSystemContentsDidChange, object: nil) { note in
+            (note.userInfo?["changedPaths"] as? Set<String>)?.contains(changedPath) ?? false
+        }
+        // Simulate the (session-owned) watcher firing an event.
+        spy.onEvent?(DirectoryWatcher.Event(path: changedPath, kind: .modified, isDirectory: false, rawFlags: 0))
+        await fulfillment(of: [posted], timeout: 1)
+        session.shutdown()
+    }
+
+    func testRestoredCustomBoardArrangementSurvivesReconcile() throws {
+        let projectRoot = tempRoot.appendingPathComponent("project", isDirectory: true)
+        let dirB = projectRoot.appendingPathComponent("b", isDirectory: true)
+        try FileManager.default.createDirectory(at: dirB, withIntermediateDirectories: true)
+        let fileURL = projectRoot.appendingPathComponent("TODO.md")
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+        let projectPath = projectRoot.standardizedFileURL.path
+
+        let project = container.makeProjectSession(rootURL: projectRoot, vibespaceID: vibespaceID)
+        project.terminalViewModel.createTab(directoryURL: projectRoot, startImmediately: false)
+        project.terminalViewModel.createTab(directoryURL: projectRoot, startImmediately: false)
+        project.terminalViewModel.createTab(directoryURL: dirB, startImmediately: false)
+
+        // Persist a CUSTOM 2-column arrangement. Terminal tiles reference ids that
+        // differ from the live tabs (as on restore) but match working directories;
+        // a file tile sits at col0 row1 (not a default position).
+        let layoutPersistence = LayoutPersistenceService(fileManager: .default, stateFileURL: layoutStateFileURL)
+        func term(_ dir: URL) -> VibeSpaceTerminalBoardTile {
+            VibeSpaceTerminalBoardTile(
+                projectPath: projectPath,
+                terminalTabID: UUID(),
+                workingDirectoryPath: dir.standardizedFileURL.path
+            )
+        }
+        let fileTile = VibeSpaceTerminalBoardTile(workingDirectoryPath: "", contentKind: .file(fileURL))
+        let layout = VibeSpaceTerminalBoardLayout(
+            columns: [
+                VibeSpaceTerminalBoardColumn(widthWeight: 1, tiles: [term(projectRoot), fileTile]),
+                VibeSpaceTerminalBoardColumn(widthWeight: 1, tiles: [term(dirB), term(projectRoot)]),
+            ],
+            activeTileID: nil
+        )
+        layoutPersistence.setTerminalBoardState(.fromLegacyLayout(layout), for: vibespaceID)
+
+        let boardStore = VibeSpaceTerminalBoardStore(
+            vibespaceID: vibespaceID,
+            layoutPersistence: layoutPersistence,
+            terminalBoardStandaloneRegistry: container.terminalBoardStandaloneRegistry
+        )
+        func structure() -> [[String]] {
+            boardStore.layout.columns.map { col in
+                col.tiles.map { $0.isFile ? "file" : ($0.isTerminal ? "terminal" : "other") }
+            }
+        }
+        let before = structure()
+        XCTAssertEqual(before, [["terminal", "file"], ["terminal", "terminal"]])
+
+        // Restore timing: the project is transiently absent from the snapshot
+        // (e.g. a remote project still resolving/connecting) before it resolves.
+        boardStore.syncProjects([])
+        boardStore.syncProjects([project]) // triggers reconcileTerminalTiles
+
+        XCTAssertEqual(structure(), before, "restored custom board arrangement must survive reconcile")
+    }
+
     private func makeProjectSessionDependencies(
         layoutPersistence: LayoutPersistenceService
     ) -> ProjectSessionDependencies {
@@ -449,7 +539,17 @@ final class ProjectSessionStateTests: XCTestCase {
             vibespaceID: vibespaceID,
             folderExplorerViewModelFactory: container.makeFolderExplorerViewModel,
             terminalViewModelFactory: container.makeTerminalViewModel,
-            detachedWindowManager: container.detachedWindowManager
+            detachedWindowManager: container.detachedWindowManager,
+            directoryWatcher: DirectoryWatcher()
         )
     }
+}
+
+private final class SpyFileSystemWatcher: FileSystemEventWatching {
+    var onEvent: ((DirectoryWatcher.Event) -> Void)?
+    private(set) var watchedPaths: Set<String> = []
+    private(set) var invalidated = false
+    func setOnEvent(_ onEvent: @escaping (DirectoryWatcher.Event) -> Void) { self.onEvent = onEvent }
+    func updateWatchedPaths(_ paths: Set<String>) { watchedPaths = paths }
+    func invalidate() { invalidated = true }
 }

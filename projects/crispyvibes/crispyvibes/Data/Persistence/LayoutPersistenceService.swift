@@ -182,6 +182,15 @@ final class LayoutPersistenceService: ObservableObject {
     }
 
     func resetToFirstRunState() {
+        // Remove the persisted per-vibespace layout files too — otherwise the
+        // lazy-load in `layoutForVibeSpace` would re-read them after the reset.
+        if let wps = vibespacePersistenceStore {
+            for key in vibespaceLayoutsByID.keys {
+                if let uuid = UUID(uuidString: key) {
+                    persistenceStore.removeFile(at: wps.vibespaceLayoutURL(for: uuid))
+                }
+            }
+        }
         vibespaceLayoutsByID = [:]
         projectLayoutsByPath = [:]
         vibespaceSidebarWidth = CGFloat(AppFirstRunExperience.Layout.defaultVibeSpaceSidebarWidth)
@@ -420,7 +429,14 @@ final class LayoutPersistenceService: ObservableObject {
     }
 
     private func layoutForVibeSpace(_ key: String) -> VibeSpaceRailLayoutState {
-        vibespaceLayoutsByID[key] ?? VibeSpaceRailLayoutState()
+        // Load the persisted layout before returning. Every getter/setter funnels
+        // through here, so this guarantees a setter (setCanvasMode/setRailSize/…)
+        // mutates the real layout rather than an empty default that would then be
+        // persisted over the saved board (wiping tiles/positions).
+        if vibespaceLayoutsByID[key] == nil, let uuid = UUID(uuidString: key) {
+            loadVibeSpaceLayoutIfNeeded(for: uuid)
+        }
+        return vibespaceLayoutsByID[key] ?? VibeSpaceRailLayoutState()
     }
 
     private func vibespaceKey(for vibespaceID: UUID?) -> String {

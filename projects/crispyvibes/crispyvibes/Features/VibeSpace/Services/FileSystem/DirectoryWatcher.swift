@@ -227,3 +227,14 @@ final class DirectoryWatcher {
         invalidate()
     }
 }
+
+/// Lifecycle/event interface for a filesystem watcher. Lets `ProjectSession`
+/// own watching behind an abstraction (per DI guidelines) and lets tests inject
+/// a spy in place of the concrete FSEvents-backed `DirectoryWatcher`.
+protocol FileSystemEventWatching: AnyObject {
+    func setOnEvent(_ onEvent: @escaping (DirectoryWatcher.Event) -> Void)
+    func updateWatchedPaths(_ paths: Set<String>)
+    func invalidate()
+}
+
+extension DirectoryWatcher: FileSystemEventWatching {}

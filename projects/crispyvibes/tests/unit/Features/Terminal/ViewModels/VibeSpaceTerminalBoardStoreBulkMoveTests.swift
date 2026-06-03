@@ -47,7 +47,8 @@ final class VibeSpaceTerminalBoardStoreBulkMoveTests: XCTestCase {
             vibespaceManagement: container.vibespaceManagement,
             folderExplorerViewModelFactory: container.makeFolderExplorerViewModel,
             terminalViewModelFactory: container.makeTerminalViewModel,
-            detachedWindowManager: container.detachedWindowManager
+            detachedWindowManager: container.detachedWindowManager,
+            directoryWatcher: DirectoryWatcher()
         )
         projectA = AnyProjectSession(ProjectSession(rootURL: projectAURL, dependencies: depsA))
         projectB = AnyProjectSession(ProjectSession(rootURL: projectBURL, dependencies: depsA))

@@ -55,7 +55,8 @@ final class TerminalBehavioralTests: XCTestCase {
                     worker: self.container.makePaneWorker(pane: .terminal)
                 )
             },
-            detachedWindowManager: container.detachedWindowManager
+            detachedWindowManager: container.detachedWindowManager,
+            directoryWatcher: DirectoryWatcher()
         )
 
         let firstSession = ProjectSession(rootURL: projectRoot, dependencies: sessionDeps)

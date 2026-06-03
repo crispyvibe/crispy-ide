@@ -47,13 +47,12 @@ enum TerminalTileReconciler {
                             tabsByID: tabsByProjectPathAndID[projectPath] ?? [:],
                             tabsByDirectory: tabsByProjectPathAndDirectory[projectPath] ?? [:]
                         )
-                        continue
                     }
-                    // Project gone — clear path and fall through to standalone.
-                    state.surfaces[surfaceIndex].layout.updateTile(tileID) { updated in
-                        updated.projectPath = nil
-                        updated.terminalTabID = nil
-                    }
+                    // Project not in the current snapshot (e.g. still resolving on
+                    // restore). Leave the tile untouched so its saved position is
+                    // preserved; it rebinds when the project appears. Do NOT clear
+                    // its identity or convert it to a standalone tile.
+                    continue
                 }
 
                 bindTile(
