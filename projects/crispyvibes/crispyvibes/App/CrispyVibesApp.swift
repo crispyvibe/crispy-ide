@@ -39,6 +39,8 @@ extension Notification.Name {
     static let checkForAppUpdates = Notification.Name("checkForAppUpdates")
     static let openExternalPaths = Notification.Name("openExternalPaths")
     static let toggleVibeCast = Notification.Name("toggleVibeCast")
+    static let toggleTodos = Notification.Name("toggleTodos")
+    static let quickCaptureTodo = Notification.Name("quickCaptureTodo")
     static let addACPTileToBoard = Notification.Name("addACPTileToBoard")
     /// Posted by the title-bar New Terminal popover. Listeners create a
     /// terminal in the supplied directory: a board tile in terminal-board
@@ -81,7 +83,7 @@ extension Notification.Name {
     /// project context menu.
     /// userInfo: `[AppCommandUserInfoKey.projectPath: String]`.
     static let removeParkedProjectRequested = Notification.Name("removeParkedProjectRequested")
-    /// F052: posted after a git worktree is deleted so the unified sidebar
+    /// F055: posted after a git worktree is deleted so the unified sidebar
     /// re-discovers worktrees (covers not-added worktrees whose removal doesn't
     /// change the project set).
     static let vibespaceWorktreesDidChange = Notification.Name("vibespaceWorktreesDidChange")

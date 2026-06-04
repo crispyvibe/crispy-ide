@@ -2,7 +2,7 @@
 
 ## Overview
 
-The unified layout is rendered by the existing `VibeSpaceSidebarPanelView` when `AppShellStore.vibespaceSidebarUnified` is true. It composes per-project/worktree nodes instead of the classic tab `switch`. Worktree discovery/grouping comes from `WorktreeServicing` (F052); the node views reuse existing file-tree, source-control, and conversation pieces.
+The unified layout is rendered by the existing `VibeSpaceSidebarPanelView` when `AppShellStore.vibespaceSidebarUnified` is true. It composes per-project/worktree nodes instead of the classic tab `switch`. Worktree discovery/grouping comes from `WorktreeServicing` (F055); the node views reuse existing file-tree, source-control, and conversation pieces.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ Files:
 Panel `@State`: `unifiedThreadsByProject`, `worktreeInfoByProject`, `worktreesByCommonDir`. Node-local `@State`: `isExpanded`, `activeTab` (Files/Changes/Chats). `vibespaceSidebarUnified` is `@Published private(set)` on `AppShellStore`, mutated via setter.
 
 ## Dependencies
-`WorktreeServicing` (F052), source-control VM (F026), `AgentConversationStore` (F040), folder explorer (F024), `ProjectFileTreeView`.
+`WorktreeServicing` (F055), source-control VM (F026), `AgentConversationStore` (F040), folder explorer (F024), `ProjectFileTreeView`.
 
 ## Platform Considerations
 macOS; AppKit `NSAlert`/`NSTextField` for the new-worktree prompt + delete confirmation, presented from the ContentView extension.

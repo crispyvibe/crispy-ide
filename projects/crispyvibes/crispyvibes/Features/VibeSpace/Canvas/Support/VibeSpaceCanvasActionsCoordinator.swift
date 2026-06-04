@@ -55,6 +55,15 @@ final class VibeSpaceCanvasActionsCoordinator {
         }
     }
 
+    func toggleTodos() {
+        guard activeVibeSpaceID != nil else { return }
+        prepareForVibeSpacePresentation()
+
+        if !splitViewStore.activateExistingTab(matching: { $0.kind == .todos }) {
+            contentViewerStore.openTodos()
+        }
+    }
+
     func wireProjectFileOpenHandler(_ project: AnyProjectSession) {
         vibespaceCanvasFileOpenUseCase.wireProjectFileOpenHandler(
             project,

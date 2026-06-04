@@ -24,6 +24,8 @@ struct AppContainer {
     /// F049: central comment store for the active vibespace. Wraps the
     /// existing `agentConversationStore` for RPC.
     let vibespaceCommentStore: VibeSpaceCommentStore
+    /// F053: quick todos & sticky notes store for the active vibespace.
+    let vibespaceTodoStore: VibeSpaceTodoStore
     /// F049-R05 + F049-R13: orchestrates anchor relocation + file lifecycle.
     let commentLifecycleCoordinator: CommentLifecycleCoordinator
     let externalAgentSessionService: ExternalAgentSessionService
@@ -36,7 +38,7 @@ struct AppContainer {
     /// feature so developer tools can show received → sent → result. F041.
     let contextSummaryObservabilityStore: ContextSummaryObservabilityStore
 
-    /// F052: git worktree discovery + mutations, behind a protocol so views
+    /// F055: git worktree discovery + mutations, behind a protocol so views
     /// don't shell out to git directly. Defaulted so `makeDefault` is unchanged.
     let worktreeService: any WorktreeServicing = WorktreeService()
 
@@ -163,6 +165,14 @@ struct AppContainer {
         // are scoped to the focused space. The closure captures the catalog
         // store weakly via the AppContainer reference held by the binding.
         vibespaceCommentStore.bindActiveVibeSpace(provider: vibespaceCatalogStore) { [weak vibespaceCatalogStore, weak appShellStore] in
+            guard let catalog = vibespaceCatalogStore, let activeID = appShellStore?.activeVibeSpaceID else {
+                return vibespaceCatalogStore?.vibespaces.first?.id.uuidString
+            }
+            return catalog.vibespaces.first(where: { $0.id == activeID })?.id.uuidString
+        }
+        // F053: bind the todo store to the active vibespace using the same
+        // resolver so todo reads/writes are scoped to the focused space.
+        vibespaceTodoStore.bindActiveVibeSpace(provider: vibespaceCatalogStore) { [weak vibespaceCatalogStore, weak appShellStore] in
             guard let catalog = vibespaceCatalogStore, let activeID = appShellStore?.activeVibeSpaceID else {
                 return vibespaceCatalogStore?.vibespaces.first?.id.uuidString
             }
@@ -370,6 +380,7 @@ struct AppContainer {
         let acpVibeSpaceContextStore = ACPVibeSpaceContextStore()
         let agentConversationStore = AgentConversationStore()
         let vibespaceCommentStore = VibeSpaceCommentStore(conversationStore: agentConversationStore)
+        let vibespaceTodoStore = VibeSpaceTodoStore(conversationStore: agentConversationStore)
         let commentLifecycleCoordinator = CommentLifecycleCoordinator(store: vibespaceCommentStore)
         let externalAgentSessionService = ExternalAgentSessionService()
         let makeACPStandaloneStore: @MainActor (UUID, UUID?) -> ACPStandaloneSessionStore = { id, vibespaceID in
@@ -508,6 +519,7 @@ struct AppContainer {
         let shelfStore = ShelfStore(persistenceStore: appPersistenceStore)
         let cliCommandRouter = CLICommandRouter(shelfStore: shelfStore)
         cliCommandRouter.attachVibeSpaceCommentStore(vibespaceCommentStore)
+        cliCommandRouter.attachVibeSpaceTodoStore(vibespaceTodoStore)
         let cliSocketServer = CLISocketServer(router: cliCommandRouter)
         return AppContainer(
             appPersistenceStore: appPersistenceStore,
@@ -531,6 +543,7 @@ struct AppContainer {
             acpDeveloperToolsService: acpDeveloperToolsService,
             agentConversationStore: agentConversationStore,
             vibespaceCommentStore: vibespaceCommentStore,
+            vibespaceTodoStore: vibespaceTodoStore,
             commentLifecycleCoordinator: commentLifecycleCoordinator,
             externalAgentSessionService: externalAgentSessionService,
             acpSessionRegistry: acpSessionRegistry,

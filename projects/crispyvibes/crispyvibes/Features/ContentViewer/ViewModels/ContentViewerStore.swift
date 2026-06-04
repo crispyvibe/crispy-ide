@@ -115,6 +115,7 @@ final class ContentViewerStore: ObservableObject {
     }
 
     func openVibeCast() { activeGroup.openTab(.vibeCast) }
+    func openTodos() { activeGroup.openTab(.todos) }
 
     func makeACPStore(
         focusedProject: AnyProjectSession?,

@@ -137,7 +137,7 @@ extension ContentView {
         )
     }
 
-    /// F052: prompt for a branch, create a sibling worktree on it, and open it.
+    /// F055: prompt for a branch, create a sibling worktree on it, and open it.
     private func newWorktree(repoRoot: String) {
         let prompt = NSAlert()
         prompt.messageText = AppStrings.Worktree.newTitle
@@ -172,7 +172,7 @@ extension ContentView {
         }
     }
 
-    /// F052: delete a git worktree from disk (confirmed). Removes its project
+    /// F055: delete a git worktree from disk (confirmed). Removes its project
     /// first if it's added, runs `git worktree remove`, offers a force fallback
     /// for dirty/locked worktrees, then re-discovers worktrees.
     private func deleteWorktree(path: String) {

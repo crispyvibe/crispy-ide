@@ -25,7 +25,7 @@ struct WorktreeProbeResult: Sendable {
 
 /// A unified-sidebar node's backing group: one project, or several worktrees
 /// of the same repository clubbed together, plus any of the repo's worktrees
-/// that haven't been added as projects yet (F052/F053).
+/// that haven't been added as projects yet (F055/F056).
 struct UnifiedProjectGroup: Identifiable {
     let id: UUID
     let addedProjects: [AnyProjectSession]

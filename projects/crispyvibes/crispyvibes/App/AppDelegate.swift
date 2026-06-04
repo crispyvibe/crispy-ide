@@ -259,6 +259,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.post(name: .openTerminalOnlyVibeSpaceView, object: nil)
         case .toggleVibeCast:
             NotificationCenter.default.post(name: .toggleVibeCast, object: nil)
+        case .quickCaptureTodo:
+            NotificationCenter.default.post(name: .quickCaptureTodo, object: nil)
         case .focusNextProject:
             NotificationCenter.default.post(name: .focusNextProject, object: nil)
         case .focusPreviousProject:

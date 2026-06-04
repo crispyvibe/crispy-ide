@@ -1,6 +1,6 @@
 import Foundation
 
-/// F053: mediates the unified sidebar's data + git-worktree/conversation IO so
+/// F056: mediates the unified sidebar's data + git-worktree/conversation IO so
 /// the views never call services directly. Owns the worktree probe results and
 /// per-project conversation threads; the panel observes its published state.
 @MainActor

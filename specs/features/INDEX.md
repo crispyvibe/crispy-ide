@@ -16,7 +16,7 @@
 
 ## Features
 
-Next available prefix: F054. Numbers are never reused.
+Next available prefix: F057. Numbers are never reused. (F053 Quick Todos & Sticky Notes, F055 Git Worktrees, and F056 Unified Project Side Panel are implemented. F052 Whiteboarding and F054 Mind Maps are reserved/planned but deprioritized — see `specs/planning/whiteboards-todos-mindmaps-design.md`.)
 
 | Prefix | Feature | Domain | Folder | Status |
 |--------|---------|--------|--------|--------|
@@ -69,8 +69,9 @@ Next available prefix: F054. Numbers are never reused.
 | F049 | File Comments | D4 | `editor/file-comments` | implemented |
 | F050 | Jupyter Notebook Support | D4 | `editor/notebook` | draft |
 | F051 | Remote Agent CLI | D8 | `remote/remote-agent-cli` | draft |
-| F052 | Git Worktrees | D6 | `source-control/git-worktrees` | draft |
-| F053 | Unified Project Side Panel | D2 | `vibespace/unified-sidebar` | draft |
+| F053 | Quick Todos & Sticky Notes | D2 | `vibespace/todos` | implemented |
+| F055 | Git Worktrees | D6 | `source-control/git-worktrees` | draft |
+| F056 | Unified Project Side Panel | D2 | `vibespace/unified-sidebar` | draft |
 
 ## NFR Index
 

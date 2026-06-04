@@ -52,6 +52,16 @@ final class JupyterServerService {
     /// across surfaces (inline pane, split, spotlight) instead of reloaded.
     private var arbiters: [String: NotebookWebViewArbiter] = [:]
 
+    /// Live remote servers, keyed by `host|rootDir`, holding what's needed to
+    /// tear them down (cancel the forward + kill the remote process).
+    private struct RemoteHandle {
+        let host: RemoteNotebookHosting
+        let pid: String
+        let localPort: UInt16
+        let remotePort: UInt16
+    }
+    private var remoteHandles: [String: RemoteHandle] = [:]
+
     /// Returns the shared web-view arbiter for a notebook, creating (and loading
     /// the web view) once per notebook path.
     func webViewArbiter(forNotebook fileURL: URL, url: URL) -> NotebookWebViewArbiter {
@@ -69,10 +79,18 @@ final class JupyterServerService {
     }
 
     /// Resolves the WKWebView URL for a notebook, lazily starting (and reusing)
-    /// the server rooted at the notebook's directory.
-    func notebookURL(for fileURL: URL) async throws -> URL {
-        let root = fileURL.deletingLastPathComponent().standardizedFileURL
-        let server = try await ensureServer(rootDirectory: root)
+    /// the server rooted at the notebook's directory. When `remoteHost` is
+    /// supplied the server runs on that host and is reached through a forwarded
+    /// loopback port; otherwise it runs locally.
+    func notebookURL(for fileURL: URL, remoteHost: RemoteNotebookHosting? = nil) async throws -> URL {
+        let server: Server
+        if let remoteHost {
+            let root = fileURL.deletingLastPathComponent().standardizedFileURL.path
+            server = try await ensureRemoteServer(rootDirectory: root, host: remoteHost)
+        } else {
+            let root = fileURL.deletingLastPathComponent().standardizedFileURL
+            server = try await ensureServer(rootDirectory: root)
+        }
         let relativePath = fileURL.standardizedFileURL.lastPathComponent
         let encodedPath = relativePath
             .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? relativePath
@@ -95,6 +113,14 @@ final class JupyterServerService {
             process.terminate()
         }
         processes.removeAll()
+        for handle in remoteHandles.values {
+            let handle = handle
+            Task { @MainActor in
+                await handle.host.cancelForward(localPort: handle.localPort, remotePort: handle.remotePort)
+                _ = try? await handle.host.runLoginScript("kill \(handle.pid) 2>/dev/null; exit 0", timeout: 5)
+            }
+        }
+        remoteHandles.removeAll()
         servers.removeAll()
     }
 
@@ -167,6 +193,115 @@ final class JupyterServerService {
         try await waitUntilReady(baseURL: baseURL, token: token, process: process)
         return Server(baseURL: baseURL, token: token, rootDirectory: rootDirectory)
     }
+
+    // MARK: - Remote lifecycle (F050)
+
+    private func ensureRemoteServer(rootDirectory: String, host: RemoteNotebookHosting) async throws -> Server {
+        let key = "\(host.notebookHostKey)|\(rootDirectory)"
+        if let existing = servers[key], remoteHandles[key] != nil {
+            return existing
+        }
+        if let inFlight = startTasks[key] {
+            return try await inFlight.value
+        }
+
+        let task = Task<Server, Error> { [weak self] in
+            guard let self else { throw StartError.terminated("Service released.") }
+            return try await self.startRemoteServer(rootDirectory: rootDirectory, host: host, key: key)
+        }
+        startTasks[key] = task
+        defer { startTasks[key] = nil }
+        let server = try await task.value
+        servers[key] = server
+        return server
+    }
+
+    private func startRemoteServer(rootDirectory: String, host: RemoteNotebookHosting, key: String) async throws -> Server {
+        let token = Self.makeToken()
+        guard let localPort = Self.reserveFreePort() else { throw StartError.noFreePort }
+        let localPort16 = UInt16(localPort)
+
+        let output = try await host.runLoginScript(
+            Self.remoteLaunchScript(rootDirectory: rootDirectory, token: token),
+            timeout: 30
+        )
+        guard let launch = Self.parseRemoteLaunch(output) else {
+            if output.contains("ERR") { throw StartError.jupyterNotFound }
+            throw StartError.terminated("Could not start remote Jupyter server.")
+        }
+
+        do {
+            try await host.forwardPort(localPort: localPort16, remotePort: launch.port)
+        } catch {
+            await killRemote(host: host, pid: launch.pid)
+            throw StartError.terminated(error.localizedDescription)
+        }
+
+        let baseURL = URL(string: "http://127.0.0.1:\(localPort)/")!
+        // F050-R09: never log the URL/token.
+        logger.info("Remote Jupyter server forwarded to 127.0.0.1:\(localPort, privacy: .public)")
+        do {
+            try await waitUntilReadyRemote(baseURL: baseURL, token: token)
+        } catch {
+            await host.cancelForward(localPort: localPort16, remotePort: launch.port)
+            await killRemote(host: host, pid: launch.pid)
+            throw error
+        }
+
+        remoteHandles[key] = RemoteHandle(host: host, pid: launch.pid, localPort: localPort16, remotePort: launch.port)
+        return Server(baseURL: baseURL, token: token, rootDirectory: URL(fileURLWithPath: rootDirectory))
+    }
+
+    private func waitUntilReadyRemote(baseURL: URL, token: String) async throws {
+        let statusURL = URL(string: "api/status?token=\(token)", relativeTo: baseURL)!
+        for _ in 0..<60 {
+            if Task.isCancelled { throw CancellationError() }
+            var request = URLRequest(url: statusURL)
+            request.timeoutInterval = 2
+            if let (_, response) = try? await URLSession.shared.data(for: request),
+               let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                return
+            }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        throw StartError.readinessTimedOut
+    }
+
+    private func killRemote(host: RemoteNotebookHosting, pid: String) async {
+        _ = try? await host.runLoginScript("kill \(pid) 2>/dev/null; exit 0", timeout: 5)
+    }
+
+    /// Login-shell script that picks a free remote loopback port, launches a
+    /// detached Jupyter server bound to it, and echoes `OK <pid> <port>`. Emits
+    /// `ERR …` when `jupyter`/`python3` are missing so the UI can show the
+    /// "unavailable" state instead of a failure. `root_dir` is single-quote
+    /// escaped; `token` is hex (shell-safe).
+    static func remoteLaunchScript(rootDirectory: String, token: String) -> String {
+        let escapedRoot = "'" + rootDirectory.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        return """
+        if ! command -v jupyter >/dev/null 2>&1; then echo "ERR no-jupyter"; exit 0; fi
+        if ! command -v python3 >/dev/null 2>&1; then echo "ERR no-python"; exit 0; fi
+        ROOT=\(escapedRoot)
+        TOKEN=\(token)
+        PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); p=s.getsockname()[1]; s.close(); print(p)')
+        nohup jupyter notebook --no-browser --ip=127.0.0.1 --port="$PORT" --ServerApp.token="$TOKEN" --ServerApp.password= --ServerApp.open_browser=False --ServerApp.root_dir="$ROOT" >"/tmp/.crispy-jupyter-$PORT.log" 2>&1 &
+        echo "OK $! $PORT"
+        """
+    }
+
+    /// Parses the last `OK <pid> <port>` line emitted by `remoteLaunchScript`.
+    /// `pid` must be numeric so it's safe to interpolate into the kill command.
+    static func parseRemoteLaunch(_ output: String) -> (pid: String, port: UInt16)? {
+        for line in output.split(whereSeparator: \.isNewline).reversed() {
+            let fields = line.split(separator: " ")
+            if fields.count >= 3, fields[0] == "OK", Int(fields[1]) != nil, let port = UInt16(fields[2]) {
+                return (String(fields[1]), port)
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Local readiness
 
     private func waitUntilReady(baseURL: URL, token: String, process: Process) async throws {
         let statusURL = URL(string: "api/status?token=\(token)", relativeTo: baseURL)!
@@ -257,6 +392,9 @@ extension EnvironmentValues {
 /// UI served by the local Jupyter server inside a `WKWebView`.
 struct NotebookEditorView: View {
     let fileURL: URL
+    /// F050: when set, the Jupyter server is launched on this remote host and
+    /// reached through a forwarded loopback port. `nil` for local files.
+    let remoteHost: RemoteNotebookHosting?
     @Environment(\.jupyterServerService) private var service
     /// F050: comment env provided by the surrounding content-viewer/editor.
     @Environment(\.vibespaceCommentStoreEnvironment) private var commentStore
@@ -285,7 +423,7 @@ struct NotebookEditorView: View {
         Group {
             switch phase {
             case .starting:
-                ProgressView(String(localized: "notebook.starting.title"))
+                ProgressView(String(localized: "notebook.starting.title", defaultValue: "Starting Jupyter…"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityIdentifier("editor.notebook.starting")
             case .ready(let arbiter):
@@ -302,14 +440,14 @@ struct NotebookEditorView: View {
                     }
             case .unavailable:
                 ContentUnavailableView {
-                    Label(String(localized: "notebook.unavailable.title"), systemImage: "book.closed")
+                    Label(String(localized: "notebook.unavailable.title", defaultValue: "Jupyter Not Available"), systemImage: "book.closed")
                 } description: {
-                    Text(String(localized: "notebook.unavailable.description"))
+                    Text(String(localized: "notebook.unavailable.description", defaultValue: "Install Jupyter (Notebook 7) and make sure it's on your PATH to open notebooks. For remote projects, install it on the remote host."))
                 }
                 .accessibilityIdentifier("editor.notebook.unavailable")
             case .failed(let message):
                 ContentUnavailableView {
-                    Label(String(localized: "notebook.failed.title"), systemImage: "exclamationmark.triangle")
+                    Label(String(localized: "notebook.failed.title", defaultValue: "Couldn't Open Notebook"), systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(message)
                 }
@@ -322,18 +460,22 @@ struct NotebookEditorView: View {
     private func start() async {
         phase = .starting
         guard let service else {
-            phase = .failed(String(localized: "notebook.failed.noService"))
+            phase = .failed(String(localized: "notebook.failed.noService", defaultValue: "The notebook service is unavailable."))
             return
         }
-        guard service.isJupyterAvailable() else {
+        // Local servers gate on a resolvable local `jupyter`; remote servers
+        // resolve it on the host (surfaced as `.unavailable` below if missing).
+        if remoteHost == nil, !service.isJupyterAvailable() {
             phase = .unavailable
             return
         }
         do {
-            let url = try await service.notebookURL(for: fileURL)
+            let url = try await service.notebookURL(for: fileURL, remoteHost: remoteHost)
             phase = .ready(service.webViewArbiter(forNotebook: fileURL, url: url))
         } catch is CancellationError {
             // View went away or file changed; leave state untouched.
+        } catch JupyterServerService.StartError.jupyterNotFound {
+            phase = .unavailable
         } catch {
             phase = .failed(error.localizedDescription)
         }

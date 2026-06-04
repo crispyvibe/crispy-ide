@@ -180,6 +180,7 @@ final class PaneWorkerClientAndFileIconTests: XCTestCase {
         XCTAssertEqual(FileIconProvider.iconName(for: "SWIFT"), "swift")
         XCTAssertEqual(FileIconProvider.iconName(for: "TsX"), "react")
         XCTAssertEqual(FileIconProvider.iconName(for: "json"), "json")
+        XCTAssertEqual(FileIconProvider.iconName(for: "ipynb"), "notebook")
         XCTAssertEqual(FileIconProvider.iconName(for: "DOCKERFILE"), "docker")
         XCTAssertNil(FileIconProvider.iconName(for: "unknown-ext"))
         XCTAssertNil(FileIconProvider.iconImage(for: "unknown-ext"))

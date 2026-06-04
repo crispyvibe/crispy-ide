@@ -8,6 +8,9 @@ struct SFTPFileContentProvider: FileContentProviding {
 
     var requiresMaterializedLocalPreview: Bool { true }
 
+    /// F050: notebooks for remote files launch and execute on the remote host.
+    var remoteNotebookHost: RemoteNotebookHosting? { connection }
+
     func readFile(at path: String) async throws -> Data {
         let sftp = try connection.availableSFTP()
         let path = path

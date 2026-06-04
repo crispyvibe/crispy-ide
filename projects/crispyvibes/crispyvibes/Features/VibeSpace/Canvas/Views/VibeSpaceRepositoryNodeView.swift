@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// A repository node for the unified sidebar (F052/F053): clubs the worktrees
+/// A repository node for the unified sidebar (F055/F056): clubs the worktrees
 /// of one git repo. Each worktree is rendered as its own collapsible
 /// `VibeSpaceWorktreeNodeView` child.
 struct VibeSpaceRepositoryNodeView: View {

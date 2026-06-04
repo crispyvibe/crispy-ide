@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// A per-project node for the unified sidebar (F053): a project header that
+/// A per-project node for the unified sidebar (F056): a project header that
 /// expands to the project's own Files / Source Control / Conversations
 /// sub-sections. Reuses `ProjectFileTreeView`, the matching repository view
 /// model's changed files, and the project's conversation threads.

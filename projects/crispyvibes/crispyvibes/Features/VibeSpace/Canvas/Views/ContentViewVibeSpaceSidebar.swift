@@ -48,20 +48,20 @@ struct VibeSpaceSidebarPanelView: View {
     let onOpenConversationThread: (ConversationThreadSummary) -> Void
     let onDeleteConversationThread: (String) async -> Void
     let onPreviewExternalSession: (ExternalAgentTranscript) -> Void
-    /// F053: when true, render the stacked collapsible unified layout instead
+    /// F056: when true, render the stacked collapsible unified layout instead
     /// of the classic tab-swapped content. Default false (classic).
     var isUnified: Bool = false
-    /// F053: flips between classic and unified layouts (header toggle button).
+    /// F056: flips between classic and unified layouts (header toggle button).
     let onToggleUnified: () -> Void
-    /// F052: open a not-added git worktree as a project (by absolute path).
+    /// F055: open a not-added git worktree as a project (by absolute path).
     let onOpenWorktree: (String) -> Void
-    /// F052: delete a git worktree from disk (by absolute path), confirmed.
+    /// F055: delete a git worktree from disk (by absolute path), confirmed.
     let onDeleteWorktree: (String) -> Void
     /// Start a new agent chat for a specific worktree/project.
     let onNewChat: (AnyProjectSession) -> Void
-    /// F052: create a new worktree for the repo whose main root is passed.
+    /// F055: create a new worktree for the repo whose main root is passed.
     let onNewWorktree: (String) -> Void
-    /// F052: git worktree discovery/mutations (injected, not called as a free function).
+    /// F055: git worktree discovery/mutations (injected, not called as a free function).
     let worktreeService: any WorktreeServicing
 
     @ObservedObject var viewModel: UnifiedSidebarViewModel
@@ -176,7 +176,7 @@ struct VibeSpaceSidebarPanelView: View {
         }
     }
 
-    /// F053 (increment 1): per-project unified layout. Each project is a node
+    /// F056 (increment 1): per-project unified layout. Each project is a node
     /// that expands to its own Files / Source Control / Conversations
     /// sub-sections, consolidating what the classic view splits across tabs.
     /// Per-worktree grouping (Repository tier) is the next increment.
@@ -270,7 +270,7 @@ struct VibeSpaceSidebarPanelView: View {
         return "\(vibespace)#\(paths)"
     }
 
-    /// F052/F053: groups vibespace projects by shared git repository (worktrees
+    /// F055/F056: groups vibespace projects by shared git repository (worktrees
     /// of the same repo are clubbed) and attaches the repo's not-added
     /// worktrees. Order follows the project list.
     private var unifiedProjectGroups: [UnifiedProjectGroup] {

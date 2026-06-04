@@ -15,25 +15,25 @@ Worktree features execute git subprocesses with user-influenced arguments and ca
 
 ## Threats
 
-### F052-T01: Argument/command injection via branch name
+### F055-T01: Argument/command injection via branch name
 - Vector: a crafted branch name (e.g. `--option`, path traversal, or shell metacharacters).
 - Impact: unexpected git behavior or worktree created outside the intended location.
 - Likelihood: Low (single user, local).
 - Mitigation: arguments are passed as a non-shell argv array (no shell interpolation); `/` in the branch is sanitized when deriving the sibling directory name; the worktree path is computed by the app, not the user. Further hardening: reject branch names beginning with `-` and validate against `git check-ref-format` (follow-up).
 
-### F052-T02: Data loss via force delete
+### F055-T02: Data loss via force delete
 - Vector: "Force Delete" runs `git worktree remove --force`, discarding uncommitted changes.
 - Impact: loss of uncommitted work.
 - Likelihood: Medium (user-initiated).
 - Mitigation: two-step flow — non-force delete first; force only after an explicit second confirmation that warns changes will be lost. Primary worktree is never deletable.
 
-### F052-T03: Deleting the active project's directory
+### F055-T03: Deleting the active project's directory
 - Vector: deleting a worktree currently open as a live project.
 - Impact: dangling session pointing at a removed directory.
 - Likelihood: Low.
 - Mitigation: the project is removed (session shut down) before `git worktree remove`; the panel re-probes afterward.
 
-### F052-T04: Stale/prunable worktree paths
+### F055-T04: Stale/prunable worktree paths
 - Vector: `git worktree list` may report worktrees whose directory is gone.
 - Impact: acting on a non-existent path.
 - Mitigation: parser skips `prunable` entries and verifies the directory exists before listing it.

@@ -16,6 +16,7 @@ model documents the boundaries and mitigations.
 | WebView ↔ local server | The `WKWebView` talks HTTP/WebSocket to `127.0.0.1:PORT` authenticated by a per-server token |
 | Kernel → host | Executed notebook code runs with the user's privileges and full local access |
 | File system → app | `.ipynb` files are read/written by the server's Contents API |
+| Remote host ↔ app (SSH) | For remote projects the server runs on the host (bound to remote `127.0.0.1`); reached via an `ssh -L` loopback-to-loopback forward over the existing ControlMaster. Launch/poll/kill scripts run in a remote login shell |
 
 ## Attack Surfaces
 
@@ -24,6 +25,9 @@ model documents the boundaries and mitigations.
 3. WebView navigation (origin confinement; untrusted notebook outputs).
 4. Process argument/PATH construction (command/argument injection).
 5. Notebook content itself (executed code, malicious outputs).
+6. Remote launch script construction (the notebook root dir is single-quote
+   escaped, the token is hex, and the remote pid is validated numeric before it is
+   interpolated into the `kill` command — guarding shell injection on the host).
 
 ## Threats
 

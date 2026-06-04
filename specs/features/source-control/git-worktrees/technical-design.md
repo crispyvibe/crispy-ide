@@ -2,7 +2,7 @@
 
 ## Overview
 
-Worktree discovery and mutation are isolated behind `WorktreeServicing`, injected via `AppContainer`. The unified sidebar (F053) consumes the service results to build repository/worktree nodes. Pure porcelain parsing lives in `WorktreeParser` so it is unit-testable without git.
+Worktree discovery and mutation are isolated behind `WorktreeServicing`, injected via `AppContainer`. The unified sidebar (F056) consumes the service results to build repository/worktree nodes. Pure porcelain parsing lives in `WorktreeParser` so it is unit-testable without git.
 
 ## Architecture
 
@@ -39,7 +39,7 @@ UnifiedProjectGroup            WorktreeService (Features/VibeSpace/Services/)
 Discovered worktrees are runtime-only (never persisted). Added worktrees are persisted as normal projects (F021). `primaryPath` = parent of the git-common-dir (the main worktree).
 
 ## Dependencies
-PaneWorkerExecutor (git runner), F021 add/remove project flows, F053 sidebar.
+PaneWorkerExecutor (git runner), F021 add/remove project flows, F056 sidebar.
 
 ## Platform Considerations
 macOS; local filesystem only. SSH paths skipped (`ssh://` prefix).

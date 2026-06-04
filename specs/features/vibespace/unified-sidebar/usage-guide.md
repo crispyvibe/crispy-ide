@@ -1,6 +1,6 @@
 ---
 title: "Unified Project Side Panel"
-feature: "F053"
+feature: "F056"
 domain: "vibespace"
 audience: "user"
 version: "1.0"

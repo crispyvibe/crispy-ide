@@ -163,16 +163,21 @@ final class AppKitTreeCellView: NSTableCellView, NSTextFieldDelegate {
             chevronButton.isEnabled = false
         }
 
-        let iconName: String
-        if item.isDirectory {
-            iconName = "folder"
-        } else if item.isMarkdown {
-            iconName = "doc.richtext.fill"
+        if !item.isDirectory, let setiImage = FileIconProvider.iconImage(for: item.url.pathExtension) {
+            iconView.image = setiImage
+            iconView.contentTintColor = .secondaryLabelColor
         } else {
-            iconName = "doc.fill"
+            let iconName: String
+            if item.isDirectory {
+                iconName = "folder"
+            } else if item.isMarkdown {
+                iconName = "doc.richtext.fill"
+            } else {
+                iconName = "doc.fill"
+            }
+            iconView.image = NSImage(systemSymbolName: iconName, accessibilityDescription: nil)
+            iconView.contentTintColor = item.isDirectory ? .controlAccentColor : .secondaryLabelColor
         }
-        iconView.image = NSImage(systemSymbolName: iconName, accessibilityDescription: nil)
-        iconView.contentTintColor = item.isDirectory ? .controlAccentColor : .secondaryLabelColor
         iconView.alphaValue = ignoredAlpha
 
         if !isInRenameMode {

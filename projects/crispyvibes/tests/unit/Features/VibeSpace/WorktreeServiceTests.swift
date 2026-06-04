@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import CrispyVibes
 
-/// F052: unit coverage for git-worktree porcelain parsing and the worktree
+/// F055: unit coverage for git-worktree porcelain parsing and the worktree
 /// service's git wiring (via an injected runner — no real git needed).
 @MainActor
 final class WorktreeServiceTests: XCTestCase {
