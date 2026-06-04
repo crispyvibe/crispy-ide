@@ -101,6 +101,11 @@ kernel picker; Jupyter itself is configured through your environment.
 - **Requires your own Jupyter install** — none is bundled.
 - **Reload is destructive to unsaved state** — showing external disk changes
   re-reads from disk; in-progress kernel output not yet saved can be lost.
-- **Remote (SSH) notebooks** are not supported yet.
+- **Remote (SSH) notebooks** run Jupyter on the remote host, reached through a
+  forwarded loopback port. The remote host must have `jupyter` (Notebook 7) and
+  `python3` on its login-shell `PATH`; if either is missing the notebook shows
+  the "unavailable" state. The remote server is started on first open and is
+  killed on app quit, but a dropped SSH connection can leave it running until
+  the next quit reconnects and cleans up.
 - **POC**: kernel/interpreter picker and persistence rely on the embedded Notebook 7
   UI; deeper native integration is planned.

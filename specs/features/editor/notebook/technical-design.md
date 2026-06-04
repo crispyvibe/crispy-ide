@@ -57,6 +57,20 @@ hex token → spawn `/usr/bin/env jupyter notebook --no-browser --ip=127.0.0.1
 with `CommandPathResolver.environmentWithResolvedPath()` → poll
 `http://127.0.0.1:N/api/status?token=…` until `200`.
 
+**Remote (SSH) server start (F050-R13):** the plugin passes
+`viewModel.fileContentProvider?.remoteNotebookHost` (the `SFTPFileContentProvider`
+vends its `SSHConnection`, which conforms to `RemoteNotebookHosting`) to
+`NotebookEditorView`, and `service.notebookURL(for:remoteHost:)` branches to
+`ensureRemoteServer`. There: generate the token + reserve a *local* loopback port →
+`host.runLoginScript(...)` runs a `bash -l -s` script (fed via stdin over the
+ControlMaster) that picks a free *remote* loopback port in `python3`, launches a
+detached `jupyter notebook` bound to it, and echoes `OK <pid> <port>` (or `ERR
+no-jupyter`/`no-python` → `.unavailable`) → `host.forwardPort(local→remote)` issues
+`ssh -O forward -L` on the existing socket → poll `http://127.0.0.1:localPort/api/
+status?token=…` until `200`. Servers are keyed `host|rootDir`; a `RemoteHandle`
+(host, pid, ports) drives teardown (`cancelForward` + remote `kill`) in
+`shutdownAll`.
+
 **Execution & save:** handled entirely by Notebook 7 against the spawned server
 over its WebSocket kernel protocol and Contents API.
 

@@ -107,6 +107,16 @@ labels read "Cell N".
 When the `.ipynb` changes on disk (e.g. an agent edits it), the open notebook
 reloads so the change surfaces, debounced to coalesce burst events.
 
+### F050-R13: Remote (SSH) notebooks
+A notebook opened from a remote (SSH) project launches its Jupyter Server **on the
+remote host** — rooted at the notebook's remote directory and bound to remote
+loopback — and is reached through an SSH local port forward over the existing
+ControlMaster connection. The server is one-per-host+root, started lazily, and its
+remote process is killed (and the forward cancelled) on app quit. When the host
+lacks `jupyter` or `python3`, the surface shows the same "unavailable" state as the
+local case (F050-R07). The loopback-only/token boundary in F050-R09 holds on both
+ends (remote bind is `127.0.0.1`; the forward is loopback-to-loopback).
+
 ## Scenarios
 
 ### Scenario F050-S01: Open and read a notebook

@@ -164,4 +164,79 @@ extension CLICommandRouter {
             "parked_project_path": .string(normalizedPath),
         ])
     }
+
+    // MARK: - F044-R83: Activate (Unpark) Project
+
+    func handleVibeSpaceActivateProject(_ request: CLIRequest) -> CLIResponse {
+        guard let pathParam = request.params?["path"]?.stringValue,
+              !pathParam.isEmpty else {
+            return .error(
+                id: request.id,
+                code: CLIErrorCode.invalidParams,
+                message: "path is required"
+            )
+        }
+        guard let coordinator = vibespaceActionsCoordinator else {
+            return .error(
+                id: request.id,
+                code: CLIErrorCode.notConnected,
+                message: "vibespace actions coordinator is not attached"
+            )
+        }
+        guard let vibespace = vibespaceCatalogStore?.vibespaces.first else {
+            return .error(
+                id: request.id,
+                code: CLIErrorCode.vibespaceNotFound,
+                message: "no focused vibespace"
+            )
+        }
+
+        let normalizedPath = URL(fileURLWithPath: pathParam).standardizedFileURL.path
+        guard vibespace.isProjectParked(path: normalizedPath) else {
+            return .error(
+                id: request.id,
+                code: CLIErrorCode.fileNotFound,
+                message: "project is not parked in vibespace: \(normalizedPath)"
+            )
+        }
+
+        guard let activated = coordinator.unparkProject(path: normalizedPath) else {
+            return .error(
+                id: request.id,
+                code: CLIErrorCode.internalError,
+                message: "unpark produced no project (directory may be missing): \(normalizedPath)"
+            )
+        }
+
+        return .ok(id: request.id, result: [
+            "activated_project_path": .string(activated.projectIdentifier),
+            "focused": .bool(true),
+        ])
+    }
+
+    // MARK: - F044-R84: List Projects
+
+    func handleVibeSpaceListProjects(_ request: CLIRequest) -> CLIResponse {
+        guard let vibespace = vibespaceCatalogStore?.vibespaces.first else {
+            return .error(
+                id: request.id,
+                code: CLIErrorCode.vibespaceNotFound,
+                message: "no focused vibespace"
+            )
+        }
+
+        let active: [CLIJSONValue] = vibespace.projects.map { project in
+            .object([
+                "path": .string(project.projectIdentifier),
+                "name": .string(URL(fileURLWithPath: project.projectIdentifier).lastPathComponent),
+                "focused": .bool(vibespace.focusedProjectID == project.id),
+            ])
+        }
+
+        return .ok(id: request.id, result: [
+            "active": .array(active),
+            "parked": .array(vibespace.parkedProjectPaths.map { .string($0) }),
+            "unresolved": .array(vibespace.unresolvedProjectPaths.map { .string($0) }),
+        ])
+    }
 }

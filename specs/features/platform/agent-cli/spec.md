@@ -22,6 +22,7 @@ The CLI ships in stages. Foundation (transport, authorization, env injection, PA
 | Terminal | `terminal.read` | deferred — needs Ghostty screen-buffer bridge (see [F044-R30](commands-terminal.md)) |
 | Browser | `browser.list`, `browser.open`, `browser.close` | shipped |
 | Browser | `browser.snapshot`, `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload`, `browser.eval`, `browser.click`, `browser.type`, `browser.wait`, `browser.screenshot`, `browser.console`, `browser.dialog` | deferred |
+| VibeSpace | `vibespace.addProject`, `vibespace.removeProject`, `vibespace.parkProject`, `vibespace.activateProject`, `vibespace.listProjects` | shipped |
 | VibeSpace | `vibespace.list`, `vibespace.current`, `pane.list` | deferred |
 
 ## Dependencies
@@ -129,7 +130,7 @@ Detailed per-command requirements and scenarios live in category-specific docs:
 | Shelf | [commands-shelf.md](commands-shelf.md) | `shelf.add`, `shelf.list`, `shelf.remove` |
 | Browser | [commands-browser.md](commands-browser.md) | `browser.open`, `browser.snapshot`, `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload`, `browser.eval`, `browser.click`, `browser.type`, `browser.wait`, `browser.screenshot`, `browser.console`, `browser.dialog` |
 | Shortcuts | [commands-shortcuts.md](commands-shortcuts.md) | `shortcut.list`, `shortcut.add` |
-| VibeSpace | [commands-vibespace.md](commands-vibespace.md) | `vibespace.list`, `vibespace.current`, `pane.list`, `vibespace.addProject`, `vibespace.removeProject`, `vibespace.parkProject` |
+| VibeSpace | [commands-vibespace.md](commands-vibespace.md) | `vibespace.list`, `vibespace.current`, `pane.list`, `vibespace.addProject`, `vibespace.removeProject`, `vibespace.parkProject`, `vibespace.activateProject`, `vibespace.listProjects` |
 
 ## Error Codes
 
@@ -234,3 +235,4 @@ None at this time.
 | 2026-05-14 | Initial draft extracted from prior planning notes | Manu |
 | 2026-05-17 | Marked feature implemented; added per-category implementation status table; retired planning docs | Manu |
 | 2026-05-30 | Replaced process-ancestry authorization (F044-R02) with owner-only `0600` socket access so any same-user process (incl. ACP agents, tmux/ssh shells) can use the CLI; removed `CLIProcessAncestry` and the bypass flag. See F051 (Remote Agent CLI). | Manu |
+| 2026-06-03 | Added `vibespace.activateProject` (F044-R83) and `vibespace.listProjects` (F044-R84), completing CLI project lifecycle alongside add/remove/park. | — |

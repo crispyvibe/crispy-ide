@@ -166,6 +166,36 @@ final class VibeSpaceStateParkingTests: XCTestCase {
         XCTAssertTrue(vibespace.parkedProjectPaths.isEmpty)
     }
 
+    // MARK: - F021-R19: Remove Parked Project
+
+    func testRemoveParkedProjectDropsPathAndClearsAssociatedState() throws {
+        let live = try makeProjectDirectory("live")
+        let parked = try makeProjectDirectory("parked")
+        var vibespace = container.makeVibeSpaceState(name: "Fixture", projectURLs: [live, parked])
+        let parkedID = try XCTUnwrap(
+            vibespace.projects.first(where: { $0.projectIdentifier == parked.standardizedFileURL.path })?.id
+        )
+        vibespace.parkProject(id: parkedID)
+        XCTAssertEqual(vibespace.parkedProjectPaths, [parked.standardizedFileURL.path])
+
+        vibespace.removeParkedProject(path: parked.path)
+
+        // Path dropped, associated color tag cleared, live project untouched.
+        XCTAssertTrue(vibespace.parkedProjectPaths.isEmpty)
+        XCTAssertFalse(vibespace.isProjectParked(path: parked.path))
+        XCTAssertNil(vibespace.projectColorTagsByPath[parked.standardizedFileURL.path])
+        XCTAssertEqual(vibespace.projects.count, 1)
+        XCTAssertEqual(vibespace.projects.first?.projectIdentifier, live.standardizedFileURL.path)
+    }
+
+    func testRemoveParkedProjectIsNoOpForUnknownPath() throws {
+        let live = try makeProjectDirectory("live")
+        var vibespace = container.makeVibeSpaceState(name: "Fixture", projectURLs: [live])
+        vibespace.removeParkedProject(path: "/not/parked/here")
+        XCTAssertEqual(vibespace.projects.count, 1)
+        XCTAssertTrue(vibespace.parkedProjectPaths.isEmpty)
+    }
+
     // MARK: - F012-R17: Browser ownership at the VM layer
 
     func testBrowserPanelViewModelCarriesProjectPath() {

@@ -247,6 +247,13 @@ enum VibespaceCommand {
         /// Absolute path of the project to park.
         path: String,
     },
+    /// Activate (unpark) a parked project in the focused vibespace and focus it.
+    ActivateProject {
+        /// Absolute path of the parked project to activate.
+        path: String,
+    },
+    /// List active, parked, and unresolved projects in the focused vibespace.
+    ListProjects,
 }
 
 #[derive(Subcommand, Debug)]
@@ -630,6 +637,14 @@ fn run(cli: Cli) -> Result<(), String> {
         Command::Vibespace(VibespaceCommand::ParkProject { path }) => (
             "vibespace.parkProject",
             json!({ "path": path }),
+        ),
+        Command::Vibespace(VibespaceCommand::ActivateProject { path }) => (
+            "vibespace.activateProject",
+            json!({ "path": path }),
+        ),
+        Command::Vibespace(VibespaceCommand::ListProjects) => (
+            "vibespace.listProjects",
+            json!({}),
         ),
         Command::Comments(CommentsCommand::Add { file, line, column, end_line, end_column, comment, parent }) => (
             "comments.add",

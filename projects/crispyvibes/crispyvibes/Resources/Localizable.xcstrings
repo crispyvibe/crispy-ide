@@ -3306,6 +3306,17 @@
         }
       }
     },
+    "vibespace.removeProject.action" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove Project"
+          }
+        }
+      }
+    },
     "vibespace.noProjects" : {
       "extractionState" : "stale",
       "localizations" : {

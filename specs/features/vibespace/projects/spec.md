@@ -264,6 +264,30 @@ Then only live projects' terminals appear as targets (terminalSources derives fr
 And the scope toggle (`if projects.count > 1`) counts only live projects
 ```
 
+### F021-S25 · Remove active project via context menu (R18)
+
+```gherkin
+Given project P is open (live) and shown in the Files tab
+When the user selects "Remove Project" on P's right-click menu
+Then `.removeProjectRequested` is posted with P's project id
+And `VibeSpaceCanvasActionsCoordinator.removeProject(id:)` runs
+And P's terminals/browsers are torn down and P is removed from `projects`
+And focus falls back to the last remaining project (F021-S06)
+And no confirmation prompt is shown
+```
+
+### F021-S26 · Remove parked project via context menu (R19)
+
+```gherkin
+Given project P is parked (shown in the Files-tab "Parked Projects" section)
+When the user selects "Remove Project" on P's right-click menu
+Then `.removeParkedProjectRequested` is posted with P's path
+And `VibeSpaceCanvasActionsCoordinator.removeParkedProject(path:)` runs
+And `VibeSpaceState.removeParkedProject(path:)` drops P from `parkedProjectPaths` and clears its associated per-project state
+And P is NOT activated (no live session is created)
+And no confirmation prompt is shown
+```
+
 ---
 
 ## Requirements
@@ -287,6 +311,8 @@ And the scope toggle (`if projects.count > 1`) counts only live projects
 | F021-R15 | Pane Focus Selects Project — single-click focus on a pane (terminal, file, browser) MUST set the pane's owning project as the focused project | implemented |
 | F021-R16 | Immediate Focus Change — focus change happens on single click, no double-click required | implemented |
 | F021-R17 | Cross-Surface Consistency — click-to-select MUST work across content viewer tabs, terminal tray, board tiles, and detached board windows | implemented |
+| F021-R18 | Remove Active Project — live projects expose a "Remove Project" context-menu action (alongside "Park Project") that removes the project and applies focus fallback; no confirmation prompt | implemented |
+| F021-R19 | Remove Parked Project — parked projects expose a "Remove Project" context-menu action (alongside "Activate Project") that drops the parked entry and clears its associated state without activating it; no confirmation prompt | implemented |
 
 ---
 
@@ -301,12 +327,14 @@ And the scope toggle (`if projects.count > 1`) counts only live projects
 - Files tab renders a "Parked Projects" section with activate context menu (F021-R12, R13)
 - Single-click on a content-viewer tab whose owning project differs from the focused project switches focus (F021-R15, R16)
 - Click-to-select is idempotent — already-focused projects do not re-trigger focus (F021-R15)
+- "Remove Project" is available on both active and parked project context menus; removing an active project applies focus fallback, removing a parked project drops it without activation; neither prompts for confirmation (F021-R18, R19)
 
 ## Test Coverage
 
 | Scope | Test File |
 |---|---|
-| Park/unpark state transitions; addProjects auto-unpark; ProjectConfigFile + VibeSpaceConfigFile backward-compatible decode; ProjectSession deallocation after park; repeated park/unpark cycles do not accumulate sessions | `tests/unit/Models/VibeSpaceStateParkingTests.swift` |
+| Park/unpark state transitions; addProjects auto-unpark; ProjectConfigFile + VibeSpaceConfigFile backward-compatible decode; ProjectSession deallocation after park; repeated park/unpark cycles do not accumulate sessions; remove parked project drops path + clears associated state and is a no-op for unknown paths | `tests/unit/Models/VibeSpaceStateParkingTests.swift` |
+| Coordinator-level parked-project removal via the active catalog | `tests/unit/Models/CLICommandRouterVibeSpaceProjectTests.swift` |
 | `.boardTileActivated` notification posted with `projectPath` when project-owned tile activates; userInfo lacks key for standalone tile | `tests/unit/Features/Terminal/ViewModels/VibeSpaceTerminalBoardStoreClickToSelectTests.swift` |
 | Existing project lifecycle and add/remove behavior | `tests/unit/Models/VibeSpaceStateTests.swift`, `tests/unit/Models/VibeSpaceStateTestsOverridesAndPaths.swift` |
 | Pre-existing memory lifecycle for ProjectSession + TerminalViewModel + EditorGroupStore | `tests/unit/Features/Terminal/ViewModels/TerminalMemoryLifecycleTests.swift`, `tests/unit/Features/ContentViewer/ViewModels/ContentViewerMemoryLifecycleTests.swift` |
@@ -315,7 +343,6 @@ And the scope toggle (`if projects.count > 1`) counts only live projects
 
 ## Open Questions
 
-- Should project removal prompt for confirmation?
 - Should bulk park (multi-select) be added in a future iteration? Currently single-project only (F021-R13).
 
 ---
@@ -327,3 +354,4 @@ And the scope toggle (`if projects.count > 1`) counts only live projects
 | 2026-04-15 | Initial draft — extracted from F014 Navigation | — |
 | 2026-05-22 | Added project parking (F021-R09–R14) and click-to-select project (F021-R15–R17), with scenarios S16–S22 | — |
 | 2026-05-22 | Closed F021-R17 cross-surface coverage: board-tile click-to-select wired via `.boardTileActivated`; terminal-tray and exclusion behaviors documented as inherent in scenarios S23–S24 | — |
+| 2026-06-03 | Added project removal via context menu for active (F021-R18) and parked (F021-R19) projects, with scenarios S25–S26; no confirmation prompt (resolves the prior open question) | — |

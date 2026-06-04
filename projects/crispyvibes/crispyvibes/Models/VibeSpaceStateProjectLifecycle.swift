@@ -173,6 +173,20 @@ extension VibeSpaceState {
         pruneColorTags()
     }
 
+    /// F021-R19 Remove Parked Project.
+    ///
+    /// Drops a parked project at the given normalized path from
+    /// `parkedProjectPaths` and clears its associated per-project state,
+    /// without activating it. Mirrors `removeUnresolvedProject` for the
+    /// parked collection. No-op if the path is not parked.
+    mutating func removeParkedProject(path: String) {
+        let normalized = Self.normalizedPath(from: path)
+        parkedProjectPaths.removeAll(where: { $0 == normalized })
+        removeProjectAssociatedState(for: normalized)
+        storedProjectPaths = projects.map(\.projectIdentifier) + unresolvedProjectPaths
+        pruneColorTags()
+    }
+
     mutating func relinkUnresolvedProject(path: String, to replacementURL: URL) -> AnyProjectSession? {
         let normalizedMissingPath = Self.normalizedPath(from: path)
         guard let unresolvedIndex = unresolvedProjectPaths.firstIndex(of: normalizedMissingPath) else {

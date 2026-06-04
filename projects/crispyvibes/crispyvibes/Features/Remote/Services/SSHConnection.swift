@@ -358,3 +358,44 @@ final class SSHConnection: ObservableObject, SSHConnectionProviding {
 
     deinit { healthTask?.cancel() }
 }
+
+// MARK: - RemoteNotebookHosting (F050)
+
+/// Lets a remote project host a Jupyter server: run the launch/poll/kill scripts
+/// in a login shell and forward a loopback port to the remote server, both over
+/// the existing ControlMaster socket.
+extension SSHConnection: RemoteNotebookHosting {
+    var notebookHostKey: String { profile.sshURI }
+
+    func runLoginScript(_ script: String, timeout: TimeInterval) async throws -> String {
+        let result = try await runSSH(
+            args: sshArgs() + ["bash", "-l", "-s"],
+            timeout: timeout,
+            stdinData: Data(script.utf8)
+        )
+        guard result.status == 0 else {
+            let errStr = String(data: result.stderr, encoding: .utf8) ?? ""
+            throw SSHRemoteError.timeout("Remote script failed (exit \(result.status)): \(errStr)")
+        }
+        return String(data: result.stdout, encoding: .utf8) ?? ""
+    }
+
+    func forwardPort(localPort: UInt16, remotePort: UInt16) async throws {
+        try await addPortForward(
+            PortForwardRule(
+                id: UUID(),
+                localPort: localPort,
+                remoteHost: "127.0.0.1",
+                remotePort: remotePort,
+                autoDetected: false
+            )
+        )
+    }
+
+    func cancelForward(localPort: UInt16, remotePort: UInt16) async {
+        guard let rule = portForwardService.activeForwards.first(where: {
+            $0.localPort == localPort && $0.remotePort == remotePort
+        }) else { return }
+        try? await removePortForward(rule)
+    }
+}

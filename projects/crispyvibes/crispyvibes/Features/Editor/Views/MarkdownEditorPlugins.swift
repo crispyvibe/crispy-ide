@@ -335,7 +335,10 @@ private struct NotebookEditorPlugin: EditorContentPlugin {
 
     func makeView(context: EditorPluginContext) -> AnyView {
         AnyView(
-            NotebookEditorView(fileURL: context.viewModel.fileURL ?? URL(fileURLWithPath: "/"))
+            NotebookEditorView(
+                fileURL: context.viewModel.fileURL ?? URL(fileURLWithPath: "/"),
+                remoteHost: context.viewModel.fileContentProvider?.remoteNotebookHost
+            )
                 .id("notebook-editor-\(context.viewModel.fileURL?.path ?? "")")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityIdentifier("editor.notebook")

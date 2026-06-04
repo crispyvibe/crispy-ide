@@ -61,6 +61,7 @@ struct FileIconProvider {
         "json": "json",
         "jsonl": "json",
         "jsonc": "json",
+        "ipynb": "notebook",
         "yaml": "yml",
         "yml": "yml",
         "toml": "config",
@@ -125,7 +126,17 @@ struct FileIconProvider {
             return nil
         }
         guard let image = NSImage(contentsOf: url) else { return nil }
+        // Monochrome glyphs (no explicit color) render as a template so the host
+        // can tint them for the current theme; colored icons render as-is.
+        image.isTemplate = needsTemplateTint(for: url)
         iconImageCache.setObject(image, forKey: cacheKey)
         return image
+    }
+
+    private static func needsTemplateTint(for url: URL) -> Bool {
+        guard let svg = try? String(contentsOf: url, encoding: .utf8).lowercased() else { return false }
+        let hasExplicitColor = svg.contains("fill=") || svg.contains("stroke=")
+            || svg.contains("fill:") || svg.contains("stroke:") || svg.contains("currentcolor")
+        return !hasExplicitColor
     }
 }

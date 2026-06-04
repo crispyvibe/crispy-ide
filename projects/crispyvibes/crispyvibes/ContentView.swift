@@ -458,8 +458,38 @@ struct ContentView: View {
 
     private var notificationAwareContent: some View {
         applyVibeSpaceCommandNotifications(
-            to: applySystemAndGhosttyNotifications(to: lifecycleAwareContent)
+            to: applyProjectLifecycleNotifications(
+                to: applySystemAndGhosttyNotifications(to: lifecycleAwareContent)
+            )
         )
+    }
+
+    /// F021-R13 / R18 / R19: park, activate (unpark), and remove project
+    /// lifecycle commands posted from sidebar context menus. Split into its own
+    /// modifier function to keep `applySystemAndGhosttyNotifications` within the
+    /// SwiftUI type-checker's complexity budget.
+    private func applyProjectLifecycleNotifications<Content: View>(to content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .parkProjectRequested)) { notification in
+                // F021-R13: park the requested project (right-click → "Park Project").
+                guard let projectID = notification.userInfo?[AppCommandUserInfoKey.projectID] as? UUID else { return }
+                vibespaceCanvasActionsCoordinator.parkProject(id: projectID)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .activateProjectRequested)) { notification in
+                // F021-R13: activate (unpark) the requested project.
+                guard let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String else { return }
+                _ = vibespaceCanvasActionsCoordinator.unparkProject(path: projectPath)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .removeProjectRequested)) { notification in
+                // F021-R18: remove the requested live project (right-click → "Remove Project").
+                guard let projectID = notification.userInfo?[AppCommandUserInfoKey.projectID] as? UUID else { return }
+                vibespaceCanvasActionsCoordinator.removeProject(id: projectID)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .removeParkedProjectRequested)) { notification in
+                // F021-R19: remove the requested parked project without activating it.
+                guard let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String else { return }
+                vibespaceCanvasActionsCoordinator.removeParkedProject(path: projectPath)
+            }
     }
 
     private func applySystemAndGhosttyNotifications<Content: View>(to content: Content) -> some View {
@@ -567,16 +597,6 @@ struct ContentView: View {
                 guard let owner = projects.first(where: { $0.projectIdentifier == projectPath }) else { return }
                 if activeVibeSpaceSession.focusedProject?.id == owner.id { return }
                 vibespaceCanvasActionsCoordinator.focusProject(owner)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .parkProjectRequested)) { notification in
-                // F021-R13: park the requested project (right-click → "Park Project").
-                guard let projectID = notification.userInfo?[AppCommandUserInfoKey.projectID] as? UUID else { return }
-                vibespaceCanvasActionsCoordinator.parkProject(id: projectID)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .activateProjectRequested)) { notification in
-                // F021-R13: activate (unpark) the requested project.
-                guard let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String else { return }
-                _ = vibespaceCanvasActionsCoordinator.unparkProject(path: projectPath)
             }
             .onReceive(NotificationCenter.default.publisher(for: .ghosttyOpenLinkTargetRequested)) { notification in
                 guard let url = notification.userInfo?[AppCommandUserInfoKey.url] as? URL else { return }
