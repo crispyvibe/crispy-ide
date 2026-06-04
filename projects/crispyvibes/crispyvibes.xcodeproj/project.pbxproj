@@ -40,6 +40,7 @@
 		17D2FB0E3252D64055270C63 /* MermaidRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07D2FB0E3252D64055270C63 /* MermaidRenderer.swift */; };
 		17D9F9867D965C7BF79D5718 /* CrispyVibesBrowserWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBC20EA6850FBCF7E4B11E7 /* CrispyVibesBrowserWebView.swift */; };
 		18A7EBE079747898EC0BCA41 /* VibeSpaceStateParkingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */; };
+		C2D00000000000000000002C /* WorktreeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002B /* WorktreeServiceTests.swift */; };
 		1A2B3C4D5E6F708090A0B0C0 /* NewTerminalPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3C4D5E6F70809091A1B1C1 /* NewTerminalPopover.swift */; };
 		1C1584E11C4B8C1A48B680DB /* TerminalSessionCommandDispatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59932D5C5F2165C815170786 /* TerminalSessionCommandDispatch.swift */; };
 		1D7A942377D2F5058C127D21 /* BoardInteractionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9319FACD47F3ED87CD2C2D28 /* BoardInteractionControllerTests.swift */; };
@@ -468,6 +469,13 @@
 		BRWSOWNR0002000200020002 /* BrowserHostOwnershipCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRWSOWNR0001000100010001 /* BrowserHostOwnershipCoordinator.swift */; };
 		C1BC645B356BA596BE12DC7A /* AppDelegateDefaultsObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4859A806650A6BA1D0A035E1 /* AppDelegateDefaultsObservation.swift */; };
 		C2D000000000000000000002 /* VibeSpaceSidebarProjectTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000001 /* VibeSpaceSidebarProjectTree.swift */; };
+		C2D000000000000000000022 /* UnifiedSidebarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000021 /* UnifiedSidebarModels.swift */; };
+		C2D000000000000000000030 /* UnifiedSidebarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002F /* UnifiedSidebarViewModel.swift */; };
+		C2D00000000000000000002E /* ContentViewUnifiedSidebarActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */; };
+		C2D000000000000000000028 /* WorktreeServicing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000027 /* WorktreeServicing.swift */; };
+		C2D00000000000000000002A /* WorktreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000029 /* WorktreeService.swift */; };
+		C2D000000000000000000024 /* VibeSpaceWorktreeNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */; };
+		C2D000000000000000000026 /* VibeSpaceRepositoryNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */; };
 		C2D000000000000000000004 /* VibeSpaceSidebarFilesPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000003 /* VibeSpaceSidebarFilesPane.swift */; };
 		C2D000000000000000000006 /* VibeSpaceSidebarGitPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000005 /* VibeSpaceSidebarGitPane.swift */; };
 		C2D000000000000000000008 /* VibeSpaceSidebarSessionsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000007 /* VibeSpaceSidebarSessionsPane.swift */; };
@@ -1082,6 +1090,7 @@
 		B34C57F74BECDBDC098D2F00 /* TerminalContextSummaryViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalContextSummaryViewModelTests.swift; sourceTree = "<group>"; };
 		B3FE6FAFD6CEFD6F405CDCC8 /* TerminalViewModelPresets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalViewModelPresets.swift; sourceTree = "<group>"; };
 		B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateParkingTests.swift; sourceTree = "<group>"; };
+		C2D00000000000000000002B /* WorktreeServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/VibeSpace/WorktreeServiceTests.swift; sourceTree = SOURCE_ROOT; };
 		B4D2E5F6A7C8B9012F3A4D85 /* TmuxService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmuxService.swift; sourceTree = "<group>"; };
 		B51662ADBA65455898E6CA36 /* DockPreviewBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DockPreviewBridge.swift; sourceTree = "<group>"; };
 		B5EB1846F17F63B52C6107C8 /* AppSettingsSheetViewGeneral.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewGeneral.swift; sourceTree = "<group>"; };
@@ -1112,6 +1121,13 @@
 		C1B9CCF2E2BA8AB7F99D4190 /* SettingsLayoutPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsLayoutPrimitives.swift; sourceTree = "<group>"; };
 		C2C1E3B2A8770E85559D71C4 /* MeasuredPaneWorker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeasuredPaneWorker.swift; sourceTree = "<group>"; };
 		C2D000000000000000000001 /* VibeSpaceSidebarProjectTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarProjectTree.swift; sourceTree = "<group>"; };
+		C2D000000000000000000021 /* UnifiedSidebarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedSidebarModels.swift; sourceTree = "<group>"; };
+		C2D00000000000000000002F /* UnifiedSidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Canvas/State/UnifiedSidebarViewModel.swift; sourceTree = SOURCE_ROOT; };
+		C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewUnifiedSidebarActions.swift; sourceTree = "<group>"; };
+		C2D000000000000000000027 /* WorktreeServicing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Protocols/WorktreeServicing.swift; sourceTree = SOURCE_ROOT; };
+		C2D000000000000000000029 /* WorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Services/WorktreeService.swift; sourceTree = SOURCE_ROOT; };
+		C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceWorktreeNodeView.swift; sourceTree = "<group>"; };
+		C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceRepositoryNodeView.swift; sourceTree = "<group>"; };
 		C2D000000000000000000003 /* VibeSpaceSidebarFilesPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarFilesPane.swift; sourceTree = "<group>"; };
 		C2D000000000000000000005 /* VibeSpaceSidebarGitPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarGitPane.swift; sourceTree = "<group>"; };
 		C2D000000000000000000007 /* VibeSpaceSidebarSessionsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarSessionsPane.swift; sourceTree = "<group>"; };
@@ -1694,6 +1710,7 @@
 				72896AE448D6177CD65CB9C8 /* VibeSpaceStateTests.swift */,
 				07B977ECF638A5A85D81A20C /* VibeSpaceStateTestsOverridesAndPaths.swift */,
 				B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */,
+				C2D00000000000000000002B /* WorktreeServiceTests.swift */,
 				5C9C1F8E3A5A38C9C43E8859 /* CLICommandRouterBrowserOpenTests.swift */,
 				36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */,
 				AABBCCDD11223344EEFF0001 /* CLISocketServerResilienceTests.swift */,
@@ -3277,6 +3294,13 @@
 				EA5E55200000000000000003 /* ExternalAgentSessionPreviewPanel.swift */,
 				C2D00000000000000000000D /* VibeSpaceSidebarSessionsSectionView.swift */,
 				C2D000000000000000000001 /* VibeSpaceSidebarProjectTree.swift */,
+				C2D000000000000000000021 /* UnifiedSidebarModels.swift */,
+				C2D00000000000000000002F /* UnifiedSidebarViewModel.swift */,
+				C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */,
+				C2D000000000000000000027 /* WorktreeServicing.swift */,
+				C2D000000000000000000029 /* WorktreeService.swift */,
+				C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */,
+				C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -3667,6 +3691,13 @@
 				C2D000000000000000000008 /* VibeSpaceSidebarSessionsPane.swift in Sources */,
 				C2D00000000000000000000E /* VibeSpaceSidebarSessionsSectionView.swift in Sources */,
 				C2D000000000000000000002 /* VibeSpaceSidebarProjectTree.swift in Sources */,
+				C2D000000000000000000022 /* UnifiedSidebarModels.swift in Sources */,
+				C2D000000000000000000030 /* UnifiedSidebarViewModel.swift in Sources */,
+				C2D00000000000000000002E /* ContentViewUnifiedSidebarActions.swift in Sources */,
+				C2D000000000000000000028 /* WorktreeServicing.swift in Sources */,
+				C2D00000000000000000002A /* WorktreeService.swift in Sources */,
+				C2D000000000000000000024 /* VibeSpaceWorktreeNodeView.swift in Sources */,
+				C2D000000000000000000026 /* VibeSpaceRepositoryNodeView.swift in Sources */,
 				A10000000000000000000004 /* FileItem.swift in Sources */,
 				A10000000000000000000005 /* TerminalTab.swift in Sources */,
 				A10000000000000000000049 /* VibeSpaceTerminalBoardLayout.swift in Sources */,
@@ -4084,6 +4115,7 @@
 				34F2B3A75ED03C8319284730 /* VibeSpaceStateTestsOverridesAndPaths.swift in Sources */,
 				12C586A1AF30570016CA09C7 /* VibeSpaceStateTests.swift in Sources */,
 				18A7EBE079747898EC0BCA41 /* VibeSpaceStateParkingTests.swift in Sources */,
+				C2D00000000000000000002C /* WorktreeServiceTests.swift in Sources */,
 				D2E735AB928E8D15CEA87462 /* CLICommandRouterBrowserOpenTests.swift in Sources */,
 				CCDC8997D1ABDB93ECD16E3E /* CLICommandRouterBrowserListTests.swift in Sources */,
 				AABBCCDD11223344EEFF0002 /* CLISocketServerResilienceTests.swift in Sources */,

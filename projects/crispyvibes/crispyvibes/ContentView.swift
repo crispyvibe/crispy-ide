@@ -45,6 +45,7 @@ struct ContentView: View {
     @StateObject var projectActivityTracker: ProjectActivityTracker
     @StateObject var splitViewStore: SplitViewStore
     @StateObject var stackedRailOverlayCoordinator = StackedRailExpansionOverlayCoordinator()
+    @StateObject var unifiedSidebarViewModel = UnifiedSidebarViewModel()
     @StateObject private var stableDependencies: ContentViewStableDependencies
     @StateObject var dockPreviewBridge: DockPreviewBridge
     @StateObject var dockedFileViewerCoordinator: DockedFileViewerCoordinator

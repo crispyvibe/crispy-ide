@@ -81,6 +81,10 @@ extension Notification.Name {
     /// project context menu.
     /// userInfo: `[AppCommandUserInfoKey.projectPath: String]`.
     static let removeParkedProjectRequested = Notification.Name("removeParkedProjectRequested")
+    /// F052: posted after a git worktree is deleted so the unified sidebar
+    /// re-discovers worktrees (covers not-added worktrees whose removal doesn't
+    /// change the project set).
+    static let vibespaceWorktreesDidChange = Notification.Name("vibespaceWorktreesDidChange")
 }
 
 enum AppCommandUserInfoKey {
