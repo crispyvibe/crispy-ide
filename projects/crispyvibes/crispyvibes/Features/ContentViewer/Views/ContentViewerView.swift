@@ -22,6 +22,7 @@ struct ContentViewerView: View {
     /// F049: optional central comment store. When non-nil and the active tab
     /// is a file, the comments side-panel docks on the right.
     var commentStore: VibeSpaceCommentStore? = nil
+    @Environment(\.vibespaceTodoStoreEnvironment) private var todoStore
     @State private var dropZone: EditorDropZone?
     @State private var isDropTargeted = false
 
@@ -133,6 +134,7 @@ struct ContentViewerView: View {
                         projectColorTagsByPath: projectColorTagsByPath,
                         activityTracker: activityTracker,
                         vibeCastView: vibeCastViewFactory(),
+                        todosView: todosViewFactory(),
                         terminalSessionResolver: terminalSessionResolver,
                         dockedBrowserCoordinator: dockedBrowserCoordinator,
                         onLinkTargetActivated: onLinkTargetActivated,
@@ -170,6 +172,8 @@ struct ContentViewerView: View {
                     ContentUnavailableView(AppStrings.VibeCast.noTerminal, systemImage: "terminal",
                                            description: Text(AppStrings.VibeCast.noTerminalDescription))
                 }
+            case .todos:
+                todosContent
             case .webPage(let reference):
                 WebPageTabView(reference: reference, coordinator: dockedBrowserCoordinator, onTitleChanged: { title in
                     activeGroup.updateTabTitle(activeTab.id, title: title)
@@ -267,6 +271,21 @@ struct ContentViewerView: View {
             .allowsHitTesting(false)
             .accessibilityElement(children: .ignore)
             .accessibilityIdentifier(splitStore.isSplit ? "content-viewer.state.split" : "content-viewer.state.single")
+    }
+
+    @ViewBuilder
+    private var todosContent: some View {
+        if let todoStore {
+            TodosSurfaceView(store: todoStore, focusedProjectPath: focusedProjectRootPath)
+        } else {
+            ContentUnavailableView(AppStrings.Todos.title, systemImage: "checklist")
+        }
+    }
+
+    private func todosViewFactory() -> (() -> AnyView)? {
+        guard let todoStore else { return nil }
+        let path = focusedProjectRootPath
+        return { AnyView(TodosSurfaceView(store: todoStore, focusedProjectPath: path)) }
     }
 
     private func vibeCastViewFactory() -> (() -> AnyView)? {

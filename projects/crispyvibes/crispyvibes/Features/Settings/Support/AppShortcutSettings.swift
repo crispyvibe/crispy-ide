@@ -58,6 +58,7 @@ enum AppShortcutAction: String, CaseIterable, Identifiable, Codable {
     case resetFontSize
     case openSettings
     case openDeveloperTools
+    case quickCaptureTodo
 
     var id: String { rawValue }
 }
@@ -267,6 +268,7 @@ enum AppShortcutRegistry {
         .init(action: .openDetailedVibeSpaceView, title: "Open Detailed View", section: .vibespace, defaultBinding: .init(keyCode: AppShortcutKeyCode.d, modifiers: [.command]), isEditable: true),
         .init(action: .openTerminalOnlyVibeSpaceView, title: "Open Terminal Board", section: .vibespace, defaultBinding: .init(keyCode: AppShortcutKeyCode.t, modifiers: [.command]), isEditable: true),
         .init(action: .toggleVibeCast, title: "Toggle VibeCast", section: .vibespace, defaultBinding: .init(keyCode: AppShortcutKeyCode.v, modifiers: [.command, .shift]), isEditable: true),
+        .init(action: .quickCaptureTodo, title: "Quick Add Todo", section: .vibespace, defaultBinding: .init(keyCode: AppShortcutKeyCode.t, modifiers: [.command, .control]), isEditable: true),
         .init(action: .focusNextProject, title: "Focus Next Project", section: .projects, defaultBinding: .init(keyCode: AppShortcutKeyCode.rightBracket, modifiers: [.command, .option]), isEditable: true),
         .init(action: .focusPreviousProject, title: "Focus Previous Project", section: .projects, defaultBinding: .init(keyCode: AppShortcutKeyCode.leftBracket, modifiers: [.command, .option]), isEditable: true),
         .init(action: .focusProject1, title: "Focus Project 1", section: .projects, defaultBinding: .init(keyCode: AppShortcutKeyCode.one, modifiers: [.command]), isEditable: false),

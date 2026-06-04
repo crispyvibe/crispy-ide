@@ -29,6 +29,21 @@ struct ContentView: View {
     @StateObject var vibespaceCatalogStore: VibeSpaceCatalogStore
     @StateObject var vibespaceHydrationCoordinator: VibeSpaceHydrationCoordinator
     @State var expandedVibeSpaceSidebarProjectPaths: Set<String> = []
+    @State private var isShowingQuickCapture = false
+
+    @ViewBuilder
+    private var quickCaptureOverlay: some View {
+        if isShowingQuickCapture {
+            TodoQuickCaptureOverlay(
+                store: appContainer.vibespaceTodoStore,
+                projects: activeVibeSpaceSession.projects.map {
+                    TodoCaptureProject(id: $0.rootURL.standardizedFileURL.path, name: $0.title)
+                },
+                initialProjectPath: activeVibeSpaceSession.focusedProject?.rootURL.standardizedFileURL.path,
+                onClose: { isShowingQuickCapture = false }
+            )
+        }
+    }
     @State var didApplyUITestOverrides = false
     @State var isHoveringSideMenuItem: AppSideMenuItem?
     @State var hiddenRailTerminalIDsByVibeSpace: [UUID: [String: Set<UUID>]] = [:]
@@ -294,7 +309,7 @@ struct ContentView: View {
             return reference.projectPath
         case .terminal(let projectID, _):
             return projects.first(where: { $0.id == projectID })?.projectIdentifier
-        case .vibeCast, .acpPane:
+        case .vibeCast, .todos, .acpPane:
             return nil
         }
     }
@@ -638,6 +653,9 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .toggleVibeCast)) { _ in
                 vibespaceCanvasActionsCoordinator.toggleVibeCast()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleTodos)) { _ in
+                vibespaceCanvasActionsCoordinator.toggleTodos()
+            }
             .onReceive(NotificationCenter.default.publisher(for: .createTerminalRequested)) { notification in
                 createTerminalFromToolbar(notification: notification)
             }
@@ -670,6 +688,10 @@ struct ContentView: View {
                 }
             }
             .overlay { walkthroughOverlayLayer }
+            .overlay { quickCaptureOverlay }
+            .onReceive(NotificationCenter.default.publisher(for: .quickCaptureTodo)) { _ in
+                isShowingQuickCapture = true
+            }
             .overlay {
                 if let externalAgentSessionPreview {
                     ExternalAgentSessionPreviewPanel(

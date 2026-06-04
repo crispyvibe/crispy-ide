@@ -63,6 +63,9 @@ enum Command {
     /// File comment operations (F049).
     #[command(subcommand)]
     Comments(CommentsCommand),
+    /// Quick todo / sticky note operations (F053).
+    #[command(subcommand)]
+    Todo(TodoCommand),
 }
 
 /// F049: file commenting CRUD.
@@ -145,6 +148,84 @@ enum CommentsCommand {
         /// Status filter.
         #[arg(long, default_value = "active")]
         status: String,
+    },
+}
+
+/// F053: quick todos / sticky notes.
+#[derive(Subcommand, Debug)]
+enum TodoCommand {
+    /// Create a todo / sticky note.
+    Add {
+        /// Todo title.
+        text: String,
+        /// Project path to scope to (defaults to $CRISPY_PROJECT_PATH; omit for vibespace-level).
+        #[arg(long)]
+        project: Option<String>,
+        /// Optional longer note body.
+        #[arg(long)]
+        body: Option<String>,
+        /// Optional color tag.
+        #[arg(long)]
+        color: Option<String>,
+        /// Optional related file path.
+        #[arg(long)]
+        file: Option<String>,
+    },
+    /// List todos (active by default).
+    List {
+        /// Project path filter (defaults to $CRISPY_PROJECT_PATH).
+        #[arg(long)]
+        project: Option<String>,
+        /// Status filter: active, completed, all.
+        #[arg(long, default_value = "active")]
+        status: String,
+    },
+    /// Mark a todo completed.
+    Complete {
+        /// Todo ID.
+        id: String,
+    },
+    /// Reopen a completed todo.
+    Reopen {
+        /// Todo ID.
+        id: String,
+    },
+    /// Update a todo's text, body, or color.
+    Update {
+        /// Todo ID.
+        id: String,
+        #[arg(long)]
+        text: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        color: Option<String>,
+    },
+    /// Delete a todo.
+    Remove {
+        /// Todo ID.
+        id: String,
+    },
+    /// Show a todo with its full thread.
+    Show {
+        /// Todo ID.
+        id: String,
+    },
+    /// Thread message operations.
+    #[command(subcommand)]
+    Message(TodoMessageCommand),
+}
+
+/// F053: todo thread messages.
+#[derive(Subcommand, Debug)]
+enum TodoMessageCommand {
+    /// Append a markdown message to a todo's thread.
+    Add {
+        /// Todo ID.
+        id: String,
+        /// Message body (markdown).
+        #[arg(long)]
+        text: String,
     },
 }
 
@@ -586,6 +667,38 @@ fn run(cli: Cli) -> Result<(), String> {
             "comments.search",
             json!({ "query": query, "file_prefix": file_prefix, "status": status }),
         ),
+        Command::Todo(TodoCommand::Add { text, project, body, color, file }) => (
+            "todo.add",
+            json!({ "text": text, "project": project, "body": body, "color": color, "file": file }),
+        ),
+        Command::Todo(TodoCommand::List { project, status }) => (
+            "todo.list",
+            json!({ "project": project, "status": status }),
+        ),
+        Command::Todo(TodoCommand::Complete { id }) => (
+            "todo.complete",
+            json!({ "id": id }),
+        ),
+        Command::Todo(TodoCommand::Reopen { id }) => (
+            "todo.reopen",
+            json!({ "id": id }),
+        ),
+        Command::Todo(TodoCommand::Update { id, text, body, color }) => (
+            "todo.update",
+            json!({ "id": id, "text": text, "body": body, "color": color }),
+        ),
+        Command::Todo(TodoCommand::Remove { id }) => (
+            "todo.remove",
+            json!({ "id": id }),
+        ),
+        Command::Todo(TodoCommand::Show { id }) => (
+            "todo.show",
+            json!({ "id": id }),
+        ),
+        Command::Todo(TodoCommand::Message(TodoMessageCommand::Add { id, text })) => (
+            "todo.message.add",
+            json!({ "id": id, "text": text }),
+        ),
     };
 
     let response = send_request(&socket_path, method, params, &env)?;
@@ -1010,6 +1123,62 @@ fn print_human(method: &str, result: &Value) {
             let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
             let count = result.get("deletedCount").and_then(Value::as_i64).unwrap_or(0);
             println!("deleted {count} comment(s) starting at {id}");
+        }
+        "todo.add" => {
+            let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
+            let title = result.get("title").and_then(Value::as_str).unwrap_or("");
+            println!("created: {id}  {title}");
+        }
+        "todo.list" => {
+            if let Some(todos) = result.get("todos").and_then(Value::as_array) {
+                if todos.is_empty() {
+                    println!("(no todos)");
+                } else {
+                    for t in todos {
+                        let id = t.get("id").and_then(Value::as_str).unwrap_or("?");
+                        let title = t.get("title").and_then(Value::as_str).unwrap_or("");
+                        let status = t.get("status").and_then(Value::as_str).unwrap_or("active");
+                        let mark = if status == "completed" { "[x]" } else { "[ ]" };
+                        println!("{mark} {id}  {title}");
+                    }
+                }
+            }
+        }
+        "todo.complete" | "todo.reopen" => {
+            let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
+            let status = result.get("status").and_then(Value::as_str).unwrap_or("?");
+            println!("{id}: {status}");
+        }
+        "todo.update" => {
+            let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
+            println!("updated: {id}");
+        }
+        "todo.remove" => {
+            let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
+            println!("removed: {id}");
+        }
+        "todo.show" => {
+            let title = result.get("title").and_then(Value::as_str).unwrap_or("");
+            let status = result.get("status").and_then(Value::as_str).unwrap_or("active");
+            let mark = if status == "completed" { "[x]" } else { "[ ]" };
+            println!("{mark} {title}");
+            if let Some(body) = result.get("body").and_then(Value::as_str) {
+                if !body.is_empty() { println!("\n{body}"); }
+            }
+            if let Some(msgs) = result.get("messages").and_then(Value::as_array) {
+                if !msgs.is_empty() {
+                    println!("\n--- thread ---");
+                    for m in msgs {
+                        let who = m.get("authorKind").and_then(Value::as_str).unwrap_or("user");
+                        let b = m.get("body").and_then(Value::as_str).unwrap_or("");
+                        println!("[{who}] {b}");
+                    }
+                }
+            }
+        }
+        "todo.message.add" => {
+            let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
+            println!("message added: {id}");
         }
         _ => {
             let pretty = serde_json::to_string_pretty(result).unwrap_or_default();

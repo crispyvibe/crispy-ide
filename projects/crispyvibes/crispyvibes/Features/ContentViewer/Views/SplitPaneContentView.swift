@@ -17,6 +17,7 @@ struct SplitPaneContentView: View {
     var projectColorTagsByPath: [String: ProjectColorTag] = [:]
     @ObservedObject var activityTracker: ProjectActivityTracker
     var vibeCastView: (() -> AnyView)?
+    var todosView: (() -> AnyView)?
     var terminalSessionResolver: ((UUID, UUID) -> TerminalSession?)? = nil
     var dockedBrowserCoordinator: DockedBrowserCoordinator? = nil
     var onLinkTargetActivated: ((URL) -> Void)? = nil
@@ -162,6 +163,9 @@ struct SplitPaneContentView: View {
                 fileContentArea(filePath: reference.url.path)
             case .vibeCast:
                 if let vibeCastView { vibeCastView() }
+                else { vibeCastUnavailable }
+            case .todos:
+                if let todosView { todosView() }
                 else { vibeCastUnavailable }
             case .webPage(let reference):
                 if let coordinator = dockedBrowserCoordinator {

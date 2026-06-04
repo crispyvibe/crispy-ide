@@ -31,6 +31,10 @@ final class CLICommandRouter {
     /// the UI uses.
     weak var vibespaceCommentStore: VibeSpaceCommentStore?
 
+    /// F053: late-bound reference to the todo store so CLI handlers read/write
+    /// todos via the same Rust-backed store the UI uses.
+    weak var vibespaceTodoStore: VibeSpaceTodoStore?
+
     init(
         appBundleName: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Crispy",
         appVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0",
@@ -100,6 +104,16 @@ final class CLICommandRouter {
         }
         self.vibespaceCommentStore = store
         agentCLILogger.notice("vibespace comment store attached")
+    }
+
+    /// F053: late-bound idempotent injection of the central todo store.
+    func attachVibeSpaceTodoStore(_ store: VibeSpaceTodoStore) {
+        if vibespaceTodoStore != nil {
+            agentCLILogger.notice("vibespace todo store attach skipped (already attached)")
+            return
+        }
+        self.vibespaceTodoStore = store
+        agentCLILogger.notice("vibespace todo store attached")
     }
 
     func dispatch(_ request: CLIRequest) async -> CLIResponse {
@@ -599,6 +613,117 @@ final class CLICommandRouter {
                 errors: ["invalid_params", "internal_error", "not_connected"]
             ),
             handler: { [unowned self] req in await self.handleCommentsSearch(req) }
+        ),
+
+        // MARK: Todos (F053)
+        CommandRegistration(
+            method: "todo.add",
+            descriptor: CommandDescriptor(
+                summary: "Create a quick todo / sticky note in the active vibespace (F053-R01).",
+                params: [
+                    .init(name: "text", type: "string", required: true, description: "Todo title."),
+                    .init(name: "project", type: "string", required: false, description: "Project path to scope to; defaults to the caller's project, omit for vibespace-level."),
+                    .init(name: "body", type: "string", required: false, description: "Optional longer note body."),
+                    .init(name: "color", type: "string", required: false, description: "Optional color tag."),
+                    .init(name: "file", type: "string", required: false, description: "Optional related file path."),
+                ],
+                result: [.init(name: "id", type: "string", description: "ID of the created todo.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoAdd(req) }
+        ),
+        CommandRegistration(
+            method: "todo.list",
+            descriptor: CommandDescriptor(
+                summary: "List todos for a project or across the active vibespace.",
+                params: [
+                    .init(name: "project", type: "string", required: false, description: "Project path filter; defaults to the caller's project, omit context for all."),
+                    .init(name: "status", type: "string", required: false, description: "Status filter: active, completed, all.", defaultValue: .string("active")),
+                ],
+                result: [.init(name: "todos", type: "array", description: "Array of todos.")],
+                errors: ["invalid_params", "vibespace_not_found", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoList(req) }
+        ),
+        CommandRegistration(
+            method: "todo.complete",
+            descriptor: CommandDescriptor(
+                summary: "Mark a todo completed.",
+                params: [.init(name: "id", type: "string", required: true, description: "Todo ID.")],
+                result: [
+                    .init(name: "id", type: "string", description: "Todo ID."),
+                    .init(name: "status", type: "string", description: "New status."),
+                ],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoComplete(req) }
+        ),
+        CommandRegistration(
+            method: "todo.reopen",
+            descriptor: CommandDescriptor(
+                summary: "Reopen a completed todo.",
+                params: [.init(name: "id", type: "string", required: true, description: "Todo ID.")],
+                result: [
+                    .init(name: "id", type: "string", description: "Todo ID."),
+                    .init(name: "status", type: "string", description: "New status."),
+                ],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoReopen(req) }
+        ),
+        CommandRegistration(
+            method: "todo.update",
+            descriptor: CommandDescriptor(
+                summary: "Update a todo's text, body, or color.",
+                params: [
+                    .init(name: "id", type: "string", required: true, description: "Todo ID."),
+                    .init(name: "text", type: "string", required: false, description: "New title."),
+                    .init(name: "body", type: "string", required: false, description: "New body."),
+                    .init(name: "color", type: "string", required: false, description: "New color tag."),
+                ],
+                result: [.init(name: "id", type: "string", description: "Todo ID.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoUpdate(req) }
+        ),
+        CommandRegistration(
+            method: "todo.remove",
+            descriptor: CommandDescriptor(
+                summary: "Delete a todo.",
+                params: [.init(name: "id", type: "string", required: true, description: "Todo ID.")],
+                result: [
+                    .init(name: "id", type: "string", description: "Todo ID."),
+                    .init(name: "removed", type: "boolean", description: "True if deleted."),
+                ],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoRemove(req) }
+        ),
+        CommandRegistration(
+            method: "todo.show",
+            descriptor: CommandDescriptor(
+                summary: "Show a todo with its full rich-text thread.",
+                params: [.init(name: "id", type: "string", required: true, description: "Todo ID.")],
+                result: [
+                    .init(name: "id", type: "string", description: "Todo ID."),
+                    .init(name: "messages", type: "array", description: "Ordered thread messages."),
+                ],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoShow(req) }
+        ),
+        CommandRegistration(
+            method: "todo.message.add",
+            descriptor: CommandDescriptor(
+                summary: "Append a rich-text (markdown) message to a todo's thread.",
+                params: [
+                    .init(name: "id", type: "string", required: true, description: "Todo ID."),
+                    .init(name: "text", type: "string", required: true, description: "Message body (markdown)."),
+                ],
+                result: [.init(name: "id", type: "string", description: "ID of the created message.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoMessageAdd(req) }
         ),
     ] + Self.browserForwardedRegistrations
 

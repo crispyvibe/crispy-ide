@@ -3,6 +3,7 @@ mod handlers_comments;
 mod handlers_message;
 mod handlers_session;
 mod handlers_thread;
+mod handlers_todos;
 mod rpc;
 mod schema;
 mod util;
@@ -158,6 +159,16 @@ async fn dispatch(conn: &libsql::Connection, req: Request) -> Response {
         "comment.relocate" => handlers_comments::comment_relocate(conn, id, params).await,
         "comment.search" => handlers_comments::comment_search(conn, id, params).await,
         "comment.movePath" => handlers_comments::comment_move_path(conn, id, params).await,
+
+        // F053 — Quick todos & sticky notes
+        "todo.add" => handlers_todos::todo_add(conn, id, params).await,
+        "todo.list" => handlers_todos::todo_list(conn, id, params).await,
+        "todo.update" => handlers_todos::todo_update(conn, id, params).await,
+        "todo.complete" => handlers_todos::todo_complete(conn, id, params).await,
+        "todo.delete" => handlers_todos::todo_delete(conn, id, params).await,
+        "todo.show" => handlers_todos::todo_show(conn, id, params).await,
+        "todo.message.add" => handlers_todos::todo_message_add(conn, id, params).await,
+        "todo.message.list" => handlers_todos::todo_message_list(conn, id, params).await,
 
         // Board stubs
         m if m.starts_with("board.") => handlers_board::stub(id, m),
