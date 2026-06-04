@@ -739,6 +739,7 @@ final class RemoteProjectSessionTests: XCTestCase {
             acpDeveloperToolsService: acpDeveloperToolsService,
             agentConversationStore: agentConversationStore,
             vibespaceCommentStore: VibeSpaceCommentStore(conversationStore: agentConversationStore),
+            vibespaceTodoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
             commentLifecycleCoordinator: CommentLifecycleCoordinator(store: VibeSpaceCommentStore(conversationStore: agentConversationStore)),
             externalAgentSessionService: ExternalAgentSessionService(),
             acpSessionRegistry: acpSessionRegistry,
