@@ -16,7 +16,7 @@
 
 ## Features
 
-Next available prefix: F052. Numbers are never reused.
+Next available prefix: F054. Numbers are never reused.
 
 | Prefix | Feature | Domain | Folder | Status |
 |--------|---------|--------|--------|--------|
@@ -69,6 +69,8 @@ Next available prefix: F052. Numbers are never reused.
 | F049 | File Comments | D4 | `editor/file-comments` | implemented |
 | F050 | Jupyter Notebook Support | D4 | `editor/notebook` | draft |
 | F051 | Remote Agent CLI | D8 | `remote/remote-agent-cli` | draft |
+| F052 | Git Worktrees | D6 | `source-control/git-worktrees` | draft |
+| F053 | Unified Project Side Panel | D2 | `vibespace/unified-sidebar` | draft |
 
 ## NFR Index
 
