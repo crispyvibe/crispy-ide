@@ -73,6 +73,7 @@ private enum BrowserTabDisplayNameFormatter {
 enum ContentViewerTabKind: Equatable {
     case file(FileDocumentReference)
     case vibeCast
+    case todos
     case webPage(BrowserTabReference)
     case terminal(projectID: UUID, tabID: UUID)
     case acpPane(id: UUID)
@@ -92,6 +93,8 @@ struct ContentViewerTab: Identifiable, Equatable {
             return name.isEmpty ? url.path : name
         case .vibeCast:
             return "VibeCast"
+        case .todos:
+            return "Todos"
         case .webPage(let reference):
             if let url = reference.seedURL {
                 return BrowserTabDisplayNameFormatter.title(for: url)
@@ -118,6 +121,8 @@ struct ContentViewerTab: Identifiable, Equatable {
             return "doc.text"
         case .vibeCast:
             return "antenna.radiowaves.left.and.right"
+        case .todos:
+            return "checklist"
         case .webPage:
             return "globe"
         case .terminal:
@@ -137,6 +142,10 @@ struct ContentViewerTab: Identifiable, Equatable {
 
     static var vibeCast: ContentViewerTab {
         ContentViewerTab(id: "vibeCast", kind: .vibeCast)
+    }
+
+    static var todos: ContentViewerTab {
+        ContentViewerTab(id: "todos", kind: .todos)
     }
 
     static func webPage(
@@ -200,6 +209,7 @@ private struct ContentViewerTabDragPayload: Codable, Equatable {
     private enum PayloadKind: String, Codable {
         case file
         case vibeCast
+        case todos
         case webPage
         case terminal
         case acpPane
@@ -221,6 +231,12 @@ private struct ContentViewerTabDragPayload: Codable, Equatable {
             fileReference = reference
         case .vibeCast:
             kind = .vibeCast
+            value = nil
+            customTitle = tab.customTitle
+            browserReference = nil
+            fileReference = nil
+        case .todos:
+            kind = .todos
             value = nil
             customTitle = tab.customTitle
             browserReference = nil
@@ -256,6 +272,8 @@ private struct ContentViewerTabDragPayload: Codable, Equatable {
             return .file(url: URL(fileURLWithPath: value))
         case .vibeCast:
             return .vibeCast
+        case .todos:
+            return .todos
         case .webPage:
             if let browserReference {
                 return .webPage(reference: browserReference, customTitle: customTitle)

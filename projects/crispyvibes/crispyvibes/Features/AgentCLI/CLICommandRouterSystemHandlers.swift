@@ -143,6 +143,7 @@ extension CLICommandRouter {
     /// Domain catalog. Order here controls the order they appear in `help` output.
     static let domains: [DomainInfo] = [
         DomainInfo(name: "core", description: "Universal meta commands: connectivity, identity, introspection."),
+        DomainInfo(name: "todo", description: "Quick todos / sticky notes scoped to a vibespace or project. Agents can add, list, complete, reopen, update, and remove todos; data persists in the encrypted store and surfaces in the Todos panel."),
         DomainInfo(name: "shelf", description: "The shelf is a persistent collection of files and folders pinned by the user, surviving app restarts and visible in the vibespace sidebar. Agents can add or remove entries; Crispy never deletes the underlying files when an entry is removed."),
         DomainInfo(name: "terminal", description: "Terminal sessions inside vibespaces. Each terminal has a UUID and runs a shell process; agents can read screen contents, send text, send key sequences, spawn new terminals, and wait for completion."),
         DomainInfo(name: "browser", description: "Embedded WebKit browser panels scoped to a vibespace. Agents drive navigation, capture DOM snapshots, click and type into elements, evaluate JavaScript, and handle page dialogs."),

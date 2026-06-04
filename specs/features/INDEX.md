@@ -16,7 +16,7 @@
 
 ## Features
 
-Next available prefix: F052. Numbers are never reused.
+Next available prefix: F055. Numbers are never reused. (F053 Quick Todos & Sticky Notes is implemented. F052 Whiteboarding and F054 Mind Maps are reserved/planned but deprioritized — see `specs/planning/whiteboards-todos-mindmaps-design.md`.)
 
 | Prefix | Feature | Domain | Folder | Status |
 |--------|---------|--------|--------|--------|
@@ -69,6 +69,7 @@ Next available prefix: F052. Numbers are never reused.
 | F049 | File Comments | D4 | `editor/file-comments` | implemented |
 | F050 | Jupyter Notebook Support | D4 | `editor/notebook` | draft |
 | F051 | Remote Agent CLI | D8 | `remote/remote-agent-cli` | draft |
+| F053 | Quick Todos & Sticky Notes | D2 | `vibespace/todos` | implemented |
 
 ## NFR Index
 

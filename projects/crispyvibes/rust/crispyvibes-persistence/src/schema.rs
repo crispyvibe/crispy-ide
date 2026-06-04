@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use libsql::Connection;
 
-const CURRENT_VERSION: i64 = 3;
+const CURRENT_VERSION: i64 = 4;
 
 pub async fn run_migrations(conn: &Connection) -> Result<i64> {
     conn.execute(
@@ -21,6 +21,9 @@ pub async fn run_migrations(conn: &Connection) -> Result<i64> {
     }
     if version < 3 {
         migrate_v3(conn).await.context("V3 migration")?;
+    }
+    if version < 4 {
+        migrate_v4(conn).await.context("V4 migration")?;
     }
 
     Ok(CURRENT_VERSION)
@@ -283,6 +286,51 @@ async fn migrate_v3(conn: &Connection) -> Result<()> {
         "CREATE INDEX IF NOT EXISTS idx_comments_surface ON comments(vibespace_id, surface_kind, file_path)",
 
         "INSERT INTO schema_version (version) VALUES (3)",
+    ];
+
+    for stmt in stmts {
+        conn.execute(stmt, ()).await.with_context(|| {
+            let preview: String = stmt.chars().take(60).collect();
+            format!("execute: {preview}...")
+        })?;
+    }
+
+    Ok(())
+}
+
+
+/// F053 — Quick todos & sticky notes. Vibespace-scoped via `vibespace_id`;
+/// optionally project-scoped via `project_path` (NULL = vibespace-level).
+/// `due_at`/`reminder_at` are reserved for the later reminders phase.
+async fn migrate_v4(conn: &Connection) -> Result<()> {
+    let stmts = [
+        "CREATE TABLE IF NOT EXISTS todos (
+            id           TEXT PRIMARY KEY,
+            vibespace_id TEXT NOT NULL,
+            project_path TEXT,
+            title        TEXT NOT NULL,
+            body         TEXT,
+            color_tag    TEXT,
+            file_path    TEXT,
+            status       TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','completed')),
+            due_at       TEXT,
+            reminder_at  TEXT,
+            created_at   TEXT NOT NULL,
+            updated_at   TEXT NOT NULL,
+            completed_at TEXT
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_todos_vs ON todos(vibespace_id, status, updated_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_todos_vs_project ON todos(vibespace_id, project_path, status, updated_at DESC)",
+        "CREATE TABLE IF NOT EXISTS todo_messages (
+            id          TEXT PRIMARY KEY,
+            todo_id     TEXT NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+            body        TEXT NOT NULL,
+            author_kind TEXT NOT NULL DEFAULT 'user' CHECK (author_kind IN ('user','agent')),
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_todo_messages_todo ON todo_messages(todo_id, created_at)",
+        "INSERT INTO schema_version (version) VALUES (4)",
     ];
 
     for stmt in stmts {

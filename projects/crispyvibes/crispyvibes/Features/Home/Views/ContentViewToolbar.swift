@@ -344,6 +344,14 @@ extension ContentView {
                     })
                         .help(AppStrings.VibeCast.title)
                         .accessibilityIdentifier("toolbar.vibecast")
+
+                    vibespaceToolbarControl(Button {
+                        NotificationCenter.default.post(name: .toggleTodos, object: nil)
+                    } label: {
+                        HomeToolbarIconLabel(systemName: "checklist")
+                    })
+                        .help(AppStrings.Todos.title)
+                        .accessibilityIdentifier("toolbar.todos")
                 }
             }
 

@@ -10,6 +10,7 @@
 		01267F46A2AEA5373C9EADB8 /* ACPMarkdownHTMLView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC48D35FCD58D084483C9917 /* ACPMarkdownHTMLView.swift */; };
 		0192232DBD01670BF7C6C6D7 /* BoardCursorRegionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00F72377C9FA23F598D0560F /* BoardCursorRegionsTests.swift */; };
 		02BFBDFB6F927EDB5D70C7B2 /* TextGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A199FBB4076712252D28F5 /* TextGenerationService.swift */; };
+		0351684DC70D1835A9A411F9 /* VibeSpaceTodoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CACAAC6CF3CDA8AB81F1E5 /* VibeSpaceTodoStore.swift */; };
 		035F65A29AAA298B711DA5BA /* CrossFileCommentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F929E1E343D4388CC4D3B983 /* CrossFileCommentsView.swift */; };
 		042CD7350961BDC4E1FC8029 /* LayoutPersistenceServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0BA7A8EA2536B337A202D8A /* LayoutPersistenceServiceTests.swift */; };
 		0497B88F0AF64D49E7BFCB75 /* ContentViewVibeSpaceHydration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AAD273E7CADCF147834D4ED /* ContentViewVibeSpaceHydration.swift */; };
@@ -19,6 +20,7 @@
 		0497B88F0AF64D49E7BFCB79 /* VibeSpaceProjectFocusUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AAD273E7CADCF147834D4F1 /* VibeSpaceProjectFocusUseCase.swift */; };
 		0497B88F0AF64D49E7BFCB7A /* VibeSpaceHydrationCoordinatorProjectRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0497B88F0AF64D49E7BFCB7B /* VibeSpaceHydrationCoordinatorProjectRuntime.swift */; };
 		0518CC8301136F84758C8E94 /* TerminalSessionDelegateAndView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132A680C12159B6827A422A2 /* TerminalSessionDelegateAndView.swift */; };
+		06B0E5AD4B4CA235BF427C7C /* Todo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10A547C43FD1C507328A502 /* Todo.swift */; };
 		0712012CB5DE266E34DA28DC /* CommentsFloatingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA858148B9A59001BF0F265B /* CommentsFloatingButton.swift */; };
 		07D2EA07007D8D68E650FEBE /* CommentsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F18E469D8C6B1BC9042B2E5 /* CommentsPanelView.swift */; };
 		0953282E16DB48F7A99DC0E9 /* CodeEditorCommentBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126E91B4976C63221AAF2FDB /* CodeEditorCommentBridge.swift */; };
@@ -156,6 +158,7 @@
 		7685C7E0E6D068FC69A8FC46 /* TerminalViewModelTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AFE902D189DEB4CE721F8C3 /* TerminalViewModelTabs.swift */; };
 		7821EBF769F001F0BABA0F0C /* TerminalViewModelTestsExecutionFlows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D40B67F5AF706A291328CEE /* TerminalViewModelTestsExecutionFlows.swift */; };
 		785554E6966466B1459D8C57 /* ContextSummaryGenerating.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4BEE53B3AFE95AC5CB99A55 /* ContextSummaryGenerating.swift */; };
+		785ACCA93D1CBC27A40E06F3 /* TodoQuickCaptureOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6929502A5AE9CA15649651FF /* TodoQuickCaptureOverlay.swift */; };
 		79A260A512FBDAD8067D9EC2 /* VibeSpacePersistenceIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E084AEC5005817CDE77C59BF /* VibeSpacePersistenceIntegrationTests.swift */; };
 		7A3F6DFA8D0B4C3E90000001 /* VibeSpaceStackedProjectRailSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3F6DFA8D0B4C3E90000002 /* VibeSpaceStackedProjectRailSupport.swift */; };
 		7A3F6DFA8D0B4C3E90000003 /* ContentViewStackedProjectRailActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3F6DFA8D0B4C3E90000004 /* ContentViewStackedProjectRailActions.swift */; };
@@ -165,6 +168,7 @@
 		7ABA9E9C933617F63BFAAA26 /* SerialTaskQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B09E173B53D66230B2C17655 /* SerialTaskQueue.swift */; };
 		7D6038213B6FD38E66509899 /* AppSettingsSheetContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6979D608CA6926C1AF712494 /* AppSettingsSheetContent.swift */; };
 		7DAEBC5A5586122F1375844C /* SessionMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51AE4E055CB8863F7F099186 /* SessionMetadata.swift */; };
+		7E30E212A37754AF565B5859 /* TodoStoreEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A7BFBE7491D028837AE2C4 /* TodoStoreEnvironment.swift */; };
 		7F7343AD85C80EB8D751EF9B /* TerminalPresetServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 693A6536CC82EA75F8F3D672 /* TerminalPresetServices.swift */; };
 		7F9806279941B6EFF7E6BC77 /* ProjectSessionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF905C32F32F1A4D3625D045 /* ProjectSessionStateTests.swift */; };
 		7FAD00112233445566778899 /* TerminalInteractiveTargetDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FAD00112233445566778898 /* TerminalInteractiveTargetDetector.swift */; };
@@ -201,7 +205,6 @@
 		9D6B53B31B44D970839BAAF9 /* IOSurface.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D29548E45635BC4A2C7E3DD /* IOSurface.framework */; };
 		9D9E97AEF9B55DCF760B96F8 /* AppShellModelTestsVibeSpaceAndTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = E826F8E8F690FD18AFCDC36B /* AppShellModelTestsVibeSpaceAndTerminal.swift */; };
 		9E7AF289134CAC49D7A610A2 /* VibeSpaceCreationResultTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12D51EBA7514F74FBD39501 /* VibeSpaceCreationResultTests.swift */; };
-		A1D0DA0000000000DA00BB03 /* ManageVibeSpacesViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */; };
 		A10000000000000000000001 /* CrispyVibesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000002 /* CrispyVibesApp.swift */; };
 		A10000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000003 /* AppDelegate.swift */; };
 		A10000000000000000000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000004 /* ContentView.swift */; };
@@ -229,9 +232,6 @@
 		A1000000000000000000001A /* VibeSpaceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001B /* VibeSpaceState.swift */; };
 		A1000000000000000000001B /* FocusedProjectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001C /* FocusedProjectView.swift */; };
 		A1000000000000000000001C /* StackedProjectCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001D /* StackedProjectCardView.swift */; };
-		A1D0DA0000000000DA00BB02 /* ManageVibeSpacesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B2 /* ManageVibeSpacesViewModel.swift */; };
-		A1D0DA0000000000DA00BB04 /* AppSettingsSheetViewVibeSpaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B4 /* AppSettingsSheetViewVibeSpaces.swift */; };
-		A1D0DA0000000000DA00BB05 /* AppSettingsVibeSpacesContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B5 /* AppSettingsVibeSpacesContext.swift */; };
 		A1000000000000000000001D /* NativeSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001E /* NativeSplitView.swift */; };
 		A1000000000000000000001E /* LayoutPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001F /* LayoutPersistenceService.swift */; };
 		A10000000000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000021 /* Assets.xcassets */; };
@@ -351,6 +351,10 @@
 		A1D000000000000000000018 /* VibeSpaceCanvasActionsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D000000000000000000019 /* VibeSpaceCanvasActionsCoordinator.swift */; };
 		A1D000000000000000000020 /* ContentViewTerminalSpotlightBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000020 /* ContentViewTerminalSpotlightBrowser.swift */; };
 		A1D000000000000000000021 /* ContentViewTerminalSpotlightNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000021 /* ContentViewTerminalSpotlightNavigation.swift */; };
+		A1D0DA0000000000DA00BB02 /* ManageVibeSpacesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B2 /* ManageVibeSpacesViewModel.swift */; };
+		A1D0DA0000000000DA00BB03 /* ManageVibeSpacesViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */; };
+		A1D0DA0000000000DA00BB04 /* AppSettingsSheetViewVibeSpaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B4 /* AppSettingsSheetViewVibeSpaces.swift */; };
+		A1D0DA0000000000DA00BB05 /* AppSettingsVibeSpacesContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10DA0000000000000DA00B5 /* AppSettingsVibeSpacesContext.swift */; };
 		A1F000000000000000000001 /* BrowserFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F000000000000000000003 /* BrowserFeatureTests.swift */; };
 		A1F000000000000000000002 /* VibeSpaceShortcutProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F000000000000000000004 /* VibeSpaceShortcutProviderTests.swift */; };
 		A20000000000000000000001 /* UnitSuiteStructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000000000000000000004 /* UnitSuiteStructureTests.swift */; };
@@ -414,6 +418,8 @@
 		A9C100000000000000000018 /* VibeSpaceSidebarConversationsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C200000000000000000018 /* VibeSpaceSidebarConversationsPane.swift */; };
 		A9C100000000000000000019 /* DockedAgentPreviewCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C200000000000000000019 /* DockedAgentPreviewCoordinator.swift */; };
 		A9C100000000000000000020 /* AgentDockPreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C200000000000000000020 /* AgentDockPreviewPanel.swift */; };
+		AABBCCDD11223344EEFF0002 /* CLISocketServerResilienceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDD11223344EEFF0001 /* CLISocketServerResilienceTests.swift */; };
+		AABBCCDD11223344EEFF0004 /* CLIExecRelayServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDD11223344EEFF0003 /* CLIExecRelayServerTests.swift */; };
 		ABCD1234ABCD1234ABCD1234 /* VibeSpaceSourceControlViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABCD1234ABCD1234ABCD1235 /* VibeSpaceSourceControlViewModelTests.swift */; };
 		AC0010010000000000000001 /* ACPTransportPromptCompletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0010010000000000000002 /* ACPTransportPromptCompletionTests.swift */; };
 		AC0FD49C84289D78F9B704A1 /* AppSettingsSheetViewServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 206C8EB4200B59A816EE2E28 /* AppSettingsSheetViewServices.swift */; };
@@ -433,6 +439,7 @@
 		ADD000000000000000000007 /* LocalCommandExecutorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD000000000000000000008 /* LocalCommandExecutorTests.swift */; };
 		ADD00000000000000000000A /* VibeSpaceTerminalBoardStoreAddTileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD00000000000000000000B /* VibeSpaceTerminalBoardStoreAddTileTests.swift */; };
 		ADD00000000000000000000C /* ComposeHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD00000000000000000000D /* ComposeHistoryTests.swift */; };
+		AF7DE45178894ED06A93BEF5 /* TodoDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A27B25FC728E29CA267B700 /* TodoDetailView.swift */; };
 		B01C6B5E7DAE99CE841EE969 /* PaneWorkerClientAndFileIconTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 554E867E1559D589DF6F2399 /* PaneWorkerClientAndFileIconTests.swift */; };
 		B01E0C43357F74CC1DD0F369 /* ContentViewCatalogRecentSnapshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C52B060B3A6451F1736E911 /* ContentViewCatalogRecentSnapshots.swift */; };
 		B07C004F1D67ADBFE12DD9FB /* ContentViewerTabItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C235B644DB6B4114D40498D /* ContentViewerTabItemView.swift */; };
@@ -442,6 +449,8 @@
 		B441F918527A716B3B4CFEA6 /* DocumentBufferStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B3444C6DBB3A395D597D916 /* DocumentBufferStoreTests.swift */; };
 		B46CBA75328AC61E4AAEDF6B /* OperationMetricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC6AE2F6E509F8231A2F2CA /* OperationMetricsStore.swift */; };
 		B4C921675C4C4E4FB2E260FD /* CLICommandRouterBrowserHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C31719235B442EC97D7A234 /* CLICommandRouterBrowserHandlers.swift */; };
+		B4F27F84D163A07A52C85BB3 /* TodosPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 052F463B82C756B2CD782D33 /* TodosPanelView.swift */; };
+		B55E7F9AEC76560D834D7AE5 /* CLICommandRouterTodoHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36614E48DD50988227BE2397 /* CLICommandRouterTodoHandlers.swift */; };
 		B5AE1C535A5B3A6A008F3200 /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076F010F6417EBE98E5BEA2B /* AppStrings.swift */; };
 		B5FB3BE1789896D0D9D04FCF /* VibeSpaceSettingsRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D25D8E9DD2F083E4FE0B3D /* VibeSpaceSettingsRows.swift */; };
 		B8679E2B487A2F623E34192C /* PDFFilePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6865C7E06CEF39B3C6CB25 /* PDFFilePreview.swift */; };
@@ -466,6 +475,7 @@
 		BRVMEXT10002000200020002 /* BrowserPanelViewModelExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRVMEXT10001000100010001 /* BrowserPanelViewModelExtras.swift */; };
 		BRWSHOST0002000200020002 /* BrowserSessionHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRWSHOST0001000100010001 /* BrowserSessionHostView.swift */; };
 		BRWSOWNR0002000200020002 /* BrowserHostOwnershipCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRWSOWNR0001000100010001 /* BrowserHostOwnershipCoordinator.swift */; };
+		C09D89721027C10CCAA0790B /* TodosSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFFA679768A1D8A7C2392526 /* TodosSurfaceView.swift */; };
 		C1BC645B356BA596BE12DC7A /* AppDelegateDefaultsObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4859A806650A6BA1D0A035E1 /* AppDelegateDefaultsObservation.swift */; };
 		C2D000000000000000000002 /* VibeSpaceSidebarProjectTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000001 /* VibeSpaceSidebarProjectTree.swift */; };
 		C2D000000000000000000004 /* VibeSpaceSidebarFilesPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000003 /* VibeSpaceSidebarFilesPane.swift */; };
@@ -608,6 +618,7 @@
 		EBA2C28DAAC39919A046EB63 /* BrowserSurfaceBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAC22A30408EBEB42F2B6AC5 /* BrowserSurfaceBridge.swift */; };
 		F04100000000000000000002 /* TerminalContextSummarySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04100000000000000000001 /* TerminalContextSummarySession.swift */; };
 		F04100000000000000000004 /* ContextSummaryObservabilityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04100000000000000000003 /* ContextSummaryObservabilityStore.swift */; };
+		F157AAD72BD9FF36699FE746 /* TodoMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F875041564222EFE739F84D0 /* TodoMessage.swift */; };
 		F1A2B3C4D5E6F7A8B9C0D1E2 /* FileTreeFlatRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E3 /* FileTreeFlatRow.swift */; };
 		F1A8F1C4760E51B9D414C5FA /* SettingsPrimitives.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CAFF374AB8A27082386A013 /* SettingsPrimitives.swift */; };
 		F1D000000000000000000011 /* VibeSpaceSourceControlTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000011 /* VibeSpaceSourceControlTypes.swift */; };
@@ -620,8 +631,8 @@
 		F64B81B608FC22C1E7D303E7 /* DiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7999E66ED37905E67181EC /* DiagnosticsTests.swift */; };
 		F64B81B608FC22C1E7D303E8 /* GitHeadWatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7999E66ED37905E67181ED /* GitHeadWatcherTests.swift */; };
 		FAA15B35135AEBD03B88BDDC /* MarkdownEditorPlugins.swift in Sources */ = {isa = PBXBuildFile; fileRef = C058007C6BE57237190D272A /* MarkdownEditorPlugins.swift */; };
-		FEA0000000000000000000B2 /* NotebookEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA0000000000000000000B1 /* NotebookEditorView.swift */; };
 		FB119B1240A0612B8A365F42 /* AppSettingsSheetViewGeneral.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EB1846F17F63B52C6107C8 /* AppSettingsSheetViewGeneral.swift */; };
+		FEA0000000000000000000B2 /* NotebookEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA0000000000000000000B1 /* NotebookEditorView.swift */; };
 		FEB16CONT00000002 /* BrowserContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEB16CONT00000001 /* BrowserContentView.swift */; };
 		FEEA9B453BF8FA015665A631 /* TerminalScrollbackReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8609591BDD5DC51654C9EE /* TerminalScrollbackReader.swift */; };
 		FFA61816A33B1441F553EE3C /* TerminalPresetModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EAF5625ED1F5A23A8232462 /* TerminalPresetModels.swift */; };
@@ -654,6 +665,7 @@
 		0411FF8667D7C866547292F7 /* VibeSpaceBehavioralTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceBehavioralTests.swift; sourceTree = "<group>"; };
 		0497B88F0AF64D49E7BFCB7B /* VibeSpaceHydrationCoordinatorProjectRuntime.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceHydrationCoordinatorProjectRuntime.swift; sourceTree = "<group>"; };
 		04BCFD47BCD045FC69391031 /* VibeSpaceManagementService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceManagementService.swift; sourceTree = "<group>"; };
+		052F463B82C756B2CD782D33 /* TodosPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodosPanelView.swift; path = Todos/Views/TodosPanelView.swift; sourceTree = "<group>"; };
 		076F010F6417EBE98E5BEA2B /* AppStrings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppStrings.swift; sourceTree = "<group>"; };
 		07B977ECF638A5A85D81A20C /* VibeSpaceStateTestsOverridesAndPaths.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateTestsOverridesAndPaths.swift; sourceTree = "<group>"; };
 		07D2FB0E3252D64055270C63 /* MermaidRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MermaidRenderer.swift; sourceTree = "<group>"; };
@@ -700,6 +712,7 @@
 		31022095BE5C98ED18B3821E /* FolderExplorerViewModelTreeLifecycle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FolderExplorerViewModelTreeLifecycle.swift; sourceTree = "<group>"; };
 		3296F6202DC717584444FCC9 /* ACPSessionRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPSessionRegistry.swift; sourceTree = "<group>"; };
 		340EC356A826F1BCC6D77394 /* LayoutPersistencePropertyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LayoutPersistencePropertyTests.swift; sourceTree = "<group>"; };
+		36614E48DD50988227BE2397 /* CLICommandRouterTodoHandlers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterTodoHandlers.swift; sourceTree = "<group>"; };
 		36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterBrowserListTests.swift; sourceTree = "<group>"; };
 		AABBCCDD11223344EEFF0001 /* CLISocketServerResilienceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLISocketServerResilienceTests.swift; sourceTree = "<group>"; };
 		AABBCCDD11223344EEFF0003 /* CLIExecRelayServerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLIExecRelayServerTests.swift; sourceTree = "<group>"; };
@@ -761,6 +774,7 @@
 		6705DB5F115FE512B0D8E0B2 /* TimelineEntry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TimelineEntry.swift; sourceTree = "<group>"; };
 		6885CA8D4CB1E8CBAADA0043 /* SplitContainerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitContainerView.swift; sourceTree = "<group>"; };
 		68D7F499FED252B116EF5F8B /* CLICommandRouterCommentsHandlers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterCommentsHandlers.swift; sourceTree = "<group>"; };
+		6929502A5AE9CA15649651FF /* TodoQuickCaptureOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoQuickCaptureOverlay.swift; path = Todos/Views/TodoQuickCaptureOverlay.swift; sourceTree = "<group>"; };
 		693A6536CC82EA75F8F3D672 /* TerminalPresetServices.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalPresetServices.swift; sourceTree = "<group>"; };
 		6979D608CA6926C1AF712494 /* AppSettingsSheetContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetContent.swift; sourceTree = "<group>"; };
 		69D8F23A94579CEBE723EC48 /* AppSettingsSheetViewRemoteSSH.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewRemoteSSH.swift; sourceTree = "<group>"; };
@@ -816,6 +830,7 @@
 		88A2A70496B1D17D1044FBEE /* VibeSpaceTerminalBoardStoreBulkMoveTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreBulkMoveTests.swift; sourceTree = "<group>"; };
 		89A3A9BC98EE2EEA2320FBF2 /* VibeSpaceStatePropertyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStatePropertyTests.swift; sourceTree = "<group>"; };
 		89D6C6A4F23E0455223B0EF0 /* ExperimentalFeaturesService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExperimentalFeaturesService.swift; sourceTree = "<group>"; };
+		8A27B25FC728E29CA267B700 /* TodoDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoDetailView.swift; path = Todos/Views/TodoDetailView.swift; sourceTree = "<group>"; };
 		8BFC9CF56FE0BCD0CD37E86A /* GhosttyTerminalEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalEngine.swift; sourceTree = "<group>"; };
 		8C074D30346BA4C294F7D99F /* VibeSpaceConfigModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceConfigModels.swift; sourceTree = "<group>"; };
 		8C5181BCA894219EFFA30150 /* TerminalPasteTargetingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalPasteTargetingTests.swift; sourceTree = "<group>"; };
@@ -842,8 +857,8 @@
 		9EAF5625ED1F5A23A8232462 /* TerminalPresetModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalPresetModels.swift; sourceTree = "<group>"; };
 		9F1559F53B1144C2961079C5 /* DocumentBufferTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DocumentBufferTests.swift; path = DocumentBufferTests.swift; sourceTree = "<group>"; };
 		9FE3899E41EA3ED6345C6BC8 /* SettingsNavigationPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsNavigationPrimitives.swift; sourceTree = "<group>"; };
+		A10A547C43FD1C507328A502 /* Todo.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Todo.swift; path = Todos/Models/Todo.swift; sourceTree = "<group>"; };
 		A12D51EBA7514F74FBD39501 /* VibeSpaceCreationResultTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceCreationResultTests.swift; sourceTree = "<group>"; };
-		B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ManageVibeSpacesViewModelTests.swift; sourceTree = "<group>"; };
 		A1A6559E6C9FD7520C810F00 /* TerminalContextSummary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalContextSummary.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* AppKitTreeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppKitTreeView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F5 /* AppKitTreeSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitTreeSupportViews.swift; sourceTree = "<group>"; };
@@ -907,6 +922,8 @@
 		A9C200000000000000000018 /* VibeSpaceSidebarConversationsPane.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarConversationsPane.swift; sourceTree = "<group>"; };
 		A9C200000000000000000019 /* DockedAgentPreviewCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DockedAgentPreviewCoordinator.swift; sourceTree = "<group>"; };
 		A9C200000000000000000020 /* AgentDockPreviewPanel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentDockPreviewPanel.swift; sourceTree = "<group>"; };
+		AABBCCDD11223344EEFF0001 /* CLISocketServerResilienceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLISocketServerResilienceTests.swift; sourceTree = "<group>"; };
+		AABBCCDD11223344EEFF0003 /* CLIExecRelayServerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLIExecRelayServerTests.swift; sourceTree = "<group>"; };
 		ABCD1234ABCD1234ABCD1235 /* VibeSpaceSourceControlViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceSourceControlViewModelTests.swift; sourceTree = "<group>"; };
 		AC0010010000000000000002 /* ACPTransportPromptCompletionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPTransportPromptCompletionTests.swift; sourceTree = "<group>"; };
 		AC48D35FCD58D084483C9917 /* ACPMarkdownHTMLView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPMarkdownHTMLView.swift; sourceTree = "<group>"; };
@@ -958,9 +975,6 @@
 		B10000000000000000000001B /* VibeSpaceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceState.swift; sourceTree = "<group>"; };
 		B10000000000000000000001C /* FocusedProjectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusedProjectView.swift; sourceTree = "<group>"; };
 		B10000000000000000000001D /* StackedProjectCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackedProjectCardView.swift; sourceTree = "<group>"; };
-		B10DA0000000000000DA00B2 /* ManageVibeSpacesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageVibeSpacesViewModel.swift; sourceTree = "<group>"; };
-		B10DA0000000000000DA00B4 /* AppSettingsSheetViewVibeSpaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewVibeSpaces.swift; sourceTree = "<group>"; };
-		B10DA0000000000000DA00B5 /* AppSettingsVibeSpacesContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsVibeSpacesContext.swift; sourceTree = "<group>"; };
 		B10000000000000000000001E /* NativeSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSplitView.swift; sourceTree = "<group>"; };
 		B10000000000000000000001F /* LayoutPersistenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutPersistenceService.swift; sourceTree = "<group>"; };
 		B100000000000000000000021 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -1048,6 +1062,10 @@
 		B100000000000000000000103 /* mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = mermaid.min.js; sourceTree = "<group>"; };
 		B10000000000000000000100 /* TerminalFocusCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalFocusCoordinator.swift; sourceTree = "<group>"; };
 		B100000000000000SEC00001 /* ShellEscaping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellEscaping.swift; sourceTree = "<group>"; };
+		B10DA0000000000000DA00B2 /* ManageVibeSpacesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageVibeSpacesViewModel.swift; sourceTree = "<group>"; };
+		B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ManageVibeSpacesViewModelTests.swift; sourceTree = "<group>"; };
+		B10DA0000000000000DA00B4 /* AppSettingsSheetViewVibeSpaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewVibeSpaces.swift; sourceTree = "<group>"; };
+		B10DA0000000000000DA00B5 /* AppSettingsVibeSpacesContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsVibeSpacesContext.swift; sourceTree = "<group>"; };
 		B1A199FBB4076712252D28F5 /* TextGenerationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextGenerationService.swift; sourceTree = "<group>"; };
 		B1D000000000000000000001 /* ContentViewStackedProjectRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewStackedProjectRail.swift; sourceTree = "<group>"; };
 		B1D000000000000000000002 /* ContentViewTerminalSpotlightState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewTerminalSpotlightState.swift; sourceTree = "<group>"; };
@@ -1107,7 +1125,6 @@
 		BRWSHOST0001000100010001 /* BrowserSessionHostView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserSessionHostView.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserSessionHostView.swift; sourceTree = "<group>"; };
 		BRWSOWNR0001000100010001 /* BrowserHostOwnershipCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserHostOwnershipCoordinator.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserHostOwnershipCoordinator.swift; sourceTree = "<group>"; };
 		C058007C6BE57237190D272A /* MarkdownEditorPlugins.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownEditorPlugins.swift; sourceTree = "<group>"; };
-		FEA0000000000000000000B1 /* NotebookEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotebookEditorView.swift; sourceTree = "<group>"; };
 		C1829B25562B028CDC237B52 /* SplitPaneLayoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitPaneLayoutTests.swift; sourceTree = "<group>"; };
 		C1B9CCF2E2BA8AB7F99D4190 /* SettingsLayoutPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsLayoutPrimitives.swift; sourceTree = "<group>"; };
 		C2C1E3B2A8770E85559D71C4 /* MeasuredPaneWorker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeasuredPaneWorker.swift; sourceTree = "<group>"; };
@@ -1239,6 +1256,7 @@
 		E7A100000000000000000102 /* ContentViewDependencies.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentViewDependencies.swift; sourceTree = "<group>"; };
 		E826F8E8F690FD18AFCDC36B /* AppShellModelTestsVibeSpaceAndTerminal.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppShellModelTestsVibeSpaceAndTerminal.swift; sourceTree = "<group>"; };
 		E957D6548C4B119C8C44F4A9 /* PaneWorkerExecutorSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PaneWorkerExecutorSupport.swift; sourceTree = "<group>"; };
+		E9CACAAC6CF3CDA8AB81F1E5 /* VibeSpaceTodoStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeSpaceTodoStore.swift; path = Todos/ViewModels/VibeSpaceTodoStore.swift; sourceTree = "<group>"; };
 		EA5E55200000000000000001 /* ExternalAgentSessionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExternalAgentSessionService.swift; sourceTree = "<group>"; };
 		EA5E55200000000000000002 /* VibeSpaceSidebarExternalSessionsPane.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarExternalSessionsPane.swift; sourceTree = "<group>"; };
 		EA5E55200000000000000003 /* ExternalAgentSessionPreviewPanel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExternalAgentSessionPreviewPanel.swift; sourceTree = "<group>"; };
@@ -1250,6 +1268,7 @@
 		EE83452DC02F821972872F31 /* AutosaveSchedulerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AutosaveSchedulerTests.swift; path = AutosaveSchedulerTests.swift; sourceTree = "<group>"; };
 		EF0C96874C1E64A720CEE20B /* BrowserPanelViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserPanelViewModel.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserPanelViewModel.swift; sourceTree = "<group>"; };
 		EF299D701415E664DCB1234F /* VibeSpacePersistenceService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpacePersistenceService.swift; sourceTree = "<group>"; };
+		EFFA679768A1D8A7C2392526 /* TodosSurfaceView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodosSurfaceView.swift; path = Todos/Views/TodosSurfaceView.swift; sourceTree = "<group>"; };
 		F0194D9BA74F59A8949BEBD8 /* ViewCompositionSmokeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ViewCompositionSmokeTests.swift; sourceTree = "<group>"; };
 		F03E14DD32805ECE1E3E7F65 /* CommentModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentModels.swift; sourceTree = "<group>"; };
 		F04100000000000000000001 /* TerminalContextSummarySession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalContextSummarySession.swift; sourceTree = "<group>"; };
@@ -1265,13 +1284,16 @@
 		F347CC78926BFD8BEF0DB270 /* BoardCursorRegions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BoardCursorRegions.swift; sourceTree = "<group>"; };
 		F4AAE33D95547E086D4EA872 /* VibeSpaceStateInternals.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateInternals.swift; sourceTree = "<group>"; };
 		F690A12F261C88910EFB66E4 /* BrowserSessionSnapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserSessionSnapshot.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserSessionSnapshot.swift; sourceTree = "<group>"; };
+		F7A7BFBE7491D028837AE2C4 /* TodoStoreEnvironment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoStoreEnvironment.swift; path = Todos/Support/TodoStoreEnvironment.swift; sourceTree = "<group>"; };
 		F7DA8CEC673D186321CAF2E8 /* BoardSpatialNavigationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BoardSpatialNavigationTests.swift; sourceTree = "<group>"; };
 		F83CF57205435C79F0DEF204 /* CommentInlinePopoverComposer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentInlinePopoverComposer.swift; sourceTree = "<group>"; };
+		F875041564222EFE739F84D0 /* TodoMessage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoMessage.swift; path = Todos/Models/TodoMessage.swift; sourceTree = "<group>"; };
 		F877D8A93D205ADA375BFE6D /* TerminalScrollbackSearchOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalScrollbackSearchOverlay.swift; sourceTree = "<group>"; };
 		F929E1E343D4388CC4D3B983 /* CrossFileCommentsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CrossFileCommentsView.swift; sourceTree = "<group>"; };
 		F9D04C023ECA7860320E2454 /* AppStringsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppStringsTests.swift; sourceTree = "<group>"; };
 		FBD1B77585A0E502758BCED3 /* CrispyVibesThemeManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CrispyVibesThemeManager.swift; sourceTree = "<group>"; };
 		FC80C95D8DA94C7F8595A668 /* AppSettingsSheetViewNerd.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewNerd.swift; sourceTree = "<group>"; };
+		FEA0000000000000000000B1 /* NotebookEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotebookEditorView.swift; sourceTree = "<group>"; };
 		FEB16CONT00000001 /* BrowserContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserContentView.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserContentView.swift; sourceTree = "<group>"; };
 		FF5BBF05816A1090A85D2DCF /* CognitoAuthSecurity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CognitoAuthSecurity.swift; sourceTree = "<group>"; };
 		FF93C7619B469F0674984F0F /* TerminalSessionOwnershipCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalSessionOwnershipCoordinator.swift; sourceTree = "<group>"; };
@@ -1649,6 +1671,17 @@
 			name = "Recovered References";
 			sourceTree = "<group>";
 		};
+		50FA7DF4A78CC98E49F828E9 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				052F463B82C756B2CD782D33 /* TodosPanelView.swift */,
+				8A27B25FC728E29CA267B700 /* TodoDetailView.swift */,
+				EFFA679768A1D8A7C2392526 /* TodosSurfaceView.swift */,
+				6929502A5AE9CA15649651FF /* TodoQuickCaptureOverlay.swift */,
+			);
+			name = Views;
+			sourceTree = "<group>";
+		};
 		52AE1E18A25296CE4F9B9EF5 /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -1779,6 +1812,7 @@
 				6E1F0A10D7D1453D9A8B3008 /* Editor */,
 				6E1F0A10D7D1453D9A8B3009 /* Settings */,
 				0CEC3E32F78B5191FE5C8344 /* Shared */,
+				CEAAF6BD02A5DFE6BDC8C451 /* Todos */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -1999,15 +2033,6 @@
 			path = Comments;
 			sourceTree = "<group>";
 		};
-		C9442EB9FE82D110F9A788B0 /* ViewModels */ = {
-			isa = PBXGroup;
-			children = (
-				B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */,
-			);
-			name = ViewModels;
-			path = ViewModels;
-			sourceTree = "<group>";
-		};
 		84765AF10D9D7029824390B2 /* Support */ = {
 			isa = PBXGroup;
 			children = (
@@ -2052,6 +2077,14 @@
 			path = Comments;
 			sourceTree = "<group>";
 		};
+		8AD016F7CFE0A3CE2548D4B8 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				F7A7BFBE7491D028837AE2C4 /* TodoStoreEnvironment.swift */,
+			);
+			name = Support;
+			sourceTree = "<group>";
+		};
 		8C2E189A9B62A3B8F48E8445 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -2062,6 +2095,14 @@
 				A7B7A09297F3A321D755AD01 /* UniformTypeIdentifiers.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		90B04FEA37589933E01D375F /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				F875041564222EFE739F84D0 /* TodoMessage.swift */,
+			);
+			name = Models;
 			sourceTree = "<group>";
 		};
 		939B0EF728BCB088E23234B9 /* Services */ = {
@@ -2270,6 +2311,7 @@
 				A8D5ABD4E1C9E71C6467FD94 /* CLICommandRouterVibeSpaceHandlers.swift */,
 				A6E1A000000000000000071D /* CLIKeyMapping.swift */,
 				68D7F499FED252B116EF5F8B /* CLICommandRouterCommentsHandlers.swift */,
+				36614E48DD50988227BE2397 /* CLICommandRouterTodoHandlers.swift */,
 			);
 			name = AgentCLI;
 			path = AgentCLI;
@@ -2757,6 +2799,15 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		C9442EB9FE82D110F9A788B0 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */,
+			);
+			name = ViewModels;
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
 		CAC8FA6611FA19D25E4D05CA /* Data */ = {
 			isa = PBXGroup;
 			children = (
@@ -2764,6 +2815,18 @@
 			);
 			name = Data;
 			path = Data;
+			sourceTree = "<group>";
+		};
+		CEAAF6BD02A5DFE6BDC8C451 /* Todos */ = {
+			isa = PBXGroup;
+			children = (
+				A10A547C43FD1C507328A502 /* Todo.swift */,
+				E9CACAAC6CF3CDA8AB81F1E5 /* VibeSpaceTodoStore.swift */,
+				50FA7DF4A78CC98E49F828E9 /* Views */,
+				90B04FEA37589933E01D375F /* Models */,
+				8AD016F7CFE0A3CE2548D4B8 /* Support */,
+			);
+			name = Todos;
 			sourceTree = "<group>";
 		};
 		D0F2B9DD150813F7935E0A43 /* Languages */ = {
@@ -3166,14 +3229,6 @@
 			path = Support;
 			sourceTree = "<group>";
 		};
-		FEA000000000000000000098 /* ViewModels */ = {
-			isa = PBXGroup;
-			children = (
-				B10DA0000000000000DA00B2 /* ManageVibeSpacesViewModel.swift */,
-			);
-			path = ViewModels;
-			sourceTree = "<group>";
-		};
 		FEA00000000000000000000D /* Services */ = {
 			isa = PBXGroup;
 			children = (
@@ -3359,6 +3414,14 @@
 				86AB2FA103460BD2D86D755D /* GitHeadWatcher.swift */,
 			);
 			path = FileSystem;
+			sourceTree = "<group>";
+		};
+		FEA000000000000000000098 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				B10DA0000000000000DA00B2 /* ManageVibeSpacesViewModel.swift */,
+			);
+			path = ViewModels;
 			sourceTree = "<group>";
 		};
 		FFEAAF5FB2234CCAEAAA70E2 /* VibeSpace */ = {
@@ -4061,6 +4124,15 @@
 				EBA2C28DAAC39919A046EB63 /* BrowserSurfaceBridge.swift in Sources */,
 				312029A2909C2BD59101A417 /* BrowserContentWithCommentsPanel.swift in Sources */,
 				84E6893FC3DFC547D9472468 /* CommentInlinePopoverComposer.swift in Sources */,
+				06B0E5AD4B4CA235BF427C7C /* Todo.swift in Sources */,
+				0351684DC70D1835A9A411F9 /* VibeSpaceTodoStore.swift in Sources */,
+				B55E7F9AEC76560D834D7AE5 /* CLICommandRouterTodoHandlers.swift in Sources */,
+				B4F27F84D163A07A52C85BB3 /* TodosPanelView.swift in Sources */,
+				F157AAD72BD9FF36699FE746 /* TodoMessage.swift in Sources */,
+				AF7DE45178894ED06A93BEF5 /* TodoDetailView.swift in Sources */,
+				C09D89721027C10CCAA0790B /* TodosSurfaceView.swift in Sources */,
+				7E30E212A37754AF565B5859 /* TodoStoreEnvironment.swift in Sources */,
+				785ACCA93D1CBC27A40E06F3 /* TodoQuickCaptureOverlay.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

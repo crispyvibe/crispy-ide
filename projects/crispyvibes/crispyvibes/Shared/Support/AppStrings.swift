@@ -116,6 +116,35 @@ enum AppStrings {
         static let filesOpenedFromFinder = String(localized: "shelf.filesOpenedFromFinder")
     }
 
+    // MARK: - Todos (F053)
+
+    enum Todos {
+        static let title = String(localized: "todos.title")
+        static let allInVibeSpace = String(localized: "todos.allInVibeSpace")
+        static let scopeProject = String(localized: "todos.scope.project")
+        static let scopeAll = String(localized: "todos.scope.all")
+        static let quickAddPlaceholder = String(localized: "todos.quickAdd.placeholder")
+        static let emptyTitle = String(localized: "todos.empty.title")
+        static let emptyHint = String(localized: "todos.empty.hint")
+        static let complete = String(localized: "todos.action.complete")
+        static let delete = String(localized: "todos.action.delete")
+        static let titlePlaceholder = String(localized: "todos.title.placeholder")
+        static let bodyPlaceholder = String(localized: "todos.body.placeholder")
+        static let notesLabel = String(localized: "todos.notes.label")
+        static let save = String(localized: "todos.action.save")
+        static let cancel = String(localized: "todos.action.cancel")
+        static let thread = String(localized: "todos.thread.title")
+        static let threadEmpty = String(localized: "todos.thread.empty")
+        static let messagePlaceholder = String(localized: "todos.message.placeholder")
+        static let authorYou = String(localized: "todos.author.you")
+        static let authorAgent = String(localized: "todos.author.agent")
+        static let selectPrompt = String(localized: "todos.detail.selectPrompt")
+        static let quickCapturePlaceholder = String(localized: "todos.quickCapture.placeholder")
+        static let captureLandsIn = String(localized: "todos.capture.landsIn")
+        static let captureNoProject = String(localized: "todos.capture.noProject")
+        static let captureAdded = String(localized: "todos.capture.added")
+    }
+
     // MARK: - VibeSpace Creation
 
     enum VibeSpaceCreation {

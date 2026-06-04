@@ -39,6 +39,8 @@ extension Notification.Name {
     static let checkForAppUpdates = Notification.Name("checkForAppUpdates")
     static let openExternalPaths = Notification.Name("openExternalPaths")
     static let toggleVibeCast = Notification.Name("toggleVibeCast")
+    static let toggleTodos = Notification.Name("toggleTodos")
+    static let quickCaptureTodo = Notification.Name("quickCaptureTodo")
     static let addACPTileToBoard = Notification.Name("addACPTileToBoard")
     /// Posted by the title-bar New Terminal popover. Listeners create a
     /// terminal in the supplied directory: a board tile in terminal-board
