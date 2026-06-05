@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <!--
+    F052 Whiteboarding — offline Excalidraw host.
+    Everything loads from the app's custom scheme (served by ExcalidrawSchemeHandler
+    from Resources/ExcalidrawRuntime). The CSP forbids every remote origin, so this
+    page cannot reach the network even if a stray feature tries to. Offline-only.
+
+    CSP notes:
+      - No `script-src 'unsafe-inline'`: all scripts are external (config.js, the
+        vendored UMD bundles, bridge.js).
+      - `script-src 'unsafe-eval'` is required by the Excalidraw runtime bundle.
+      - `style-src 'unsafe-inline'` is required because Excalidraw injects its
+        stylesheet at runtime via a <style> element.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src 'self' app-excalidraw: 'unsafe-eval';
+    style-src 'self' app-excalidraw: 'unsafe-inline';
+    font-src 'self' app-excalidraw:;
+    img-src 'self' app-excalidraw: data: blob:;
+    connect-src 'self' app-excalidraw:;
+    worker-src 'self' app-excalidraw: blob:;
+    child-src blob:;
+    media-src 'self' app-excalidraw: blob: data:;
+  " />
+  <style>
+    html, body, #app { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    #app { position: fixed; inset: 0; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="config.js"></script>
+  <script src="react.production.min.js"></script>
+  <script src="react-dom.production.min.js"></script>
+  <script src="excalidraw.production.min.js"></script>
+  <script src="bridge.js"></script>
+</body>
+</html>

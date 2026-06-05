@@ -70,6 +70,7 @@ struct AppKitTreeView: NSViewRepresentable {
         outline.floatsGroupRows = false
         outline.registerForDraggedTypes([
             VibeSpaceDragPayload.pasteboardType,
+            ShelfItemDrag.pasteboardType,
             .fileURL,
             .string
         ])

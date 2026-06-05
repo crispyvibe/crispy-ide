@@ -24,7 +24,8 @@ enum EditorPluginRegistry {
         PDFPreviewPlugin(),
         OfficePreviewPlugin(),
         GitDiffPreviewPlugin(),
-        NotebookEditorPlugin()
+        NotebookEditorPlugin(),
+        WhiteboardEditorPlugin()
     ]
 
     static func render(
@@ -343,6 +344,27 @@ private struct NotebookEditorPlugin: EditorContentPlugin {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityIdentifier("editor.notebook")
         )
+    }
+}
+
+@MainActor
+private struct WhiteboardEditorPlugin: EditorContentPlugin {
+    let supportedTypes: Set<MarkdownViewModel.DocumentType> = [.whiteboard]
+
+    func makeView(context: EditorPluginContext) -> AnyView {
+        let viewModel = context.viewModel
+        let editor = WhiteboardEditorView(
+            fileURL: viewModel.fileURL,
+            isBufferLoading: viewModel.isBufferLoading,
+            content: Binding(
+                get: { viewModel.displayContent },
+                set: { viewModel.userDidEdit($0) }
+            )
+        )
+        .id("whiteboard-editor-\(viewModel.fileURL?.path ?? "")")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("editor.whiteboard")
+        return AnyView(editor)
     }
 }
 

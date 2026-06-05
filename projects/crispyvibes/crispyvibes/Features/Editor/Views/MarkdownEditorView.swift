@@ -74,6 +74,8 @@ struct MarkdownEditorView: View {
             return "doc.text"
         case .notebook:
             return "book.closed"
+        case .whiteboard:
+            return "pencil.and.scribble"
         case .image:
             return "photo"
         case .pdf:

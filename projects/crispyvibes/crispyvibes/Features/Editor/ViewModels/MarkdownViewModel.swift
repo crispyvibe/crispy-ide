@@ -81,6 +81,10 @@ final class MarkdownViewModel: ObservableObject {
         /// F050: Jupyter notebook (`.ipynb`) — rendered by a dedicated editor
         /// surface backed by a locally-spawned Jupyter server, not the text buffer.
         case notebook
+        /// F052: Excalidraw whiteboard (`.excalidraw`) — a text-backed JSON
+        /// document edited through an offline Excalidraw canvas in a WKWebView.
+        /// The buffer holds the scene JSON, so it autosaves like any text file.
+        case whiteboard
         case image
         case pdf
         case office
@@ -251,6 +255,16 @@ final class MarkdownViewModel: ObservableObject {
         }
         refreshUnsavedChangesFlag()
         objectWillChange.send()
+    }
+
+    /// F052: best-effort synchronous flush of the active dirty buffer to `url`,
+    /// used before a file move so the last buffered edits aren't lost. Local
+    /// files only; remote files autosave through their content provider.
+    func flushUnsavedEdits(forFileURL url: URL) {
+        guard fileContentProvider == nil,
+              fileURL?.standardizedFileURL == url.standardizedFileURL,
+              let buffer = activeBuffer, buffer.isDirty else { return }
+        try? Data(buffer.displayContent.utf8).write(to: url, options: .atomic)
     }
 
     func retargetOpenDocuments(from oldURL: URL, to newURL: URL) {

@@ -1,0 +1,14 @@
+{
+  "name": "crispyvibes-excalidraw-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vendoring workspace for the offline Excalidraw runtime bundled into Resources/ExcalidrawRuntime (F052 Whiteboarding). Pins Excalidraw + React; build.sh copies the prebuilt UMD + assets into the app bundle. Offline-only — no CDN at runtime.",
+  "scripts": {
+    "build": "bash ./build.sh"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "0.17.6",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

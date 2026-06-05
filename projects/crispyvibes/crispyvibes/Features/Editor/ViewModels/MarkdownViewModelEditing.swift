@@ -175,7 +175,7 @@ extension MarkdownViewModel {
     }
 
     func isEditableDocumentType(_ type: DocumentType) -> Bool {
-        type == .markdown || type == .html || type == .python || type == .json || type == .r || type == .plainText
+        type == .markdown || type == .html || type == .python || type == .json || type == .r || type == .plainText || type == .whiteboard
     }
 
     func refreshUnsavedChangesFlag() {

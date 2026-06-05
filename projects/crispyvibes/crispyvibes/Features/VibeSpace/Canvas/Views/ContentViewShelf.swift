@@ -1,5 +1,22 @@
 import AppKit
+import OSLog
 import SwiftUI
+
+/// F052: pasteboard type used when dragging a Shelf item into a project's file
+/// tree to move it there. Distinct from `VibeSpaceDragPayload` so the explorer
+/// can treat a shelf drop as a move-with-retarget instead of a plain copy.
+enum ShelfItemDrag {
+    static let identifier = "com.crispyvibe.app.shelf-item"
+    static let pasteboardType = NSPasteboard.PasteboardType(identifier)
+    /// The path of the item currently being dragged from the Shelf. In-app drags
+    /// carry the type marker on the pasteboard (for drop validation) but the path
+    /// is read from here — reading custom-type data back from a SwiftUI `.onDrag`
+    /// provider in an AppKit drop is unreliable. Main-actor isolated; set at drag
+    /// start and read on drop (both on the main thread). It is overwritten by
+    /// every drag start, so a value left over from a cancelled drag is harmless.
+    @MainActor static var draggingPath: String?
+    static let logger = Logger(subsystem: "com.crispyvibe.app", category: "shelf.drag")
+}
 
 struct ShelfSidebarSectionView: View {
     private struct ShelfEntry: Identifiable, Equatable {
@@ -251,6 +268,20 @@ struct ShelfSidebarSectionView: View {
                 .buttonStyle(.plain)
                 .opacity(entry.exists ? 1 : 0.68)
                 .contextMenu { shelfEntryContextMenu(for: entry, isTopLevel: isTopLevel) }
+                .onDrag {
+                    let provider = NSItemProvider()
+                    let path = entry.path
+                    ShelfItemDrag.draggingPath = path
+                    ShelfItemDrag.logger.info("shelf onDrag begin: \(path, privacy: .public)")
+                    provider.registerDataRepresentation(
+                        forTypeIdentifier: ShelfItemDrag.identifier,
+                        visibility: .ownProcess
+                    ) { completion in
+                        completion(Data(path.utf8), nil)
+                        return nil
+                    }
+                    return provider
+                }
             }
         }
         .help(entry.fileURL.path)

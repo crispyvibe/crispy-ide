@@ -712,6 +712,14 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .quickCaptureTodo)) { _ in
                 isShowingQuickCapture = true
             }
+            .onReceive(NotificationCenter.default.publisher(for: .newWhiteboard)) { _ in
+                createNewWhiteboardInShelf()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .shelfFileMoveToProjectRequested)) { note in
+                guard let path = note.userInfo?["sourcePath"] as? String,
+                      let directory = note.userInfo?["targetDirectory"] as? URL else { return }
+                moveShelfItemToProject(sourcePath: path, targetDirectory: directory)
+            }
             .overlay {
                 if let externalAgentSessionPreview {
                     ExternalAgentSessionPreviewPanel(
