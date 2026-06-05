@@ -352,6 +352,14 @@ extension ContentView {
                     })
                         .help(AppStrings.Todos.title)
                         .accessibilityIdentifier("toolbar.todos")
+
+                    vibespaceToolbarControl(Button {
+                        NotificationCenter.default.post(name: .newWhiteboard, object: nil)
+                    } label: {
+                        HomeToolbarIconLabel(systemName: "pencil.and.scribble")
+                    })
+                        .help(AppStrings.Whiteboard.new)
+                        .accessibilityIdentifier("toolbar.new-whiteboard")
                 }
             }
 

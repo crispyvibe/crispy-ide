@@ -301,7 +301,7 @@ extension MarkdownViewModel {
             observeActiveBuffer(nil)
             workerStatus = .ready
 
-        case .markdown, .plainText, .python, .json, .r, .html, .unsupported:
+        case .markdown, .plainText, .python, .json, .r, .html, .whiteboard, .unsupported:
             workerStatus = .busy("Opening file")
             let buffer = bufferStore.openBuffer(for: resolvedReference)
             observeActiveBuffer(buffer)

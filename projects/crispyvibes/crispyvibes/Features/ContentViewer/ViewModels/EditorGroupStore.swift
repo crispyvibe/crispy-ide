@@ -255,6 +255,11 @@ final class EditorGroupStore: ObservableObject, Identifiable {
         markdownViewModel.retargetOpenDocuments(from: normalizedOld, to: normalizedNew)
     }
 
+    /// F052: flush unsaved edits for `url` to disk via the markdown view model.
+    func flushUnsavedEdits(forFileURL url: URL) {
+        markdownViewModel.flushUnsavedEdits(forFileURL: url)
+    }
+
     func closeFileTabs(at url: URL) {
         let normalizedURL = url.standardizedFileURL
         let matchingTabIDs = tabs.compactMap { tab -> String? in

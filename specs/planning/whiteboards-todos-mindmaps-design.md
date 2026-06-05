@@ -80,7 +80,7 @@ All slot into existing patterns; no parallel infrastructure. Next free prefix: F
 
 1. **F053 Todos** — `VibeSpaceTodoStore` + sticky-note panel + `todo.*` CLI (core CRUD, no reminders). **Shipped (implemented):** dockable surface (VibeCast model) + per-todo rich-text notes & flat threads + instant-capture HUD (⌃⌘T) with project picker & success feedback + palette theming & `crispyvibesUIScale`. Docs: `specs/features/vibespace/todos/`.
 2. **F053 Reminders** — `UserNotifications` + app-lifecycle decision; optional menu-bar capture.
-3. **F052 Whiteboarding** — offline Excalidraw + plugin + Shelf/move-to-project.
+3. **F052 Whiteboarding** — offline Excalidraw + plugin + Shelf/move-to-project. **Shipped (implemented):** offline Excalidraw runtime (custom `app-excalidraw://` scheme) + `.excalidraw` editable DocumentType with autosave + New-Whiteboard-into-Shelf + drag-Shelf-row-into-project move. Docs: `specs/features/editor/whiteboard/`.
 4. **Parked: F054 Mind Maps** — Mind Elixir `.mindmap` editor + `mindmap.*` CLI (deprioritized).
 5. **Optional** — native unified canvas (§F054 future).
 

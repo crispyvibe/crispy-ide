@@ -254,6 +254,18 @@ final class ContentViewerStore: ObservableObject {
         }
     }
 
+    /// F052: synchronously flush any unsaved edits for `url` to disk before a
+    /// move/rename so buffered content isn't lost when the file relocates.
+    func flushUnsavedEdits(forFileURL url: URL) {
+        if let splitStore {
+            for group in splitStore.editorGroups.values {
+                group.flushUnsavedEdits(forFileURL: url)
+            }
+        } else {
+            fallbackGroup.flushUnsavedEdits(forFileURL: url)
+        }
+    }
+
     func closeFileTabs(at url: URL) {
         if let splitStore {
             for group in splitStore.editorGroups.values {

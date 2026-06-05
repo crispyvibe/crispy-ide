@@ -140,6 +140,10 @@ extension AppKitTreeView {
 
         func outlineView(_ outlineView: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
             guard let targetURL = dropTargetURL(for: item) else { return [] }
+            // F052: a shelf item moves into the project (with shelf + tab retarget).
+            if info.draggingPasteboard.availableType(from: [ShelfItemDrag.pasteboardType]) != nil {
+                return .move
+            }
             return ExplorerItemDropPlanner.dragOperation(
                 for: info.draggingPasteboard,
                 targetDirectoryURL: targetURL,
@@ -149,6 +153,27 @@ extension AppKitTreeView {
 
         func outlineView(_ outlineView: NSOutlineView, acceptDrop info: any NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
             guard let targetURL = dropTargetURL(for: item) else { return false }
+            // F052: shelf item → move into the target directory; ContentView does
+            // the moveItem + shelf/tab retarget off this notification. The path
+            // comes from the in-app drag holder (reading custom-type data back
+            // from a SwiftUI provider here is unreliable); the pasteboard type is
+            // only the marker that this is a shelf drag.
+            if info.draggingPasteboard.availableType(from: [ShelfItemDrag.pasteboardType]) != nil {
+                let path = MainActor.assumeIsolated { () -> String? in
+                    let stashed = ShelfItemDrag.draggingPath
+                    ShelfItemDrag.draggingPath = nil
+                    return stashed
+                } ?? info.draggingPasteboard.data(forType: ShelfItemDrag.pasteboardType)
+                    .flatMap { String(data: $0, encoding: .utf8) }
+                ShelfItemDrag.logger.info("shelf acceptDrop: path=\(path ?? "nil", privacy: .public) target=\(targetURL.path, privacy: .public)")
+                guard let path, !path.isEmpty else { return false }
+                NotificationCenter.default.post(
+                    name: .shelfFileMoveToProjectRequested,
+                    object: nil,
+                    userInfo: ["sourcePath": path, "targetDirectory": targetURL]
+                )
+                return true
+            }
             let plans = ExplorerItemDropPlanner.planDrop(
                 from: info.draggingPasteboard,
                 targetDirectoryURL: targetURL,

@@ -271,6 +271,18 @@ enum AppStrings {
         static let createNewFolder = String(localized: "explorer.createNewFolder")
     }
 
+    // MARK: - Whiteboard
+
+    /// F052: Excalidraw whiteboards.
+    enum Whiteboard {
+        static let title = String(localized: "whiteboard.title", defaultValue: "Whiteboard")
+        static let new = String(localized: "whiteboard.new", defaultValue: "New Whiteboard")
+        static let canvasAccessibilityLabel = String(
+            localized: "whiteboard.canvas.accessibilityLabel",
+            defaultValue: "Whiteboard canvas"
+        )
+    }
+
     // MARK: - Source Control
 
     enum SourceControl {

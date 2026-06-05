@@ -10,6 +10,69 @@ extension ContentView {
         }
     }
 
+    /// F052: create an empty `.excalidraw` whiteboard in the app-global shelf
+    /// staging directory, add it to the Shelf, and open it. The user can later
+    /// drag the shelf row into a project to move the file there.
+    func createNewWhiteboardInShelf() {
+        let stagingDirectory = appContainer.appPersistenceStore
+            .appFileURL(relativePath: "Whiteboards", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
+        } catch {
+            ShelfItemDrag.logger.error("whiteboard staging dir create failed: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        guard let url = WhiteboardDocument.createUntitled(in: stagingDirectory) else { return }
+        openFilesInShelf([url])
+    }
+
+    /// F052: move a Shelf item into a project directory (drag Shelf row → file
+    /// tree). Moves the file, then retargets any open editor tab and removes the
+    /// item from the Shelf (it now lives in the project).
+    func moveShelfItemToProject(sourcePath: String, targetDirectory: URL) {
+        let sourceURL = URL(fileURLWithPath: sourcePath).standardizedFileURL
+        let targetDir = targetDirectory.standardizedFileURL
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else { return }
+
+        // M4: only allow dropping into a directory inside an open project.
+        let projectRoots = activeVibeSpaceSession.projects.map { $0.rootURL.standardizedFileURL.path }
+        let targetPath = targetDir.path
+        guard projectRoots.contains(where: { targetPath == $0 || targetPath.hasPrefix($0 + "/") }) else {
+            ShelfItemDrag.logger.error("shelf move rejected: target outside open projects: \(targetPath, privacy: .public)")
+            return
+        }
+
+        var destinationURL = targetDir.appendingPathComponent(sourceURL.lastPathComponent).standardizedFileURL
+        guard destinationURL.path != sourceURL.path else { return }
+
+        // Avoid clobbering an existing file in the target directory.
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            let ext = sourceURL.pathExtension
+            let stem = sourceURL.deletingPathExtension().lastPathComponent
+            var suffix = 2
+            repeat {
+                let name = ext.isEmpty ? "\(stem) \(suffix)" : "\(stem) \(suffix).\(ext)"
+                destinationURL = targetDir.appendingPathComponent(name).standardizedFileURL
+                suffix += 1
+            } while FileManager.default.fileExists(atPath: destinationURL.path)
+        }
+
+        // B1: flush any unsaved buffered edits to the source file first, so the
+        // move carries the latest content instead of a stale autosave snapshot.
+        contentViewerStore.flushUnsavedEdits(forFileURL: sourceURL)
+
+        do {
+            try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+            // The open editor tab follows the file to its new project location...
+            contentViewerStore.retargetFileSystemLocation(from: sourceURL, to: destinationURL)
+            // ...and the item leaves the Shelf — it now lives in the project.
+            shelfStore.removeFile(at: sourceURL.path)
+            ShelfItemDrag.logger.info("shelf move OK: \(sourceURL.path, privacy: .public) -> \(destinationURL.path, privacy: .public)")
+        } catch {
+            ShelfItemDrag.logger.error("shelf move FAILED: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     func openShelfFile(at path: String, makeVisible: Bool = true) {
         let fileURL = URL(fileURLWithPath: path).standardizedFileURL
         _ = shelfStore.selectFile(at: path)

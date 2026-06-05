@@ -41,6 +41,12 @@ extension Notification.Name {
     static let toggleVibeCast = Notification.Name("toggleVibeCast")
     static let toggleTodos = Notification.Name("toggleTodos")
     static let quickCaptureTodo = Notification.Name("quickCaptureTodo")
+    /// F052: posted by the title-bar "New Whiteboard" control. Listeners create
+    /// an empty `.excalidraw` in the focused project and open it.
+    static let newWhiteboard = Notification.Name("newWhiteboard")
+    /// F052: posted when a Shelf item is dropped onto a project's file tree.
+    /// userInfo: `["sourcePath": String, "targetDirectory": URL]`.
+    static let shelfFileMoveToProjectRequested = Notification.Name("shelfFileMoveToProjectRequested")
     static let addACPTileToBoard = Notification.Name("addACPTileToBoard")
     /// Posted by the title-bar New Terminal popover. Listeners create a
     /// terminal in the supplied directory: a board tile in terminal-board
