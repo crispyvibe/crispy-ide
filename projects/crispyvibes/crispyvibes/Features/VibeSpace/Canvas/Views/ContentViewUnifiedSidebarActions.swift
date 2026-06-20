@@ -88,9 +88,6 @@ extension ContentView {
                 externalAgentSessionPreview = transcript
             },
             isUnified: appShellStore.vibespaceSidebarUnified,
-            onToggleUnified: {
-                appShellStore.setVibeSpaceSidebarUnified(!appShellStore.vibespaceSidebarUnified)
-            },
             onOpenWorktree: { path in
                 _ = vibespaceCanvasActionsCoordinator.addProjectsViaCLI(urls: [URL(fileURLWithPath: path)])
             },

@@ -54,8 +54,6 @@ struct VibeSpaceSidebarPanelView: View {
     /// F056: when true, render the stacked collapsible unified layout instead
     /// of the classic tab-swapped content. Default false (classic).
     var isUnified: Bool = false
-    /// F056: flips between classic and unified layouts (header toggle button).
-    let onToggleUnified: () -> Void
     /// F055: open a not-added git worktree as a project (by absolute path).
     let onOpenWorktree: (String) -> Void
     /// F055: delete a git worktree from disk (by absolute path), confirmed.
@@ -179,8 +177,6 @@ struct VibeSpaceSidebarPanelView: View {
             } else if vibespaceShell.sidebarTab == .git {
                 vibespaceSidebarGitActions
             }
-
-            unifiedModeToggleButton
         }
     }
 
@@ -196,18 +192,6 @@ struct VibeSpaceSidebarPanelView: View {
                 .lineLimit(1)
 
             Spacer(minLength: 8)
-
-            unifiedModeToggleButton
-        }
-    }
-
-    private var unifiedModeToggleButton: some View {
-        vibespaceSidebarIconButton(
-            symbolName: isUnified ? "sidebar.left" : "rectangle.3.group",
-            helpText: isUnified ? "Classic Sidebar" : "Unified Sidebar",
-            accessibilityIdentifier: "vibespace.sidebar.unified-toggle"
-        ) {
-            onToggleUnified()
         }
     }
 

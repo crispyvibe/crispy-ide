@@ -18,9 +18,9 @@ final class AppShellStore: ObservableObject {
     @Published var activeSurface: ActiveSurface?
     @Published var activeModalSheet: ActiveModalSheet?
     @Published var vibespaceSidebarTab: FolderExplorerViewModel.SidebarTab = .files
-    /// F056: opt-in unified sidebar layout (stacked collapsible sections).
-    /// Default false keeps the classic tab-swapped panel untouched.
-    @Published private(set) var vibespaceSidebarUnified = false
+    /// F056: the unified Workspace panel is the default side-panel layout;
+    /// selecting a classic rail tab (Files/Git/…) switches to the classic panel.
+    @Published private(set) var vibespaceSidebarUnified = true
     @Published var isVibeSpaceSidebarVisible = true
 
     var operationMetricsStore: OperationMetricsStore?
@@ -120,7 +120,7 @@ final class AppShellStore: ObservableObject {
         activeModalSheet = nil
         vibespaceSidebarTab = .files
         isVibeSpaceSidebarVisible = true
-        vibespaceSidebarUnified = false
+        vibespaceSidebarUnified = true
     }
 
     func showVibeSpaceSidebar(_ tab: FolderExplorerViewModel.SidebarTab) {

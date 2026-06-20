@@ -16,8 +16,12 @@ The Unified Project Side Panel is an opt-in sidebar layout that replaces the cla
 
 ## Requirements
 
-### F056-R01: Opt-in Coexistence
-The unified layout MUST be opt-in (`AppShellStore.vibespaceSidebarUnified`, default off) and coexist with the classic tab-swapped panel; selecting a classic rail tab exits unified mode.
+### F056-R01: Dedicated Workspace rail destination
+The unified layout MUST be its own side-menu rail destination ("Workspace",
+`AppSideMenuItem.workspace`), a peer of Files / Git / Sessions / Conversations —
+not a mode squeezed into the Files explorer. The Workspace panel is the default
+side-panel layout (`AppShellStore.vibespaceSidebarUnified` default on); selecting
+any classic rail tab exits it, and selecting Workspace re-enters it.
 
 ### F056-R02: Per-project Nodes
 Each project MUST render as a collapsible node showing Files / Changes / Chats for that project, not as global cross-project sections.
@@ -54,10 +58,11 @@ Only the active view's body builds; collapsed nodes don't load file trees or fet
 **When** the user uses the node's + → New File
 **Then** a new file is created in that worktree's tree.
 
-### Scenario F056-S04: Toggle back to classic
-**Given** unified mode
-**When** the user clicks a classic rail tab (Files/Git/…)
-**Then** the panel returns to the classic tab-swapped layout.
+### Scenario F056-S04: Workspace is a separate rail destination
+**Given** the classic Files explorer is showing
+**When** the user selects the Workspace rail item
+**Then** the panel shows the unified per-project layout; selecting Files (or any
+classic tab) returns to the classic layout. The two never share one panel.
 
 ## Acceptance Criteria
 - Unified is opt-in; classic untouched when off

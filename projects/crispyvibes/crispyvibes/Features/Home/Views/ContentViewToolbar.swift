@@ -3,6 +3,7 @@ import SwiftUI
 
 enum AppSideMenuItem: String, Identifiable {
     case home
+    case workspace
     case files
     case git
     case sessions
@@ -18,6 +19,8 @@ enum AppSideMenuItem: String, Identifiable {
         switch self {
         case .home:
             return "Home"
+        case .workspace:
+            return "Workspace"
         case .files:
             return "Files"
         case .git:
@@ -41,6 +44,8 @@ enum AppSideMenuItem: String, Identifiable {
         switch self {
         case .home:
             return "house.fill"
+        case .workspace:
+            return "square.grid.2x2"
         case .files:
             return "folder"
         case .git:
@@ -147,6 +152,7 @@ struct HomeAppSideMenuRailView: View {
     let canOpenProjectFiles: Bool
     let canOpenVibeSpaceSettings: Bool
     let onHome: () -> Void
+    let onWorkspace: () -> Void
     let onFiles: () -> Void
     let onGit: () -> Void
     let onSessions: () -> Void
@@ -163,6 +169,13 @@ struct HomeAppSideMenuRailView: View {
             Spacer(minLength: 18)
 
             VStack(spacing: 10) {
+                menuButton(
+                    item: .workspace,
+                    isActive: activeItem == .workspace,
+                    isDisabled: !canOpenProjectFiles,
+                    action: onWorkspace
+                )
+
                 menuButton(
                     item: .files,
                     isActive: activeItem == .files,
@@ -502,6 +515,7 @@ extension ContentView {
             canOpenProjectFiles: canOpenProjectFilesFromAppMenu,
             canOpenVibeSpaceSettings: canOpenVibeSpaceSettingsFromAppMenu,
             onHome: showHomeCanvas,
+            onWorkspace: showWorkspaceSidebar,
             onFiles: { showProjectSidebar(.files) },
             onGit: { showProjectSidebar(.git) },
             onSessions: { showProjectSidebar(.sessions) },

@@ -56,12 +56,14 @@ extension ContentView {
     func showProjectSidebar(_ tab: FolderExplorerViewModel.SidebarTab) {
         guard homeShell.hasActiveVibeSpace else { return }
 
-        if showsVibeSpaceSidebar && homeShell.vibespaceSidebarTab == tab {
+        if showsVibeSpaceSidebar && !appShellStore.vibespaceSidebarUnified && homeShell.vibespaceSidebarTab == tab {
             homeShell.hideVibeSpaceSidebar()
             return
         }
 
         homeShell.showVibeSpaceSidebar(tab)
+        // Classic tab selection exits the unified Workspace panel.
+        appShellStore.setVibeSpaceSidebarUnified(false)
 
         let targetProject = activeVibeSpaceSession.focusedProject ?? activeVibeSpaceSession.projects.first
         guard let targetProject else { return }
@@ -75,6 +77,26 @@ extension ContentView {
         }
         if tab == .git {
             targetProject.folderExplorer.refreshGitStatus()
+        }
+        synchronizeVibeSpaceSidebarExpansion()
+    }
+
+    /// Shows the unified Workspace side panel (per-project/worktree overview),
+    /// as its own rail destination rather than a mode squeezed into Files.
+    func showWorkspaceSidebar() {
+        guard homeShell.hasActiveVibeSpace else { return }
+
+        if showsVibeSpaceSidebar && appShellStore.vibespaceSidebarUnified {
+            homeShell.hideVibeSpaceSidebar()
+            return
+        }
+
+        homeShell.showVibeSpaceSidebar(homeShell.vibespaceSidebarTab)
+        appShellStore.setVibeSpaceSidebarUnified(true)
+
+        let targetProject = activeVibeSpaceSession.focusedProject ?? activeVibeSpaceSession.projects.first
+        if let targetProject, activeVibeSpaceSession.focusedProject?.id != targetProject.id {
+            vibespaceCanvasActionsCoordinator.focusProject(targetProject)
         }
         synchronizeVibeSpaceSidebarExpansion()
     }
