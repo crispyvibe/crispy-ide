@@ -68,7 +68,7 @@ final class EditorHTMLSecurityTests: XCTestCase {
 
     func testCSPScriptSrcDisallowsFileScheme() throws {
         let html = try editorHTMLContents()
-        // F055: KaTeX scripts are co-located in MarkdownRuntime and load under
+        // F057: KaTeX scripts are co-located in MarkdownRuntime and load under
         // 'self'. script-src must NOT allow file:, which would let injected
         // markdown reference arbitrary local scripts (root read-access).
         guard let range = html.range(of: "script-src[^;]+", options: .regularExpression) else {

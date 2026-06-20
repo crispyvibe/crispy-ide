@@ -26,7 +26,7 @@ Users MUST be able to select a target terminal from a popover grouped by project
 
 ### F028-R03: Toggle and Toolbar
 
-VibeCast MUST toggle via Cmd+Shift+V and toolbar button, opening or focusing in the content viewer.
+VibeCast MUST toggle via Cmd+Shift+V and toolbar button. The surface is chosen by `ContentSurfacePolicy` (see ADR-003): in Detailed view it opens or focuses a content-viewer tab; in Terminal Board view it floats as a spotlight over the board (`presentVibeCastSpotlight()`) rather than forcing a layout switch.
 
 ### F028-R04: Singleton Tab
 
@@ -112,14 +112,14 @@ VibeCast compose inputs MUST support the inline insert trigger behavior defined 
 **Given** a vibespace is active
 **When** the user presses Cmd+Shift+V
 **Then** a `toggleVibeCast` notification is posted
-**And** the vibespace canvas coordinator activates an existing VibeCast tab or opens a new one in the content viewer
+**And** the handler consults `ContentSurfacePolicy` (ADR-003): in Detailed view the canvas coordinator activates an existing VibeCast tab or opens a new one in the content viewer; in Terminal Board view it floats VibeCast as a spotlight over the board
 
 ### Scenario F028-S10: VibeCast toggles via toolbar button
 
 **Given** a vibespace is active and the toolbar is visible
 **When** the user clicks the VibeCast toolbar button (antenna icon)
 **Then** the same `toggleVibeCast` notification is posted
-**And** VibeCast opens or focuses in the content viewer
+**And** VibeCast opens or focuses in the content viewer (Detailed view) or floats as a spotlight over the board (Terminal Board view), per `ContentSurfacePolicy`
 
 ### Scenario F028-S11: Only one VibeCast tab exists per editor group
 
@@ -204,3 +204,4 @@ VibeCast compose inputs MUST support the inline insert trigger behavior defined 
 | 2026-04-15 | Migrated from docs/features/vibecast/feature.md (VBC-001 through VBC-018) | — |
 | 2026-04-19 | Added VibeCast inline trigger behavior for content-viewer and spotlight compose inputs | Codex |
 | 2026-04-20 | Added board-tile shared popup behavior for VibeCast inline triggers | Codex |
+| 2026-06-19 | Toggle surface now chosen by `ContentSurfacePolicy` (ADR-003): Terminal Board view floats VibeCast as a spotlight instead of a content-viewer tab the board hides (R03, S09/S10) | — |

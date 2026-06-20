@@ -113,7 +113,7 @@ final class MarkdownViewModelTests: XCTestCase {
         XCTAssertEqual(saved, "# Updated\n")
     }
 
-    // MARK: - F055 LaTeX editor
+    // MARK: - F057 LaTeX editor
 
     func testDetectDocumentTypeRoutesLatexExtensions() {
         for ext in ["tex", "latex", "ltx", "TEX", "Latex", "LTX"] {

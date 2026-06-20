@@ -38,7 +38,10 @@ struct VibeSpaceSidebarPanelView: View {
     let onPreviewTmuxSession: (VibeSpaceSidebarTmuxSession) -> Void
     let onSendTmuxSessionToProject: (VibeSpaceSidebarTmuxSession, UUID) -> Void
     let onTerminateTmuxSession: (VibeSpaceSidebarTmuxSession) async -> Void
-    let agentConversationStore: AgentConversationStore
+    /// Observed so `threadChangeCounter` bumps re-evaluate `body`, letting the
+    /// `.onChange` reload newly created ACP threads immediately (mirrors the
+    /// pattern in `VibeSpaceSidebarConversationsPane`).
+    @ObservedObject var agentConversationStore: AgentConversationStore
     let externalAgentSessionService: ExternalAgentSessionService
     let dockedAgentPreviewCoordinator: DockedAgentPreviewCoordinator
     let onProjectExpansionToggled: (AnyProjectSession) -> Void
@@ -48,15 +51,77 @@ struct VibeSpaceSidebarPanelView: View {
     let onOpenConversationThread: (ConversationThreadSummary) -> Void
     let onDeleteConversationThread: (String) async -> Void
     let onPreviewExternalSession: (ExternalAgentTranscript) -> Void
+    /// F056: when true, render the stacked collapsible unified layout instead
+    /// of the classic tab-swapped content. Default false (classic).
+    var isUnified: Bool = false
+    /// F055: open a not-added git worktree as a project (by absolute path).
+    let onOpenWorktree: (String) -> Void
+    /// F055: delete a git worktree from disk (by absolute path), confirmed.
+    let onDeleteWorktree: (String) -> Void
+    /// Start a new agent chat for a specific worktree/project.
+    let onNewChat: (AnyProjectSession) -> Void
+    /// F055: create a new worktree for the repo whose main root is passed.
+    let onNewWorktree: (String) -> Void
+    /// F055: git worktree discovery/mutations (injected, not called as a free function).
+    let worktreeService: any WorktreeServicing
+
+    @ObservedObject var viewModel: UnifiedSidebarViewModel
+
+    // Forwarders so the panel body reads VM-owned state without the View
+    // touching services directly (layering: ViewModels mediate state/logic).
+    private var unifiedThreadsByProject: [String: [ConversationThreadSummary]] { viewModel.threadsByProject }
+    private var placementByProject: [String: ProjectGitPlacement] { viewModel.placementByProject }
+    private var worktreesByCommonDir: [String: [WorktreeEntry]] { viewModel.worktreesByCommonDir }
+
+    /// Branch per opened project, read from the authoritative porcelain
+    /// worktree list for the project's worktree root — one source of truth, so
+    /// a subdirectory project and its worktree can never disagree. Indexed once
+    /// (by common dir + case-insensitive canonical root) to avoid an
+    /// O(projects × worktrees) scan on every render.
+    private var branchByProject: [String: String?] {
+        var branchByRoot: [String: [String: String?]] = [:]
+        for (commonDir, entries) in worktreesByCommonDir {
+            branchByRoot[commonDir] = Dictionary(
+                entries.map { ($0.canonicalPath.lowercased(), $0.branch) },
+                uniquingKeysWith: { first, _ in first }
+            )
+        }
+        var result: [String: String?] = [:]
+        for (project, placement) in placementByProject {
+            result[project] = branchByRoot[placement.commonDir]?[placement.worktreeRoot.lowercased()] ?? nil
+        }
+        return result
+    }
+
+    /// A project anchored at a git worktree root (vs a subdirectory opened as
+    /// its own project, or a non-git folder).
+    private func nodeIsWorktreeRoot(_ project: AnyProjectSession) -> Bool {
+        placementByProject[project.projectIdentifier]?.isWorktreeRoot ?? false
+    }
+
+    /// Node-type glyph: repository box for a worktree root, plain folder for a
+    /// standalone subdirectory/non-git project, so the two never look alike.
+    private func nodeTypeIcon(for project: AnyProjectSession) -> String {
+        nodeIsWorktreeRoot(project) ? "shippingbox.fill" : "folder.fill"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            vibespaceSidebarHeader
+            if isUnified {
+                unifiedSidebarHeader
 
-            Divider()
+                Divider()
 
-            vibespaceSidebarContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                unifiedContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                vibespaceSidebarHeader
+
+                Divider()
+
+                vibespaceSidebarContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(activeThemePalette.canvasBackgroundColor)
@@ -112,6 +177,191 @@ struct VibeSpaceSidebarPanelView: View {
             } else if vibespaceShell.sidebarTab == .git {
                 vibespaceSidebarGitActions
             }
+        }
+    }
+
+    private var unifiedSidebarHeader: some View {
+        CrispyVibesHeaderChrome(
+            style: .panel,
+            background: activeThemePalette.canvasSecondaryBackgroundColor.opacity(0.94),
+            cornerRadii: shellHeaderCornerRadii
+        ) {
+            Text(vibespaceView.activeVibeSpace?.name ?? AppStrings.Sidebar.filesTab)
+                .font(CrispyVibesHeaderStyle.panel.titleFont(scale: chromeScale))
+                .foregroundStyle(activeThemePalette.primaryTextColor)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+        }
+    }
+
+    /// F056 (increment 1): per-project unified layout. Each project is a node
+    /// that expands to its own Files / Source Control / Conversations
+    /// sub-sections, consolidating what the classic view splits across tabs.
+    /// Per-worktree grouping (Repository tier) is the next increment.
+    @ViewBuilder
+    private var unifiedContent: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 6) {
+                // Shelf sits above the projects, same as the classic Files pane.
+                // Drag-in support is unchanged: external file drops are handled
+                // globally at ContentView, and the section reuses the same
+                // shelf callbacks the classic pane uses.
+                if !shelfStore.filePaths.isEmpty {
+                    ShelfSidebarSectionView(
+                        shelfStore: shelfStore,
+                        onOpenFile: onOpenShelfFile,
+                        onRevealInFinder: onRevealShelfFileInFinder,
+                        onOpenDirectoryInTerminal: onOpenShelfDirectoryInTerminal,
+                        onRenameFile: onRenameShelfFile,
+                        onDeleteFile: onDeleteShelfFile,
+                        onRemoveFile: onRemoveShelfFile,
+                        onClear: onClearShelf
+                    )
+                }
+
+                if vibespaceView.activeVibeSpaceProjects.isEmpty {
+                    ContentUnavailableView(
+                        AppStrings.VibeSpace.noProjects,
+                        systemImage: "folder",
+                        description: Text(AppStrings.Explorer.openVibeSpaceToBrowse)
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 220)
+                } else {
+                    ForEach(unifiedProjectGroups) { group in
+                        if group.addedProjects.count == 1 && group.otherWorktrees.isEmpty {
+                            VibeSpaceWorktreeNodeView(
+                                project: group.addedProjects[0],
+                                branch: branchByProject[group.addedProjects[0].projectIdentifier] ?? nil,
+                                typeIcon: nodeTypeIcon(for: group.addedProjects[0]),
+                                showsBranch: nodeIsWorktreeRoot(group.addedProjects[0]),
+                                isFocused: vibespaceView.focusedProject?.id == group.addedProjects[0].id,
+                                accentColor: projectColorTagsByPath[group.addedProjects[0].rootURL.standardizedFileURL.path]?.color
+                                    ?? activeThemePalette.accentColor,
+                                projectRootURLs: vibespaceView.activeVibeSpaceProjects.map(\.rootURL),
+                                sourceControl: vibespaceSourceControlViewModel,
+                                threads: unifiedThreadsByProject[group.addedProjects[0].projectIdentifier] ?? [],
+                                onProjectAction: { onProjectAction(group.addedProjects[0], $0) },
+                                onProjectTransferDrop: { onProjectTransferDrop(group.addedProjects[0], $0) },
+                                onOpenDiff: onOpenSourceControlDiff,
+                                onOpenThread: onOpenConversationThread,
+                                onNewChat: { onNewChat(group.addedProjects[0]) }
+                            )
+                        } else {
+                            VibeSpaceRepositoryNodeView(
+                                title: group.title,
+                                worktrees: group.addedProjects,
+                                otherWorktrees: group.otherWorktrees,
+                                branchByPath: branchByProject,
+                                primaryPath: group.primaryPath,
+                                focusedProjectID: vibespaceView.focusedProject?.id,
+                                accentColor: projectColorTagsByPath[group.addedProjects[0].rootURL.standardizedFileURL.path]?.color
+                                    ?? activeThemePalette.accentColor,
+                                projectRootURLs: vibespaceView.activeVibeSpaceProjects.map(\.rootURL),
+                                sourceControl: vibespaceSourceControlViewModel,
+                                threadsByProject: unifiedThreadsByProject,
+                                onProjectAction: { onProjectAction($0, $1) },
+                                onProjectTransferDrop: { onProjectTransferDrop($0, $1) },
+                                onOpenDiff: onOpenSourceControlDiff,
+                                onOpenThread: onOpenConversationThread,
+                                onOpenWorktree: onOpenWorktree,
+                                onDeleteWorktree: onDeleteWorktree,
+                                onNewChat: onNewChat,
+                                onNewWorktree: {
+                                    onNewWorktree(group.primaryPath ?? group.addedProjects[0].projectIdentifier)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 10)
+        }
+        .background(activeThemePalette.canvasBackgroundColor)
+        .task(id: unifiedReloadKey) {
+            await reloadUnified()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .vibespaceWorktreesDidChange)) { _ in
+            Task { await reloadUnified() }
+        }
+        .onChange(of: agentConversationStore.threadChangeCounter) { _, _ in
+            Task { await viewModel.reloadThreads(vibespaceID: vibespaceShell.activeVibeSpaceID) }
+        }
+        .accessibilityIdentifier("vibespace.sidebar.unified")
+    }
+
+    /// Triggers the view model's reload (conversation threads + git worktree
+    /// discovery) and syncs the source-control context. Re-run on
+    /// vibespace/project-set change and after worktree mutations.
+    private func reloadUnified() async {
+        viewModel.configure(worktreeService: worktreeService, conversationStore: agentConversationStore)
+        onSyncSourceControlContext()
+        await viewModel.reload(
+            projectPaths: vibespaceView.activeVibeSpaceProjects.map(\.projectIdentifier),
+            vibespaceID: vibespaceShell.activeVibeSpaceID
+        )
+    }
+
+    /// Re-runs thread/worktree discovery when the vibespace OR its project set
+    /// changes (e.g. after "Open as Project" adds a worktree, so it re-clubs
+    /// into its repository instead of appearing as a standalone node).
+    private var unifiedReloadKey: String {
+        let vibespace = vibespaceShell.activeVibeSpaceID?.uuidString ?? ""
+        let paths = vibespaceView.activeVibeSpaceProjects.map(\.projectIdentifier).joined(separator: "|")
+        return "\(vibespace)#\(paths)"
+    }
+
+    /// F055/F056: groups vibespace projects by shared git repository and
+    /// attaches the repo's not-added worktrees. Only true worktree *roots* club
+    /// together — a subdirectory opened as its own project (or a non-git folder)
+    /// stands alone, so it is never mislabeled as, or counted among, the repo's
+    /// worktrees. Order follows the project list.
+    private var unifiedProjectGroups: [UnifiedProjectGroup] {
+        var members: [[AnyProjectSession]] = []
+        var indexByCommonDir: [String: Int] = [:]
+        for project in vibespaceView.activeVibeSpaceProjects {
+            let placement = placementByProject[project.projectIdentifier]
+            if let placement, placement.isWorktreeRoot {
+                if let groupIndex = indexByCommonDir[placement.commonDir] {
+                    members[groupIndex].append(project)
+                } else {
+                    indexByCommonDir[placement.commonDir] = members.count
+                    members.append([project])
+                }
+            } else {
+                // Subdirectory project or non-git folder: always standalone.
+                members.append([project])
+            }
+        }
+        return members.map { group in
+            // A repo group's anchor is a worktree root; standalone groups have none.
+            let commonDir = placementByProject[group[0].projectIdentifier]
+                .flatMap { $0.isWorktreeRoot ? $0.commonDir : nil }
+            // Exclude the worktree roots already opened (by canonical root path)
+            // from the repo's "Other worktrees".
+            let openedRoots = Set(group.compactMap { placementByProject[$0.projectIdentifier]?.worktreeRoot })
+            let other = WorktreeEntry.notOpened(
+                commonDir.flatMap { worktreesByCommonDir[$0] } ?? [],
+                openedCanonicalPaths: openedRoots
+            )
+            let isRepoGroup = group.count > 1 || !other.isEmpty
+            let primaryPath = commonDir.map {
+                URL(fileURLWithPath: $0).standardizedFileURL.deletingLastPathComponent().path
+            }
+            let title: String
+            if isRepoGroup, let commonDir {
+                let name = URL(fileURLWithPath: commonDir).deletingLastPathComponent().lastPathComponent
+                title = name.isEmpty ? group[0].title : name
+            } else {
+                title = group[0].title
+            }
+            return UnifiedProjectGroup(
+                id: group[0].id,
+                addedProjects: group,
+                title: title,
+                otherWorktrees: other,
+                primaryPath: primaryPath
+            )
         }
     }
 
@@ -190,331 +440,89 @@ struct VibeSpaceSidebarPanelView: View {
     private var vibespaceSidebarContent: some View {
         switch vibespaceShell.sidebarTab {
         case .files:
-            VibeSpaceSidebarFilesPane(
-                shelfStore: shelfStore,
-                projects: vibespaceView.activeVibeSpaceProjects,
-                focusedProject: vibespaceView.focusedProject,
-                expandedProjectPaths: expandedProjectPaths,
-                selectedCanvasMode: vibespaceView.selectedCanvasMode,
-                projectColorTagsByPath: projectColorTagsByPath,
-                parkedProjectPaths: vibespaceView.activeVibeSpace?.parkedProjectPaths ?? [],
-                onOpenShelfFile: onOpenShelfFile,
-                onRevealShelfFileInFinder: onRevealShelfFileInFinder,
-                onOpenShelfDirectoryInTerminal: onOpenShelfDirectoryInTerminal,
-                onRenameShelfFile: onRenameShelfFile,
-                onDeleteShelfFile: onDeleteShelfFile,
-                onRemoveShelfFile: onRemoveShelfFile,
-                onClearShelf: onClearShelf,
-                onProjectExpansionToggled: onProjectExpansionToggled,
-                onFocusedProjectAppeared: onFocusedProjectAppeared,
-                onProjectAction: onProjectAction,
-                onProjectTransferDrop: onProjectTransferDrop
-            )
+            filesPane
         case .git:
-            VibeSpaceSidebarGitPane(
-                projects: vibespaceView.activeVibeSpaceProjects,
-                focusedProjectID: vibespaceView.focusedProject?.id,
-                activeVibeSpaceID: vibespaceShell.activeVibeSpaceID,
-                sourceControlSelectedFileURL: vibespaceView.sourceControlSelectedFileURL,
-                sourceControlSettings: vibespaceView.activeVibeSpace?.sourceControlSettings ?? .default,
-                viewModel: vibespaceSourceControlViewModel,
-                onCloneRequested: onPresentCloneRepositorySheet,
-                onOpenDiff: onOpenSourceControlDiff,
-                onSyncSourceControlContext: onSyncSourceControlContext
-            )
+            gitPane
         case .sessions:
-            VibeSpaceSidebarSessionsPane(
-                activeVibeSpaceID: vibespaceShell.activeVibeSpaceID,
-                vibespaces: vibespaces,
-                onPreviewSession: onPreviewTmuxSession,
-                onSendSessionToProject: onSendTmuxSessionToProject,
-                onTerminateSession: onTerminateTmuxSession
-            )
+            sessionsPane
         case .conversations:
-            VibeSpaceSidebarConversationsPane(
-                store: agentConversationStore,
-                externalSessionService: externalAgentSessionService,
-                vibespaceID: vibespaceShell.activeVibeSpaceID,
-                vibespaceName: vibespaceView.activeVibeSpace?.name,
-                projectColorTagsByPath: projectColorTagsByPath,
-                onOpenThread: { thread in
-                    onOpenConversationThread(thread)
-                },
-                onDeleteThread: { threadId in
-                    await onDeleteConversationThread(threadId)
-                },
-                onExportMarkdown: { threadId in
-                    guard let markdown = await agentConversationStore.exportMarkdown(threadId: threadId) else { return }
-                    await MainActor.run { Self.saveFileDialog(content: markdown, defaultName: "conversation.md") }
-                },
-                onExportJSON: { threadId in
-                    guard let json = await agentConversationStore.exportJSON(threadId: threadId) else { return }
-                    await MainActor.run { Self.saveFileDialog(content: json, defaultName: "conversation.json") }
-                },
-                onPreviewExternalSession: onPreviewExternalSession
-            )
+            conversationsPane
         }
     }
-}
 
-extension ContentView {
-    var vibespaceSidebarPanel: some View {
-        VibeSpaceSidebarPanelView(
+    @ViewBuilder
+    var filesPane: some View {
+        VibeSpaceSidebarFilesPane(
             shelfStore: shelfStore,
-            vibespaceCloneRepositoryCoordinator: vibespaceCloneRepositoryCoordinator,
-            vibespaceShell: vibespaceShell,
-            vibespaceView: vibespaceView,
-            vibespaces: vibespaceCatalogStore.vibespaces,
-            vibespaceSourceControlViewModel: vibespaceSourceControlViewModel,
-            expandedProjectPaths: expandedVibeSpaceSidebarProjectPaths,
-            shellHeaderCornerRadii: shellHeaderCornerRadii,
-            projectColorTagsByPath: projectColorTagsByPath,
-            onChooseCloneDestination: chooseCloneRepositoryDestinationDirectory,
-            onShowGitHubPicker: showCloneRepositoryGitHubMode,
-            onShowManualCloneURL: showCloneRepositoryURLMode,
-            onRetryProviderCheck: refreshCloneRepositoryProviderOptions,
-            onCancelCloneSheet: dismissCloneRepositorySheet,
-            onSubmitCloneSheet: cloneRepositoryIntoActiveVibeSpace,
-            onPresentCloneRepositorySheet: presentCloneRepositorySheet,
-            onRefreshFocusedProjectFiles: refreshFocusedProjectFiles,
-            onCreateFileInFocusedProject: createFileInFocusedProject,
-            onCreateFolderInFocusedProject: createFolderInFocusedProject,
-            onOpenAgentConversation: openACPConversationFromVibeSpace,
-            onRefreshSourceControl: { vibespaceSourceControlViewModel.refresh() },
-            onOpenSourceControlDiff: { repository, item in
-                vibespaceCanvasActionsCoordinator.openSourceControlDiff(
-                    repositoryRootURL: repository.repositoryRootURL,
-                    item: item
-                )
-            },
-            onSyncSourceControlContext: syncVibeSpaceSourceControlContext,
-            onOpenShelfFile: { path in
-                openShelfFile(at: path, makeVisible: false)
-            },
-            onRevealShelfFileInFinder: { path in
-                openShelfFileInFinder(at: path)
-            },
-            onOpenShelfDirectoryInTerminal: { path in
-                openShelfDirectoryInTerminal(at: path)
-            },
-            onRenameShelfFile: { path, newName in
-                try renameShelfFile(at: path, to: newName)
-            },
-            onDeleteShelfFile: { path in
-                try deleteShelfFile(at: path)
-            },
-            onRemoveShelfFile: { path in
-                removeShelfFile(at: path)
-            },
-            onClearShelf: clearShelf,
-            onPreviewTmuxSession: previewTmuxSession,
-            onSendTmuxSessionToProject: sendTmuxSessionToProject,
-            onTerminateTmuxSession: terminateTmuxSession,
-            agentConversationStore: appContainer.agentConversationStore,
-            externalAgentSessionService: appContainer.externalAgentSessionService,
-            dockedAgentPreviewCoordinator: appContainer.dockedAgentPreviewCoordinator,
-            onProjectExpansionToggled: toggleVibeSpaceSidebarProjectExpansion,
-            onFocusedProjectAppeared: revealFocusedVibeSpaceSidebarProject,
-            onProjectAction: handleVibeSpaceSidebarAction,
-            onProjectTransferDrop: { project, plans in
-                handleVibeSpaceSidebarTransferDrop(plans, for: project)
-            },
-            onOpenConversationThread: { thread in
-                if vibespaceView.selectedCanvasMode == .terminalOnly {
-                    // Board mode: show floating preview
-                    let project = vibespaceView.focusedProject ?? vibespaceView.activeVibeSpaceProjects.first
-                    dockedAgentPreviewCoordinator.showPreview(
-                        threadId: thread.id,
-                        title: thread.title,
-                        agentId: thread.agentId,
-                        projectIdentifier: project?.projectIdentifier,
-                        vibespaceID: vibespaceShell.activeVibeSpaceID
-                    )
-                } else {
-                    // Detailed mode: open as tab
-                    _ = contentViewerStore.openACPPaneForThread(
-                        agentId: thread.agentId,
-                        projectPath: thread.projectPath,
-                        threadId: thread.id,
-                        projects: vibespaceView.activeVibeSpaceProjects,
-                        vibespaceID: vibespaceShell.activeVibeSpaceID
-                    )
-                }
-            },
-            onDeleteConversationThread: { threadId in
-                // Close tabs and tear down store
-                if let store = contentViewerStore.sessionRegistry.store(forThread: threadId) {
-                    contentViewerStore.removeACPStore(id: store.id)
-                    NotificationCenter.default.post(
-                        name: .acpStoreRemoved, object: nil,
-                        userInfo: ["storeID": store.id]
-                    )
-                }
-                // Dismiss dock preview if showing this thread
-                if dockedAgentPreviewCoordinator.previewThreadId == threadId {
-                    dockedAgentPreviewCoordinator.dismissPreview()
-                }
-                // Delete from DB
-                await appContainer.agentConversationStore.deleteThread(id: threadId)
-            },
-            onPreviewExternalSession: { transcript in
-                externalAgentSessionPreview = transcript
-            }
-        )
-    }
-
-    private func refreshFocusedProjectFiles() {
-        withPrimarySidebarProject { project in
-            project.folderExplorer.refreshTree(trigger: .manual)
-        }
-    }
-
-    private func createFileInFocusedProject() {
-        withPrimarySidebarProject { project in
-            project.folderExplorer.createNewFileAtSelection()
-        }
-    }
-
-    private func createFolderInFocusedProject() {
-        withPrimarySidebarProject { project in
-            project.folderExplorer.createNewFolderAtSelection()
-        }
-    }
-
-    private func openACPConversationFromVibeSpace() {
-        if let activeVibeSpaceID = vibespaceShell.activeVibeSpaceID {
-            layoutPersistence.setCanvasMode(.detailed, for: activeVibeSpaceID)
-        }
-        _ = contentViewerStore.openACPPane(
-            focusedProject: appContainer.acpVibeSpaceSessionService.focusedProject,
-            preferredAgentID: appContainer.acpVibeSpaceSessionService.preferredAgentID,
-            vibespaceID: vibespaceShell.activeVibeSpaceID
-        )
-    }
-
-    func synchronizeVibeSpaceSidebarExpansion() {
-        let projectPaths = Set(vibespaceView.activeVibeSpaceProjects.map { $0.rootURL.standardizedFileURL.path })
-        setExpandedVibeSpaceSidebarProjectPaths(
-            expandedVibeSpaceSidebarProjectPaths.intersection(projectPaths)
-        )
-
-        guard !projectPaths.isEmpty else {
-            setExpandedVibeSpaceSidebarProjectPaths([])
-            return
-        }
-
-        guard vibespaceView.selectedCanvasMode != .terminalOnly else { return }
-
-        guard let focusedPath = vibespaceView.focusedProject?.rootURL.standardizedFileURL.path else { return }
-        if !expandedVibeSpaceSidebarProjectPaths.contains(focusedPath) {
-            var nextExpandedPaths = expandedVibeSpaceSidebarProjectPaths
-            nextExpandedPaths.insert(focusedPath)
-            setExpandedVibeSpaceSidebarProjectPaths(nextExpandedPaths)
-        }
-    }
-
-    private func toggleVibeSpaceSidebarProjectExpansion(_ project: AnyProjectSession) {
-        let path = project.rootURL.standardizedFileURL.path
-        var nextExpandedPaths = expandedVibeSpaceSidebarProjectPaths
-        if nextExpandedPaths.contains(path) {
-            nextExpandedPaths.remove(path)
-        } else {
-            project.activate()
-            project.ensureExplorerLoaded()
-            project.folderExplorer.activeSidebarTab = vibespaceShell.sidebarTab
-            nextExpandedPaths.insert(path)
-        }
-        setExpandedVibeSpaceSidebarProjectPaths(nextExpandedPaths)
-    }
-
-    private func revealFocusedVibeSpaceSidebarProject(_ project: AnyProjectSession) {
-        let projectPath = project.rootURL.standardizedFileURL.path
-        DispatchQueue.main.async {
-            var nextExpandedPaths = expandedVibeSpaceSidebarProjectPaths
-            nextExpandedPaths.insert(projectPath)
-            setExpandedVibeSpaceSidebarProjectPaths(nextExpandedPaths)
-        }
-    }
-
-    func syncVibeSpaceSourceControlContext() {
-        vibespaceSourceControlViewModel.updateVibeSpace(
             projects: vibespaceView.activeVibeSpaceProjects,
             focusedProject: vibespaceView.focusedProject,
-            selectedFileURL: vibespaceView.sourceControlSelectedFileURL,
-            sourceControlSettings: vibespaceView.activeVibeSpace?.sourceControlSettings ?? .default
+            expandedProjectPaths: expandedProjectPaths,
+            selectedCanvasMode: vibespaceView.selectedCanvasMode,
+            projectColorTagsByPath: projectColorTagsByPath,
+            parkedProjectPaths: vibespaceView.activeVibeSpace?.parkedProjectPaths ?? [],
+            onOpenShelfFile: onOpenShelfFile,
+            onRevealShelfFileInFinder: onRevealShelfFileInFinder,
+            onOpenShelfDirectoryInTerminal: onOpenShelfDirectoryInTerminal,
+            onRenameShelfFile: onRenameShelfFile,
+            onDeleteShelfFile: onDeleteShelfFile,
+            onRemoveShelfFile: onRemoveShelfFile,
+            onClearShelf: onClearShelf,
+            onProjectExpansionToggled: onProjectExpansionToggled,
+            onFocusedProjectAppeared: onFocusedProjectAppeared,
+            onProjectAction: onProjectAction,
+            onProjectTransferDrop: onProjectTransferDrop
         )
     }
 
-    private func prepareProjectForSidebarInteraction(_ project: AnyProjectSession, revealEditor: Bool = false) {
-        project.ensureExplorerLoaded()
-        project.folderExplorer.activeSidebarTab = vibespaceShell.sidebarTab
-
-        if revealEditor, let activeVibeSpaceID = vibespaceShell.activeVibeSpaceID {
-            layoutPersistence.setCanvasMode(.detailed, for: activeVibeSpaceID)
-        }
+    @ViewBuilder
+    var gitPane: some View {
+        VibeSpaceSidebarGitPane(
+            projects: vibespaceView.activeVibeSpaceProjects,
+            focusedProjectID: vibespaceView.focusedProject?.id,
+            activeVibeSpaceID: vibespaceShell.activeVibeSpaceID,
+            sourceControlSelectedFileURL: vibespaceView.sourceControlSelectedFileURL,
+            sourceControlSettings: vibespaceView.activeVibeSpace?.sourceControlSettings ?? .default,
+            viewModel: vibespaceSourceControlViewModel,
+            onCloneRequested: onPresentCloneRepositorySheet,
+            onOpenDiff: onOpenSourceControlDiff,
+            onSyncSourceControlContext: onSyncSourceControlContext
+        )
     }
 
-    private func selectVibeSpaceSidebarItem(_ item: FileItem, in project: AnyProjectSession) {
-        project.ensureExplorerLoaded()
-        project.folderExplorer.activeSidebarTab = vibespaceShell.sidebarTab
-        project.folderExplorer.select(item)
+    @ViewBuilder
+    var sessionsPane: some View {
+        VibeSpaceSidebarSessionsPane(
+            activeVibeSpaceID: vibespaceShell.activeVibeSpaceID,
+            vibespaces: vibespaces,
+            onPreviewSession: onPreviewTmuxSession,
+            onSendSessionToProject: onSendTmuxSessionToProject,
+            onTerminateSession: onTerminateTmuxSession
+        )
     }
 
-    private func openVibeSpaceSidebarItemInTab(_ item: FileItem, in project: AnyProjectSession) {
-        let shouldRevealEditor = !item.isDirectory && vibespaceView.selectedCanvasMode != .terminalOnly
-        prepareProjectForSidebarInteraction(project, revealEditor: shouldRevealEditor)
-        project.folderExplorer.openInTab(item)
-    }
-
-    private func handleVibeSpaceSidebarAction(_ project: AnyProjectSession, _ action: FileTreeAction) {
-        let vm = project.folderExplorer
-        switch action {
-        case .toggleExpansion(let item):
-            prepareProjectForSidebarInteraction(project)
-            vm.toggleExpansion(for: item)
-        case .select(let item): selectVibeSpaceSidebarItem(item, in: project)
-        case .openInTab(let item): openVibeSpaceSidebarItemInTab(item, in: project)
-        case .openInFinder(let url): appContainer.vibespaceInteraction.revealInFinder(url)
-        case .createNewFile(let item): vm.createNewFile(in: item)
-        case .createNewFolder(let item): vm.createNewFolder(in: item)
-        case .startRenaming(let item): vm.startRenaming(item: item)
-        case .commitRename: vm.commitRename()
-        case .cancelRename: vm.cancelRename()
-        case .openInTerminal(let url):
-            prepareProjectForSidebarInteraction(project)
-            project.terminal.openOrSelectTab(for: url)
-        case .openInSplitHorizontal(let item): vm.openInSplitHorizontal(item)
-        case .openInSplitVertical(let item): vm.openInSplitVertical(item)
-        case .requestDelete(let item): vm.deleteItem(item)
-        }
-    }
-
-    private func handleVibeSpaceSidebarTransferDrop(
-        _ plans: [ExplorerItemTransferPlan],
-        for project: AnyProjectSession
-    ) -> Bool {
-        guard !plans.isEmpty else { return false }
-        project.folderExplorer.transferItems(using: plans)
-        return true
-    }
-
-    private var defaultExpandedVibeSpaceSidebarProjectPaths: Set<String> {
-        guard vibespaceView.selectedCanvasMode != .terminalOnly,
-              let focusedPath = vibespaceView.focusedProject?.rootURL.standardizedFileURL.path else {
-            return []
-        }
-        return [focusedPath]
-    }
-
-    private func withPrimarySidebarProject(_ action: (AnyProjectSession) -> Void) {
-        guard let project = vibespaceView.focusedProject ?? vibespaceView.activeVibeSpaceProjects.first else { return }
-        project.ensureExplorerLoaded()
-        action(project)
-    }
-
-    private func setExpandedVibeSpaceSidebarProjectPaths(_ paths: Set<String>) {
-        if expandedVibeSpaceSidebarProjectPaths != paths {
-            expandedVibeSpaceSidebarProjectPaths = paths
-        }
+    @ViewBuilder
+    var conversationsPane: some View {
+        VibeSpaceSidebarConversationsPane(
+            store: agentConversationStore,
+            externalSessionService: externalAgentSessionService,
+            vibespaceID: vibespaceShell.activeVibeSpaceID,
+            vibespaceName: vibespaceView.activeVibeSpace?.name,
+            projectColorTagsByPath: projectColorTagsByPath,
+            onOpenThread: { thread in
+                onOpenConversationThread(thread)
+            },
+            onDeleteThread: { threadId in
+                await onDeleteConversationThread(threadId)
+            },
+            onExportMarkdown: { threadId in
+                guard let markdown = await agentConversationStore.exportMarkdown(threadId: threadId) else { return }
+                await MainActor.run { Self.saveFileDialog(content: markdown, defaultName: "conversation.md") }
+            },
+            onExportJSON: { threadId in
+                guard let json = await agentConversationStore.exportJSON(threadId: threadId) else { return }
+                await MainActor.run { Self.saveFileDialog(content: json, defaultName: "conversation.json") }
+            },
+            onPreviewExternalSession: onPreviewExternalSession
+        )
     }
 }

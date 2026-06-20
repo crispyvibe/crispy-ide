@@ -509,6 +509,8 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
             })
         case .transient:
             return nil
+        case .todos:
+            return nil
         case .filePreview:
             return nil
         case .file:

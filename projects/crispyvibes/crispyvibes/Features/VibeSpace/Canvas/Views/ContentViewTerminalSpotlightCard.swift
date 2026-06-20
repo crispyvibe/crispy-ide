@@ -177,7 +177,7 @@ extension ContentView {
             return { signal in
                 session.sendRawText(signal)
             }
-        case .vibeCast, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
             return nil
         }
     }
@@ -305,6 +305,12 @@ extension ContentView {
                 onManageShortcutsRequested: spotlight.onManageShortcutsRequested
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .todos:
+            TodosSurfaceView(
+                store: appContainer.vibespaceTodoStore,
+                focusedProjectPath: vibespaceView.focusedProject?.rootURL.standardizedFileURL.path
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .acp(_, storeID):
             if let store = contentViewerStore.acpStore(for: storeID) {
                 ACPStandalonePaneContentView(
@@ -418,17 +424,20 @@ extension ContentView {
     }
 
     private func spotlightPinMetadata(for spotlight: TerminalSpotlightState) -> SpotlightPinMetadata? {
-        switch vibespaceView.selectedCanvasMode {
-        case .detailed:
+        switch ContentSurfacePolicy.surface(for: .spotlightPin, mode: vibespaceView.selectedCanvasMode) {
+        case .detailTab:
             guard spotlightSupportsDetailedPin(spotlight) else { return nil }
             return SpotlightPinMetadata(label: "Open in Viewer", action: {
                 pinSpotlightToDetailedViewer(spotlight)
             })
-        case .terminalOnly:
+        case .boardTile:
             guard spotlightSupportsBoardPin(spotlight) else { return nil }
             return SpotlightPinMetadata(label: "Pin to Dock", action: {
                 pinSpotlightToTerminalBoard(spotlight)
             })
+        case .dockedPreview, .spotlight:
+            assertionFailure("spotlightPin must resolve to .detailTab or .boardTile")
+            return nil
         }
     }
 
@@ -436,7 +445,7 @@ extension ContentView {
         switch spotlight.source {
         case .filePreview, .file, .browserPreview, .browser:
             return true
-        case .persistent, .transient, .vibeCast, .acp:
+        case .persistent, .transient, .vibeCast, .todos, .acp:
             return false
         }
     }
@@ -445,7 +454,7 @@ extension ContentView {
         switch spotlight.source {
         case .filePreview, .browserPreview:
             return true
-        case .persistent, .transient, .vibeCast, .acp, .file, .browser:
+        case .persistent, .transient, .vibeCast, .todos, .acp, .file, .browser:
             return false
         }
     }
@@ -496,7 +505,7 @@ extension ContentView {
                 snapshot: viewModel.sessionSnapshot()
             )
             contentViewerStore.activeGroup.openTab(.webPage(reference: reference))
-        case .persistent, .transient, .vibeCast, .acp:
+        case .persistent, .transient, .vibeCast, .todos, .acp:
             return
         }
         dismissTerminalSpotlight()
@@ -518,7 +527,7 @@ extension ContentView {
                 projectPath: spotlight.owningProjectRootURL?.path
             ) else { return }
             dockedBrowserCoordinator.promotePreview(to: tileID)
-        case .persistent, .transient, .vibeCast, .acp, .file, .browser:
+        case .persistent, .transient, .vibeCast, .todos, .acp, .file, .browser:
             return
         }
         dismissTerminalSpotlight()
@@ -557,7 +566,7 @@ struct SpotlightTerminalInputBar: View {
             return terminalViewModel.session(for: tabID)
         case let .transient(session):
             return session
-        case .vibeCast, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
             return nil
         }
     }
@@ -714,7 +723,7 @@ struct SpotlightTerminalInputBar: View {
         switch spotlight.source {
         case let .persistent(_, tabID): return tabID
         case let .transient(session): return session.id
-        case .vibeCast, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
             return nil
         }
     }

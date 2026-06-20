@@ -38,6 +38,10 @@ struct AppContainer {
     /// feature so developer tools can show received → sent → result. F041.
     let contextSummaryObservabilityStore: ContextSummaryObservabilityStore
 
+    /// F055: git worktree discovery + mutations, behind a protocol so views
+    /// don't shell out to git directly. Defaulted so `makeDefault` is unchanged.
+    let worktreeService: any WorktreeServicing = WorktreeService()
+
     func makePaneWorker(pane: PaneWorkerKind) -> any PaneWorkerExecuting {
         paneWorkerFactory(pane)
     }

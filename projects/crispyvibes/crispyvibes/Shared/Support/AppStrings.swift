@@ -171,6 +171,82 @@ enum AppStrings {
         static let removeProjectAction = String(localized: "vibespace.removeProject.action", defaultValue: "Remove Project")
     }
 
+    // MARK: - Worktree (F055 / F056: unified sidebar + git worktrees)
+
+    enum Worktree {
+        static let newFile = String(localized: "worktree.newFile", defaultValue: "New File")
+        static let newFolder = String(localized: "worktree.newFolder", defaultValue: "New Folder")
+        static let refresh = String(localized: "worktree.refresh", defaultValue: "Refresh")
+        static let newAgentChat = String(localized: "worktree.newAgentChat", defaultValue: "New Agent Chat")
+        static let newFileOrFolderHelp = String(localized: "worktree.newFileOrFolder.help", defaultValue: "New File or Folder")
+        static let noChanges = String(localized: "worktree.noChanges", defaultValue: "No changes")
+        static let noConversations = String(localized: "worktree.noConversations", defaultValue: "No conversations")
+        static let notAGitRepository = String(localized: "worktree.notAGitRepository", defaultValue: "Not a Git repository")
+        static let untitledThread = String(localized: "worktree.untitledThread", defaultValue: "Untitled")
+        static let closeWorktree = String(localized: "worktree.close", defaultValue: "Close Worktree")
+        static let deleteWorktree = String(localized: "worktree.delete", defaultValue: "Delete Worktree…")
+        static let openAsProject = String(localized: "worktree.openAsProject", defaultValue: "Open as Project")
+        static let open = String(localized: "worktree.open", defaultValue: "Open")
+        static let newWorktree = String(localized: "worktree.new", defaultValue: "New Worktree…")
+        static let openAsProjectHelp = String(localized: "worktree.openAsProject.help", defaultValue: "Open as Project")
+
+        static func otherWorktrees(_ count: Int) -> String {
+            String(localized: "worktree.otherWorktrees", defaultValue: "Other worktrees (\(count))")
+        }
+        static func worktreeCount(_ count: Int) -> String {
+            String(localized: "worktree.count", defaultValue: "\(count) worktrees")
+        }
+        /// Repo count split into opened vs not-yet-opened worktrees so the
+        /// number matches what's visible ("1 open · 2 other"). Falls back to the
+        /// plain count when there are no other worktrees.
+        static func worktreeCountSplit(open: Int, other: Int) -> String {
+            other == 0
+                ? worktreeCount(open)
+                : String(localized: "worktree.count.split", defaultValue: "\(open) open · \(other) other")
+        }
+
+        // MARK: Accessibility labels / values
+        static let showFiles = String(localized: "worktree.a11y.showFiles", defaultValue: "Show files")
+        static func showChanges(_ count: Int) -> String {
+            String(localized: "worktree.a11y.showChanges", defaultValue: "Show changes, \(count) changed")
+        }
+        static func showConversations(_ count: Int) -> String {
+            String(localized: "worktree.a11y.showConversations", defaultValue: "Show conversations, \(count)")
+        }
+        static func changedFilesValue(_ count: Int) -> String {
+            String(localized: "worktree.a11y.changedFiles", defaultValue: "\(count) changed files")
+        }
+        static func openWorktreeLabel(_ name: String) -> String {
+            String(localized: "worktree.a11y.openWorktree", defaultValue: "Open worktree \(name)")
+        }
+        static func collapseExpandLabel(_ title: String) -> String {
+            String(localized: "worktree.a11y.collapseExpand", defaultValue: "\(title), collapsible section")
+        }
+        static let expandedHint = String(localized: "worktree.a11y.expanded", defaultValue: "Expanded")
+        static let collapsedHint = String(localized: "worktree.a11y.collapsed", defaultValue: "Collapsed")
+
+        // Delete confirmation
+        static func deleteConfirmTitle(_ name: String) -> String {
+            String(localized: "worktree.delete.title", defaultValue: "Delete worktree “\(name)”?")
+        }
+        static let deleteConfirmMessage = String(localized: "worktree.delete.message", defaultValue: "This removes the worktree’s directory from disk and unregisters it from git. This can’t be undone.")
+        static let deleteButton = String(localized: "worktree.delete.button", defaultValue: "Delete")
+        static let forceDeleteTitle = String(localized: "worktree.forceDelete.title", defaultValue: "Couldn’t delete worktree")
+        static func forceDeleteMessage(_ error: String) -> String {
+            String(localized: "worktree.forceDelete.message", defaultValue: "\(error)\n\nForce delete? Any uncommitted changes in the worktree will be lost.")
+        }
+        static let forceDeleteButton = String(localized: "worktree.forceDelete.button", defaultValue: "Force Delete")
+
+        // New-worktree prompt
+        static let newTitle = String(localized: "worktree.newPrompt.title", defaultValue: "New Worktree")
+        static let newMessage = String(localized: "worktree.newPrompt.message", defaultValue: "Create a new git worktree on a new branch.")
+        static let newCreateButton = String(localized: "worktree.newPrompt.create", defaultValue: "Create")
+        static let newBranchPlaceholder = String(localized: "worktree.newPrompt.placeholder", defaultValue: "new-branch-name")
+        static let createFailedTitle = String(localized: "worktree.createFailed.title", defaultValue: "Couldn’t create worktree")
+
+        static let cancel = String(localized: "common.cancel")
+    }
+
     // MARK: - Sidebar
 
     enum Sidebar {

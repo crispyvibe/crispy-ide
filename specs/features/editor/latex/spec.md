@@ -4,7 +4,7 @@ Status: implemented
 
 ## Overview
 
-F055 makes LaTeX a first-class document type in Crispy. Files with a `.tex`, `.latex`, or `.ltx` extension open in a dedicated split editor with two modes the user toggles between:
+F057 makes LaTeX a first-class document type in Crispy. Files with a `.tex`, `.latex`, or `.ltx` extension open in a dedicated split editor with two modes the user toggles between:
 
 - **Source** — the code editor (syntax-aware, find/replace, the usual text-editing affordances) with a math-symbol **palette** that inserts LaTeX snippets at the caret.
 - **Edit** (the default rich/WYSIWYG mode) — the document body is rendered by a vendored, fully **offline** KaTeX runtime in a `WKWebView`. Prose, headings, and lists are edited in place; math is typeset by KaTeX and edited through a popup equation editor with a clickable symbol grid. Every edit round-trips back to LaTeX source, **preserving the preamble, postamble, comments, and any environment Crispy does not model (e.g. `tikzpicture`) byte-for-byte verbatim**.
@@ -22,87 +22,87 @@ The feature reuses Crispy's existing file-backed editor plumbing end to end — 
 
 ## Requirements
 
-### F055-R01: LaTeX document type
+### F057-R01: LaTeX document type
 `.tex`, `.latex`, and `.ltx` files MUST be detected as a distinct `DocumentType.latex` and routed to the LaTeX editor. Detection MUST take precedence over the generic plain-text/code path so these extensions never fall back to a raw code view by accident.
 
-### F055-R02: Source / Edit toggle
+### F057-R02: Source / Edit toggle
 A LaTeX document MUST offer the same markup view-mode toggle as markdown: a **Source** mode (editable code) and an **Edit** (rich/WYSIWYG) mode. The default on open is the Edit mode. The chosen mode is remembered per open document.
 
-### F055-R03: Offline KaTeX rendering
+### F057-R03: Offline KaTeX rendering
 The Edit mode MUST render math with a runtime vendored in the app bundle. It MUST function with no network access and MUST NOT contact any remote origin at runtime (no CDN, no telemetry, no remote fonts).
 
-### F055-R04: Math symbol palette
+### F057-R04: Math symbol palette
 Both modes MUST expose a palette of common math templates and symbols (fraction, superscript/subscript, root, sum, integral, Greek letters, relations, matrix, …). Activating a palette item inserts the corresponding LaTeX snippet at the caret. In Source mode the snippet is inserted as text; in Edit mode it is inserted and immediately typeset.
 
-### F055-R05: In-place prose editing
+### F057-R05: In-place prose editing
 In Edit mode, prose, section headings, and `itemize`/`enumerate` lists MUST be editable directly in the rendered surface (typing, Enter for new paragraphs, the formatting toolbar for bold/italic/headings/lists/code).
 
-### F055-R06: Math editing via popup
+### F057-R06: Math editing via popup
 In Edit mode, display equations and inline math MUST be rendered read-only and open a popup equation editor on click. The popup MUST show a live KaTeX preview and a clickable symbol grid so a user can build math without knowing LaTeX; it MUST also expose the raw TeX for power users. Committing the popup updates the document.
 
-### F055-R07: Lossless round-trip
+### F057-R07: Lossless round-trip
 Editing MUST round-trip back to LaTeX without destroying source Crispy cannot represent. The preamble (everything up to and including `\begin{document}`) and postamble (`\end{document}` onward), comments, `\maketitle`, and unmodeled environments MUST be preserved verbatim. Editable blocks the user did **not** touch MUST be re-emitted byte-for-byte (a single edit never reflows or normalizes the rest of the document).
 
-### F055-R08: Display vs inline math is preserved
+### F057-R08: Display vs inline math is preserved
 A round-trip MUST NOT demote display math (`\[…\]`, `$$…$$`, `equation`/`align`/`gather`/…) to inline `$…$`, nor promote inline to display. Math environments MUST stay environments, not be wrapped in `\[…\]`.
 
-### F055-R09: File-backed, autosaving
+### F057-R09: File-backed, autosaving
 A LaTeX document is a real text file. Edits (from either mode) MUST be persisted through the standard document buffer + autosave path. No separate database.
 
-### F055-R10: Inline KaTeX in markdown
+### F057-R10: Inline KaTeX in markdown
 The markdown rich editor MUST typeset `$…$` (inline) and `$$…$$` (display) math via KaTeX, mark the rendered math non-editable, and round-trip it back to the original delimiters on save by recovering the embedded TeX (not by serializing rendered spans).
 
-### F055-R11: Navigation containment
+### F057-R11: Navigation containment
 The Edit-mode web view MUST be confined to the bundled `file://` runtime. External links MUST open in the system browser; in-app navigation to remote, `data:`, or other origins MUST be denied.
 
-### F055-R12: Theme-aware
+### F057-R12: Theme-aware
 The Edit-mode surface MUST follow the app's light/dark appearance.
 
-### F055-R13: Graceful degradation
+### F057-R13: Graceful degradation
 If the vendored runtime is missing from the build, the Edit mode MUST show an explanatory message rather than a blank pane.
 
-### F055-R14: Reproducible runtime build
+### F057-R14: Reproducible runtime build
 The offline runtime MUST be produced from a pinned dependency by a checked-in build script, with a committed SHA256 checksum manifest of the vendored assets.
 
 ## Scenarios
 
-### Scenario F055-S01: Open a LaTeX file (Given / When / Then)
+### Scenario F057-S01: Open a LaTeX file (Given / When / Then)
 - **Given** a `.tex` file in a project, **when** the user opens it, **then** it opens as a LaTeX document in the Edit (rich) mode, with the body typeset by KaTeX and the preamble hidden but preserved.
 
-### Scenario F055-S02: Toggle to Source
+### Scenario F057-S02: Toggle to Source
 - **Given** an open LaTeX document in Edit mode, **when** the user switches to Source, **then** the raw `.tex` is shown in the code editor; switching back to Edit re-renders the (possibly edited) source.
 
-### Scenario F055-S03: Insert a symbol from the palette (Source)
+### Scenario F057-S03: Insert a symbol from the palette (Source)
 - **Given** the Source mode with the caret in math, **when** the user clicks a palette item (e.g. `\frac{}{}`), **then** the snippet is inserted at the caret and the buffer is marked dirty.
 
-### Scenario F055-S04: Edit prose in place
+### Scenario F057-S04: Edit prose in place
 - **Given** the Edit mode, **when** the user edits a paragraph's text, **then** only that block changes in the serialized source; every other block (lists, math, comments, unknown environments) is re-emitted byte-for-byte.
 
-### Scenario F055-S05: Edit an equation via the popup
+### Scenario F057-S05: Edit an equation via the popup
 - **Given** a display equation in Edit mode, **when** the user clicks it, **then** a popup opens with a live KaTeX preview, a symbol grid, and the raw TeX; on commit the equation re-renders and the source updates.
 
-### Scenario F055-S06: Round-trip preserves unmodeled source
+### Scenario F057-S06: Round-trip preserves unmodeled source
 - **Given** a document containing a preamble, `\maketitle`, an `align` environment, a `% comment`, and a `tikzpicture`, **when** the user edits one paragraph and saves, **then** the preamble, `\maketitle`, `align`, comment, and `tikzpicture` are all present unchanged, the `align` stays an environment (not wrapped in `\[…\]`), and display math stays display.
 
-### Scenario F055-S07: Build from a blank document
+### Scenario F057-S07: Build from a blank document
 - **Given** a new empty `.tex` (no `\begin{document}` body content), **when** the user adds a heading and a paragraph in Edit mode, **then** they serialize to `\section{…}` and prose inside the document body.
 
-### Scenario F055-S08: Insert rendered math in Edit mode
+### Scenario F057-S08: Insert rendered math in Edit mode
 - **Given** the Edit mode, **when** the user inserts `\alpha` from the palette, **then** it is rendered as typeset math (not raw LaTeX) and serializes back as `$\alpha$`; inserting a matrix/environment serializes as display `\[…\]`.
 
-### Scenario F055-S09: Offline guarantee
+### Scenario F057-S09: Offline guarantee
 - **Given** no network connectivity, **when** a LaTeX document is opened and edited, **then** KaTeX, its CSS, and all fonts load from the bundle and editing works normally.
 
-### Scenario F055-S10: Inline math in markdown
+### Scenario F057-S10: Inline math in markdown
 - **Given** a markdown document containing `$E = mc^2$` and a `$$…$$` block, **when** it is viewed in the markdown rich editor, **then** both render via KaTeX; on save they round-trip back to `$…$` / `$$…$$` with the exact original TeX.
 
-### Scenario F055-S11: Dark mode
+### Scenario F057-S11: Dark mode
 - **Given** the app is in dark appearance, **when** a LaTeX document opens in Edit mode, **then** the surface renders with theme-appropriate colors (no white flash).
 
-### Scenario F055-S12: Runtime missing
+### Scenario F057-S12: Runtime missing
 - **Given** a build without the vendored runtime, **when** a LaTeX document is opened in Edit mode, **then** an "unavailable" message is shown instead of a blank pane.
 
-### Scenario F055-S13: External link
+### Scenario F057-S13: External link
 - **Given** a link to a remote URL in the Edit-mode surface, **when** the user activates it, **then** it opens in the system browser, not in the embedded web view.
 
 ## Acceptance Criteria
@@ -120,7 +120,7 @@ The offline runtime MUST be produced from a pinned dependency by a checked-in bu
 1. Should additional environments (tables/`tabular`, `figure`, theorem-like) get first-class in-place editing, or remain preserved-verbatim raw atoms (current: raw atoms)?
 2. Should the equation popup offer a larger, categorized symbol catalog (current: a fixed 16-key common set)?
 3. Is a `latex.*` agent CLI (`new|render|check`) worth adding for automation? (Deferred.)
-4. **Resolved:** the markdown editor's KaTeX **scripts** are now co-located in `MarkdownRuntime/` (loaded under `'self'`, no `script-src file:`); the CSS/fonts are still shared from `LaTeXRuntime/`. See technical-design CSP Posture and threat-model F055-T05.
+4. **Resolved:** the markdown editor's KaTeX **scripts** are now co-located in `MarkdownRuntime/` (loaded under `'self'`, no `script-src file:`); the CSS/fonts are still shared from `LaTeXRuntime/`. See technical-design CSP Posture and threat-model F057-T05.
 
 ## Change History
 

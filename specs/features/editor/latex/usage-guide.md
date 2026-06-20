@@ -1,6 +1,6 @@
 ---
 title: "LaTeX Editor"
-feature: "F055"
+feature: "F057"
 domain: "editor"
 audience: "user"
 version: "1.0"
