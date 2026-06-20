@@ -60,6 +60,7 @@ struct ContentView: View {
     @StateObject var projectActivityTracker: ProjectActivityTracker
     @StateObject var splitViewStore: SplitViewStore
     @StateObject var stackedRailOverlayCoordinator = StackedRailExpansionOverlayCoordinator()
+    @StateObject var unifiedSidebarViewModel = UnifiedSidebarViewModel()
     @StateObject private var stableDependencies: ContentViewStableDependencies
     @StateObject var dockPreviewBridge: DockPreviewBridge
     @StateObject var dockedFileViewerCoordinator: DockedFileViewerCoordinator
@@ -671,10 +672,18 @@ struct ContentView: View {
                 vibespaceCanvasActionsCoordinator.openTerminalOnlyVibeSpaceView()
             }
             .onReceive(NotificationCenter.default.publisher(for: .toggleVibeCast)) { _ in
-                vibespaceCanvasActionsCoordinator.toggleVibeCast()
+                if ContentSurfacePolicy.surface(for: .vibeCast, mode: selectedVibeSpaceCanvasMode) == .spotlight {
+                    presentVibeCastSpotlight()
+                } else {
+                    vibespaceCanvasActionsCoordinator.toggleVibeCast()
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .toggleTodos)) { _ in
-                vibespaceCanvasActionsCoordinator.toggleTodos()
+                if ContentSurfacePolicy.surface(for: .todos, mode: selectedVibeSpaceCanvasMode) == .spotlight {
+                    presentTodosSpotlight()
+                } else {
+                    vibespaceCanvasActionsCoordinator.toggleTodos()
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .createTerminalRequested)) { notification in
                 createTerminalFromToolbar(notification: notification)

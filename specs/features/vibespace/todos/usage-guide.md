@@ -18,7 +18,7 @@ Todos let you jot tasks without leaving your flow. Capture one in a second with 
 ## Getting Started
 
 - **Capture instantly:** press **⌃⌘T** anywhere — a small field appears. Type your task and press **Return**. It saves to your current project and confirms with a quick ✓. Press **Esc** to cancel.
-- **Open the surface:** click the **checklist** button in the toolbar to open the **Todos** tab (a list on the left, details on the right).
+- **Open the surface:** click the **checklist** button in the toolbar. In **Detailed** view it opens the **Todos** tab (a list on the left, details on the right); in **Terminal Board** view it floats the same surface as a **spotlight** over the board, so you never have to leave board mode to manage todos.
 
 ## Workflows
 
@@ -73,12 +73,12 @@ The capture shortcut is rebindable in **Settings → Keyboard Shortcuts → "Qui
 ## Troubleshooting
 
 - **Pressed ⌃⌘T but nothing happened:** the Todos toolbar button opens the surface; the **⌃⌘T** HUD requires an active VibeSpace. Confirm the shortcut in Settings → Keyboard Shortcuts.
-- **Clicked the toolbar button in Terminal Board mode and saw nothing:** the Todos tab opens in the content area, which is hidden in terminal-board mode — switch to **Detailed** view to see it.
+- **Clicked the toolbar button in Terminal Board mode:** Todos now floats as a **spotlight** over the board — you no longer need to switch to **Detailed** view to see it. Dismiss the spotlight to return to the board.
 - **My todo didn't go to the project I expected:** the capture target is shown in the HUD's "Lands in" menu — set it before pressing Return.
 
 ## Known Limitations
 
 - **Reminders are not available yet** (planned for a later update).
 - **Switching VibeSpace** while the Todos tab is open does not auto-refresh the list — reopen the tab to refresh.
-- Todos appear as a **content-viewer tab** only; there is no terminal-board tile or spotlight view (yet).
+- Todos opens as a **content-viewer tab** in Detailed view and as a **spotlight** over the board in Terminal Board view; a dedicated board *tile* (like ACP/Browser tiles) isn't available yet.
 - The open Todos tab is **not restored** after relaunch (your todos are — just reopen the tab).

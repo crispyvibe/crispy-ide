@@ -3,7 +3,7 @@ title: "VibeCast"
 feature: "F028"
 domain: "ai-agents"
 audience: "user"
-version: "1.0"
+version: "1.1"
 sidebar:
   label: "VibeCast"
   order: 3
@@ -18,7 +18,7 @@ VibeCast is a broadcast compose-and-send interface for dispatching text to termi
 ## Getting Started
 
 1. Press **⌘⇧V** or click the antenna icon in the toolbar to open VibeCast.
-2. VibeCast opens as a tab in the content viewer area.
+2. In **Detailed** view VibeCast opens as a tab in the content viewer area; in **Terminal Board** view it floats as a **spotlight** over the board, so you don't have to leave board mode.
 3. Select a target terminal from the target picker (or leave on broadcast mode).
 4. Type your message in the compose area and press Enter to send.
 

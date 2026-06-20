@@ -56,12 +56,14 @@ extension ContentView {
     func showProjectSidebar(_ tab: FolderExplorerViewModel.SidebarTab) {
         guard homeShell.hasActiveVibeSpace else { return }
 
-        if showsVibeSpaceSidebar && homeShell.vibespaceSidebarTab == tab {
+        if showsVibeSpaceSidebar && !appShellStore.vibespaceSidebarUnified && homeShell.vibespaceSidebarTab == tab {
             homeShell.hideVibeSpaceSidebar()
             return
         }
 
         homeShell.showVibeSpaceSidebar(tab)
+        // Classic tab selection exits the unified Workspace panel.
+        appShellStore.setVibeSpaceSidebarUnified(false)
 
         let targetProject = activeVibeSpaceSession.focusedProject ?? activeVibeSpaceSession.projects.first
         guard let targetProject else { return }
@@ -79,19 +81,33 @@ extension ContentView {
         synchronizeVibeSpaceSidebarExpansion()
     }
 
-    func openACPConversationFromToolbar() {
-        if selectedVibeSpaceCanvasMode == .terminalOnly {
-            NotificationCenter.default.post(name: .addACPTileToBoard, object: nil)
-        } else {
-            if let activeVibeSpaceID = vibespaceShell.activeVibeSpaceID {
-                layoutPersistence.setCanvasMode(.detailed, for: activeVibeSpaceID)
-            }
-            _ = contentViewerStore.openACPPane(
-                focusedProject: appContainer.acpVibeSpaceSessionService.focusedProject,
-                preferredAgentID: appContainer.acpVibeSpaceSessionService.preferredAgentID,
-                vibespaceID: vibespaceShell.activeVibeSpaceID
-            )
+    /// Shows the unified Workspace side panel (per-project/worktree overview),
+    /// as its own rail destination rather than a mode squeezed into Files.
+    func showWorkspaceSidebar() {
+        guard homeShell.hasActiveVibeSpace else { return }
+
+        if showsVibeSpaceSidebar && appShellStore.vibespaceSidebarUnified {
+            homeShell.hideVibeSpaceSidebar()
+            return
         }
+
+        homeShell.showVibeSpaceSidebar(homeShell.vibespaceSidebarTab)
+        appShellStore.setVibeSpaceSidebarUnified(true)
+
+        let targetProject = activeVibeSpaceSession.focusedProject ?? activeVibeSpaceSession.projects.first
+        if let targetProject, activeVibeSpaceSession.focusedProject?.id != targetProject.id {
+            vibespaceCanvasActionsCoordinator.focusProject(targetProject)
+        }
+        synchronizeVibeSpaceSidebarExpansion()
+    }
+
+    func openACPConversationFromToolbar() {
+        vibespaceCanvasActionsCoordinator.present(
+            .agentChat(
+                project: appContainer.acpVibeSpaceSessionService.focusedProject,
+                preferredAgentID: appContainer.acpVibeSpaceSessionService.preferredAgentID
+            )
+        )
     }
 
     /// Handles the title-bar New Terminal popover submission. The popover
@@ -110,9 +126,14 @@ extension ContentView {
         let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String
         let preferTemporary = (notification.userInfo?[AppCommandUserInfoKey.preferTemporary] as? Bool) ?? false
 
-        let useSpotlight = preferTemporary || selectedVibeSpaceCanvasMode != .terminalOnly
+        // Decision comes from the central policy; this method keeps the
+        // terminal-specific creation dispatch.
+        let surface = ContentSurfacePolicy.surface(
+            for: .terminal(preferTemporary: preferTemporary),
+            mode: selectedVibeSpaceCanvasMode
+        )
 
-        if !useSpotlight {
+        if surface == .boardTile {
             _ = boardStore.addTile(
                 projectPath: projectPath,
                 directoryURL: directoryURL.standardizedFileURL,
@@ -121,6 +142,10 @@ extension ContentView {
             )
             return
         }
+
+        // Terminal only ever resolves to .boardTile or .spotlight; assert so a
+        // future policy change that routes it elsewhere is caught in debug.
+        assert(surface == .spotlight, "terminal routed to unexpected surface \(surface)")
 
         let owningProject = projectPath.flatMap { path in
             vibespaceView.activeVibeSpaceProjects.first(where: {

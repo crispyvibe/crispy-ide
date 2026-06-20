@@ -18,6 +18,7 @@ struct TerminalSpotlightState: Identifiable {
         case persistent(terminalViewModel: TerminalViewModel, tabID: UUID)
         case transient(session: TerminalSession)
         case vibeCast
+        case todos
         case acp(tileID: UUID, storeID: UUID)
         case filePreview(target: TerminalFileSystemTarget, group: EditorGroupStore)
         case file(tileID: UUID, fileURL: URL)
@@ -94,7 +95,7 @@ extension TerminalSpotlightState.Source {
         switch self {
         case .persistent, .vibeCast, .acp, .file, .browser:
             return true
-        case .transient, .filePreview, .browserPreview:
+        case .transient, .todos, .filePreview, .browserPreview:
             return false
         }
     }
@@ -103,7 +104,7 @@ extension TerminalSpotlightState.Source {
         switch self {
         case .transient, .filePreview, .browserPreview:
             return true
-        case .persistent, .vibeCast, .acp, .file, .browser:
+        case .persistent, .vibeCast, .todos, .acp, .file, .browser:
             return false
         }
     }
@@ -116,6 +117,8 @@ extension TerminalSpotlightState.Source {
             return "scope"
         case .vibeCast:
             return "antenna.radiowaves.left.and.right"
+        case .todos:
+            return "checklist"
         case .acp:
             return "sparkles"
         case .filePreview, .file:
@@ -129,7 +132,7 @@ extension TerminalSpotlightState.Source {
         switch self {
         case .persistent, .transient:
             return true
-        case .vibeCast, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
             return false
         }
     }
@@ -138,6 +141,8 @@ extension TerminalSpotlightState.Source {
         switch self {
         case .persistent, .transient, .vibeCast, .acp, .filePreview, .file, .browserPreview, .browser:
             return true
+        case .todos:
+            return false
         }
     }
 }
@@ -292,6 +297,8 @@ final class TerminalSpotlightCoordinator: ObservableObject {
             )
         case .vibeCast:
             return .vibeCast
+        case .todos:
+            return nil
         case let .acp(tileID, storeID):
             return .acp(tileID: tileID, storeID: storeID)
         case let .filePreview(target, _):
@@ -632,6 +639,8 @@ extension ContentView {
         case let .transient(session):
             session.startIfNeeded()
         case .vibeCast:
+            break
+        case .todos:
             break
         case .acp:
             break

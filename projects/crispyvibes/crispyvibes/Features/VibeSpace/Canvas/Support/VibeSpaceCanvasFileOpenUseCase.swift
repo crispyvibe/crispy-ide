@@ -29,9 +29,9 @@ struct VibeSpaceCanvasFileOpenUseCase {
             let fileContentProvider = project.fileContent
             let projectIdentifier = project.metadata.identifier
             project.onFileOpenRequested = { request in
-                if let canvasModeProvider, canvasModeProvider() == .terminalOnly,
-                   let dockPreviewBridge,
-                   request.action == .preview || request.action == .openTab {
+                if let canvasModeProvider, let dockPreviewBridge,
+                   request.action == .preview || request.action == .openTab,
+                   ContentSurfacePolicy.surface(for: .file, mode: canvasModeProvider()) == .dockedPreview {
                     dockPreviewBridge.requestPreview(for: request.fileURL)
                     return
                 }

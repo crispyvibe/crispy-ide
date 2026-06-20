@@ -84,6 +84,8 @@ final class ContentViewStableDependencies: ObservableObject {
         self.vibespaceCanvasActionsCoordinator.operationMetricsStore = appContainer.operationMetricsStore
         // F012-R18 / F021-R10: enables browser teardown on project remove + park.
         self.vibespaceCanvasActionsCoordinator.dockedBrowserCoordinator = dockedBrowserCoordinator
+        // Lets present(.conversationThread) surface a floating preview in board mode.
+        self.vibespaceCanvasActionsCoordinator.dockedAgentPreviewCoordinator = appContainer.dockedAgentPreviewCoordinator
         // F044-R80–R82: enable CLI vibespace.addProject / removeProject / parkProject.
         appContainer.cliCommandRouter.attachVibeSpaceActionsCoordinator(self.vibespaceCanvasActionsCoordinator)
     }

@@ -51,6 +51,9 @@ struct HomeShellContext {
             return .home
         }
         guard showsVibeSpaceSidebar else { return nil }
+        if store.vibespaceSidebarUnified {
+            return .workspace
+        }
         switch store.vibespaceSidebarTab {
         case .files:
             return .files

@@ -206,6 +206,13 @@ final class LayoutPersistenceService: ObservableObject {
         return layoutForVibeSpace(key).canvasMode
     }
 
+    /// Persists the canvas layout mode for a vibespace.
+    ///
+    /// Call this directly only for an **explicit user view-mode switch** (the
+    /// Detailed/Board toggle). Do NOT call it to force a layout as a side effect
+    /// of opening content — that decision belongs to `ContentSurfacePolicy`,
+    /// routed through `VibeSpaceCanvasActionsCoordinator.present(_:)`. Bypassing
+    /// the policy is how "always jumps to detailed" bugs creep back in.
     func setCanvasMode(_ mode: VibeSpaceCanvasMode, for vibespaceID: UUID?) {
         let key = vibespaceKey(for: vibespaceID)
         var layout = layoutForVibeSpace(key)
