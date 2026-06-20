@@ -196,6 +196,34 @@ enum AppStrings {
         static func worktreeCount(_ count: Int) -> String {
             String(localized: "worktree.count", defaultValue: "\(count) worktrees")
         }
+        /// Repo count split into opened vs not-yet-opened worktrees so the
+        /// number matches what's visible ("1 open · 2 other"). Falls back to the
+        /// plain count when there are no other worktrees.
+        static func worktreeCountSplit(open: Int, other: Int) -> String {
+            other == 0
+                ? worktreeCount(open)
+                : String(localized: "worktree.count.split", defaultValue: "\(open) open · \(other) other")
+        }
+
+        // MARK: Accessibility labels / values
+        static let showFiles = String(localized: "worktree.a11y.showFiles", defaultValue: "Show files")
+        static func showChanges(_ count: Int) -> String {
+            String(localized: "worktree.a11y.showChanges", defaultValue: "Show changes, \(count) changed")
+        }
+        static func showConversations(_ count: Int) -> String {
+            String(localized: "worktree.a11y.showConversations", defaultValue: "Show conversations, \(count)")
+        }
+        static func changedFilesValue(_ count: Int) -> String {
+            String(localized: "worktree.a11y.changedFiles", defaultValue: "\(count) changed files")
+        }
+        static func openWorktreeLabel(_ name: String) -> String {
+            String(localized: "worktree.a11y.openWorktree", defaultValue: "Open worktree \(name)")
+        }
+        static func collapseExpandLabel(_ title: String) -> String {
+            String(localized: "worktree.a11y.collapseExpand", defaultValue: "\(title), collapsible section")
+        }
+        static let expandedHint = String(localized: "worktree.a11y.expanded", defaultValue: "Expanded")
+        static let collapsedHint = String(localized: "worktree.a11y.collapsed", defaultValue: "Collapsed")
 
         // Delete confirmation
         static func deleteConfirmTitle(_ name: String) -> String {

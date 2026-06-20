@@ -1286,6 +1286,7 @@ private struct DetachedTerminalBoardWindowContent: View {
     @ObservedObject var dockedFileViewerCoordinator: DockedFileViewerCoordinator
     @ObservedObject var dockedBrowserCoordinator: DockedBrowserCoordinator
     var dockedAgentPreviewCoordinator: DockedAgentPreviewCoordinator?
+    @Environment(\.vibespaceTodoStoreEnvironment) private var spotlightTodoStore
     let onManageShortcutsRequested: () -> Void
     let shortcutDefinitionsForProjectPath: (String?) -> [TerminalShortcutDefinition]
     let onTileDetachRequested: (UUID, CGPoint) -> Void
@@ -1814,7 +1815,7 @@ private struct DetachedTerminalBoardWindowContent: View {
             session.startIfNeeded()
         case let .browser(tileID, url):
             dockedBrowserCoordinator.viewModel(for: tileID, url: url).focus()
-        case .vibeCast, .acp, .filePreview, .file, .browserPreview:
+        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview:
             break
         }
     }
@@ -1875,7 +1876,7 @@ private struct DetachedTerminalBoardWindowContent: View {
             return { signal in terminalViewModel.session(for: tabID)?.sendRawText(signal) }
         case let .transient(session):
             return { signal in session.sendRawText(signal) }
-        case .vibeCast, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
             return nil
         }
     }
@@ -1976,6 +1977,12 @@ private struct DetachedTerminalBoardWindowContent: View {
                 isActive: true,
                 onManageShortcutsRequested: onManageShortcutsRequested
             )
+        case .todos:
+            if let spotlightTodoStore {
+                TodosSurfaceView(store: spotlightTodoStore, focusedProjectPath: spotlight.owningProjectRootURL?.path)
+            } else {
+                ContentUnavailableView(AppStrings.Todos.title, systemImage: "checklist")
+            }
         case let .acp(_, storeID):
             if let store = acpStoreLookup(storeID) {
                 ACPStandalonePaneContentView(

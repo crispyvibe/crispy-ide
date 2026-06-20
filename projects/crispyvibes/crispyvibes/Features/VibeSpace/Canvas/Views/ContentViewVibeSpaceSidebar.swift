@@ -38,7 +38,10 @@ struct VibeSpaceSidebarPanelView: View {
     let onPreviewTmuxSession: (VibeSpaceSidebarTmuxSession) -> Void
     let onSendTmuxSessionToProject: (VibeSpaceSidebarTmuxSession, UUID) -> Void
     let onTerminateTmuxSession: (VibeSpaceSidebarTmuxSession) async -> Void
-    let agentConversationStore: AgentConversationStore
+    /// Observed so `threadChangeCounter` bumps re-evaluate `body`, letting the
+    /// `.onChange` reload newly created ACP threads immediately (mirrors the
+    /// pattern in `VibeSpaceSidebarConversationsPane`).
+    @ObservedObject var agentConversationStore: AgentConversationStore
     let externalAgentSessionService: ExternalAgentSessionService
     let dockedAgentPreviewCoordinator: DockedAgentPreviewCoordinator
     let onProjectExpansionToggled: (AnyProjectSession) -> Void
@@ -69,8 +72,40 @@ struct VibeSpaceSidebarPanelView: View {
     // Forwarders so the panel body reads VM-owned state without the View
     // touching services directly (layering: ViewModels mediate state/logic).
     private var unifiedThreadsByProject: [String: [ConversationThreadSummary]] { viewModel.threadsByProject }
-    private var worktreeInfoByProject: [String: ProjectWorktreeInfo] { viewModel.worktreeInfoByProject }
+    private var placementByProject: [String: ProjectGitPlacement] { viewModel.placementByProject }
     private var worktreesByCommonDir: [String: [WorktreeEntry]] { viewModel.worktreesByCommonDir }
+
+    /// Branch per opened project, read from the authoritative porcelain
+    /// worktree list for the project's worktree root — one source of truth, so
+    /// a subdirectory project and its worktree can never disagree. Indexed once
+    /// (by common dir + case-insensitive canonical root) to avoid an
+    /// O(projects × worktrees) scan on every render.
+    private var branchByProject: [String: String?] {
+        var branchByRoot: [String: [String: String?]] = [:]
+        for (commonDir, entries) in worktreesByCommonDir {
+            branchByRoot[commonDir] = Dictionary(
+                entries.map { ($0.canonicalPath.lowercased(), $0.branch) },
+                uniquingKeysWith: { first, _ in first }
+            )
+        }
+        var result: [String: String?] = [:]
+        for (project, placement) in placementByProject {
+            result[project] = branchByRoot[placement.commonDir]?[placement.worktreeRoot.lowercased()] ?? nil
+        }
+        return result
+    }
+
+    /// A project anchored at a git worktree root (vs a subdirectory opened as
+    /// its own project, or a non-git folder).
+    private func nodeIsWorktreeRoot(_ project: AnyProjectSession) -> Bool {
+        placementByProject[project.projectIdentifier]?.isWorktreeRoot ?? false
+    }
+
+    /// Node-type glyph: repository box for a worktree root, plain folder for a
+    /// standalone subdirectory/non-git project, so the two never look alike.
+    private func nodeTypeIcon(for project: AnyProjectSession) -> String {
+        nodeIsWorktreeRoot(project) ? "shippingbox.fill" : "folder.fill"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -184,6 +219,23 @@ struct VibeSpaceSidebarPanelView: View {
     private var unifiedContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 6) {
+                // Shelf sits above the projects, same as the classic Files pane.
+                // Drag-in support is unchanged: external file drops are handled
+                // globally at ContentView, and the section reuses the same
+                // shelf callbacks the classic pane uses.
+                if !shelfStore.filePaths.isEmpty {
+                    ShelfSidebarSectionView(
+                        shelfStore: shelfStore,
+                        onOpenFile: onOpenShelfFile,
+                        onRevealInFinder: onRevealShelfFileInFinder,
+                        onOpenDirectoryInTerminal: onOpenShelfDirectoryInTerminal,
+                        onRenameFile: onRenameShelfFile,
+                        onDeleteFile: onDeleteShelfFile,
+                        onRemoveFile: onRemoveShelfFile,
+                        onClear: onClearShelf
+                    )
+                }
+
                 if vibespaceView.activeVibeSpaceProjects.isEmpty {
                     ContentUnavailableView(
                         AppStrings.VibeSpace.noProjects,
@@ -196,7 +248,9 @@ struct VibeSpaceSidebarPanelView: View {
                         if group.addedProjects.count == 1 && group.otherWorktrees.isEmpty {
                             VibeSpaceWorktreeNodeView(
                                 project: group.addedProjects[0],
-                                branch: worktreeInfoByProject[group.addedProjects[0].projectIdentifier]?.branch,
+                                branch: branchByProject[group.addedProjects[0].projectIdentifier] ?? nil,
+                                typeIcon: nodeTypeIcon(for: group.addedProjects[0]),
+                                showsBranch: nodeIsWorktreeRoot(group.addedProjects[0]),
                                 isFocused: vibespaceView.focusedProject?.id == group.addedProjects[0].id,
                                 accentColor: projectColorTagsByPath[group.addedProjects[0].rootURL.standardizedFileURL.path]?.color
                                     ?? activeThemePalette.accentColor,
@@ -214,7 +268,7 @@ struct VibeSpaceSidebarPanelView: View {
                                 title: group.title,
                                 worktrees: group.addedProjects,
                                 otherWorktrees: group.otherWorktrees,
-                                branchByPath: worktreeInfoByProject.mapValues(\.branch),
+                                branchByPath: branchByProject,
                                 primaryPath: group.primaryPath,
                                 focusedProjectID: vibespaceView.focusedProject?.id,
                                 accentColor: projectColorTagsByPath[group.addedProjects[0].rootURL.standardizedFileURL.path]?.color
@@ -246,6 +300,9 @@ struct VibeSpaceSidebarPanelView: View {
         .onReceive(NotificationCenter.default.publisher(for: .vibespaceWorktreesDidChange)) { _ in
             Task { await reloadUnified() }
         }
+        .onChange(of: agentConversationStore.threadChangeCounter) { _, _ in
+            Task { await viewModel.reloadThreads(vibespaceID: vibespaceShell.activeVibeSpaceID) }
+        }
         .accessibilityIdentifier("vibespace.sidebar.unified")
     }
 
@@ -270,28 +327,39 @@ struct VibeSpaceSidebarPanelView: View {
         return "\(vibespace)#\(paths)"
     }
 
-    /// F055/F056: groups vibespace projects by shared git repository (worktrees
-    /// of the same repo are clubbed) and attaches the repo's not-added
+    /// F055/F056: groups vibespace projects by shared git repository and
+    /// attaches the repo's not-added worktrees. Only true worktree *roots* club
+    /// together — a subdirectory opened as its own project (or a non-git folder)
+    /// stands alone, so it is never mislabeled as, or counted among, the repo's
     /// worktrees. Order follows the project list.
     private var unifiedProjectGroups: [UnifiedProjectGroup] {
         var members: [[AnyProjectSession]] = []
         var indexByCommonDir: [String: Int] = [:]
         for project in vibespaceView.activeVibeSpaceProjects {
-            if let commonDir = worktreeInfoByProject[project.projectIdentifier]?.commonDir,
-               let groupIndex = indexByCommonDir[commonDir] {
-                members[groupIndex].append(project)
-            } else {
-                members.append([project])
-                if let commonDir = worktreeInfoByProject[project.projectIdentifier]?.commonDir {
-                    indexByCommonDir[commonDir] = members.count - 1
+            let placement = placementByProject[project.projectIdentifier]
+            if let placement, placement.isWorktreeRoot {
+                if let groupIndex = indexByCommonDir[placement.commonDir] {
+                    members[groupIndex].append(project)
+                } else {
+                    indexByCommonDir[placement.commonDir] = members.count
+                    members.append([project])
                 }
+            } else {
+                // Subdirectory project or non-git folder: always standalone.
+                members.append([project])
             }
         }
         return members.map { group in
-            let commonDir = worktreeInfoByProject[group[0].projectIdentifier]?.commonDir
-            let addedPaths = Set(group.map(\.projectIdentifier))
-            let other = (commonDir.flatMap { worktreesByCommonDir[$0] } ?? [])
-                .filter { !addedPaths.contains($0.path) }
+            // A repo group's anchor is a worktree root; standalone groups have none.
+            let commonDir = placementByProject[group[0].projectIdentifier]
+                .flatMap { $0.isWorktreeRoot ? $0.commonDir : nil }
+            // Exclude the worktree roots already opened (by canonical root path)
+            // from the repo's "Other worktrees".
+            let openedRoots = Set(group.compactMap { placementByProject[$0.projectIdentifier]?.worktreeRoot })
+            let other = WorktreeEntry.notOpened(
+                commonDir.flatMap { worktreesByCommonDir[$0] } ?? [],
+                openedCanonicalPaths: openedRoots
+            )
             let isRepoGroup = group.count > 1 || !other.isEmpty
             let primaryPath = commonDir.map {
                 URL(fileURLWithPath: $0).standardizedFileURL.deletingLastPathComponent().path

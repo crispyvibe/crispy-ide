@@ -80,18 +80,12 @@ extension ContentView {
     }
 
     func openACPConversationFromToolbar() {
-        if selectedVibeSpaceCanvasMode == .terminalOnly {
-            NotificationCenter.default.post(name: .addACPTileToBoard, object: nil)
-        } else {
-            if let activeVibeSpaceID = vibespaceShell.activeVibeSpaceID {
-                layoutPersistence.setCanvasMode(.detailed, for: activeVibeSpaceID)
-            }
-            _ = contentViewerStore.openACPPane(
-                focusedProject: appContainer.acpVibeSpaceSessionService.focusedProject,
-                preferredAgentID: appContainer.acpVibeSpaceSessionService.preferredAgentID,
-                vibespaceID: vibespaceShell.activeVibeSpaceID
+        vibespaceCanvasActionsCoordinator.present(
+            .agentChat(
+                project: appContainer.acpVibeSpaceSessionService.focusedProject,
+                preferredAgentID: appContainer.acpVibeSpaceSessionService.preferredAgentID
             )
-        }
+        )
     }
 
     /// Handles the title-bar New Terminal popover submission. The popover
@@ -110,9 +104,14 @@ extension ContentView {
         let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String
         let preferTemporary = (notification.userInfo?[AppCommandUserInfoKey.preferTemporary] as? Bool) ?? false
 
-        let useSpotlight = preferTemporary || selectedVibeSpaceCanvasMode != .terminalOnly
+        // Decision comes from the central policy; this method keeps the
+        // terminal-specific creation dispatch.
+        let surface = ContentSurfacePolicy.surface(
+            for: .terminal(preferTemporary: preferTemporary),
+            mode: selectedVibeSpaceCanvasMode
+        )
 
-        if !useSpotlight {
+        if surface == .boardTile {
             _ = boardStore.addTile(
                 projectPath: projectPath,
                 directoryURL: directoryURL.standardizedFileURL,
@@ -121,6 +120,10 @@ extension ContentView {
             )
             return
         }
+
+        // Terminal only ever resolves to .boardTile or .spotlight; assert so a
+        // future policy change that routes it elsewhere is caught in debug.
+        assert(surface == .spotlight, "terminal routed to unexpected surface \(surface)")
 
         let owningProject = projectPath.flatMap { path in
             vibespaceView.activeVibeSpaceProjects.first(where: {

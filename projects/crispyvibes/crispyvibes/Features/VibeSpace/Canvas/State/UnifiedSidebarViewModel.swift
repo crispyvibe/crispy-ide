@@ -5,7 +5,7 @@ import Foundation
 /// per-project conversation threads; the panel observes its published state.
 @MainActor
 final class UnifiedSidebarViewModel: ObservableObject {
-    @Published private(set) var worktreeInfoByProject: [String: ProjectWorktreeInfo] = [:]
+    @Published private(set) var placementByProject: [String: ProjectGitPlacement] = [:]
     @Published private(set) var worktreesByCommonDir: [String: [WorktreeEntry]] = [:]
     @Published private(set) var threadsByProject: [String: [ConversationThreadSummary]] = [:]
 
@@ -24,8 +24,15 @@ final class UnifiedSidebarViewModel: ObservableObject {
         await loadThreads(vibespaceID: vibespaceID)
         guard let worktreeService else { return }
         let probe = await worktreeService.probe(paths: projectPaths)
-        worktreeInfoByProject = probe.infoByProject
+        placementByProject = probe.placementByProject
         worktreesByCommonDir = probe.worktreesByCommonDir
+    }
+
+    /// Reloads only the conversation threads (no worktree re-probe). Used to
+    /// react to `AgentConversationStore.threadChangeCounter` so newly created
+    /// ACP agents appear in the per-project Chats list immediately.
+    func reloadThreads(vibespaceID: UUID?) async {
+        await loadThreads(vibespaceID: vibespaceID)
     }
 
     /// Creates a worktree on a new branch. Returns the created path or an error.

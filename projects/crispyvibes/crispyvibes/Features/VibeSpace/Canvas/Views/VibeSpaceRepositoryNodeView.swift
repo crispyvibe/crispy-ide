@@ -7,6 +7,7 @@ import SwiftUI
 struct VibeSpaceRepositoryNodeView: View {
     @Environment(\.appThemePalette) private var palette
     @Environment(\.crispyvibesTheme) private var theme
+    @Environment(\.crispyvibesUIScale) private var scale
 
     let title: String
     let worktrees: [AnyProjectSession]
@@ -111,44 +112,48 @@ struct VibeSpaceRepositoryNodeView: View {
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) { showOtherWorktrees.toggle() }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: scale.spacing(6)) {
                     Image(systemName: showOtherWorktrees ? "chevron.down" : "chevron.right")
                         .font(AppTypographyTokens.scaledSystem(9, weight: .semibold))
                         .foregroundStyle(palette.secondaryTextColor)
+                        .frame(width: scale.iconSize(12))
                     Text(AppStrings.Worktree.otherWorktrees(otherWorktrees.count))
                         .font(AppTypographyTokens.caption2)
                         .foregroundStyle(palette.secondaryTextColor)
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, scale.spacing(10))
+                .frame(minHeight: scale.iconSize(26))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityHint(showOtherWorktrees ? AppStrings.Worktree.expandedHint : AppStrings.Worktree.collapsedHint)
 
             if showOtherWorktrees {
                 ForEach(otherWorktrees) { worktree in
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.triangle.branch")
-                            .font(AppTypographyTokens.scaledIcon(10))
-                            .foregroundStyle(palette.secondaryTextColor.opacity(0.7))
-                        Text(worktree.displayName)
-                            .font(AppTypographyTokens.caption)
-                            .foregroundStyle(palette.secondaryTextColor)
-                            .lineLimit(1)
-                        Spacer(minLength: 6)
-                        Button { onOpenWorktree(worktree.path) } label: {
+                    // Whole row opens the worktree — not just the trailing word.
+                    Button { onOpenWorktree(worktree.path) } label: {
+                        HStack(spacing: scale.spacing(8)) {
+                            Image(systemName: "arrow.triangle.branch")
+                                .font(AppTypographyTokens.scaledIcon(10))
+                                .foregroundStyle(palette.secondaryTextColor)
+                            Text(worktree.displayName)
+                                .font(AppTypographyTokens.caption)
+                                .foregroundStyle(palette.secondaryTextColor)
+                                .lineLimit(1)
+                            Spacer(minLength: scale.spacing(6))
                             Text(AppStrings.Worktree.open)
                                 .font(AppTypographyTokens.caption2Semibold)
                                 .foregroundStyle(accentColor)
                         }
-                        .buttonStyle(.plain)
-                        .help(AppStrings.Worktree.openAsProjectHelp)
-                        .accessibilityIdentifier("vibespace.sidebar.unified.open-worktree")
+                        .padding(.horizontal, scale.spacing(12))
+                        .frame(minHeight: scale.iconSize(26))
+                        .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 3)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .help(AppStrings.Worktree.openAsProjectHelp)
+                    .accessibilityLabel(AppStrings.Worktree.openWorktreeLabel(worktree.displayName))
+                    .accessibilityIdentifier("vibespace.sidebar.unified.open-worktree")
                     .contextMenu {
                         Button(AppStrings.Worktree.openAsProject) { onOpenWorktree(worktree.path) }
                         if worktree.path != primaryPath {
@@ -158,27 +163,31 @@ struct VibeSpaceRepositoryNodeView: View {
                 }
             }
         }
-        .padding(.leading, 14)
+        .padding(.leading, scale.spacing(14))
     }
 
     // Collapsible "section fence" — folds up the whole repo, styled lighter
     // than a tree row so the hierarchy reads flat.
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: scale.spacing(8)) {
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: scale.spacing(8)) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(AppTypographyTokens.scaledSystem(10, weight: .semibold))
                         .foregroundStyle(palette.secondaryTextColor)
+                        .frame(width: scale.iconSize(12))
                     Image(systemName: "shippingbox.fill")
+                        .font(AppTypographyTokens.caption)
                         .foregroundStyle(accentColor)
                     Text(title)
-                        .font(AppTypographyTokens.captionSemibold)
+                        .font(AppTypographyTokens.caption2Semibold)
+                        .textCase(.uppercase)
+                        .kerning(0.4)
                         .foregroundStyle(palette.primaryTextColor)
                         .lineLimit(1)
-                    Text(AppStrings.Worktree.worktreeCount(worktrees.count + otherWorktrees.count))
+                    Text(AppStrings.Worktree.worktreeCountSplit(open: worktrees.count, other: otherWorktrees.count))
                         .font(AppTypographyTokens.caption2)
                         .foregroundStyle(palette.secondaryTextColor)
                     Spacer(minLength: 0)
@@ -186,18 +195,32 @@ struct VibeSpaceRepositoryNodeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(AppStrings.Worktree.collapseExpandLabel(title))
+            .accessibilityHint(isExpanded ? AppStrings.Worktree.expandedHint : AppStrings.Worktree.collapsedHint)
 
             Button { onNewWorktree() } label: {
-                Image(systemName: "plus").font(AppTypographyTokens.scaledIcon(10))
+                Image(systemName: "arrow.triangle.branch")
+                    .font(AppTypographyTokens.scaledIcon(11))
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "plus.circle.fill").font(AppTypographyTokens.scaledIcon(7))
+                    }
+                    .frame(width: scale.iconSize(24), height: scale.iconSize(24))
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(palette.secondaryTextColor)
             .help(AppStrings.Worktree.newWorktree)
+            .accessibilityLabel(AppStrings.Worktree.newWorktree)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, scale.spacing(10))
+        .padding(.vertical, scale.spacing(6))
         .frame(maxWidth: .infinity, alignment: .leading)
+        // No background fill here: a full-width band reads as a *selected row*
+        // and competes with the real selection highlight. The uppercase/kerned
+        // title + repo glyph + count already mark this as a section header
+        // (Finder/Xcode convention), so selection stays unambiguous.
         .contentShape(Rectangle())
+        .accessibilityElement(children: .contain)
     }
 }
 

@@ -50,9 +50,65 @@ final class WorktreeServiceTests: XCTestCase {
         XCTAssertTrue(entries.isEmpty)
     }
 
+    // MARK: - Canonical (symlink-resolved) path dedup (F056)
+
+    func testParseAppliesCanonicalResolver() {
+        let porcelain = "worktree /repo/linked\nbranch refs/heads/feat\n"
+        let entries = WorktreeParser.parse(
+            porcelain: porcelain,
+            pathExists: { _ in true },
+            resolve: { _ in "/canonical/real" }
+        )
+        XCTAssertEqual(entries.first?.path, "/repo/linked")
+        XCTAssertEqual(entries.first?.canonicalPath, "/canonical/real")
+    }
+
+    func testParseDefaultCanonicalEqualsPathWhenNoSymlinks() {
+        let porcelain = "worktree /repo/main\nbranch refs/heads/main\n"
+        let entries = WorktreeParser.parse(porcelain: porcelain, pathExists: { _ in true })
+        XCTAssertEqual(entries.first?.canonicalPath, entries.first?.path)
+    }
+
+    /// A project opened via a symlinked path (`/var/...`) must still dedup
+    /// against the resolved real path git reports (`/private/var/...`), so the
+    /// active worktree does NOT repeat in "Other worktrees".
+    func testNotOpenedDedupsSymlinkedProjectPath() {
+        // git reports resolved real paths; parser keeps them (resolve is a no-op here).
+        let porcelain = """
+        worktree /private/var/repo-main
+        branch refs/heads/main
+
+        worktree /private/var/repo-feat
+        branch refs/heads/feat
+        """
+        let entries = WorktreeParser.parse(porcelain: porcelain, pathExists: { _ in true }, resolve: { $0 })
+
+        // Project opened via the symlink form; canonicalized the same way the service does.
+        let realByLink = ["/var/repo-main": "/private/var/repo-main"]
+        let resolve: (String) -> String = { realByLink[$0] ?? $0 }
+        let openedCanonical = Set(["/var/repo-main"].map(resolve))
+
+        let other = WorktreeEntry.notOpened(entries, openedCanonicalPaths: openedCanonical)
+        XCTAssertEqual(other.map(\.path), ["/private/var/repo-feat"], "main worktree should be excluded despite symlink form")
+
+        // Regression guard: comparing the raw (non-canonical) path fails to dedup.
+        let rawOther = WorktreeEntry.notOpened(entries, openedCanonicalPaths: ["/var/repo-main"])
+        XCTAssertEqual(rawOther.count, 2, "raw path compare would repeat the active worktree")
+    }
+
+    /// On a case-insensitive APFS volume, a worktree opened with different
+    /// casing than git reports must still dedup out of "Other worktrees".
+    func testNotOpenedDedupsCaseInsensitively() {
+        let porcelain = "worktree /private/var/Repo-Main\nbranch refs/heads/main\n"
+        let entries = WorktreeParser.parse(porcelain: porcelain, pathExists: { _ in true }, resolve: { $0 })
+        let opened = Set(["/private/var/repo-main"]) // lower-cased form
+        let other = WorktreeEntry.notOpened(entries, openedCanonicalPaths: opened)
+        XCTAssertTrue(other.isEmpty, "case-only path difference must still dedup")
+    }
+
     // MARK: - WorktreeService (injected git runner)
 
-    func testProbeResolvesCommonDirAndBranch() async {
+    func testProbeBuildsWorktreeRootPlacement() async {
         let tempDir = NSTemporaryDirectory() + "wt-\(UUID().uuidString)"
         try? FileManager.default.createDirectory(atPath: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: tempDir) }
@@ -60,21 +116,60 @@ final class WorktreeServiceTests: XCTestCase {
         let runner: WorktreeService.GitRunner = { args in
             func ok(_ s: String) -> (Int32, Data, Data) { (0, Data(s.utf8), Data()) }
             if args.contains("--git-common-dir") { return ok("/repo/.git") }
-            if args.contains("--abbrev-ref") { return ok("main") }
+            if args.contains("--show-toplevel") { return ok(tempDir) }
             if args.contains("list") { return ok("worktree \(tempDir)\nbranch refs/heads/main\n") }
             return (1, Data(), Data())
         }
 
-        let result = await WorktreeService(runGit: runner).probe(paths: ["/repo"])
-        XCTAssertEqual(result.infoByProject["/repo"]?.commonDir, "/repo/.git")
-        XCTAssertEqual(result.infoByProject["/repo"]?.branch, "main")
+        let result = await WorktreeService(runGit: runner).probe(paths: [tempDir])
+        let placement = result.placementByProject[tempDir]
+        XCTAssertEqual(placement?.commonDir, "/repo/.git")
+        XCTAssertEqual(placement?.worktreeRoot, WorktreeParser.resolveCanonical(tempDir))
+        XCTAssertEqual(placement?.relativeSubpath, "")
+        XCTAssertEqual(placement?.isWorktreeRoot, true)
         XCTAssertEqual(result.worktreesByCommonDir["/repo/.git"]?.count, 1)
+    }
+
+    /// The reported bug: a subdirectory opened as its own project shares the
+    /// repo's common-dir and branch, but is NOT the worktree root, so it must
+    /// be flagged `isWorktreeRoot == false` (→ standalone node, no duplicate
+    /// branch-labeled worktree, not counted among the repo's worktrees).
+    func testProbeSubdirectoryProjectIsNotWorktreeRoot() async {
+        let root = NSTemporaryDirectory() + "wt-\(UUID().uuidString)"
+        let sub = root + "/book-manuscript"
+        try? FileManager.default.createDirectory(atPath: sub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: root) }
+
+        let runner: WorktreeService.GitRunner = { args in
+            func ok(_ s: String) -> (Int32, Data, Data) { (0, Data(s.utf8), Data()) }
+            if args.contains("--git-common-dir") { return ok("/repo/.git") }
+            // git reports the containing worktree root for a subdirectory.
+            if args.contains("--show-toplevel") { return ok(root) }
+            if args.contains("list") { return ok("worktree \(root)\nbranch refs/heads/whiteboard\n") }
+            return (1, Data(), Data())
+        }
+
+        let result = await WorktreeService(runGit: runner).probe(paths: [sub])
+        let placement = result.placementByProject[sub]
+        XCTAssertEqual(placement?.worktreeRoot, WorktreeParser.resolveCanonical(root))
+        XCTAssertEqual(placement?.relativeSubpath, "book-manuscript")
+        XCTAssertEqual(placement?.isWorktreeRoot, false, "a subdirectory project must not be treated as a worktree root")
+    }
+
+    func testProbeSkipsProjectsThatAreNotGitRepos() async {
+        // No --show-toplevel (rev-parse fails outside a repo) → no placement.
+        let runner: WorktreeService.GitRunner = { args in
+            if args.contains("--git-common-dir") { return (0, Data("/repo/.git".utf8), Data()) }
+            return (128, Data(), Data("fatal: not a git repository".utf8))
+        }
+        let result = await WorktreeService(runGit: runner).probe(paths: ["/tmp/plain-folder"])
+        XCTAssertTrue(result.placementByProject.isEmpty)
     }
 
     func testProbeSkipsSSHPaths() async {
         let result = await WorktreeService(runGit: { _ in (0, Data(), Data()) })
             .probe(paths: ["ssh://host/repo"])
-        XCTAssertTrue(result.infoByProject.isEmpty)
+        XCTAssertTrue(result.placementByProject.isEmpty)
     }
 
     func testAddWorktreeSuccessReturnsPath() async {

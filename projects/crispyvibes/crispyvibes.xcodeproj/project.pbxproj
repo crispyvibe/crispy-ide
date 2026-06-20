@@ -43,6 +43,7 @@
 		17D9F9867D965C7BF79D5718 /* CrispyVibesBrowserWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBC20EA6850FBCF7E4B11E7 /* CrispyVibesBrowserWebView.swift */; };
 		18A7EBE079747898EC0BCA41 /* VibeSpaceStateParkingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */; };
 		C2D00000000000000000002C /* WorktreeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002B /* WorktreeServiceTests.swift */; };
+		C2D0000000000000000000F1 /* ContentSurfacePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */; };
 		1A2B3C4D5E6F708090A0B0C0 /* NewTerminalPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3C4D5E6F70809091A1B1C1 /* NewTerminalPopover.swift */; };
 		1C1584E11C4B8C1A48B680DB /* TerminalSessionCommandDispatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59932D5C5F2165C815170786 /* TerminalSessionCommandDispatch.swift */; };
 		1D7A942377D2F5058C127D21 /* BoardInteractionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9319FACD47F3ED87CD2C2D28 /* BoardInteractionControllerTests.swift */; };
@@ -484,6 +485,7 @@
 		C2D00000000000000000002E /* ContentViewUnifiedSidebarActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */; };
 		C2D000000000000000000028 /* WorktreeServicing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000027 /* WorktreeServicing.swift */; };
 		C2D00000000000000000002A /* WorktreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000029 /* WorktreeService.swift */; };
+		C2D0000000000000000000F3 /* ContentPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D0000000000000000000F2 /* ContentPresentation.swift */; };
 		C2D000000000000000000024 /* VibeSpaceWorktreeNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */; };
 		C2D000000000000000000026 /* VibeSpaceRepositoryNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */; };
 		C2D000000000000000000004 /* VibeSpaceSidebarFilesPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000003 /* VibeSpaceSidebarFilesPane.swift */; };
@@ -1109,6 +1111,7 @@
 		B3FE6FAFD6CEFD6F405CDCC8 /* TerminalViewModelPresets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalViewModelPresets.swift; sourceTree = "<group>"; };
 		B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateParkingTests.swift; sourceTree = "<group>"; };
 		C2D00000000000000000002B /* WorktreeServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/VibeSpace/WorktreeServiceTests.swift; sourceTree = SOURCE_ROOT; };
+		C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/VibeSpace/Support/ContentSurfacePolicyTests.swift; sourceTree = SOURCE_ROOT; };
 		B4D2E5F6A7C8B9012F3A4D85 /* TmuxService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmuxService.swift; sourceTree = "<group>"; };
 		B51662ADBA65455898E6CA36 /* DockPreviewBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DockPreviewBridge.swift; sourceTree = "<group>"; };
 		B5EB1846F17F63B52C6107C8 /* AppSettingsSheetViewGeneral.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewGeneral.swift; sourceTree = "<group>"; };
@@ -1143,6 +1146,7 @@
 		C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewUnifiedSidebarActions.swift; sourceTree = "<group>"; };
 		C2D000000000000000000027 /* WorktreeServicing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Protocols/WorktreeServicing.swift; sourceTree = SOURCE_ROOT; };
 		C2D000000000000000000029 /* WorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Services/WorktreeService.swift; sourceTree = SOURCE_ROOT; };
+		C2D0000000000000000000F2 /* ContentPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Canvas/Support/ContentPresentation.swift; sourceTree = SOURCE_ROOT; };
 		C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceWorktreeNodeView.swift; sourceTree = "<group>"; };
 		C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceRepositoryNodeView.swift; sourceTree = "<group>"; };
 		C2D000000000000000000003 /* VibeSpaceSidebarFilesPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarFilesPane.swift; sourceTree = "<group>"; };
@@ -1744,6 +1748,7 @@
 				07B977ECF638A5A85D81A20C /* VibeSpaceStateTestsOverridesAndPaths.swift */,
 				B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */,
 				C2D00000000000000000002B /* WorktreeServiceTests.swift */,
+				C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */,
 				5C9C1F8E3A5A38C9C43E8859 /* CLICommandRouterBrowserOpenTests.swift */,
 				36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */,
 				AABBCCDD11223344EEFF0001 /* CLISocketServerResilienceTests.swift */,
@@ -3354,6 +3359,7 @@
 				C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */,
 				C2D000000000000000000027 /* WorktreeServicing.swift */,
 				C2D000000000000000000029 /* WorktreeService.swift */,
+				C2D0000000000000000000F2 /* ContentPresentation.swift */,
 				C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */,
 				C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */,
 			);
@@ -3759,6 +3765,7 @@
 				C2D00000000000000000002E /* ContentViewUnifiedSidebarActions.swift in Sources */,
 				C2D000000000000000000028 /* WorktreeServicing.swift in Sources */,
 				C2D00000000000000000002A /* WorktreeService.swift in Sources */,
+				C2D0000000000000000000F3 /* ContentPresentation.swift in Sources */,
 				C2D000000000000000000024 /* VibeSpaceWorktreeNodeView.swift in Sources */,
 				C2D000000000000000000026 /* VibeSpaceRepositoryNodeView.swift in Sources */,
 				A10000000000000000000004 /* FileItem.swift in Sources */,
@@ -4188,6 +4195,7 @@
 				12C586A1AF30570016CA09C7 /* VibeSpaceStateTests.swift in Sources */,
 				18A7EBE079747898EC0BCA41 /* VibeSpaceStateParkingTests.swift in Sources */,
 				C2D00000000000000000002C /* WorktreeServiceTests.swift in Sources */,
+				C2D0000000000000000000F1 /* ContentSurfacePolicyTests.swift in Sources */,
 				D2E735AB928E8D15CEA87462 /* CLICommandRouterBrowserOpenTests.swift in Sources */,
 				CCDC8997D1ABDB93ECD16E3E /* CLICommandRouterBrowserListTests.swift in Sources */,
 				AABBCCDD11223344EEFF0002 /* CLISocketServerResilienceTests.swift in Sources */,

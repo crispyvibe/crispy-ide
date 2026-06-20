@@ -141,7 +141,7 @@ extension ContentView {
                 if case let .acp(id, _, _, _) = $0 { return id == tileID }
                 return false
             })
-        case .filePreview:
+        case .filePreview, .todos:
             return nil
         case let .file(_, fileURL):
             return items.firstIndex(where: {
@@ -210,6 +210,15 @@ extension ContentView {
         let spotlight = makeSpotlightState(
             source: .vibeCast,
             title: AppStrings.VibeCast.title,
+            workingDirectoryURL: spotlightHomeDirectoryURL
+        )
+        setTerminalSpotlight(spotlight, animated: animated)
+    }
+
+    func presentTodosSpotlight(animated: Bool = true) {
+        let spotlight = makeSpotlightState(
+            source: .todos,
+            title: AppStrings.Todos.title,
             workingDirectoryURL: spotlightHomeDirectoryURL
         )
         setTerminalSpotlight(spotlight, animated: animated)

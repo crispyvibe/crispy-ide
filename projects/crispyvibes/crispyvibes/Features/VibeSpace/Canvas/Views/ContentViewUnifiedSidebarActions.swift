@@ -64,26 +64,9 @@ extension ContentView {
                 handleVibeSpaceSidebarTransferDrop(plans, for: project)
             },
             onOpenConversationThread: { thread in
-                if vibespaceView.selectedCanvasMode == .terminalOnly {
-                    // Board mode: show floating preview
-                    let project = vibespaceView.focusedProject ?? vibespaceView.activeVibeSpaceProjects.first
-                    dockedAgentPreviewCoordinator.showPreview(
-                        threadId: thread.id,
-                        title: thread.title,
-                        agentId: thread.agentId,
-                        projectIdentifier: project?.projectIdentifier,
-                        vibespaceID: vibespaceShell.activeVibeSpaceID
-                    )
-                } else {
-                    // Detailed mode: open as tab
-                    _ = contentViewerStore.openACPPaneForThread(
-                        agentId: thread.agentId,
-                        projectPath: thread.projectPath,
-                        threadId: thread.id,
-                        projects: vibespaceView.activeVibeSpaceProjects,
-                        vibespaceID: vibespaceShell.activeVibeSpaceID
-                    )
-                }
+                // Surface (docked preview in board mode vs detail tab) is decided
+                // centrally by ContentSurfacePolicy via present(_:).
+                vibespaceCanvasActionsCoordinator.present(.conversationThread(thread))
             },
             onDeleteConversationThread: { threadId in
                 // Close tabs and tear down store
@@ -125,15 +108,15 @@ extension ContentView {
         )
     }
 
-    /// Open a new agent (ACP) conversation pane scoped to a specific worktree.
+    /// Open a new agent (ACP) conversation scoped to a specific worktree.
+    /// Surface (board tile vs detail tab) is decided centrally by
+    /// `VibeSpaceCanvasActionsCoordinator.present(_:)` based on the active view.
     private func newChat(for project: AnyProjectSession) {
-        if let activeVibeSpaceID = vibespaceShell.activeVibeSpaceID {
-            layoutPersistence.setCanvasMode(.detailed, for: activeVibeSpaceID)
-        }
-        _ = contentViewerStore.openACPPane(
-            focusedProject: project,
-            preferredAgentID: appContainer.acpVibeSpaceSessionService.preferredAgentID,
-            vibespaceID: vibespaceShell.activeVibeSpaceID
+        vibespaceCanvasActionsCoordinator.present(
+            .agentChat(
+                project: project,
+                preferredAgentID: appContainer.acpVibeSpaceSessionService.preferredAgentID
+            )
         )
     }
 
@@ -225,13 +208,11 @@ extension ContentView {
     }
 
     private func openACPConversationFromVibeSpace() {
-        if let activeVibeSpaceID = vibespaceShell.activeVibeSpaceID {
-            layoutPersistence.setCanvasMode(.detailed, for: activeVibeSpaceID)
-        }
-        _ = contentViewerStore.openACPPane(
-            focusedProject: appContainer.acpVibeSpaceSessionService.focusedProject,
-            preferredAgentID: appContainer.acpVibeSpaceSessionService.preferredAgentID,
-            vibespaceID: vibespaceShell.activeVibeSpaceID
+        vibespaceCanvasActionsCoordinator.present(
+            .agentChat(
+                project: appContainer.acpVibeSpaceSessionService.focusedProject,
+                preferredAgentID: appContainer.acpVibeSpaceSessionService.preferredAgentID
+            )
         )
     }
 
@@ -304,7 +285,11 @@ extension ContentView {
     }
 
     private func openVibeSpaceSidebarItemInTab(_ item: FileItem, in project: AnyProjectSession) {
-        let shouldRevealEditor = !item.isDirectory && vibespaceView.selectedCanvasMode != .terminalOnly
+        // File surfacing: reveal the editor only when the policy routes files
+        // to a detail tab (i.e. not board mode, where a file shows as a docked
+        // preview). Same rulebook the file-open use case consults.
+        let shouldRevealEditor = !item.isDirectory
+            && ContentSurfacePolicy.surface(for: .file, mode: vibespaceView.selectedCanvasMode) == .detailTab
         prepareProjectForSidebarInteraction(project, revealEditor: shouldRevealEditor)
         project.folderExplorer.openInTab(item)
     }

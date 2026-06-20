@@ -24,6 +24,10 @@ final class VibeSpaceCanvasActionsCoordinator {
     /// parked. Wired by `AppContainer` after construction.
     weak var dockedBrowserCoordinator: DockedBrowserCoordinator?
 
+    /// Floating agent-conversation preview used when surfacing a conversation
+    /// thread in board mode. Wired by `AppContainer` after construction.
+    weak var dockedAgentPreviewCoordinator: DockedAgentPreviewCoordinator?
+
     init(
         appShellStore: AppShellStore,
         vibespaceCatalogStore: VibeSpaceCatalogStore,
@@ -46,21 +50,112 @@ final class VibeSpaceCanvasActionsCoordinator {
         self.vibespaceCanvasFileOpenUseCase = VibeSpaceCanvasFileOpenUseCase(commentLifecycle: commentLifecycle)
     }
 
-    func toggleVibeCast() {
-        guard activeVibeSpaceID != nil else { return }
+    func toggleVibeCast() { present(.vibeCast) }
+
+    func toggleTodos() { present(.todos) }
+
+    /// Single entry point for surfacing content in a vibespace. Consults
+    /// `ContentSurfacePolicy` for the active canvas mode, then routes to the
+    /// correct surface — so callers never branch on canvas mode or force a
+    /// layout switch themselves. New content types and entry points should go
+    /// through here (or, for flows with bespoke creation like terminal/file,
+    /// at least consult `ContentSurfacePolicy`) rather than re-deriving the
+    /// decision per call site.
+    func present(_ content: PresentableContent) {
+        guard let vibespaceID = activeVibeSpaceID else { return }
         prepareForVibeSpacePresentation()
 
-        if !splitViewStore.activateExistingTab(matching: { $0.kind == .vibeCast }) {
-            contentViewerStore.openVibeCast()
+        switch ContentSurfacePolicy.surface(for: content.kind, mode: selectedCanvasMode) {
+        case .detailTab:
+            layoutPersistence.setCanvasMode(.detailed, for: vibespaceID)
+            presentInDetailTab(content, vibespaceID: vibespaceID)
+        case .boardTile:
+            presentOnBoard(content, vibespaceID: vibespaceID)
+        case .dockedPreview:
+            presentAsDockedPreview(content, vibespaceID: vibespaceID)
+        case .spotlight:
+            // No PresentableContent case resolves to spotlight today (terminal
+            // owns that dispatch).
+            fallbackToDetailTab(content, vibespaceID: vibespaceID,
+                                "PresentableContent \(content.kind) unexpectedly routed to .spotlight")
         }
     }
 
-    func toggleTodos() {
-        guard activeVibeSpaceID != nil else { return }
-        prepareForVibeSpacePresentation()
+    /// Defensive fallback for a (content, surface) combination the policy does
+    /// not produce today. Asserts in debug so a future policy change that
+    /// breaks the invariant is caught loudly, while never dropping the action
+    /// in production.
+    private func fallbackToDetailTab(_ content: PresentableContent, vibespaceID: UUID, _ reason: @autoclosure () -> String) {
+        assertionFailure(reason())
+        layoutPersistence.setCanvasMode(.detailed, for: vibespaceID)
+        presentInDetailTab(content, vibespaceID: vibespaceID)
+    }
 
-        if !splitViewStore.activateExistingTab(matching: { $0.kind == .todos }) {
-            contentViewerStore.openTodos()
+    private func presentInDetailTab(_ content: PresentableContent, vibespaceID: UUID) {
+        switch content {
+        case let .agentChat(project, preferredAgentID):
+            _ = contentViewerStore.openACPPane(
+                focusedProject: project,
+                preferredAgentID: preferredAgentID,
+                vibespaceID: vibespaceID
+            )
+        case let .conversationThread(thread):
+            _ = contentViewerStore.openACPPaneForThread(
+                agentId: thread.agentId,
+                projectPath: thread.projectPath,
+                threadId: thread.id,
+                projects: activeVibeSpace?.projects ?? [],
+                vibespaceID: vibespaceID
+            )
+        case .todos:
+            if !splitViewStore.activateExistingTab(matching: { $0.kind == .todos }) {
+                contentViewerStore.openTodos()
+            }
+        case .vibeCast:
+            if !splitViewStore.activateExistingTab(matching: { $0.kind == .vibeCast }) {
+                contentViewerStore.openVibeCast()
+            }
+        }
+    }
+
+    private func presentOnBoard(_ content: PresentableContent, vibespaceID: UUID) {
+        switch content {
+        case let .agentChat(project, _):
+            // Scope the board's new agent to the requested project (no-op if
+            // it's already focused), then add a tile — staying in board view.
+            if let project, activeVibeSpace?.focusedProjectID != project.id {
+                focusProject(project)
+            }
+            NotificationCenter.default.post(name: .addACPTileToBoard, object: nil)
+        case .conversationThread, .todos, .vibeCast:
+            // Policy never routes these to the board today.
+            fallbackToDetailTab(content, vibespaceID: vibespaceID,
+                                "PresentableContent \(content.kind) unexpectedly routed to .boardTile")
+        }
+    }
+
+    private func presentAsDockedPreview(_ content: PresentableContent, vibespaceID: UUID) {
+        switch content {
+        case let .conversationThread(thread):
+            guard let dockedAgentPreviewCoordinator else {
+                // Should be wired by AppContainer; assert on misconfiguration
+                // but never drop the action.
+                fallbackToDetailTab(content, vibespaceID: vibespaceID,
+                                    "dockedAgentPreviewCoordinator not wired")
+                return
+            }
+            let project = activeVibeSpace?.focusedProject ?? activeVibeSpace?.projects.first
+            dockedAgentPreviewCoordinator.showPreview(
+                threadId: thread.id,
+                title: thread.title,
+                agentId: thread.agentId,
+                projectIdentifier: project?.projectIdentifier,
+                vibespaceID: vibespaceID
+            )
+        case .agentChat, .todos, .vibeCast:
+            // Policy never routes these to a docked preview today.
+            fallbackToDetailTab(content, vibespaceID: vibespaceID,
+                                "PresentableContent \(content.kind) unexpectedly routed to .dockedPreview")
         }
     }
 
@@ -80,6 +175,14 @@ final class VibeSpaceCanvasActionsCoordinator {
         repositoryRootURL: URL,
         item: VibeSpaceSourceControlStatusItem
     ) {
+        // A git diff has no board surface. In board mode, show the file in the
+        // floating docked preview (consistent with every other file open on the
+        // board) instead of yanking the layout to detailed; the diff view itself
+        // is a detailed-view feature. Decision comes from the central policy.
+        if ContentSurfacePolicy.surface(for: .file, mode: selectedCanvasMode) == .dockedPreview {
+            dockPreviewBridge?.requestPreview(for: item.url.standardizedFileURL)
+            return
+        }
         vibespaceCanvasFileOpenUseCase.openSourceControlDiff(
             repositoryRootURL: repositoryRootURL,
             item: item,
@@ -550,3 +653,5 @@ final class VibeSpaceCanvasActionsCoordinator {
         }
     }
 }
+
+
