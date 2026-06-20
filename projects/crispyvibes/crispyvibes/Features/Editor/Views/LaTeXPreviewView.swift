@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import OSLog
 import SwiftUI
@@ -26,6 +27,13 @@ struct LaTeXPreviewView: NSViewRepresentable {
     var insertionRequest: EditorInsertionRequest? = nil
     var onInsertionConsumed: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
+    /// F049: rich-mode comment surface — bridge + store + panel + file path.
+    /// When present, comments are surfaced in the WYSIWYG canvas (block
+    /// decorations + a floating composer) the same way as the markdown rich view.
+    @Environment(\.codeEditorCommentBridge) private var commentBridge: CodeEditorCommentBridge?
+    @Environment(\.vibespaceCommentStoreEnvironment) private var commentStoreEnv: VibeSpaceCommentStore?
+    @Environment(\.commentsPanelEnvironment) private var commentsPanelEnv: CommentsPanelStore?
+    @Environment(\.commentsFilePathEnvironment) private var commentsFilePath: String?
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -34,6 +42,9 @@ struct LaTeXPreviewView: NSViewRepresentable {
         contentController.add(context.coordinator, name: "latexReady")
         contentController.add(context.coordinator, name: "latexChanged")
         contentController.add(context.coordinator, name: "latexLog")
+        contentController.add(context.coordinator, name: "commentsRichSelectionChanged")
+        contentController.add(context.coordinator, name: "commentsRichRequestAdd")
+        contentController.add(context.coordinator, name: "commentsRichGutterClick")
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
@@ -64,6 +75,19 @@ struct LaTeXPreviewView: NSViewRepresentable {
         context.coordinator.syncThemeIfNeeded()
         context.coordinator.applyCommandIfNeeded()
         context.coordinator.applyInsertionIfNeeded()
+        // F049: keep the bridge pointed at the live webView and re-attempt the
+        // store subscription (the comment env often arrives after makeNSView).
+        if let bridge = commentBridge {
+            bridge.observeRichMode(webView: webView)
+        }
+        if context.coordinator.commentStoreSubscription == nil, let store = commentStoreEnv {
+            context.coordinator.commentStoreSubscription = store.changes
+                .receive(on: RunLoop.main)
+                .sink { [weak coordinator = context.coordinator] _ in
+                    coordinator?.syncCommentDecorationsIfNeeded()
+                }
+        }
+        context.coordinator.syncCommentDecorationsIfNeeded()
     }
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
@@ -73,6 +97,9 @@ struct LaTeXPreviewView: NSViewRepresentable {
         controller.removeScriptMessageHandler(forName: "latexReady")
         controller.removeScriptMessageHandler(forName: "latexChanged")
         controller.removeScriptMessageHandler(forName: "latexLog")
+        controller.removeScriptMessageHandler(forName: "commentsRichSelectionChanged")
+        controller.removeScriptMessageHandler(forName: "commentsRichRequestAdd")
+        controller.removeScriptMessageHandler(forName: "commentsRichGutterClick")
     }
 
     /// Bundled `LaTeXRuntime/index.html` (folder reference). `nil` if the
@@ -98,11 +125,34 @@ struct LaTeXPreviewView: NSViewRepresentable {
         private var lastInjectedTheme = ""
         private var lastHandledCommandID: UUID?
         private var lastInsertionID: UUID?
+        var commentStoreSubscription: AnyCancellable?
         private let logger = Logger(subsystem: "com.crispyvibe.app", category: "latex.preview")
 
         init(parent: LaTeXPreviewView) { self.parent = parent }
 
-        func attach(webView: WKWebView) { self.webView = webView }
+        func attach(webView: WKWebView) {
+            self.webView = webView
+            // F049: re-sync comment decorations whenever the store changes.
+            if commentStoreSubscription == nil, let store = parent.commentStoreEnv {
+                commentStoreSubscription = store.changes
+                    .receive(on: RunLoop.main)
+                    .sink { [weak self] _ in self?.syncCommentDecorationsIfNeeded() }
+            }
+        }
+
+        /// F049: push the current per-file threads into the WYSIWYG canvas via
+        /// the shared rich-mode bridge (delegates JSON + JS to the bridge).
+        func syncCommentDecorationsIfNeeded() {
+            guard isReady,
+                  let bridge = parent.commentBridge,
+                  let store = parent.commentStoreEnv,
+                  let path = parent.commentsFilePath else { return }
+            bridge.syncRichModeDecorations(
+                from: store,
+                filePath: path,
+                selectedThreadID: parent.commentsPanelEnv?.selectedThreadID
+            )
+        }
 
         func syncContentIfNeeded(force: Bool = false) {
             guard isReady, let webView, !parent.isBufferLoading else { return }
@@ -146,6 +196,35 @@ struct LaTeXPreviewView: NSViewRepresentable {
                 syncContentIfNeeded(force: true)
                 applyCommandIfNeeded()
                 applyInsertionIfNeeded()
+                // F049: register the webview with the bridge and decorate.
+                if let bridge = parent.commentBridge, let webView {
+                    bridge.observeRichMode(webView: webView)
+                }
+                syncCommentDecorationsIfNeeded()
+            case "commentsRichSelectionChanged":
+                // Selection moved; the JS composer owns its own state.
+                break
+            case "commentsRichRequestAdd":
+                guard let info = message.body as? [String: Any] else { return }
+                let anchor = CommentAnchor.fromNotificationPayload(info)
+                if let body = info["body"] as? String, !body.isEmpty {
+                    Task { @MainActor [weak self] in
+                        guard let self,
+                              let store = self.parent.commentStoreEnv,
+                              let path = self.parent.commentsFilePath else { return }
+                        _ = await store.add(filePath: path, anchor: anchor, body: body, surfaceKind: .file)
+                    }
+                } else {
+                    NotificationCenter.default.post(
+                        name: .commentsRequestAddForSelection,
+                        object: nil,
+                        userInfo: anchor.notificationPayload(filePath: parent.commentsFilePath)
+                    )
+                }
+            case "commentsRichGutterClick":
+                guard let info = message.body as? [String: Any],
+                      let threadID = info["threadID"] as? String else { return }
+                parent.commentsPanelEnv?.revealForReply(threadID: threadID)
             case "latexChanged":
                 guard let source = message.body as? String, source != parent.content else { return }
                 // Mark this as the last-injected content so the buffer update we
@@ -153,6 +232,8 @@ struct LaTeXPreviewView: NSViewRepresentable {
                 // the DOM and reset the caret while the user is typing.
                 lastInjectedContent = source
                 parent.onEdit?(source)
+                // Source lines shifted; re-push decorations onto the new layout.
+                syncCommentDecorationsIfNeeded()
             case "latexLog":
                 logger.debug("katex: \(String(describing: message.body), privacy: .public)")
             default:

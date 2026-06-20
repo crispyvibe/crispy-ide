@@ -312,9 +312,18 @@
       if (el) content.appendChild(el);
     });
     if (!content.childNodes.length) content.appendChild(emptyParagraph());
+    // Always end on an editable paragraph. When the document's last block is a
+    // read-only atom (math, raw environment, comment, title), there is no caret
+    // landing spot after it, so the user can't append new text at the end.
+    var lastBlock = content.lastElementChild;
+    if (lastBlock && lastBlock.classList && lastBlock.classList.contains("atom")) {
+      content.appendChild(emptyParagraph());
+    }
     typesetMath(content);
     snapshotPristine(content);
+    annotateLatexSourceLines();
     suppressSync = false;
+    if (window.crispyvibesComments) window.crispyvibesComments.redecorate();
   }
 
   // Record each editable block's rendered HTML so serialization can tell which
@@ -607,21 +616,26 @@
     return s || null;
   }
 
+  // Emit the LaTeX source for one top-level canvas child (or null to skip).
+  // Shared by serializeCanvas and the comment source-line annotator so the
+  // line numbers comments anchor to exactly match the serialized file.
+  function emitNodeSource(node) {
+    if (node.nodeType === 1 && node.dataset &&
+        node.dataset.srcOriginal !== undefined &&
+        node.dataset.pristine !== undefined &&
+        node.innerHTML === node.dataset.pristine) {
+      // Untouched editable block → re-emit its original source verbatim, so a
+      // single edit never reflows/normalizes the rest of the document.
+      return node.dataset.srcOriginal;
+    }
+    return blockToLatex(node);
+  }
+
   function serializeCanvas() {
     var content = document.getElementById("content");
     var parts = [];
     content.childNodes.forEach(function (node) {
-      var s;
-      // Untouched editable block → re-emit its original source verbatim, so a
-      // single edit never reflows/normalizes the rest of the document.
-      if (node.nodeType === 1 && node.dataset &&
-          node.dataset.srcOriginal !== undefined &&
-          node.dataset.pristine !== undefined &&
-          node.innerHTML === node.dataset.pristine) {
-        s = node.dataset.srcOriginal;
-      } else {
-        s = blockToLatex(node);
-      }
+      var s = emitNodeSource(node);
       if (s !== null && s !== "") parts.push(s);
     });
     var body = parts.join("\n\n");
@@ -630,11 +644,71 @@
     return out;
   }
 
+  // ---- comment source-line mapping (F049) -------------------------------
+
+  // Tag each top-level block with the 1-based line range it occupies in the
+  // serialized .tex, mirroring serializeCanvas's layout (preamble + "\n" +
+  // parts joined by "\n\n"). Comments anchor by these line numbers, exactly
+  // like the markdown rich editor.
+  function annotateLatexSourceLines() {
+    var content = document.getElementById("content");
+    if (!content) return;
+    var line = model.pre ? (model.pre.split("\n").length + 1) : 1;
+    var first = true;
+    content.childNodes.forEach(function (node) {
+      if (node.nodeType !== 1) return;
+      var s = emitNodeSource(node);
+      if (s === null || s === "") return;
+      if (!first) line += 2; // the "\n\n" join between blocks
+      var span = s.split("\n").length;
+      node.setAttribute("data-comment-source-line", String(line));
+      node.setAttribute("data-comment-source-line-end", String(line + span - 1));
+      line += span - 1;
+      first = false;
+    });
+  }
+
+  function elementForLatexSourceLine(targetLine) {
+    var content = document.getElementById("content");
+    if (!content) return null;
+    var children = content.children;
+    var fallback = null;
+    for (var i = 0; i < children.length; i++) {
+      var el = children[i];
+      var s = parseInt(el.getAttribute("data-comment-source-line") || "0", 10);
+      var e = parseInt(el.getAttribute("data-comment-source-line-end") || "0", 10);
+      if (s > 0 && e > 0 && targetLine >= s && targetLine <= e) return el;
+      if (s > 0 && s <= targetLine) fallback = el;
+    }
+    return fallback;
+  }
+
+  function selectionLatexSourceLineRange() {
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+    var range = sel.getRangeAt(0);
+    var content = document.getElementById("content");
+    function blockAncestor(node) {
+      var el = node && node.nodeType === 1 ? node : (node && node.parentElement);
+      while (el && el !== content && !(el.hasAttribute && el.hasAttribute("data-comment-source-line"))) {
+        el = el.parentElement;
+      }
+      return el && el !== content ? el : null;
+    }
+    var sb = blockAncestor(range.startContainer);
+    var eb = blockAncestor(range.endContainer);
+    if (!sb && !eb) return null;
+    var startLine = parseInt((sb || eb).getAttribute("data-comment-source-line") || "0", 10);
+    var endLine = parseInt((eb || sb).getAttribute("data-comment-source-line-end") || "0", 10);
+    if (startLine <= 0 || endLine <= 0) return null;
+    return { startLine: startLine, endLine: Math.max(startLine, endLine), anchorText: sel.toString().slice(0, 4096) };
+  }
+
   function scheduleSync() {
     if (suppressSync) return;
     if (pendingTimer) clearTimeout(pendingTimer);
     pendingTimer = setTimeout(function () {
-      try { postChanged(serializeCanvas()); } catch (e) { log("serialize: " + e); }
+      try { postChanged(serializeCanvas()); annotateLatexSourceLines(); } catch (e) { log("serialize: " + e); }
     }, 220);
   }
 
@@ -713,6 +787,203 @@
     }
   }
 
+  // ---- comments (F049) --------------------------------------------------
+  // Mirrors the markdown rich editor: source-line anchoring, a floating "add
+  // comment" composer on selection, and class-only block decorations (no child
+  // nodes injected into editable blocks, so the verbatim/pristine round-trip is
+  // never disturbed). Thread navigation uses the SwiftUI panel via scrollToAnchor.
+
+  var crispyvibesCommentThreads = [];
+  var crispyvibesSelectedThreadID = null;
+  var crispyvibesLastSelection = null;
+
+  function postComment(name, payload) {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[name]) {
+      window.webkit.messageHandlers[name].postMessage(payload);
+    }
+  }
+
+  function injectCommentStyles() {
+    if (document.getElementById("crispyvibes-comment-styles")) return;
+    var style = document.createElement("style");
+    style.id = "crispyvibes-comment-styles";
+    style.textContent =
+      "[data-comment-thread]{border-radius:4px;transition:background-color .2s;box-shadow:-3px 0 0 0 rgba(42,144,255,0.55);}" +
+      ".crispyvibes-comment-active{background-color:rgba(42,144,255,0.10);}" +
+      ".crispyvibes-comment-resolved{background-color:rgba(150,150,150,0.06);box-shadow:-3px 0 0 0 rgba(150,150,150,0.5);}" +
+      ".crispyvibes-comment-stale{box-shadow:-3px 0 0 0 rgba(255,165,0,0.7);}" +
+      ".crispyvibes-comment-selected{background-color:rgba(42,144,255,0.20)!important;outline:1px solid rgba(42,144,255,0.5);outline-offset:2px;}";
+    document.head.appendChild(style);
+  }
+
+  // Decoration is class/attribute-only: it never adds child nodes to a block,
+  // so a block's innerHTML (and thus its pristine/verbatim status) is unchanged.
+  window.crispyvibesComments = {
+    setComments: function (threads, selectedID) {
+      crispyvibesCommentThreads = Array.isArray(threads) ? threads : [];
+      crispyvibesSelectedThreadID = selectedID || null;
+      this.redecorate();
+    },
+    redecorate: function () {
+      var content = document.getElementById("content");
+      if (!content) return;
+      content.querySelectorAll("[data-comment-thread]").forEach(function (el) {
+        el.removeAttribute("data-comment-thread");
+        el.classList.remove(
+          "crispyvibes-comment-active", "crispyvibes-comment-resolved",
+          "crispyvibes-comment-stale", "crispyvibes-comment-selected"
+        );
+      });
+      crispyvibesCommentThreads.forEach(function (th) {
+        var el = elementForLatexSourceLine(th.startLine || 1);
+        if (!el) return;
+        el.setAttribute("data-comment-thread", th.id || "");
+        if (th.status === "resolved") el.classList.add("crispyvibes-comment-resolved");
+        else if (th.status === "stale") el.classList.add("crispyvibes-comment-stale");
+        else el.classList.add("crispyvibes-comment-active");
+        if (crispyvibesSelectedThreadID && th.id === crispyvibesSelectedThreadID) {
+          el.classList.add("crispyvibes-comment-selected");
+        }
+      });
+    },
+    scrollToAnchor: function (anchor) {
+      var line = (typeof anchor === "number") ? anchor : (anchor && anchor.startLine ? anchor.startLine : 1);
+      var el = elementForLatexSourceLine(line);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("crispyvibes-comment-selected");
+      setTimeout(function () { el.classList.remove("crispyvibes-comment-selected"); }, 1200);
+    },
+    scrollToLine: function (line) { this.scrollToAnchor({ startLine: line }); },
+    clearSelection: function () {
+      crispyvibesLastSelection = null;
+      var b = document.getElementById("crispyvibes-comment-add-button");
+      if (b) b.style.display = "none";
+    }
+  };
+
+  function crispyvibesSetupComments() {
+    injectCommentStyles();
+
+    var btn = document.createElement("button");
+    btn.id = "crispyvibes-comment-add-button";
+    btn.type = "button";
+    btn.textContent = "\uD83D\uDCAC Comment";
+    Object.assign(btn.style, {
+      position: "fixed", zIndex: "9998", display: "none", padding: "4px 9px",
+      font: "12px system-ui, sans-serif", background: "rgba(40,40,40,0.92)", color: "white",
+      border: "0.5px solid rgba(255,255,255,0.18)", borderRadius: "6px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.4)", cursor: "pointer", userSelect: "none"
+    });
+    btn.addEventListener("mousedown", function (e) { e.preventDefault(); });
+    document.body.appendChild(btn);
+
+    var composer = document.createElement("div");
+    composer.id = "crispyvibes-comment-composer";
+    Object.assign(composer.style, {
+      position: "fixed", zIndex: "10000", display: "none", width: "280px", padding: "8px",
+      background: "rgba(30,30,30,0.97)", border: "0.5px solid rgba(255,255,255,0.18)",
+      borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.5)", fontFamily: "system-ui, sans-serif"
+    });
+    var preview = document.createElement("div");
+    Object.assign(preview.style, {
+      maxHeight: "40px", overflow: "hidden", marginBottom: "6px", padding: "4px 6px",
+      background: "rgba(255,255,255,0.06)", borderRadius: "4px",
+      borderLeft: "2px solid rgba(120,120,255,0.6)", color: "rgba(255,255,255,0.6)",
+      fontSize: "11px", whiteSpace: "pre-wrap", wordBreak: "break-word"
+    });
+    composer.appendChild(preview);
+    var input = document.createElement("textarea");
+    Object.assign(input.style, {
+      width: "100%", minHeight: "44px", maxHeight: "90px", resize: "vertical", padding: "6px 8px",
+      background: "rgba(255,255,255,0.08)", border: "0.5px solid rgba(255,255,255,0.15)",
+      borderRadius: "6px", color: "white", fontSize: "13px", boxSizing: "border-box", outline: "none"
+    });
+    input.placeholder = "Write a comment...";
+    composer.appendChild(input);
+    var actions = document.createElement("div");
+    Object.assign(actions.style, { display: "flex", justifyContent: "flex-end", gap: "6px", marginTop: "6px" });
+    var cancel = document.createElement("button");
+    cancel.textContent = "Cancel";
+    Object.assign(cancel.style, {
+      padding: "3px 10px", background: "rgba(255,255,255,0.1)",
+      border: "0.5px solid rgba(255,255,255,0.2)", borderRadius: "4px",
+      color: "rgba(255,255,255,0.8)", fontSize: "12px", cursor: "pointer"
+    });
+    var submit = document.createElement("button");
+    submit.textContent = "Comment";
+    Object.assign(submit.style, {
+      padding: "3px 10px", background: "rgba(80,120,255,0.9)", border: "none",
+      borderRadius: "4px", color: "white", fontSize: "12px", fontWeight: "600", cursor: "pointer"
+    });
+    actions.appendChild(cancel); actions.appendChild(submit);
+    composer.appendChild(actions);
+    document.body.appendChild(composer);
+    composer.addEventListener("mousedown", function (e) { e.stopPropagation(); });
+
+    var anchorData = null;
+
+    function placeAt(rect, el) {
+      el.style.top = Math.max(8, rect.top - 30) + "px";
+      el.style.left = Math.min(window.innerWidth - 150, Math.max(8, rect.left)) + "px";
+    }
+    function showComposer(range) {
+      anchorData = range;
+      preview.textContent = (range.anchorText || "").substring(0, 120);
+      preview.style.display = range.anchorText ? "block" : "none";
+      input.value = "";
+      composer.style.top = btn.style.top;
+      composer.style.left = btn.style.left;
+      composer.style.display = "block";
+      btn.style.display = "none";
+      setTimeout(function () { input.focus(); }, 30);
+    }
+    function hideComposer() { composer.style.display = "none"; anchorData = null; input.value = ""; }
+
+    btn.addEventListener("click", function () {
+      if (crispyvibesLastSelection) showComposer(crispyvibesLastSelection);
+    });
+    cancel.addEventListener("click", function (e) { e.preventDefault(); hideComposer(); });
+    submit.addEventListener("click", function (e) {
+      e.preventDefault();
+      var body = input.value.trim();
+      if (!body || !anchorData) return;
+      postComment("commentsRichRequestAdd", {
+        startLine: anchorData.startLine, endLine: anchorData.endLine,
+        anchorText: anchorData.anchorText || "", body: body
+      });
+      hideComposer();
+    });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { e.preventDefault(); hideComposer(); }
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit.click(); }
+    });
+
+    function reposition() {
+      if (composer.style.display === "block") return;
+      var range = selectionLatexSourceLineRange();
+      var sel = window.getSelection();
+      if (range && sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        crispyvibesLastSelection = range;
+        var rect = sel.getRangeAt(0).getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) { btn.style.display = "none"; return; }
+        placeAt(rect, btn);
+        btn.style.display = "block";
+        postComment("commentsRichSelectionChanged", range);
+        return;
+      }
+      btn.style.display = "none";
+      crispyvibesLastSelection = null;
+    }
+    function schedule() { setTimeout(reposition, 0); }
+    document.addEventListener("selectionchange", schedule);
+    document.addEventListener("mouseup", schedule, true);
+    document.addEventListener("keyup", schedule, true);
+    document.addEventListener("scroll", function () {
+      if (btn.style.display === "block") reposition();
+    }, true);
+  }
+
   // ---- lifecycle --------------------------------------------------------
 
   function ready() {
@@ -726,9 +997,10 @@
         if (!pendingTimer) return;
         clearTimeout(pendingTimer);
         pendingTimer = null;
-        try { typesetMath(content); postChanged(serializeCanvas()); } catch (e) { log("serialize: " + e); }
+        try { typesetMath(content); postChanged(serializeCanvas()); annotateLatexSourceLines(); } catch (e) { log("serialize: " + e); }
       }, true);
     }
+    crispyvibesSetupComments();
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.latexReady) {
       window.webkit.messageHandlers.latexReady.postMessage({});
     }

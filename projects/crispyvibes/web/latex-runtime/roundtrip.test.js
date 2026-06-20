@@ -355,6 +355,25 @@ async function run() {
     out.includes("nested a") && out.includes("nested b") &&
     out.includes("\\item one") && out.includes("\\item two"), out);
 
+  // ---- Test 18: comment source-line annotation matches serialization --
+  console.log("Test 18: comment source-line annotation matches serialized lines");
+  env = makeEnv();
+  env.window.crispyvibesSetLatex(DOC);
+  out = await fireInputAndCapture(env.window, env.state);
+  const outLines18 = (out || "").split("\n");
+  const introEl = [...env.window.document.querySelectorAll("#content [data-comment-source-line]")]
+    .find((el) => el.tagName === "H2" && /Intro/.test(el.textContent));
+  check("heading block carries a source line", !!introEl, introEl && introEl.outerHTML.slice(0, 80));
+  if (introEl) {
+    const annotated = parseInt(introEl.getAttribute("data-comment-source-line"), 10);
+    const actual = outLines18.findIndex((l) => l.indexOf("\\section{Intro}") >= 0) + 1;
+    check("annotated line == serialized line", annotated === actual, { annotated, actual });
+  }
+  // The element lookup used by setComments/scrollToAnchor resolves the block.
+  check("comments API is exposed", typeof env.window.crispyvibesComments === "object" &&
+    typeof env.window.crispyvibesComments.setComments === "function" &&
+    typeof env.window.crispyvibesComments.scrollToAnchor === "function", typeof env.window.crispyvibesComments);
+
   console.log(failures === 0 ? "\nALL PASSED" : `\n${failures} FAILED`);
   process.exit(failures === 0 ? 0 : 1);
 }
