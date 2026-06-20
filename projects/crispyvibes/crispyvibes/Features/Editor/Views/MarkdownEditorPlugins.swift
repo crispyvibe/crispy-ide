@@ -25,7 +25,8 @@ enum EditorPluginRegistry {
         OfficePreviewPlugin(),
         GitDiffPreviewPlugin(),
         NotebookEditorPlugin(),
-        WhiteboardEditorPlugin()
+        WhiteboardEditorPlugin(),
+        LaTeXEditorPlugin()
     ]
 
     static func render(
@@ -365,6 +366,59 @@ private struct WhiteboardEditorPlugin: EditorContentPlugin {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("editor.whiteboard")
         return AnyView(editor)
+    }
+}
+
+@MainActor
+private struct LaTeXEditorPlugin: EditorContentPlugin {
+    let supportedTypes: Set<MarkdownViewModel.DocumentType> = [.latex]
+
+    func makeView(context: EditorPluginContext) -> AnyView {
+        let viewModel = context.viewModel
+        let pathID = viewModel.fileURL?.path ?? ""
+
+        // Single pane driven by the markup view-mode toggle (like markdown):
+        // Source = editable code, Preview = read-only KaTeX render.
+        if viewModel.currentMarkupViewMode == .rich {
+            let preview = LaTeXPreviewView(
+                content: viewModel.displayContent,
+                isBufferLoading: viewModel.isBufferLoading,
+                onEdit: { newSource in viewModel.userDidEdit(newSource) },
+                commandRequest: context.commandRequest.wrappedValue,
+                insertionRequest: viewModel.latexInsertionRequest,
+                onInsertionConsumed: { viewModel.latexInsertionRequest = nil }
+            )
+            .id("latex-preview-\(pathID)")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("editor.latex.preview")
+            return AnyView(preview)
+        }
+
+        let source = CodeEditorView(
+            fileURL: viewModel.fileURL ?? URL(fileURLWithPath: "/"),
+            language: GenericCodeLanguage(name: "LaTeX", fileExtensions: ["tex", "latex", "ltx"]),
+            codeEditorAccessibilityIdentifier: "editor.code.latex",
+            embeddedDropBridge: context.embeddedDropBridge,
+            pendingSourceSelection: pendingSourceSelection(for: viewModel),
+            onPendingSourceSelectionConsumed: {
+                viewModel.consumePendingSourceSelection(for: viewModel.currentDocumentID)
+            },
+            insertionRequest: viewModel.latexInsertionRequest,
+            onInsertionConsumed: { viewModel.latexInsertionRequest = nil },
+            isBufferLoading: viewModel.isBufferLoading,
+            content: Binding(
+                get: { viewModel.displayContent },
+                set: { _ in }
+            ),
+            onContentChange: { newContent in
+                viewModel.userDidEdit(newContent)
+            }
+        )
+        .id("latex-source-\(pathID)")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("editor.latex")
+
+        return AnyView(source)
     }
 }
 

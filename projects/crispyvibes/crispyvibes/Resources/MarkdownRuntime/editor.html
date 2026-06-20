@@ -4,8 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self' file:; script-src 'self' 'nonce-crispyvibes-editor' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: https: http:; connect-src 'none'; frame-src 'self' file: blob:;">
+        content="default-src 'self' file:; script-src 'self' 'nonce-crispyvibes-editor' 'unsafe-eval'; style-src 'self' 'unsafe-inline' file:; font-src 'self' file:; img-src 'self' file: data: https: http:; connect-src 'none'; frame-src 'self' file: blob:;">
   <link rel="stylesheet" href="github-markdown.min.css" />
+  <link rel="stylesheet" href="../LaTeXRuntime/katex.min.css" />
   <style>
     html, body {
       margin: 0;
@@ -412,6 +413,8 @@
   <script src="highlight.min.js"></script>
   <script src="mermaid.min.js" defer></script>
   <script src="turndown.js"></script>
+  <script src="katex.min.js"></script>
+  <script src="auto-render.min.js"></script>
   <script nonce="crispyvibes-editor">
     const editor = document.getElementById("editor");
     const turndownService = new TurndownService({
@@ -431,6 +434,34 @@
       replacement: function(content, node) {
         var source = node.getAttribute("data-mermaid-source") || content;
         return "\n\n```mermaid\n" + source.trim() + "\n```\n\n";
+      }
+    });
+
+    // Round-trip KaTeX-rendered math back to LaTeX delimiters on save. KaTeX
+    // embeds the original TeX in <annotation encoding="application/x-tex">,
+    // so we recover the exact source rather than serializing rendered spans.
+    turndownService.addRule("katexMath", {
+      filter: function(node) {
+        if (node.nodeType !== 1) return false;
+        if (node.classList.contains("katex-display")) return true;
+        // A standalone parse-error span (KaTeX throwOnError:false) carries the
+        // original source as text but has no annotation. Capture it so the math
+        // delimiters are not silently stripped on save.
+        if (node.classList.contains("katex-error")) return true;
+        return node.classList.contains("katex")
+          && !(node.parentElement && node.parentElement.classList.contains("katex-display"));
+      },
+      replacement: function(content, node) {
+        var ann = node.querySelector('annotation[encoding="application/x-tex"]');
+        var tex = ann ? ann.textContent : "";
+        if (!tex && node.classList.contains("katex-error")) {
+          // Recover the raw LaTeX from the error span. A failed parse cannot be
+          // told apart as display vs inline, so re-emit inline delimiters; the
+          // source text itself is preserved either way.
+          tex = node.textContent || "";
+        }
+        if (!tex) return content;
+        return node.classList.contains("katex-display") ? ("\n\n$$" + tex + "$$\n\n") : ("$" + tex + "$");
       }
     });
 
@@ -481,6 +512,30 @@
         if (el.classList.contains("language-mermaid")) return;
         hljs.highlightElement(el);
       });
+    }
+
+    // Typeset LaTeX math in the rendered markdown via KaTeX auto-render.
+    // Rendered math is marked non-editable so the contenteditable surface
+    // can't corrupt the KaTeX DOM; save round-trips via the katexMath rule.
+    function renderMathInArticle() {
+      if (!window.renderMathInElement) return;
+      try {
+        window.renderMathInElement(editor, {
+          delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "\\[", right: "\\]", display: true },
+            { left: "\\(", right: "\\)", display: false },
+            { left: "$", right: "$", display: false }
+          ],
+          throwOnError: false,
+          ignoredClasses: ["language-mermaid"]
+        });
+        editor.querySelectorAll(".katex-display, .katex, .katex-error").forEach((el) => {
+          el.contentEditable = "false";
+        });
+      } catch (_) {
+        // Best-effort: a math parse failure must never break markdown render.
+      }
     }
 
     var mermaidCounter = 0;
@@ -560,6 +615,7 @@
       editor.innerHTML = html;
       resolveMarkdownImageSources(markdownBaseHref);
       highlightCodeBlocks();
+      renderMathInArticle();
       var hasMermaid = editor.querySelectorAll('pre code.language-mermaid').length > 0;
       if (hasMermaid) {
         renderMermaidBlocks(); // suppressSync managed inside

@@ -16,7 +16,7 @@
 
 ## Features
 
-Next available prefix: F055. Numbers are never reused. (F052 Whiteboarding and F053 Quick Todos & Sticky Notes are implemented. F054 Mind Maps is reserved/planned but deprioritized — see `specs/planning/whiteboards-todos-mindmaps-design.md`.)
+Next available prefix: F056. Numbers are never reused. (F052 Whiteboarding and F053 Quick Todos & Sticky Notes are implemented. F054 Mind Maps is reserved/planned but deprioritized — see `specs/planning/whiteboards-todos-mindmaps-design.md`.)
 
 | Prefix | Feature | Domain | Folder | Status |
 |--------|---------|--------|--------|--------|
@@ -71,6 +71,7 @@ Next available prefix: F055. Numbers are never reused. (F052 Whiteboarding and F
 | F051 | Remote Agent CLI | D8 | `remote/remote-agent-cli` | draft |
 | F052 | Whiteboarding | D4 | `editor/whiteboard` | implemented |
 | F053 | Quick Todos & Sticky Notes | D2 | `vibespace/todos` | implemented |
+| F055 | LaTeX Editor | D4 | `editor/latex` | implemented |
 
 ## NFR Index
 

@@ -56,6 +56,8 @@ final class MarkdownViewModel: ObservableObject {
     @Published var codeLanguageKind: CodeLanguageKind?
     @Published var markupViewModeByDocumentID: [String: MarkupViewMode] = [:]
     @Published var pendingSourceSelection: PendingSourceSelection?
+    /// Pending LaTeX snippet to insert at the source editor's cursor (math palette).
+    @Published var latexInsertionRequest: EditorInsertionRequest?
 
     var lastSavedContent = ""
     var lastSaveDate = Date.distantPast
@@ -85,6 +87,10 @@ final class MarkdownViewModel: ObservableObject {
         /// document edited through an offline Excalidraw canvas in a WKWebView.
         /// The buffer holds the scene JSON, so it autosaves like any text file.
         case whiteboard
+        /// LaTeX document (`.tex`/`.latex`/`.ltx`) — a text-backed source file
+        /// edited in a split source + live KaTeX-rendered math preview. The
+        /// buffer holds the raw LaTeX, so it autosaves like any text file.
+        case latex
         case image
         case pdf
         case office

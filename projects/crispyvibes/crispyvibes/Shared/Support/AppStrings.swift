@@ -283,6 +283,22 @@ enum AppStrings {
         )
     }
 
+    /// LaTeX documents (KaTeX-rendered preview).
+    enum LaTeX {
+        static let previewAccessibilityLabel = String(
+            localized: "latex.preview.accessibilityLabel",
+            defaultValue: "LaTeX preview"
+        )
+        static let paletteMatrix = String(
+            localized: "latex.palette.matrix",
+            defaultValue: "matrix"
+        )
+        static let runtimeUnavailable = String(
+            localized: "latex.runtime.unavailable",
+            defaultValue: "The LaTeX preview runtime is unavailable. Rebuild the app to restore it."
+        )
+    }
+
     // MARK: - Source Control
 
     enum SourceControl {
@@ -652,6 +668,9 @@ enum AppStrings {
         static let draw = String(localized: "editor.draw")
         static let unsaved = String(localized: "editor.unsaved")
         static let cannotPreview = String(localized: "editor.cannotPreview")
+        static let viewModeRich = String(localized: "editor.viewMode.rich", defaultValue: "Rich")
+        static let viewModeEdit = String(localized: "editor.viewMode.edit", defaultValue: "Edit")
+        static let viewModeSource = String(localized: "editor.viewMode.source", defaultValue: "Source")
     }
 
     // MARK: - Settings

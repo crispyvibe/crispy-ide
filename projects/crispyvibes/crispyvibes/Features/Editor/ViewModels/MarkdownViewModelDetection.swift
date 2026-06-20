@@ -12,12 +12,15 @@ extension MarkdownViewModel {
     /// F052: Excalidraw whiteboards. Detected ahead of JSON so `.excalidraw`
     /// routes to the whiteboard canvas rather than the raw JSON code view.
     static let excalidrawExtensions: Set<String> = ["excalidraw"]
+    /// LaTeX documents. Routed ahead of `plainText` so `.tex`/`.latex`/`.ltx`
+    /// open in the split source + KaTeX math-preview editor.
+    static let latexExtensions: Set<String> = ["tex", "latex", "ltx"]
     static let rExtensions: Set<String> = ["r", "R", "rmd", "Rmd"]
     static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp", "heic", "heif", "svg"]
     /// Microsoft Office document extensions previewed via Quick Look (F045).
     static let officeExtensions: Set<String> = ["docx", "doc", "pptx", "ppt", "xlsx", "xls"]
     static let plainTextExtensions: Set<String> = [
-        "txt", "text", "log", "bib", "tex", "rst", "adoc",
+        "txt", "text", "log", "bib", "rst", "adoc",
         "csv", "tsv"
     ]
     static let codeLanguageByExtension: [String: CodeLanguageKind] = [
@@ -64,6 +67,10 @@ extension MarkdownViewModel {
 
         if excalidrawExtensions.contains(ext) {
             return .whiteboard
+        }
+
+        if latexExtensions.contains(ext) {
+            return .latex
         }
 
         if pythonExtensions.contains(ext) {

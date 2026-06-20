@@ -36,15 +36,21 @@ extension MarkdownViewModel {
     }
 
     var supportsMarkupViewModeToggle: Bool {
-        documentType == .markdown || documentType == .html
+        documentType == .markdown || documentType == .html || documentType == .latex
+    }
+
+    /// Default mode per type. Markdown/HTML and LaTeX all open in the editable
+    /// rendered (rich) view; LaTeX's rich view is a WYSIWYG editor over KaTeX.
+    var defaultMarkupViewMode: MarkupViewMode {
+        .rich
     }
 
     var currentMarkupViewMode: MarkupViewMode {
         guard supportsMarkupViewModeToggle,
               let documentID = activeMarkupDocumentID else {
-            return .rich
+            return defaultMarkupViewMode
         }
-        return markupViewModeByDocumentID[documentID] ?? .rich
+        return markupViewModeByDocumentID[documentID] ?? defaultMarkupViewMode
     }
 
     func setCurrentMarkupViewMode(_ mode: MarkupViewMode) {
@@ -53,7 +59,7 @@ extension MarkdownViewModel {
             return
         }
 
-        if mode == .rich {
+        if mode == defaultMarkupViewMode {
             markupViewModeByDocumentID.removeValue(forKey: documentID)
         } else {
             markupViewModeByDocumentID[documentID] = mode
@@ -62,6 +68,12 @@ extension MarkdownViewModel {
 
     func clearMarkupViewMode(forDocumentID documentID: String) {
         markupViewModeByDocumentID.removeValue(forKey: documentID)
+    }
+
+    /// Queue a LaTeX snippet for insertion at the source editor's cursor.
+    func insertLatexSnippet(_ snippet: String) {
+        guard documentType == .latex else { return }
+        latexInsertionRequest = EditorInsertionRequest(snippet)
     }
 
     func updateEditableContentFromRenderer(_ content: String) {
@@ -175,7 +187,7 @@ extension MarkdownViewModel {
     }
 
     func isEditableDocumentType(_ type: DocumentType) -> Bool {
-        type == .markdown || type == .html || type == .python || type == .json || type == .r || type == .plainText || type == .whiteboard
+        type == .markdown || type == .html || type == .python || type == .json || type == .r || type == .plainText || type == .whiteboard || type == .latex
     }
 
     func refreshUnsavedChangesFlag() {

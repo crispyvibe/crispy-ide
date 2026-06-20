@@ -65,4 +65,20 @@ final class EditorHTMLSecurityTests: XCTestCase {
             "The inline <script> tag must have a nonce attribute matching the CSP"
         )
     }
+
+    func testCSPScriptSrcDisallowsFileScheme() throws {
+        let html = try editorHTMLContents()
+        // F055: KaTeX scripts are co-located in MarkdownRuntime and load under
+        // 'self'. script-src must NOT allow file:, which would let injected
+        // markdown reference arbitrary local scripts (root read-access).
+        guard let range = html.range(of: "script-src[^;]+", options: .regularExpression) else {
+            XCTFail("editor.html CSP must contain a script-src directive")
+            return
+        }
+        let scriptSrc = String(html[range])
+        XCTAssertFalse(
+            scriptSrc.contains("file:"),
+            "script-src must not allow the file: scheme — co-locate scripts under 'self'"
+        )
+    }
 }
