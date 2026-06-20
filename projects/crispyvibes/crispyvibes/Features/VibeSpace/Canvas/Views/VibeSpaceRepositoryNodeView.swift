@@ -127,6 +127,7 @@ struct VibeSpaceRepositoryNodeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .vibespaceHoverHighlight(cornerRadius: 6)
             .accessibilityHint(showOtherWorktrees ? AppStrings.Worktree.expandedHint : AppStrings.Worktree.collapsedHint)
 
             if showOtherWorktrees {
@@ -151,6 +152,7 @@ struct VibeSpaceRepositoryNodeView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .vibespaceHoverHighlight(cornerRadius: 5)
                     .help(AppStrings.Worktree.openAsProjectHelp)
                     .accessibilityLabel(AppStrings.Worktree.openWorktreeLabel(worktree.displayName))
                     .accessibilityIdentifier("vibespace.sidebar.unified.open-worktree")
@@ -195,6 +197,7 @@ struct VibeSpaceRepositoryNodeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .vibespaceHoverHighlight(cornerRadius: 6)
             .accessibilityLabel(AppStrings.Worktree.collapseExpandLabel(title))
             .accessibilityHint(isExpanded ? AppStrings.Worktree.expandedHint : AppStrings.Worktree.collapsedHint)
 
@@ -209,6 +212,7 @@ struct VibeSpaceRepositoryNodeView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(palette.secondaryTextColor)
+            .vibespaceHoverHighlight(cornerRadius: 6)
             .help(AppStrings.Worktree.newWorktree)
             .accessibilityLabel(AppStrings.Worktree.newWorktree)
         }

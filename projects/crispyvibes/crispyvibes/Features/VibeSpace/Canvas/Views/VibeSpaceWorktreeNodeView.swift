@@ -231,6 +231,7 @@ struct VibeSpaceWorktreeNodeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .vibespaceHoverHighlight(cornerRadius: 6)
             .accessibilityLabel(AppStrings.Worktree.collapseExpandLabel(indent ? (branch ?? project.title) : project.title))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(isExpanded ? AppStrings.Worktree.expandedHint : AppStrings.Worktree.collapsedHint)
@@ -242,16 +243,18 @@ struct VibeSpaceWorktreeNodeView: View {
             // Consistent toggle set on every node — Files / Changes / Chats —
             // so position is predictable; empty Changes/Chats dim but stay
             // reachable (this is the only path to a worktree's first chat).
-            viewToggle(.files, system: "doc.text", count: nil,
-                       tint: palette.secondaryTextColor,
-                       label: AppStrings.Worktree.showFiles, value: nil)
-            viewToggle(.changes, system: "plusminus", count: changeCount > 0 ? changeCount : nil,
-                       tint: changeCount > 0 ? palette.gitModifiedStatusColor : palette.secondaryTextColor.opacity(0.5),
-                       label: AppStrings.Worktree.showChanges(changeCount),
-                       value: AppStrings.Worktree.changedFilesValue(changeCount))
-            viewToggle(.chats, system: "bubble.left", count: threads.isEmpty ? nil : threads.count,
-                       tint: threads.isEmpty ? palette.secondaryTextColor.opacity(0.5) : palette.secondaryTextColor,
-                       label: AppStrings.Worktree.showConversations(threads.count), value: nil)
+            HStack(spacing: scale.spacing(1)) {
+                viewToggle(.files, system: "doc.text", count: nil,
+                           tint: palette.secondaryTextColor,
+                           label: AppStrings.Worktree.showFiles, value: nil)
+                viewToggle(.changes, system: "plusminus", count: changeCount > 0 ? changeCount : nil,
+                           tint: changeCount > 0 ? palette.gitModifiedStatusColor : palette.secondaryTextColor.opacity(0.5),
+                           label: AppStrings.Worktree.showChanges(changeCount),
+                           value: AppStrings.Worktree.changedFilesValue(changeCount))
+                viewToggle(.chats, system: "bubble.left", count: threads.isEmpty ? nil : threads.count,
+                           tint: threads.isEmpty ? palette.secondaryTextColor.opacity(0.5) : palette.secondaryTextColor,
+                           label: AppStrings.Worktree.showConversations(threads.count), value: nil)
+            }
         }
         .padding(.horizontal, scale.spacing(10))
         .padding(.vertical, scale.spacing(8))
@@ -273,25 +276,26 @@ struct VibeSpaceWorktreeNodeView: View {
                 Divider()
                 Button(AppStrings.Worktree.refresh) { project.folderExplorer.refreshTree(trigger: .manual) }
             } label: {
-                // Distinct from the chat "+": a doc-badge glyph marks this as a
-                // file/folder creation menu, not an immediate add.
                 Image(systemName: "doc.badge.plus").font(AppTypographyTokens.scaledIcon(11))
-                    .frame(width: scale.iconSize(22), height: scale.iconSize(22))
+                    .frame(width: scale.iconSize(24), height: scale.iconSize(24))
                     .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
-            .menuIndicator(.visible)
+            .menuIndicator(.hidden)
             .fixedSize()
+            .tint(palette.secondaryTextColor)
             .foregroundStyle(palette.secondaryTextColor)
+            .vibespaceHoverHighlight(cornerRadius: 6)
             .help(AppStrings.Worktree.newFileOrFolderHelp)
             .accessibilityLabel(AppStrings.Worktree.newFileOrFolderHelp)
         } else if activeTab == .chats {
             Button { onNewChat() } label: {
                 Image(systemName: "plus.bubble").font(AppTypographyTokens.scaledIcon(11))
-                    .frame(width: scale.iconSize(22), height: scale.iconSize(22))
+                    .frame(width: scale.iconSize(24), height: scale.iconSize(24))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .vibespaceHoverHighlight(cornerRadius: 6)
             .foregroundStyle(palette.secondaryTextColor)
             .help(AppStrings.Worktree.newAgentChat)
             .accessibilityLabel(AppStrings.Worktree.newAgentChat)
@@ -324,13 +328,14 @@ struct VibeSpaceWorktreeNodeView: View {
             .padding(.horizontal, scale.spacing(6))
             .frame(minWidth: scale.iconSize(24), minHeight: scale.iconSize(24))
             .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(isActive ? accentColor.opacity(0.28) : Color.clear)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isActive ? palette.secondaryTextColor.opacity(0.16) : Color.clear)
             )
             .foregroundStyle(isActive ? palette.primaryTextColor : tint)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .vibespaceHoverHighlight(cornerRadius: 6)
         .help(label)
         .accessibilityLabel(label)
         .accessibilityValue(value ?? "")
@@ -370,6 +375,7 @@ struct VibeSpaceWorktreeNodeView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .vibespaceHoverHighlight(cornerRadius: 5)
             }
         }
     }
@@ -390,6 +396,7 @@ struct VibeSpaceWorktreeNodeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .vibespaceHoverHighlight(cornerRadius: 5)
             .accessibilityLabel(AppStrings.Worktree.newAgentChat)
         } else {
             ForEach(threads) { thread in
@@ -412,6 +419,7 @@ struct VibeSpaceWorktreeNodeView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .vibespaceHoverHighlight(cornerRadius: 5)
             }
         }
     }
@@ -426,3 +434,30 @@ struct VibeSpaceWorktreeNodeView: View {
     }
 }
 
+
+// MARK: - Shared hover feedback for unified-sidebar buttons
+
+/// Subtle rounded background that appears on pointer hover, giving every
+/// unified-sidebar control consistent affordance feedback.
+private struct VibeSpaceHoverHighlight: ViewModifier {
+    @Environment(\.appThemePalette) private var palette
+    let cornerRadius: CGFloat
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(palette.secondaryTextColor.opacity(hovering ? 0.12 : 0))
+            )
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+extension View {
+    /// Adds a subtle hover background to a unified-sidebar button.
+    func vibespaceHoverHighlight(cornerRadius: CGFloat = 6) -> some View {
+        modifier(VibeSpaceHoverHighlight(cornerRadius: cornerRadius))
+    }
+}
