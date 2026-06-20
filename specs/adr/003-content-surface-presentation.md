@@ -33,17 +33,32 @@ Introduce a single decision authority and a single dispatch entry point.
 
 - **`ContentKind`** — payload-free decision vocabulary (`agentChat`,
   `conversationThread`, `todos`, `vibeCast`, `terminal(preferTemporary:)`,
-  `file`).
+  `file`, `spotlightPin`).
 - **`ContentSurface`** — the four real surfaces (`detailTab`, `boardTile`,
   `dockedPreview`, `spotlight`), decoupled from the two-case layout mode.
 - **`ContentSurfacePolicy.surface(for:mode:)`** — the single, pure, unit-tested
   function mapping `ContentKind × VibeSpaceCanvasMode → ContentSurface`.
 - **`VibeSpaceCanvasActionsCoordinator.present(_:)`** — the single dispatch for
-  the tab/tile/preview cases (`PresentableContent`). It consults the policy,
-  switches/keeps the layout, and routes.
+  the `detailTab` / `boardTile` / `dockedPreview` cases (`PresentableContent`:
+  agent chat, conversation thread, todos, VibeCast). It consults the policy,
+  switches to / keeps the layout, and routes. A surface the policy never
+  produces for a given payload hits an `assertionFailure` fallback that still
+  lands a detail tab in production — so a future policy change that breaks the
+  invariant is caught loudly without dropping the action.
 
 (All in `Features/VibeSpace/Canvas/Support/ContentPresentation.swift` +
 `VibeSpaceCanvasActionsCoordinator`.)
+
+The policy table (board mode = `.terminalOnly`):
+
+| Kind | `.detailed` | `.terminalOnly` (board) |
+|------|-------------|-------------------------|
+| `agentChat` | detail tab | board tile |
+| `conversationThread`, `file` | detail tab | docked preview |
+| `todos`, `vibeCast` | detail tab | spotlight |
+| `terminal(preferTemporary: true)` | spotlight | spotlight |
+| `terminal(preferTemporary: false)` | spotlight | board tile |
+| `spotlightPin` | detail tab | board tile |
 
 Rules:
 
@@ -51,6 +66,21 @@ Rules:
 - Flows with bespoke creation (terminal, file open) keep their own dispatch but
   derive the decision from `ContentSurfacePolicy.surface(for:mode:)` — they do
   not branch on canvas mode themselves.
+- The **`spotlight`** surface is dispatched outside `present(_:)`: `present(_:)`
+  owns the tab/tile/preview surfaces, while the `.toggleTodos` / `.toggleVibeCast`
+  handlers in `ContentView` consult the policy and, in board mode, call
+  `presentTodosSpotlight()` / `presentVibeCastSpotlight()` (the terminal spotlight
+  overlay), falling through to `present(_:)` for the detail tab in detailed mode.
+  Todos is now a full spotlight citizen (`TerminalSpotlightState.Source.todos`).
+  Terminal owns its own spotlight dispatch.
+- A git diff has no board surface: `openSourceControlDiff` asks the policy for
+  `.file` and, when that yields `.dockedPreview` (board mode), shows the changed
+  file in the docked preview instead of yanking the layout to `.detailed`;
+  otherwise it opens the diff in a detail tab. File-open (`VibeSpaceCanvasFileOpenUseCase`)
+  routes the same way through the policy.
+- Pinning a spotlight preview (`spotlightPin`) resolves to a `boardTile` in board
+  mode ("Pin to Dock") or a `detailTab` in detailed mode ("Open in Viewer"); the
+  pin UI derives that from the policy rather than branching on mode.
 - `layoutPersistence.setCanvasMode` is called directly only for an explicit user
   view-mode switch (the Detailed/Board toggle), never as a side effect of
   surfacing content. Its doc comment states this.
@@ -63,8 +93,10 @@ Rules:
   sweep.
 - The policy is synchronously unit-tested (`ContentSurfacePolicyTests`) with no
   view or payload setup, covering every kind × mode.
-- Three latent bugs are fixed by construction (todos/VibeCast no longer lost in
-  board mode; agent flows are view-aware everywhere).
+- Three latent bugs are fixed by construction (todos/VibeCast float as a
+  spotlight over the board instead of being silently lost; git diff shows a
+  docked preview rather than forcing detailed; agent flows are view-aware
+  everywhere).
 - Enforcement is by convention + the policy + the `setCanvasMode` doc guardrail,
   not by access control: `setCanvasMode` has a legitimate non-surfacing caller
   (the explicit view-mode toggle), so it cannot be made private.

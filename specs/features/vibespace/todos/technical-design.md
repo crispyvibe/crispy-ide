@@ -68,7 +68,7 @@ CREATE INDEX idx_todo_messages_todo ON todo_messages(todo_id, created_at);
 
 ## Dockable surface integration (VibeCast model)
 
-`ContentViewerTabKind.todos` added and handled in every exhaustive switch (`ContentViewerTab` title/icon/drag-payload, `EditorGroupStore`, `ContentViewerView`, `SplitPaneContentView`, `ContentView.resolveOwningProjectPath`). `ContentViewerStore.openTodos()` opens the tab; `ContentViewerView` builds `TodosSurfaceView` from the env store + `focusedProjectRootPath` (single-pane `todosContent` and split-pane `todosViewFactory`). Toolbar checklist button posts `.toggleTodos` → `VibeSpaceCanvasActionsCoordinator.toggleTodos()` (activate-existing-or-open). Capture: `quickCaptureTodo` `AppShortcutAction` (default ⌃⌘T, editable) → `AppDelegate` posts `.quickCaptureTodo` → `ContentView` shows `TodoQuickCaptureOverlay` (hosted on `body`, not the deep `notificationAwareContent` chain, to avoid type-checker blow-up).
+`ContentViewerTabKind.todos` added and handled in every exhaustive switch (`ContentViewerTab` title/icon/drag-payload, `EditorGroupStore`, `ContentViewerView`, `SplitPaneContentView`, `ContentView.resolveOwningProjectPath`). `ContentViewerStore.openTodos()` opens the tab; `ContentViewerView` builds `TodosSurfaceView` from the env store + `focusedProjectRootPath` (single-pane `todosContent` and split-pane `todosViewFactory`). The toolbar checklist button posts `.toggleTodos`; `ContentView`'s handler consults `ContentSurfacePolicy.surface(for: .todos, mode:)` (see ADR-003) and routes by surface: in board mode (`.spotlight`) it calls `presentTodosSpotlight()` — a `TerminalSpotlightState.Source.todos` overlay rendering `TodosSurfaceView` in the spotlight card; otherwise (`.detailTab`) it calls `VibeSpaceCanvasActionsCoordinator.toggleTodos()` → `present(.todos)`, which switches to detailed and activates-existing-or-opens the tab. Capture: `quickCaptureTodo` `AppShortcutAction` (default ⌃⌘T, editable) → `AppDelegate` posts `.quickCaptureTodo` → `ContentView` shows `TodoQuickCaptureOverlay` (hosted on `body`, not the deep `notificationAwareContent` chain, to avoid type-checker blow-up).
 
 ## Theming & scaling
 
@@ -99,7 +99,7 @@ Views read `@Environment(\.appThemePalette)` (`accentColor`, `canvasBackgroundCo
 ## Known Gaps / Future
 
 - Vibespace-switch auto-refresh of the open surface (hook parity with comments).
-- Board-tile + spotlight presentations (separate `TileContentKind`/spotlight enums).
+- Board-tile presentation (a dedicated `TileContentKind` alongside ACP/Browser); the spotlight presentation now ships (board mode floats Todos as `TerminalSpotlightState.Source.todos`, chosen by `ContentSurfacePolicy`).
 - Session restore of the `.todos` tab (parity with VibeCast — not persisted).
 - Reminders (`due_at`/`reminder_at` + `UserNotifications`).
 - Server-side markdown sanitization parity with comments (see threat-model F053-T01).

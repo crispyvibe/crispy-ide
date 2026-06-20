@@ -4,7 +4,7 @@ Status: draft
 
 ## Overview
 
-The Unified Project Side Panel is an opt-in sidebar layout that replaces the classic tab-swapped panel (Files / Git / Sessions / Conversations) with a single per-project view. Each project (or git worktree) is a collapsible node whose body shows its Files, Source Control changes, or Conversations via compact in-header view toggles — so a file is reachable with minimal clicks. Repositories with multiple worktrees club their worktrees together (F055).
+The Unified Project Side Panel ("Workspace") is its own side-menu rail destination — a peer of the classic Files / Git / Sessions / Conversations tabs — and is the default side-panel layout. Instead of swapping the whole panel between separate tabs, it shows a single per-project view: each project (or git worktree) is a collapsible node whose body shows its Files, Source Control changes, or Conversations via compact in-header view toggles, so a file is reachable with minimal clicks. The Shelf is folded in at the top of the panel. Worktrees of the same repository (identified by `ProjectGitPlacement` worktree-root identity) club together (F055); a subdirectory opened as its own project stands alone.
 
 ## Dependencies
 
@@ -12,7 +12,7 @@ The Unified Project Side Panel is an opt-in sidebar layout that replaces the cla
 - F026 (Git Operations) — per-project changed-files (reuses the source-control view model)
 - F040 (Agent Conversation Persistence) — per-project conversation threads
 - F055 (Git Worktrees) — worktree clubbing, discovery, lifecycle
-- F033 (Shelf) — (classic panel only; not yet folded into unified)
+- F033 (Shelf) — folded into the unified panel, rendered at the top above the project nodes
 
 ## Requirements
 
@@ -30,7 +30,10 @@ Each project MUST render as a collapsible node showing Files / Changes / Chats f
 A worktree node MUST expose Files / Changes / Chats as compact toggles in its header (with counts), defaulting to Files. Switching is one click; the active view fills the node body. The focused project's node auto-expands so its files are visible with zero clicks.
 
 ### F056-R04: Repository Grouping
-Worktrees of one repository MUST be clubbed under a collapsible "section fence" repository row (lighter than a tree row) with a worktree count; single-checkout/non-repo projects render as a single node (F055-R02).
+Worktrees of one repository MUST be clubbed under a collapsible "section fence" repository row (lighter than a tree row) with a worktree count. Grouping uses `ProjectGitPlacement` worktree-root identity (`commonDir` + symlink-resolved `worktreeRoot`): only projects opened at a true worktree root club together. A subdirectory opened as its own project — or a non-git folder — MUST render as a standalone node and MUST NOT be clubbed with or mislabeled as the worktree it lives in. Single-checkout/non-repo projects render as a single node (F055-R02).
+
+### F056-R08: Shelf folded in
+The Shelf (F033) MUST render inside the unified panel, above the project nodes, when it has entries — reusing the same shelf section/callbacks as the classic Files pane (open, reveal, rename, delete, remove, clear).
 
 ### F056-R05: Friendly, Filtered Changes
 The Changes view MUST show colored status badges (A/M/D/R/U) — not raw porcelain codes — sorted modified→deleted→renamed→added, and MUST hide OS/tool noise (`.DS_Store`, `Thumbs.db`, `.ipynb_checkpoints/`).
@@ -64,18 +67,29 @@ Only the active view's body builds; collapsed nodes don't load file trees or fet
 **Then** the panel shows the unified per-project layout; selecting Files (or any
 classic tab) returns to the classic layout. The two never share one panel.
 
+### Scenario F056-S05: Subdirectory project stays standalone
+**Given** a repository's worktree is open and a subdirectory of it is also opened as its own project
+**When** the unified panel groups projects
+**Then** the subdirectory project renders as a standalone node, not clubbed under the repository row, and is not counted among that repo's worktrees.
+
+### Scenario F056-S06: Shelf at the top
+**Given** the Workspace panel is showing and the Shelf has entries
+**When** the panel renders
+**Then** the Shelf section appears above the project nodes with its open/reveal/rename/delete/remove/clear actions.
+
 ## Acceptance Criteria
-- Unified is opt-in; classic untouched when off
+- Workspace is its own rail destination and the default side-panel layout; selecting a classic tab exits it
 - Per-project nodes with Files/Changes/Chats header toggles; focused auto-expands
-- Repositories club worktrees; changes show friendly badges and hide noise
+- Repositories club worktree roots by `ProjectGitPlacement` identity; subdirectory/non-git projects stay standalone; changes show friendly badges and hide noise
+- Shelf rendered at the top of the panel
 - New File/Folder/Chat/Worktree available without leaving the panel
 
 ## Open Questions
-- Fold Sessions and Shelf into the unified panel (currently classic-only)?
+- Fold Sessions into the unified panel (currently classic-only)?
 - Per-node "Other worktrees" collapsed dashboard of branch chips (deferred).
-- A dedicated `UnifiedSidebarViewModel` to fully mediate state (currently the panel holds view state and calls the injected `WorktreeServicing` directly).
 
 ## Change History
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-06-04 | Initial draft — opt-in unified per-project sidebar, view toggles, repo clubbing, friendly changes, creation affordances | — |
+| 2026-06-19 | Promoted to dedicated "Workspace" rail destination, default-on (R01/S04); Shelf folded in at top (R08/S06); grouping uses `ProjectGitPlacement` worktree-root identity, subdirectory projects standalone (R04/S05); dedicated `UnifiedSidebarViewModel` mediates state | — |

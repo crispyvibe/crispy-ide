@@ -58,7 +58,7 @@ Reminders are out of scope for v1. The schema reserves `due_at`/`reminder_at` so
 **When** the user presses Esc or clicks outside the HUD **Then** it dismisses with no todo created.
 
 ### Scenario F053-S04: Open the dockable surface
-**Given** an active vibespace **When** the user clicks the Todos toolbar button (or triggers the toggle) **Then** the Todos surface opens (or re-activates) as a content-viewer tab in detailed mode.
+**Given** an active vibespace **When** the user clicks the Todos toolbar button (or triggers the toggle) **Then** the Todos surface opens (or re-activates): in **Detailed** view as a content-viewer tab, and in **Terminal Board** view as a floating **spotlight** over the board. The surface decision comes from `ContentSurfacePolicy` (see ADR-003), so the toolbar never forces a layout switch.
 
 ### Scenario F053-S05: Quick-add in the list
 **When** the user types in the list's quick-add field and presses Return **Then** a card is created in the current scope and auto-selected.
@@ -99,7 +99,7 @@ Reminders are out of scope for v1. The schema reserves `due_at`/`reminder_at` so
 ## Open Questions
 
 1. **Vibespace-switch refresh:** the open surface does not yet auto-refresh when the active vibespace changes (parity hook with comments pending).
-2. **Board tile / spotlight parity:** Todos is a content-viewer tab only; board-tile and spotlight presentations (which VibeCast/Browser/ACP have) are deferred.
+2. **Board tile parity:** Todos now floats as a **spotlight** over the board (a full `TerminalSpotlightState.Source.todos` citizen; surface chosen by `ContentSurfacePolicy`, ADR-003). A dedicated board *tile* (alongside ACP/Browser tiles) is still deferred.
 3. **Session restore:** a `.todos` tab is not persisted across relaunch (parity with VibeCast, which also isn't).
 4. **Reminders staging:** when added, separate "due date" from "reminder time" or a single field?
 5. **Markdown link hardening:** thread/body markdown is rendered inline-only (no HTML/JS execution), but unlike comments the body is not server-sanitized — see threat-model F053-T01.
@@ -110,3 +110,4 @@ Reminders are out of scope for v1. The schema reserves `due_at`/`reminder_at` so
 |------|--------|
 | 2026-06-03 | Initial spec (sidebar panel; SQLite; reminders deferred). |
 | 2026-06-04 | Reworked to the shipped feature: dockable surface (VibeCast model), per-todo rich-text notes + flat threads, instant-capture HUD with project picker + success feedback, palette theming + `crispyvibesUIScale`. Status → implemented. |
+| 2026-06-19 | Surfacing now goes through the centralized `ContentSurfacePolicy` (ADR-003): in Terminal Board view Todos floats as a spotlight instead of being a detail-tab-only surface that the board hid. |

@@ -12,8 +12,15 @@ Worktree features execute git subprocesses with user-influenced arguments and ca
 - Branch-name text field → `git worktree add -b <branch> <path>`.
 - Worktree path (from `git worktree list`) → `git worktree remove`.
 - `git worktree list --porcelain` output parsing.
+- Project↔worktree path identity (`--show-toplevel`, symlink resolution, case-insensitive compare) used to decide clubbing and which directory a delete/close acts on.
 
 ## Threats
+
+### F055-T05: Path-identity confusion (mis-clubbing / wrong target)
+- Vector: a project opened at a subdirectory of a worktree, via a symlinked path (`/var` → `/private/var`), or with case differing from git's report on a case-insensitive APFS volume.
+- Impact: a non-worktree folder mislabeled/clubbed as a worktree, the active worktree duplicated in "Other worktrees", or a mutation targeting the wrong directory.
+- Likelihood: Medium (common on macOS).
+- Mitigation: identity uses `git rev-parse --show-toplevel` resolved to a canonical (symlink-resolved, standardized) path; only `isWorktreeRoot` projects (empty `relativeSubpath`) club; subdirectory and non-descendant paths fall back to standalone; "Other worktrees" dedup compares canonical paths case-insensitively. Filesystem-touching resolution runs in the service off the main actor, never in a SwiftUI body.
 
 ### F055-T01: Argument/command injection via branch name
 - Vector: a crafted branch name (e.g. `--option`, path traversal, or shell metacharacters).

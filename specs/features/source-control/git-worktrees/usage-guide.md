@@ -3,7 +3,7 @@ title: "Git Worktrees"
 feature: "F055"
 domain: "source-control"
 audience: "user"
-version: "1.0"
+version: "1.1"
 sidebar:
   label: "Git Worktrees"
   order: 3
@@ -17,7 +17,7 @@ Crispy understands git worktrees. When projects in a vibespace are worktrees of 
 
 ## Getting Started
 
-1. Switch the side panel to the unified layout (the toggle in the sidebar header).
+1. Open the **Workspace** rail item (the grid icon in the side menu). It shows the unified per-project/worktree panel and is on by default.
 2. A repository with more than one worktree appears as a collapsible **repository** row (e.g. `myrepo · 2 worktrees`).
 3. Expand it to see each worktree (labeled by branch), each with its own Files / Changes / Chats.
 
@@ -47,6 +47,7 @@ None. Worktrees are discovered automatically from git; nothing is persisted beyo
 | A worktree isn't showing | It must belong to a git repo you've added; non-git folders and SSH/remote projects aren't grouped. |
 | Delete failed | The worktree likely has uncommitted changes or is locked — use Force Delete only if you accept losing those changes. |
 | "Other worktrees" is empty | The repo has only the worktrees you've already added. |
+| A folder inside a repo shows as its own project, not a worktree | Only folders opened at a worktree's root are grouped as worktrees. A subdirectory you opened as its own project stays a standalone node, even though it's in the same repo. |
 
 ## Known Limitations
 - Local repositories only (no SSH/remote worktrees yet).
