@@ -1,0 +1,26 @@
+= AsciiDoc Demo
+:toc:
+
+== Introduction
+
+AsciiDoc renders to *HTML*. It supports _italics_, `code`, and lists.
+
+[source,python]
+----
+def hello():
+    print("world")
+----
+
+== Features
+
+. Ordered one
+. Ordered two
+
+* Bullet a
+* Bullet b
+
+|===
+| Name | Score
+| Alice | 95
+| Bob | 88
+|===

@@ -1,0 +1,10 @@
+digraph Pipeline {
+  rankdir=LR;
+  node [shape=box, style=rounded];
+
+  Source -> Compile -> Render -> Preview;
+  Compile -> Errors [style=dashed];
+  Render -> PDF;
+  Preview -> Edit;
+  Edit -> Source [label="re-render"];
+}

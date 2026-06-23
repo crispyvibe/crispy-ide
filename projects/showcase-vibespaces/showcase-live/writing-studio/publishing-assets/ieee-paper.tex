@@ -26,7 +26,6 @@
 }
 
 \begin{document}
-
 \maketitle
 
 \begin{abstract}
@@ -43,18 +42,21 @@ LaTeX, KaTeX, offline rendering, WYSIWYG, document editing
 \end{IEEEkeywords}
 
 \section{Introduction}
-Mathematical typesetting in interactive editors traditionally requires either a
+
+Mathematical typesetting in interactive  editors traditionally requires either a
 full TeX toolchain or a network round-trip to a rendering service. Both options
 impose latency and availability constraints. We describe an approach that bundles
 a deterministic renderer and edits a contenteditable surface while keeping the
 underlying source authoritative.
 
 \section{Background}
+
 KaTeX renders a useful subset of LaTeX math synchronously. Prior work focuses on
 server-side rendering; we instead constrain the renderer to a read-only,
 offline web view and reconstruct source from the edited document object model.
 
 \section{Method}
+
 Let $S$ be the source document and $D$ the rendered document model. Our editor
 maintains an invariant that untouched blocks serialize byte-for-byte:
 \begin{equation}
@@ -65,14 +67,17 @@ Edited blocks are re-serialized via a structural mapping
 $f : D \rightarrow S$ that preserves the preamble and any unmodeled environment.
 
 \subsection{Rendering Pipeline}
+
 The pipeline splits $S$ into blocks, classifies each block, and renders math
 blocks through KaTeX while leaving prose editable in place.
 
 \subsection{Complexity}
+
 Block classification is linear in document length, $O(n)$, and rendering is
 bounded by the number of math nodes $m$, giving an overall cost of $O(n + m)$.
 
 \section{Results}
+
 Across a corpus of 1{,}200 documents, byte-exact round-trip preservation held for
 99.4\% of unedited blocks, and median render latency was 6.2\,ms per document.
 
@@ -92,16 +97,17 @@ Mixed         & 99.4 & 6.2 \\
 \end{table}
 
 \section{Conclusion}
+
 A vendored, offline renderer confined to a sandboxed surface yields fast,
 private math typesetting while keeping the source document authoritative.
 Future work includes incremental re-rendering and per-project macro support.
 
 \section*{Acknowledgment}
+
 The authors thank the Writing Studio team for feedback on early prototypes.
 
 \begin{thebibliography}{1}
 \bibitem{katex} Khan Academy, ``KaTeX: The fastest math typesetting library for the web,'' 2024.
 \bibitem{tex} D. E. Knuth, \textit{The \TeX book}. Addison-Wesley, 1984.
 \end{thebibliography}
-
 \end{document}
