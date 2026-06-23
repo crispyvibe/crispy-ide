@@ -78,6 +78,12 @@ struct MarkdownEditorView: View {
             return "pencil.and.scribble"
         case .latex:
             return "function"
+        case .typst:
+            return "doc.richtext"
+        case .asciidoc:
+            return "doc.plaintext"
+        case .diagram:
+            return "point.topleft.down.to.point.bottomright.curvepath"
         case .image:
             return "photo"
         case .pdf:
@@ -504,6 +510,31 @@ struct MarkdownEditorView: View {
         viewModel.supportsMarkupViewModeToggle
     }
 
+    /// Formats that render to a read-only preview (edit in Source): Typst,
+    /// AsciiDoc, Graphviz.
+    private var isRenderPreviewFormat: Bool {
+        switch viewModel.documentType {
+        case .typst, .asciidoc, .diagram: return true
+        default: return false
+        }
+    }
+
+    private var renderFormatLabel: String {
+        switch viewModel.documentType {
+        case .typst: return "Typst"
+        case .asciidoc: return "AsciiDoc"
+        case .diagram: return "Graphviz"
+        default: return ""
+        }
+    }
+
+    /// Label for the `.rich` segment of the mode toggle, per format.
+    private var richModeLabel: String {
+        if viewModel.documentType == .latex { return AppStrings.Editor.viewModeEdit }
+        if isRenderPreviewFormat { return AppStrings.Editor.viewModePreview }
+        return AppStrings.Editor.viewModeRich
+    }
+
     private var shouldShowUnsavedIndicator: Bool {
         if viewModel.documentType == .image {
             return viewModel.hasUnsavedImageEdits
@@ -516,9 +547,21 @@ struct MarkdownEditorView: View {
             if viewModel.documentType == .latex {
                 if viewModel.currentMarkupViewMode == .source {
                     latexMathPalette
+                } else if viewModel.currentMarkupViewMode == .compiled {
+                    Text(AppStrings.Editor.viewModeCompiled)
+                        .font(AppTypographyTokens.caption)
+                        .foregroundStyle(appThemePalette.secondaryTextColor)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
                 } else {
                     latexRichToolbar
                 }
+            } else if isRenderPreviewFormat {
+                Text(renderFormatLabel)
+                    .font(AppTypographyTokens.caption)
+                    .foregroundStyle(appThemePalette.secondaryTextColor)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
             } else if viewModel.currentMarkupViewMode == .rich {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -637,12 +680,15 @@ struct MarkdownEditorView: View {
                 }
             )
         ) {
-            Text(viewModel.documentType == .latex ? AppStrings.Editor.viewModeEdit : AppStrings.Editor.viewModeRich).tag(MarkdownViewModel.MarkupViewMode.rich)
+            Text(richModeLabel).tag(MarkdownViewModel.MarkupViewMode.rich)
             Text(AppStrings.Editor.viewModeSource).tag(MarkdownViewModel.MarkupViewMode.source)
+            if viewModel.documentType == .latex {
+                Text(AppStrings.Editor.viewModeCompiled).tag(MarkdownViewModel.MarkupViewMode.compiled)
+            }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .frame(width: 132)
+        .frame(width: viewModel.documentType == .latex ? 188 : 132)
         .accessibilityIdentifier("editor.mode.toggle")
     }
 }

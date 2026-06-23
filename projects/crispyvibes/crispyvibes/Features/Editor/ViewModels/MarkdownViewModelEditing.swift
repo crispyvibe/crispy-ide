@@ -36,13 +36,20 @@ extension MarkdownViewModel {
     }
 
     var supportsMarkupViewModeToggle: Bool {
-        documentType == .markdown || documentType == .html || documentType == .latex
+        switch documentType {
+        case .markdown, .html, .latex, .typst, .asciidoc, .diagram: return true
+        default: return false
+        }
     }
 
-    /// Default mode per type. Markdown/HTML and LaTeX all open in the editable
-    /// rendered (rich) view; LaTeX's rich view is a WYSIWYG editor over KaTeX.
+    /// Default mode per type. Markdown/HTML and LaTeX open in the editable
+    /// rendered (rich) view; LaTeX prefers the full-TeX PDF view when a local
+    /// TeX toolchain is installed, otherwise the dependency-free rich view.
     var defaultMarkupViewMode: MarkupViewMode {
-        .rich
+        if documentType == .latex, LaTeXNativeCompiler.isToolchainAvailable {
+            return .compiled
+        }
+        return .rich
     }
 
     var currentMarkupViewMode: MarkupViewMode {
@@ -187,7 +194,7 @@ extension MarkdownViewModel {
     }
 
     func isEditableDocumentType(_ type: DocumentType) -> Bool {
-        type == .markdown || type == .html || type == .python || type == .json || type == .r || type == .plainText || type == .whiteboard || type == .latex
+        type == .markdown || type == .html || type == .python || type == .json || type == .r || type == .plainText || type == .whiteboard || type == .latex || type == .typst || type == .asciidoc || type == .diagram
     }
 
     func refreshUnsavedChangesFlag() {

@@ -373,6 +373,42 @@ enum AppStrings {
             localized: "latex.runtime.unavailable",
             defaultValue: "The LaTeX preview runtime is unavailable. Rebuild the app to restore it."
         )
+        static let compiledAccessibilityLabel = String(
+            localized: "latex.compiled.accessibilityLabel",
+            defaultValue: "Compiled LaTeX PDF preview"
+        )
+        static let compiling = String(
+            localized: "latex.compiled.compiling",
+            defaultValue: "Compiling…"
+        )
+        static let compilerUnavailable = String(
+            localized: "latex.compiled.unavailable",
+            defaultValue: "The full-TeX compiler runtime is unavailable. Rebuild the app to restore it."
+        )
+        static let compileFailedTitle = String(
+            localized: "latex.compiled.failed",
+            defaultValue: "Compilation failed"
+        )
+        static let toolchainMissingTitle = String(
+            localized: "latex.compiled.toolchain.title",
+            defaultValue: "Full LaTeX preview needs a TeX engine"
+        )
+        static let toolchainMissingBody = String(
+            localized: "latex.compiled.toolchain.body",
+            defaultValue: "Install BasicTeX (~100 MB) or MacTeX to render the real PDF. The Edit and Source tabs work without it."
+        )
+        static let toolchainRecheck = String(
+            localized: "latex.compiled.toolchain.recheck",
+            defaultValue: "Recheck"
+        )
+        static let toolchainUseEdit = String(
+            localized: "latex.compiled.toolchain.useEdit",
+            defaultValue: "Use Edit Tab"
+        )
+        static let toolchainGetBasicTeX = String(
+            localized: "latex.compiled.toolchain.getBasicTeX",
+            defaultValue: "Get BasicTeX"
+        )
     }
 
     // MARK: - Source Control
@@ -747,6 +783,8 @@ enum AppStrings {
         static let viewModeRich = String(localized: "editor.viewMode.rich", defaultValue: "Rich")
         static let viewModeEdit = String(localized: "editor.viewMode.edit", defaultValue: "Edit")
         static let viewModeSource = String(localized: "editor.viewMode.source", defaultValue: "Source")
+        static let viewModeCompiled = String(localized: "editor.viewMode.compiled", defaultValue: "PDF")
+        static let viewModePreview = String(localized: "editor.viewMode.preview", defaultValue: "Preview")
     }
 
     // MARK: - Settings

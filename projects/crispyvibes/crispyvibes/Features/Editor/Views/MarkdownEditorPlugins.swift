@@ -26,7 +26,10 @@ enum EditorPluginRegistry {
         GitDiffPreviewPlugin(),
         NotebookEditorPlugin(),
         WhiteboardEditorPlugin(),
-        LaTeXEditorPlugin()
+        LaTeXEditorPlugin(),
+        TypstEditorPlugin(),
+        AsciiDocEditorPlugin(),
+        DiagramEditorPlugin()
     ]
 
     static func render(
@@ -377,6 +380,21 @@ private struct LaTeXEditorPlugin: EditorContentPlugin {
         let viewModel = context.viewModel
         let pathID = viewModel.fileURL?.path ?? ""
 
+        // Full-TeX compiled PDF preview (read-only; edits happen in Source/Edit).
+        if viewModel.currentMarkupViewMode == .compiled {
+            let compiled = LaTeXCompiledPane(
+                content: viewModel.displayContent,
+                isBufferLoading: viewModel.isBufferLoading,
+                documentURL: viewModel.fileURL,
+                onEdit: { newSource in viewModel.userDidEdit(newSource) },
+                onUseEditTab: { viewModel.setCurrentMarkupViewMode(.rich) }
+            )
+            .id("latex-compiled-\(pathID)")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("editor.latex.compiled")
+            return AnyView(compiled)
+        }
+
         // Single pane driven by the markup view-mode toggle (like markdown):
         // Source = editable code, Preview = read-only KaTeX render.
         if viewModel.currentMarkupViewMode == .rich {
@@ -420,6 +438,101 @@ private struct LaTeXEditorPlugin: EditorContentPlugin {
 
         return AnyView(source)
     }
+}
+
+@MainActor
+private struct TypstEditorPlugin: EditorContentPlugin {
+    let supportedTypes: Set<MarkdownViewModel.DocumentType> = [.typst]
+    func makeView(context: EditorPluginContext) -> AnyView {
+        formatPreviewView(
+            context: context, language: GenericCodeLanguage(name: "Typst", fileExtensions: ["typ"]),
+            sourceID: "typst-source", accessibility: "editor.typst"
+        ) { viewModel in
+            AnyView(CompiledPDFPreviewView(
+                content: viewModel.displayContent,
+                isBufferLoading: viewModel.isBufferLoading,
+                documentURL: viewModel.fileURL,
+                compile: { src, url in await TypstPreviewCompiler().compile(source: src, documentURL: url) }
+            ))
+        }
+    }
+}
+
+@MainActor
+private struct DiagramEditorPlugin: EditorContentPlugin {
+    let supportedTypes: Set<MarkdownViewModel.DocumentType> = [.diagram]
+    func makeView(context: EditorPluginContext) -> AnyView {
+        formatPreviewView(
+            context: context, language: GenericCodeLanguage(name: "Graphviz", fileExtensions: ["dot", "gv"]),
+            sourceID: "diagram-source", accessibility: "editor.diagram"
+        ) { viewModel in
+            AnyView(CompiledPDFPreviewView(
+                content: viewModel.displayContent,
+                isBufferLoading: viewModel.isBufferLoading,
+                documentURL: viewModel.fileURL,
+                compile: { src, url in await GraphvizPreviewCompiler().compile(source: src, documentURL: url) }
+            ))
+        }
+    }
+}
+
+@MainActor
+private struct AsciiDocEditorPlugin: EditorContentPlugin {
+    let supportedTypes: Set<MarkdownViewModel.DocumentType> = [.asciidoc]
+    func makeView(context: EditorPluginContext) -> AnyView {
+        formatPreviewView(
+            context: context, language: GenericCodeLanguage(name: "AsciiDoc", fileExtensions: ["adoc", "asciidoc", "asc"]),
+            sourceID: "asciidoc-source", accessibility: "editor.asciidoc"
+        ) { viewModel in
+            AnyView(HTMLDocPreviewView(
+                content: viewModel.displayContent,
+                isBufferLoading: viewModel.isBufferLoading,
+                documentURL: viewModel.fileURL,
+                render: { src, url in await AsciiDoctorPreviewCompiler().compile(source: src, documentURL: url) }
+            ))
+        }
+    }
+}
+
+/// Shared body for the render-preview formats: Source = code editor,
+/// Preview (`.rich`) = the format's rendered output.
+@MainActor
+private func formatPreviewView(
+    context: EditorPluginContext,
+    language: any LanguageDefinition,
+    sourceID: String,
+    accessibility: String,
+    preview: (MarkdownViewModel) -> AnyView
+) -> AnyView {
+    let viewModel = context.viewModel
+    let pathID = viewModel.fileURL?.path ?? ""
+
+    if viewModel.currentMarkupViewMode == .source {
+        let source = CodeEditorView(
+            fileURL: viewModel.fileURL ?? URL(fileURLWithPath: "/"),
+            language: language,
+            codeEditorAccessibilityIdentifier: "\(accessibility).source",
+            embeddedDropBridge: context.embeddedDropBridge,
+            pendingSourceSelection: pendingSourceSelection(for: viewModel),
+            onPendingSourceSelectionConsumed: {
+                viewModel.consumePendingSourceSelection(for: viewModel.currentDocumentID)
+            },
+            isBufferLoading: viewModel.isBufferLoading,
+            content: Binding(get: { viewModel.displayContent }, set: { _ in }),
+            onContentChange: { newContent in viewModel.userDidEdit(newContent) }
+        )
+        .id("\(sourceID)-\(pathID)")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier(accessibility)
+        return AnyView(source)
+    }
+
+    return AnyView(
+        preview(viewModel)
+            .id("\(sourceID)-preview-\(pathID)")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("\(accessibility).preview")
+    )
 }
 
 private func previewUnavailableView() -> some View {

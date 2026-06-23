@@ -153,6 +153,10 @@
 		6E1F0A10D7D1453D9A8B1007 /* EditorBehavioralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E1F0A10D7D1453D9A8B2007 /* EditorBehavioralTests.swift */; };
 		6F83C0C0CB0A24A19576B480 /* ExperimentalFeaturesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D6C6A4F23E0455223B0EF0 /* ExperimentalFeaturesService.swift */; };
 		6FA4BD284BDEBA8D5E488476 /* LaTeXPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4570EEA7054A98314CA30D1 /* LaTeXPreviewView.swift */; };
+		A1B2C3D4E5F600000000A002 /* LaTeXCompiledPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */; };
+		A1B2C3D4E5F600000000A006 /* LaTeXNativeCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */; };
+		A1B2C3D4E5F600000000A00A /* CompiledPreviewSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */; };
+		A1B2C3D4E5F600000000A008 /* DocumentFormatPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */; };
 		7021E3A3A4EFF7F72F53CF1C /* CognitoAuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 864E2DDA5731BFA89130C3E0 /* CognitoAuthServiceTests.swift */; };
 		713EBEBB7BBA2718C22A0E0D /* DirectoryWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86AA2FA103460BD2D86D755C /* DirectoryWatcher.swift */; };
 		714EBEBB7BBA2718C22A0E0E /* GitHeadWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86AB2FA103460BD2D86D755D /* GitHeadWatcher.swift */; };
@@ -1249,6 +1253,10 @@
 		D2A6E434F948D8B68CAC439F /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = "<group>"; };
 		D43F43FE8D544F062D06C00E /* BrowserUIDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserUIDelegate.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserUIDelegate.swift; sourceTree = "<group>"; };
 		D4570EEA7054A98314CA30D1 /* LaTeXPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXPreviewView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXCompiledPreviewView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXNativeCompiler.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompiledPreviewSupportViews.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentFormatPreviews.swift; sourceTree = "<group>"; };
 		D4A0B11E0000000000000002 /* BoardInlinePickerOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardInlinePickerOverlay.swift; sourceTree = "<group>"; };
 		D5D6B746834B459ADED44AAA /* PaneWorkerExecutorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PaneWorkerExecutorTests.swift; sourceTree = "<group>"; };
 		D5E6F7081920A1B2C3D4E5F6 /* BrowserDownloadDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserDownloadDelegate.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserDownloadDelegate.swift; sourceTree = "<group>"; };
@@ -3218,6 +3226,10 @@
 				0BA53C083B84B24A49BBBD6F /* PlainTextEditor.swift */,
 				B10000000000000000000002C /* PythonFileViewer.swift */,
 				D4570EEA7054A98314CA30D1 /* LaTeXPreviewView.swift */,
+				A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */,
+				A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */,
+				A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */,
+				A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -4226,6 +4238,10 @@
 				38666CDE2B58A50BBF132632 /* WhiteboardDocument.swift in Sources */,
 				EC7E87D893D1FACB05340A28 /* ExcalidrawSchemeHandler.swift in Sources */,
 				6FA4BD284BDEBA8D5E488476 /* LaTeXPreviewView.swift in Sources */,
+				A1B2C3D4E5F600000000A002 /* LaTeXCompiledPreviewView.swift in Sources */,
+				A1B2C3D4E5F600000000A006 /* LaTeXNativeCompiler.swift in Sources */,
+				A1B2C3D4E5F600000000A00A /* CompiledPreviewSupportViews.swift in Sources */,
+				A1B2C3D4E5F600000000A008 /* DocumentFormatPreviews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -15,12 +15,18 @@ extension MarkdownViewModel {
     /// LaTeX documents. Routed ahead of `plainText` so `.tex`/`.latex`/`.ltx`
     /// open in the split source + KaTeX math-preview editor.
     static let latexExtensions: Set<String> = ["tex", "latex", "ltx"]
+    /// Typst documents — rendered to a PDF preview via `typst`.
+    static let typstExtensions: Set<String> = ["typ"]
+    /// AsciiDoc documents — rendered to an HTML preview via `asciidoctor`.
+    static let asciidocExtensions: Set<String> = ["adoc", "asciidoc", "asc"]
+    /// Graphviz diagrams — rendered to a PDF preview via `dot`.
+    static let diagramExtensions: Set<String> = ["dot", "gv"]
     static let rExtensions: Set<String> = ["r", "R", "rmd", "Rmd"]
     static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp", "heic", "heif", "svg"]
     /// Microsoft Office document extensions previewed via Quick Look (F045).
     static let officeExtensions: Set<String> = ["docx", "doc", "pptx", "ppt", "xlsx", "xls"]
     static let plainTextExtensions: Set<String> = [
-        "txt", "text", "log", "bib", "rst", "adoc",
+        "txt", "text", "log", "bib", "rst",
         "csv", "tsv"
     ]
     static let codeLanguageByExtension: [String: CodeLanguageKind] = [
@@ -71,6 +77,18 @@ extension MarkdownViewModel {
 
         if latexExtensions.contains(ext) {
             return .latex
+        }
+
+        if typstExtensions.contains(ext) {
+            return .typst
+        }
+
+        if asciidocExtensions.contains(ext) {
+            return .asciidoc
+        }
+
+        if diagramExtensions.contains(ext) {
+            return .diagram
         }
 
         if pythonExtensions.contains(ext) {
