@@ -148,6 +148,10 @@
                        .replace(/\\end\{(?:itemize|enumerate)\}\s*$/, "");
       return /\\begin\{(?:itemize|enumerate)\}/.test(listInner) ? "raw" : "list";
     }
+    if (/^\\begin\{abstract\}/.test(t)) return "abstract";
+    if (/^\\begin\{IEEEkeywords\}/.test(t)) return "keywords";
+    if (/^\\begin\{(?:table|tabular)\b/.test(t)) return "table";
+    if (/^\\begin\{thebibliography\}/.test(t)) return "bib";
     if (/^\\begin\{/.test(t)) return "raw";
     return "para";
   }
@@ -170,6 +174,22 @@
       .replace(/\\(?:emph|textit)\{([^{}]*)\}/g, "<em>$1</em>")
       .replace(/\\underline\{([^{}]*)\}/g, "<u>$1</u>")
       .replace(/\\texttt\{([^{}]*)\}/g, "<code>$1</code>");
+    // Common text-mode niceties so prose reads cleanly instead of showing raw
+    // control sequences: logos, TeX quotes, dashes, the {,} digit-group idiom,
+    // escaped specials, and thin/normal spacing macros.
+    s = s
+      .replace(/\\LaTeX\b/g, "LaTeX")
+      .replace(/\\TeX\b/g, "TeX")
+      .replace(/``/g, "\u201C")
+      .replace(/''/g, "\u201D")
+      .replace(/---/g, "\u2014")
+      .replace(/--/g, "\u2013")
+      .replace(/\{,\}/g, ",")
+      .replace(/\\&amp;/g, "&amp;")
+      .replace(/\\([%#_{}])/g, "$1")
+      .replace(/\\,/g, "\u2009")
+      .replace(/\\[;:]/g, " ")
+      .replace(/~/g, "\u00A0");
     s = s.replace(/\u0000M(\d+)\u0000/g, function (_, i) { return math[+i]; });
     // Restore as a literal "$" inside an auto-render-ignored span, so KaTeX
     // (which has no concept of an escaped dollar) won't typeset it; it
@@ -271,6 +291,88 @@
         renderTitleInto(mt);
         return mt;
       }
+      case "abstract": {
+        // Editable block: the body is typed directly; the "Abstract" label is
+        // added via CSS ::before so it never enters the serialized source.
+        var ab = document.createElement("div");
+        ab.className = "blk blk-edit blk-abstract";
+        ab.dataset.srcOriginal = block.src;
+        ab.dataset.env = "abstract";
+        var aInner = block.src
+          .replace(/^[\s\S]*?\\begin\{abstract\}/, "")
+          .replace(/\\end\{abstract\}[\s\S]*$/, "")
+          .trim();
+        ab.innerHTML = renderInline(aInner) || "<br>";
+        return ab;
+      }
+      case "keywords": {
+        var kw = document.createElement("div");
+        kw.className = "blk blk-edit blk-keywords";
+        kw.dataset.srcOriginal = block.src;
+        kw.dataset.env = "keywords";
+        var kInner = block.src
+          .replace(/^[\s\S]*?\\begin\{IEEEkeywords\}/, "")
+          .replace(/\\end\{IEEEkeywords\}[\s\S]*$/, "")
+          .trim();
+        kw.innerHTML = renderInline(kInner) || "<br>";
+        return kw;
+      }
+      case "table": {
+        var tb = atom("blk-table");
+        tb.dataset.src = block.src;
+        var caption = (block.src.match(/\\caption\{([^{}]*)\}/) || [])[1];
+        var tabMatch = block.src.match(/\\begin\{tabular\}\s*\{[^}]*\}([\s\S]*?)\\end\{tabular\}/);
+        if (tabMatch) {
+          if (caption) {
+            var capEl = document.createElement("div");
+            capEl.className = "tex-caption";
+            capEl.innerHTML = renderInline(caption);
+            tb.appendChild(capEl);
+          }
+          var tableEl = document.createElement("table");
+          tableEl.className = "tex-table";
+          tabMatch[1].split(/\\\\/).forEach(function (rowSrc) {
+            var row = rowSrc.replace(/\\hline/g, "").trim();
+            if (!row) return;
+            var tr = document.createElement("tr");
+            // Split on column `&` while protecting escaped `\&`.
+            row.replace(/\\&/g, "\u0000AMP\u0000").split("&").forEach(function (cellSrc) {
+              var td = document.createElement("td");
+              td.innerHTML = renderInline(cellSrc.replace(/\u0000AMP\u0000/g, "\\&").trim()) || "<br>";
+              tr.appendChild(td);
+            });
+            tableEl.appendChild(tr);
+          });
+          tb.appendChild(tableEl);
+        } else {
+          var tpre = document.createElement("pre");
+          tpre.textContent = block.src.trim();
+          tb.appendChild(tpre);
+        }
+        return tb;
+      }
+      case "bib": {
+        var bb = atom("blk-bib");
+        bb.dataset.src = block.src;
+        var bLabel = document.createElement("div");
+        bLabel.className = "env-label";
+        bLabel.textContent = "References";
+        bb.appendChild(bLabel);
+        var ol = document.createElement("ol");
+        ol.className = "tex-bib";
+        var bInner = block.src
+          .replace(/^[\s\S]*?\\begin\{thebibliography\}\{[^}]*\}/, "")
+          .replace(/\\end\{thebibliography\}[\s\S]*$/, "");
+        bInner.split(/\\bibitem(?:\[[^\]]*\])?\{[^}]*\}/).forEach(function (entry) {
+          var text = entry.trim();
+          if (!text) return;
+          var li = document.createElement("li");
+          li.innerHTML = renderInline(text);
+          ol.appendChild(li);
+        });
+        bb.appendChild(ol);
+        return bb;
+      }
       default: { // raw / unknown — preserved verbatim, shown read-only
         var r = atom("blk-raw");
         r.dataset.src = block.src;
@@ -288,8 +390,51 @@
     var hasDate = /\\date\s*\{/.test(model.pre);
     var date = (hasDate ? preambleField("date") : "\\today").replace(/\\today/g, new Date().toLocaleDateString());
     if (title) { var h = document.createElement("h1"); h.className = "doc-title"; h.innerHTML = renderInline(title); el.appendChild(h); }
-    if (author) { var a = document.createElement("div"); a.className = "doc-author"; a.innerHTML = renderInline(author); el.appendChild(a); }
+    if (author) {
+      var a = document.createElement("div");
+      a.className = "doc-author";
+      // Unwrap IEEE author-block macros and split on \\ / \and into lines so
+      // the author area reads as names + affiliations rather than raw macros.
+      var cleaned = cleanAuthorSource(author);
+      a.innerHTML = cleaned
+        .split(/\\\\|\\and\b/)
+        .map(function (line) { return renderInline(line.trim()); })
+        .filter(function (x) { return x; })
+        .join("<br>");
+      el.appendChild(a);
+    }
     if (date) { var d = document.createElement("div"); d.className = "doc-date"; d.innerHTML = renderInline(date); el.appendChild(d); }
+  }
+
+  // Strip `\IEEEauthorblockN{...}` / `\IEEEauthorblockA{...}` wrappers (keeping
+  // their inner content), handling nested braces. Other author markup
+  // (\textit, etc.) is left for renderInline.
+  function unwrapMacro(src, macro) {
+    var out = "";
+    var i = 0;
+    var needle = macro + "{";
+    while (i < src.length) {
+      var idx = src.indexOf(needle, i);
+      if (idx < 0) { out += src.slice(i); break; }
+      out += src.slice(i, idx);
+      var j = idx + needle.length;
+      var depth = 1;
+      while (j < src.length && depth > 0) {
+        var ch = src[j];
+        if (ch === "{") depth++;
+        else if (ch === "}") { depth--; if (depth === 0) break; }
+        out += ch;
+        j++;
+      }
+      i = j + 1; // past the matching "}"
+    }
+    return out;
+  }
+
+  function cleanAuthorSource(src) {
+    var s = unwrapMacro(src, "\\IEEEauthorblockN");
+    s = unwrapMacro(s, "\\IEEEauthorblockA");
+    return s;
   }
 
   function emptyParagraph() {
@@ -307,22 +452,40 @@
     suppressSync = true;
     content.setAttribute("contenteditable", "true");
     content.innerHTML = "";
-    splitBlocks(split.body).forEach(function (block) {
-      var el = renderBlockEl(block);
-      if (el) content.appendChild(el);
-    });
-    if (!content.childNodes.length) content.appendChild(emptyParagraph());
-    // Always end on an editable paragraph. When the document's last block is a
-    // read-only atom (math, raw environment, comment, title), there is no caret
-    // landing spot after it, so the user can't append new text at the end.
-    var lastBlock = content.lastElementChild;
-    if (lastBlock && lastBlock.classList && lastBlock.classList.contains("atom")) {
-      content.appendChild(emptyParagraph());
+    try {
+      splitBlocks(split.body).forEach(function (block) {
+        var el;
+        // A single malformed block must never abort the whole render (which
+        // would leave the surface non-editable); fall back to a raw block.
+        try { el = renderBlockEl(block); }
+        catch (e) {
+          log("renderBlock: " + e);
+          el = atom("blk-raw");
+          el.dataset.src = block.src;
+          var pre = document.createElement("pre");
+          pre.textContent = (block.src || "").trim();
+          el.appendChild(pre);
+        }
+        if (el) content.appendChild(el);
+      });
+      if (!content.childNodes.length) content.appendChild(emptyParagraph());
+      // Always end on an editable paragraph. When the document's last block is a
+      // read-only atom (math, raw environment, comment, title), there is no caret
+      // landing spot after it, so the user can't append new text at the end.
+      var lastBlock = content.lastElementChild;
+      if (lastBlock && lastBlock.classList && lastBlock.classList.contains("atom")) {
+        content.appendChild(emptyParagraph());
+      }
+      typesetMath(content);
+      snapshotPristine(content);
+      annotateLatexSourceLines();
+    } catch (e) {
+      log("render-body: " + e);
+    } finally {
+      // Always re-enable sync, even if rendering hit an error — otherwise edits
+      // would silently stop saving.
+      suppressSync = false;
     }
-    typesetMath(content);
-    snapshotPristine(content);
-    annotateLatexSourceLines();
-    suppressSync = false;
     if (window.crispyvibesComments) window.crispyvibesComments.redecorate();
   }
 
@@ -536,11 +699,32 @@
 
   // ---- serialization (canvas DOM → LaTeX) -------------------------------
 
+  // Re-escape display text back to LaTeX when serializing an EDITED block.
+  // renderInline turns source escapes/typography into display glyphs (\% -> %,
+  // `` -> “, -- -> – …); without reversing them here, editing a block would
+  // write the glyphs back and corrupt the source (a bare % becomes a comment,
+  // & an alignment tab). Only reached for edited blocks — pristine blocks emit
+  // their original source verbatim. The `&%#_` cases are illegal unescaped in
+  // LaTeX body text, so reversing is always correct.
+  function reescapeInlineText(text) {
+    return text
+      .replace(/(?<!\\)&/g, "\\&")
+      .replace(/(?<!\\)%/g, "\\%")
+      .replace(/(?<!\\)#/g, "\\#")
+      .replace(/(?<!\\)_/g, "\\_")
+      .replace(/\u201C/g, "``")
+      .replace(/\u201D/g, "''")
+      .replace(/\u2014/g, "---")
+      .replace(/\u2013/g, "--")
+      .replace(/\u2009/g, "\\,")
+      .replace(/\u00A0/g, "~");
+  }
+
   // Inline content within a block element back to LaTeX.
   function serializeInline(node) {
     var out = "";
     node.childNodes.forEach(function (child) {
-      if (child.nodeType === 3) { out += child.nodeValue; return; }
+      if (child.nodeType === 3) { out += reescapeInlineText(child.nodeValue); return; }
       if (child.nodeType !== 1) return;
       var el = child;
       if (el.classList && (el.classList.contains("katex") || el.classList.contains("katex-display"))) {
@@ -589,6 +773,14 @@
     var el = node;
     if (el.classList.contains("atom")) {
       return el.dataset.src !== undefined ? el.dataset.src : null; // preserved verbatim
+    }
+    // Edited scholarly environment → re-wrap the edited body. (Untouched ones
+    // are emitted verbatim by emitNodeSource via dataset.srcOriginal.)
+    if (el.dataset && el.dataset.env === "abstract") {
+      return "\\begin{abstract}\n" + serializeInline(el).trim() + "\n\\end{abstract}";
+    }
+    if (el.dataset && el.dataset.env === "keywords") {
+      return "\\begin{IEEEkeywords}\n" + serializeInline(el).trim() + "\n\\end{IEEEkeywords}";
     }
     // Math that ended up as a top-level node (e.g. inserted at the canvas root).
     if (el.classList.contains("katex") || el.classList.contains("katex-display")) {

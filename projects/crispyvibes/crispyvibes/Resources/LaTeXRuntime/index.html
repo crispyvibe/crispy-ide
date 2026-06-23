@@ -93,6 +93,21 @@
       opacity: 0.7;
     }
     .blk-blank { height: 0; margin: 0; }
+    /* Rendered scholarly environments */
+    .blk-abstract { margin: 1.2em 0; font-size: 0.95em; }
+    .blk-abstract::before { content: "Abstract"; display: block; font-weight: 700; margin-bottom: 0.3em; }
+    .blk-keywords { margin: 0.8em 0; font-size: 0.95em; }
+    .blk-keywords::before { content: "Index Terms\2014"; font-weight: 700; font-style: italic; margin-right: 0.3em; }
+    .blk-table { margin: 1.2em 0; padding: 0 8px; text-align: center; }
+    .tex-caption { font-size: 0.9em; opacity: 0.8; margin-bottom: 0.5em; }
+    .tex-table { border-collapse: collapse; margin: 0 auto; }
+    .tex-table td { border-bottom: 1px solid rgba(135, 145, 175, 0.4); padding: 4px 14px; text-align: center; }
+    .tex-table tr:first-child td { border-bottom-width: 2px; font-weight: 600; }
+    .blk-bib { margin: 1.2em 0; padding: 0 8px; }
+    .blk-bib .env-label { font-weight: 700; margin-bottom: 0.4em; }
+    .tex-bib { font-size: 0.9em; margin: 0; padding-left: 1.6em; }
+    .tex-bib li { margin: 0.25em 0; }
+    .doc-author { line-height: 1.5; }
     .katex { font-size: 1.05em; }
     .katex-display { margin: 0.6em 0; }
     /* Visual equation editor panel */

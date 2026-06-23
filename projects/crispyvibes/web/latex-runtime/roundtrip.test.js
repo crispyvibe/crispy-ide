@@ -374,6 +374,22 @@ async function run() {
     typeof env.window.crispyvibesComments.setComments === "function" &&
     typeof env.window.crispyvibesComments.scrollToAnchor === "function", typeof env.window.crispyvibesComments);
 
+  // ---- Test 19: editing a block re-escapes LaTeX specials (BL-4) ------
+  console.log("Test 19: edited block re-escapes specials (& % # _) and typography");
+  env = makeEnv();
+  env.window.crispyvibesSetLatex(
+    "\\begin{document}\nWe kept 99.4\\% and A \\& B and x\\_y \\#1.\n\\end{document}\n"
+  );
+  const p19 = [...env.window.document.querySelectorAll("#content > p")].find((p) => /99\.4/.test(p.textContent));
+  check("specials render as plain glyphs", !!p19 && /99\.4% and A & B and x_y #1/.test(p19.textContent), p19 && p19.textContent);
+  if (p19) {
+    const tn = [...p19.childNodes].find((n) => n.nodeType === 3 && /99\.4/.test(n.nodeValue));
+    if (tn) tn.nodeValue = tn.nodeValue.replace("kept", "keep");
+  }
+  out = await fireInputAndCapture(env.window, env.state);
+  check("edited block re-escapes & % # _ (no corruption)",
+    out.includes("99.4\\% and A \\& B and x\\_y \\#1"), out);
+
   console.log(failures === 0 ? "\nALL PASSED" : `\n${failures} FAILED`);
   process.exit(failures === 0 ? 0 : 1);
 }
