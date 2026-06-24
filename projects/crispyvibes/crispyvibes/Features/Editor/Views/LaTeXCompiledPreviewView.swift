@@ -34,11 +34,8 @@ struct LaTeXCompiledPreviewView: NSViewRepresentable {
         }
         context.coordinator.attach(container: container)
         context.coordinator.commentsFilePath = commentsFilePath
-
-        guard LaTeXNativeCompiler.isToolchainAvailable else {
-            container.showStatus(AppStrings.LaTeX.compilerUnavailable, isError: true)
-            return container
-        }
+        // Toolchain availability is gated upstream by LaTeXCompiledPane; if a
+        // compile still fails it surfaces non-destructively via the error path.
         container.showStatus(AppStrings.LaTeX.compiling, isError: false)
         context.coordinator.scheduleCompile(force: true)
         return container
@@ -89,7 +86,6 @@ struct LaTeXCompiledPreviewView: NSViewRepresentable {
         private func selectionChanged() {
             let selection = container?.pdfView.currentSelection
             let selectedText = selection?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            logger.debug("pdf-comment: selectionChanged file=\(self.commentsFilePath ?? "nil", privacy: .public) selLen=\(selectedText.count)")
             guard commentsFilePath != nil,
                   let pdfView = container?.pdfView,
                   let selection = pdfView.currentSelection,
@@ -238,7 +234,6 @@ struct LaTeXCompiledPreviewView: NSViewRepresentable {
             while start > 0, !lines[start - 1].trimmingCharacters(in: .whitespaces).isEmpty { start -= 1 }
             var end = idx
             while end < lines.count - 1, !lines[end + 1].trimmingCharacters(in: .whitespaces).isEmpty { end += 1 }
-            logger.debug("edit-on-page: line \(line) -> block \(start + 1)...\(end + 1)")
             let blockText = lines[start...end].joined(separator: "\n")
             let rangeLabel = start == end
                 ? "Editing line \(start + 1)"

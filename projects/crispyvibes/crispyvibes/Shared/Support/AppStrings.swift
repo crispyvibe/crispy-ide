@@ -373,17 +373,9 @@ enum AppStrings {
             localized: "latex.runtime.unavailable",
             defaultValue: "The LaTeX preview runtime is unavailable. Rebuild the app to restore it."
         )
-        static let compiledAccessibilityLabel = String(
-            localized: "latex.compiled.accessibilityLabel",
-            defaultValue: "Compiled LaTeX PDF preview"
-        )
         static let compiling = String(
             localized: "latex.compiled.compiling",
             defaultValue: "Compiling…"
-        )
-        static let compilerUnavailable = String(
-            localized: "latex.compiled.unavailable",
-            defaultValue: "The full-TeX compiler runtime is unavailable. Rebuild the app to restore it."
         )
         static let compileFailedTitle = String(
             localized: "latex.compiled.failed",

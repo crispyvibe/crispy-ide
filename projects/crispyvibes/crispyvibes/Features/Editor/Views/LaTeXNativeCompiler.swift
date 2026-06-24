@@ -12,9 +12,7 @@ import OSLog
 struct LaTeXNativeCompiler {
     struct CompileResult {
         let pdfURL: URL?
-        let synctexURL: URL?
         let log: String
-        let succeeded: Bool
     }
 
     /// A resolved source location from a SyncTeX reverse lookup.
@@ -112,17 +110,11 @@ struct LaTeXNativeCompiler {
         }
 
         let pdfURL = buildDir.appendingPathComponent("main.pdf")
-        let synctexURL = buildDir.appendingPathComponent("main.synctex.gz")
         let hasPDF = fileManager.fileExists(atPath: pdfURL.path)
         // On failure there's no PDF to keep (and the dir won't be tracked by the
         // view for later cleanup), so remove it now to avoid leaking scratch dirs.
         if !hasPDF { try? fileManager.removeItem(at: buildDir) }
-        return CompileResult(
-            pdfURL: hasPDF ? pdfURL : nil,
-            synctexURL: fileManager.fileExists(atPath: synctexURL.path) ? synctexURL : nil,
-            log: log,
-            succeeded: hasPDF
-        )
+        return CompileResult(pdfURL: hasPDF ? pdfURL : nil, log: log)
     }
 
     /// Whether the pdflatex log asks for another pass.
