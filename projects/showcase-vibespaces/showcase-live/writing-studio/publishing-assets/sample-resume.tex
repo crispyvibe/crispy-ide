@@ -1,0 +1,63 @@
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage[margin=0.75in]{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{titlesec}
+
+% Tighten section spacing and add a rule under each section title.
+\titleformat{\section}{\large\bfseries\scshape}{}{0em}{}[\titlerule]
+\titlespacing{\section}{0pt}{10pt}{6pt}
+\setlist[itemize]{leftmargin=1.2em, itemsep=2pt, topsep=2pt}
+\pagestyle{empty}
+
+\begin{document}
+
+\begin{center}
+  {\Huge \textbf{Jordan Rivera}}\\[4pt]
+  San Francisco, CA $\cdot$ (555) 012-3456 $\cdot$
+  \href{mailto:jordan.rivera@example.com}{jordan.rivera@example.com}\\
+  \href{https://github.com/example}{github.com/example} $\cdot$
+  \href{https://linkedin.com/in/example}{linkedin.com/in/example}
+\end{center}
+
+\section{Summary}
+Backend-leaning full-stack engineer with 6+ years building reliable,
+high-throughput services. Comfortable owning a feature end to end: design,
+implementation, observability, and on-call.
+
+\section{Experience}
+
+\textbf{Senior Software Engineer} \hfill \textit{2021 -- Present}\\
+\textit{Acme Cloud, San Francisco, CA}
+\begin{itemize}
+  \item Led the redesign of the billing pipeline, cutting invoice latency by 60\%.
+  \item Mentored 4 engineers and introduced a lightweight RFC process.
+  \item Owned the multi-region failover hgh runbook; reduced MTTR from 45 to 9 minutes.
+\end{itemize}
+
+\textbf{Software Engineer} \hfill \textit{2018 -- 2021}\\
+\textit{Beacon Labs, Remote}
+\begin{itemize}
+  \item Built an event-ingestion service handling 50k events/sec at p99 < 80ms.
+  \item Migrated a monolith module to a service with zero downtime.
+\end{itemize}
+
+\section{Education}
+\textbf{B.S. in Computer Science} \hfill \textit{2014 -- 2018}\\
+\textit{State University} --- GPA 3.8/4.0
+
+\section{Skills}
+\begin{itemize}
+  \item \textbf{Languages:} Go, Swift, TypeScript, Python, SQL
+  \item \textbf{Infrastructure:} Kubernetes, Terraform, PostgreSQL, Kafka, AWS
+  \item \textbf{Practices:} Distributed systems, observability, CI/CD, code review
+\end{itemize}
+
+\section{Selected Projects}
+\begin{itemize}
+  \item \textbf{OpenTrace} --- lightweight distributed tracing library (2k+ stars).
+  \item \textbf{ledger-rs} --- double-entry accounting engine with a typed query API.
+\end{itemize}
+
+\end{document}

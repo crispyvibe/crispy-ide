@@ -1,6 +1,17 @@
 import SwiftUI
 import AppKit
 
+/// A request to insert text at the code editor's current selection. Identity is
+/// a fresh UUID per request so inserting the same snippet twice still fires.
+struct EditorInsertionRequest: Equatable {
+    let id: UUID
+    let text: String
+    init(_ text: String) {
+        self.id = UUID()
+        self.text = text
+    }
+}
+
 /// Generic code editor with syntax highlighting support
 struct CodeEditorView: NSViewRepresentable {
     let fileURL: URL
@@ -9,6 +20,10 @@ struct CodeEditorView: NSViewRepresentable {
     var embeddedDropBridge: ContentViewerEmbeddedDropBridge? = nil
     var pendingSourceSelection: MarkdownViewModel.SourceSelection? = nil
     var onPendingSourceSelectionConsumed: (() -> Void)? = nil
+    /// Insert-at-cursor hook (e.g. the LaTeX math palette). When a new request
+    /// arrives it is inserted at the current selection, then consumed.
+    var insertionRequest: EditorInsertionRequest? = nil
+    var onInsertionConsumed: (() -> Void)? = nil
     var isBufferLoading: Bool = false
     @Binding var content: String
     let onContentChange: (String) -> Void
@@ -116,6 +131,7 @@ struct CodeEditorView: NSViewRepresentable {
         // Update theme if color scheme changed
         context.coordinator.updateThemeIfNeeded(textView: textView, colorScheme: colorScheme)
         applyPendingSourceSelectionIfNeeded(in: textView)
+        applyInsertionRequestIfNeeded(in: textView, coordinator: context.coordinator)
 
         // F049: register the textView with the comment bridge so the SwiftUI
         // overlay can compute pixel-accurate rects for gutter + highlights.
@@ -184,6 +200,18 @@ struct CodeEditorView: NSViewRepresentable {
             scrollView.contentView.scroll(to: target)
             scrollView.reflectScrolledClipView(scrollView.contentView)
         }
+    }
+
+    /// Insert the pending snippet at the current selection (math palette).
+    /// Identity-guarded so the same request isn't applied twice.
+    private func applyInsertionRequestIfNeeded(in textView: NSTextView, coordinator: Coordinator) {
+        guard let insertionRequest, coordinator.lastInsertionID != insertionRequest.id else { return }
+        coordinator.lastInsertionID = insertionRequest.id
+        if textView.window?.firstResponder !== textView {
+            textView.window?.makeFirstResponder(textView)
+        }
+        textView.insertText(insertionRequest.text, replacementRange: textView.selectedRange())
+        onInsertionConsumed?()
     }
 
     private func applyPendingSourceSelectionIfNeeded(in textView: NSTextView) {
@@ -278,6 +306,7 @@ struct CodeEditorView: NSViewRepresentable {
         var parent: CodeEditorView
         var lastColorScheme: ColorScheme
         var lastFileURL: URL?
+        var lastInsertionID: UUID?
         private var lastThemeBackground: NSColor?
         private var highlightWorkItem: DispatchWorkItem?
 

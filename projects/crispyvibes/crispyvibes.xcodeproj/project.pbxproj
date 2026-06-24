@@ -152,6 +152,11 @@
 		6E1F0A10D7D1453D9A8B1006 /* TerminalBehavioralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E1F0A10D7D1453D9A8B2006 /* TerminalBehavioralTests.swift */; };
 		6E1F0A10D7D1453D9A8B1007 /* EditorBehavioralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E1F0A10D7D1453D9A8B2007 /* EditorBehavioralTests.swift */; };
 		6F83C0C0CB0A24A19576B480 /* ExperimentalFeaturesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D6C6A4F23E0455223B0EF0 /* ExperimentalFeaturesService.swift */; };
+		6FA4BD284BDEBA8D5E488476 /* LaTeXPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4570EEA7054A98314CA30D1 /* LaTeXPreviewView.swift */; };
+		A1B2C3D4E5F600000000A002 /* LaTeXCompiledPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */; };
+		A1B2C3D4E5F600000000A006 /* LaTeXNativeCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */; };
+		A1B2C3D4E5F600000000A00A /* CompiledPreviewSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */; };
+		A1B2C3D4E5F600000000A008 /* DocumentFormatPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */; };
 		7021E3A3A4EFF7F72F53CF1C /* CognitoAuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 864E2DDA5731BFA89130C3E0 /* CognitoAuthServiceTests.swift */; };
 		713EBEBB7BBA2718C22A0E0D /* DirectoryWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86AA2FA103460BD2D86D755C /* DirectoryWatcher.swift */; };
 		714EBEBB7BBA2718C22A0E0E /* GitHeadWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86AB2FA103460BD2D86D755D /* GitHeadWatcher.swift */; };
@@ -231,6 +236,8 @@
 		A10000000000000000000013 /* highlight.min.js in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000014 /* highlight.min.js */; };
 		A10000000000000000000014 /* marked.umd.js in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000015 /* marked.umd.js */; };
 		A10000000000000000000015 /* turndown.js in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000016 /* turndown.js */; };
+		KATEXMINJS00000000000002 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = KATEXMINJS00000000000001 /* katex.min.js */; };
+		AUTORENDERJS000000000002 /* auto-render.min.js in Resources */ = {isa = PBXBuildFile; fileRef = AUTORENDERJS000000000001 /* auto-render.min.js */; };
 		A10000000000000000000016 /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000017 /* THIRD_PARTY_NOTICES.md */; };
 		A10000000000000000000017 /* PaneWorkerInfrastructure.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000018 /* PaneWorkerInfrastructure.swift */; };
 		A10000000000000000000018 /* ProjectSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000019 /* ProjectSession.swift */; };
@@ -481,6 +488,7 @@
 		BRWSHOST0002000200020002 /* BrowserSessionHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRWSHOST0001000100010001 /* BrowserSessionHostView.swift */; };
 		BRWSOWNR0002000200020002 /* BrowserHostOwnershipCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRWSOWNR0001000100010001 /* BrowserHostOwnershipCoordinator.swift */; };
 		C09D89721027C10CCAA0790B /* TodosSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFFA679768A1D8A7C2392526 /* TodosSurfaceView.swift */; };
+		C146610DAC25776F24C15D48 /* LaTeXRuntime in Resources */ = {isa = PBXBuildFile; fileRef = AFBDF00B5F802FCC349FAB84 /* LaTeXRuntime */; };
 		C1BC645B356BA596BE12DC7A /* AppDelegateDefaultsObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4859A806650A6BA1D0A035E1 /* AppDelegateDefaultsObservation.swift */; };
 		C2D000000000000000000002 /* VibeSpaceSidebarProjectTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000001 /* VibeSpaceSidebarProjectTree.swift */; };
 		C2D000000000000000000022 /* UnifiedSidebarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000021 /* UnifiedSidebarModels.swift */; };
@@ -956,6 +964,7 @@
 		ADD00000000000000000000B /* VibeSpaceTerminalBoardStoreAddTileTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreAddTileTests.swift; sourceTree = "<group>"; };
 		ADD00000000000000000000D /* ComposeHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeHistoryTests.swift; sourceTree = "<group>"; };
 		AEC6AE2F6E509F8231A2F2CA /* OperationMetricsStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OperationMetricsStore.swift; sourceTree = "<group>"; };
+		AFBDF00B5F802FCC349FAB84 /* LaTeXRuntime */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; name = LaTeXRuntime; path = LaTeXRuntime; sourceTree = "<group>"; };
 		AFD0B13CCDCFC58AF1CE523F /* CodeEditorCommentBridgeEnvironment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CodeEditorCommentBridgeEnvironment.swift; sourceTree = "<group>"; };
 		AFE41179110DAD31D25DB684 /* ShortcutPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ShortcutPanelView.swift; path = crispyvibes/Features/Terminal/Views/ShortcutPanelView.swift; sourceTree = "<group>"; };
 		B09E173B53D66230B2C17655 /* SerialTaskQueue.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SerialTaskQueue.swift; sourceTree = "<group>"; };
@@ -981,6 +990,8 @@
 		B100000000000000000000014 /* highlight.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = highlight.min.js; sourceTree = "<group>"; };
 		B100000000000000000000015 /* marked.umd.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = marked.umd.js; sourceTree = "<group>"; };
 		B100000000000000000000016 /* turndown.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = turndown.js; sourceTree = "<group>"; };
+		KATEXMINJS00000000000001 /* katex.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = katex.min.js; sourceTree = "<group>"; };
+		AUTORENDERJS000000000001 /* auto-render.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = auto-render.min.js; sourceTree = "<group>"; };
 		B100000000000000000000017 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
 		B100000000000000000000018 /* PaneWorkerInfrastructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneWorkerInfrastructure.swift; sourceTree = "<group>"; };
 		B100000000000000000000019 /* ProjectSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSession.swift; sourceTree = "<group>"; };
@@ -1241,6 +1252,11 @@
 		D285C6841FBC59920516899B /* MarkupRenderedEditor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkupRenderedEditor.swift; sourceTree = "<group>"; };
 		D2A6E434F948D8B68CAC439F /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = "<group>"; };
 		D43F43FE8D544F062D06C00E /* BrowserUIDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserUIDelegate.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserUIDelegate.swift; sourceTree = "<group>"; };
+		D4570EEA7054A98314CA30D1 /* LaTeXPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXPreviewView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXCompiledPreviewView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXNativeCompiler.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompiledPreviewSupportViews.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentFormatPreviews.swift; sourceTree = "<group>"; };
 		D4A0B11E0000000000000002 /* BoardInlinePickerOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardInlinePickerOverlay.swift; sourceTree = "<group>"; };
 		D5D6B746834B459ADED44AAA /* PaneWorkerExecutorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PaneWorkerExecutorTests.swift; sourceTree = "<group>"; };
 		D5E6F7081920A1B2C3D4E5F6 /* BrowserDownloadDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserDownloadDelegate.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserDownloadDelegate.swift; sourceTree = "<group>"; };
@@ -2729,6 +2745,7 @@
 				F0CAE1777488E5369283C502 /* terminfo */,
 				6DA5C784CC785D74A446E6CE /* Localizable.xcstrings */,
 				3BAF0E29A080BF961EB2DF29 /* ExcalidrawRuntime */,
+				AFBDF00B5F802FCC349FAB84 /* LaTeXRuntime */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -2743,6 +2760,8 @@
 				B100000000000000000000015 /* marked.umd.js */,
 				B100000000000000000000103 /* mermaid.min.js */,
 				B100000000000000000000016 /* turndown.js */,
+				KATEXMINJS00000000000001 /* katex.min.js */,
+				AUTORENDERJS000000000001 /* auto-render.min.js */,
 			);
 			path = MarkdownRuntime;
 			sourceTree = "<group>";
@@ -3206,6 +3225,11 @@
 				D285C6841FBC59920516899B /* MarkupRenderedEditor.swift */,
 				0BA53C083B84B24A49BBBD6F /* PlainTextEditor.swift */,
 				B10000000000000000000002C /* PythonFileViewer.swift */,
+				D4570EEA7054A98314CA30D1 /* LaTeXPreviewView.swift */,
+				A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */,
+				A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */,
+				A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */,
+				A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -3648,11 +3672,14 @@
 				A10000000000000000000014 /* marked.umd.js in Resources */,
 				A10000000000000000000103 /* mermaid.min.js in Resources */,
 				A10000000000000000000015 /* turndown.js in Resources */,
+				KATEXMINJS00000000000002 /* katex.min.js in Resources */,
+				AUTORENDERJS000000000002 /* auto-render.min.js in Resources */,
 				A10000000000000000000016 /* THIRD_PARTY_NOTICES.md in Resources */,
 				431732E81833B187219FC0F1 /* ghostty in Resources */,
 				71D056556E0640337330B412 /* terminfo in Resources */,
 				8AD23B65BA673BC9F2DAE9A9 /* Localizable.xcstrings in Resources */,
 				15E15C3D7B3DC59D5F716C45 /* ExcalidrawRuntime in Resources */,
+				C146610DAC25776F24C15D48 /* LaTeXRuntime in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4210,6 +4237,11 @@
 				0C8CD0D1BDE6AAC394E69A7B /* WhiteboardEditorView.swift in Sources */,
 				38666CDE2B58A50BBF132632 /* WhiteboardDocument.swift in Sources */,
 				EC7E87D893D1FACB05340A28 /* ExcalidrawSchemeHandler.swift in Sources */,
+				6FA4BD284BDEBA8D5E488476 /* LaTeXPreviewView.swift in Sources */,
+				A1B2C3D4E5F600000000A002 /* LaTeXCompiledPreviewView.swift in Sources */,
+				A1B2C3D4E5F600000000A006 /* LaTeXNativeCompiler.swift in Sources */,
+				A1B2C3D4E5F600000000A00A /* CompiledPreviewSupportViews.swift in Sources */,
+				A1B2C3D4E5F600000000A008 /* DocumentFormatPreviews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

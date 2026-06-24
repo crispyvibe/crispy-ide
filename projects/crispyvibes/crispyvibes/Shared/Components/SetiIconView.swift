@@ -89,8 +89,16 @@ struct SetiIconView: View {
     }
 
     private static func needsTemplateTint(for url: URL) -> Bool {
-        guard let svgMarkup = try? String(contentsOf: url, encoding: .utf8).lowercased() else {
+        guard var svgMarkup = try? String(contentsOf: url, encoding: .utf8).lowercased() else {
             return false
+        }
+
+        // `fill="none"`/`stroke="none"` are not real colors. Strip them so an
+        // icon whose only paint is "none" (glyph paths defaulting to black) is
+        // still template-tinted and stays visible on dark themes (e.g. tex.svg).
+        for token in ["fill=\"none\"", "fill='none'", "fill: none", "fill:none",
+                      "stroke=\"none\"", "stroke='none'", "stroke: none", "stroke:none"] {
+            svgMarkup = svgMarkup.replacingOccurrences(of: token, with: "")
         }
 
         let hasExplicitColorInstruction =

@@ -69,6 +69,8 @@ struct FileIconProvider {
         "csv": "csv",
         "bib": "tex",
         "tex": "tex",
+        "latex": "tex",
+        "ltx": "tex",
         "rst": "default",
         "adoc": "default",
 
@@ -134,7 +136,15 @@ struct FileIconProvider {
     }
 
     private static func needsTemplateTint(for url: URL) -> Bool {
-        guard let svg = try? String(contentsOf: url, encoding: .utf8).lowercased() else { return false }
+        guard var svg = try? String(contentsOf: url, encoding: .utf8).lowercased() else { return false }
+        // `fill="none"`/`stroke="none"` are not real colors. Strip them first so
+        // an icon whose only paint is "none" — its glyph paths defaulting to
+        // black — is still treated as monochrome and template-tinted, instead of
+        // rendering as invisible black on a dark theme (e.g. tex.svg).
+        for token in ["fill=\"none\"", "fill='none'", "fill: none", "fill:none",
+                      "stroke=\"none\"", "stroke='none'", "stroke: none", "stroke:none"] {
+            svg = svg.replacingOccurrences(of: token, with: "")
+        }
         let hasExplicitColor = svg.contains("fill=") || svg.contains("stroke=")
             || svg.contains("fill:") || svg.contains("stroke:") || svg.contains("currentcolor")
         return !hasExplicitColor

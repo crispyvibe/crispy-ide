@@ -36,6 +36,8 @@ final class MarkdownViewModel: ObservableObject {
     enum MarkupViewMode: String, CaseIterable, Hashable {
         case rich
         case source
+        /// Full-TeX compiled PDF preview (LaTeX only).
+        case compiled
     }
 
     @Published var fileURL: URL?
@@ -56,6 +58,8 @@ final class MarkdownViewModel: ObservableObject {
     @Published var codeLanguageKind: CodeLanguageKind?
     @Published var markupViewModeByDocumentID: [String: MarkupViewMode] = [:]
     @Published var pendingSourceSelection: PendingSourceSelection?
+    /// Pending LaTeX snippet to insert at the source editor's cursor (math palette).
+    @Published var latexInsertionRequest: EditorInsertionRequest?
 
     var lastSavedContent = ""
     var lastSaveDate = Date.distantPast
@@ -85,6 +89,19 @@ final class MarkdownViewModel: ObservableObject {
         /// document edited through an offline Excalidraw canvas in a WKWebView.
         /// The buffer holds the scene JSON, so it autosaves like any text file.
         case whiteboard
+        /// LaTeX document (`.tex`/`.latex`/`.ltx`) — a text-backed source file
+        /// edited in a split source + live KaTeX-rendered math preview. The
+        /// buffer holds the raw LaTeX, so it autosaves like any text file.
+        case latex
+        /// Typst document (`.typ`) — text-backed; edited in source with a
+        /// rendered PDF preview (`typst compile`).
+        case typst
+        /// AsciiDoc document (`.adoc`/`.asciidoc`) — text-backed; edited in
+        /// source with a rendered HTML preview (`asciidoctor`).
+        case asciidoc
+        /// Graphviz diagram (`.dot`/`.gv`) — text-backed; edited in source with
+        /// a rendered PDF preview (`dot -Tpdf`).
+        case diagram
         case image
         case pdf
         case office

@@ -1,0 +1,16 @@
+{
+  "name": "crispyvibes-latex-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vendoring workspace for the offline KaTeX runtime bundled into Resources/LaTeXRuntime (LaTeX math preview). Pins KaTeX; build.sh copies the prebuilt JS/CSS/fonts into the app bundle. Offline-only — no CDN at runtime.",
+  "scripts": {
+    "build": "bash ./build.sh",
+    "test": "node roundtrip.test.js"
+  },
+  "dependencies": {
+    "katex": "0.16.11"
+  },
+  "devDependencies": {
+    "jsdom": "29.1.1"
+  }
+}

@@ -113,6 +113,97 @@ final class MarkdownViewModelTests: XCTestCase {
         XCTAssertEqual(saved, "# Updated\n")
     }
 
+    // MARK: - F057 LaTeX editor
+
+    func testDetectDocumentTypeRoutesLatexExtensions() {
+        for ext in ["tex", "latex", "ltx", "TEX", "Latex", "LTX"] {
+            let url = URL(fileURLWithPath: "/tmp/doc.\(ext)")
+            XCTAssertEqual(
+                MarkdownViewModel.detectDocumentType(for: url),
+                .latex,
+                "expected .latex for extension .\(ext)"
+            )
+        }
+        // `.bib` must remain plain text — only `tex` was pulled out of the
+        // plain-text set, not the rest of the TeX-adjacent extensions.
+        XCTAssertEqual(
+            MarkdownViewModel.detectDocumentType(for: URL(fileURLWithPath: "/tmp/refs.bib")),
+            .plainText
+        )
+        XCTAssertEqual(
+            MarkdownViewModel.detectDocumentType(for: URL(fileURLWithPath: "/tmp/README.md")),
+            .markdown
+        )
+    }
+
+    func testLatexDocumentOpensEditableInRichMode() async throws {
+        let fileURL = tempRoot.appendingPathComponent("paper.tex")
+        try Data("\\documentclass{article}\n\\begin{document}\nHello $x^2$.\n\\end{document}\n".utf8).write(to: fileURL)
+
+        viewModel.openFile(at: fileURL)
+        let opened = await waitForCondition(timeout: 8) {
+            self.viewModel.workerStatus == .ready && self.viewModel.documentType == .latex
+        }
+        XCTAssertTrue(opened)
+        XCTAssertTrue(viewModel.isEditableDocumentType(.latex))
+        XCTAssertTrue(viewModel.supportsMarkupViewModeToggle)
+        XCTAssertEqual(viewModel.defaultMarkupViewMode, .rich)
+        XCTAssertEqual(viewModel.currentMarkupViewMode, .rich)
+    }
+
+    func testInsertLatexSnippetQueuesRequestForLatexDocuments() async throws {
+        let fileURL = tempRoot.appendingPathComponent("paper.tex")
+        try Data("\\begin{document}\n\\end{document}\n".utf8).write(to: fileURL)
+
+        viewModel.openFile(at: fileURL)
+        let opened = await waitForCondition(timeout: 8) {
+            self.viewModel.workerStatus == .ready && self.viewModel.documentType == .latex
+        }
+        XCTAssertTrue(opened)
+        XCTAssertNil(viewModel.latexInsertionRequest)
+
+        viewModel.insertLatexSnippet("\\alpha ")
+        XCTAssertEqual(viewModel.latexInsertionRequest?.text, "\\alpha ")
+    }
+
+    func testInsertLatexSnippetIgnoredForNonLatexDocuments() async throws {
+        let fileURL = tempRoot.appendingPathComponent("README.md")
+        try Data("# Hi\n".utf8).write(to: fileURL)
+
+        viewModel.openFile(at: fileURL)
+        let opened = await waitForCondition(timeout: 8) {
+            self.viewModel.workerStatus == .ready && self.viewModel.documentType == .markdown
+        }
+        XCTAssertTrue(opened)
+
+        viewModel.insertLatexSnippet("\\alpha ")
+        XCTAssertNil(viewModel.latexInsertionRequest)
+    }
+
+    func testLatexEditAndSaveRoundTrip() async throws {
+        let fileURL = tempRoot.appendingPathComponent("paper.tex")
+        try Data("\\begin{document}\nHello.\n\\end{document}\n".utf8).write(to: fileURL)
+
+        viewModel.openFile(at: fileURL)
+        let opened = await waitForCondition(timeout: 8) {
+            self.viewModel.workerStatus == .ready && self.viewModel.documentType == .latex
+        }
+        XCTAssertTrue(opened)
+        XCTAssertTrue(viewModel.isEditableDocumentType(viewModel.documentType))
+
+        viewModel.updateText("\\begin{document}\nHello edited.\n\\end{document}\n")
+        XCTAssertTrue(viewModel.hasUnsavedChanges)
+
+        viewModel.save()
+        let savedReady = await waitForCondition(timeout: 8) {
+            self.viewModel.workerStatus == .ready && !self.viewModel.hasUnsavedChanges
+        }
+        XCTAssertTrue(savedReady)
+
+        let saved = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertEqual(saved, "\\begin{document}\nHello edited.\n\\end{document}\n")
+    }
+
     func testEditorTabLifecycleDeduplicatesAndClosesTabs() async throws {
         let firstURL = tempRoot.appendingPathComponent("README.md")
         let secondURL = tempRoot.appendingPathComponent("notes.txt")

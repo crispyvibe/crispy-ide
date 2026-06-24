@@ -76,6 +76,14 @@ struct MarkdownEditorView: View {
             return "book.closed"
         case .whiteboard:
             return "pencil.and.scribble"
+        case .latex:
+            return "function"
+        case .typst:
+            return "doc.richtext"
+        case .asciidoc:
+            return "doc.plaintext"
+        case .diagram:
+            return "point.topleft.down.to.point.bottomright.curvepath"
         case .image:
             return "photo"
         case .pdf:
@@ -502,6 +510,31 @@ struct MarkdownEditorView: View {
         viewModel.supportsMarkupViewModeToggle
     }
 
+    /// Formats that render to a read-only preview (edit in Source): Typst,
+    /// AsciiDoc, Graphviz.
+    private var isRenderPreviewFormat: Bool {
+        switch viewModel.documentType {
+        case .typst, .asciidoc, .diagram: return true
+        default: return false
+        }
+    }
+
+    private var renderFormatLabel: String {
+        switch viewModel.documentType {
+        case .typst: return "Typst"
+        case .asciidoc: return "AsciiDoc"
+        case .diagram: return "Graphviz"
+        default: return ""
+        }
+    }
+
+    /// Label for the `.rich` segment of the mode toggle, per format.
+    private var richModeLabel: String {
+        if viewModel.documentType == .latex { return AppStrings.Editor.viewModeEdit }
+        if isRenderPreviewFormat { return AppStrings.Editor.viewModePreview }
+        return AppStrings.Editor.viewModeRich
+    }
+
     private var shouldShowUnsavedIndicator: Bool {
         if viewModel.documentType == .image {
             return viewModel.hasUnsavedImageEdits
@@ -511,7 +544,25 @@ struct MarkdownEditorView: View {
 
     private var markupToolbar: some View {
         HStack(spacing: 10) {
-            if viewModel.currentMarkupViewMode == .rich {
+            if viewModel.documentType == .latex {
+                if viewModel.currentMarkupViewMode == .source {
+                    latexMathPalette
+                } else if viewModel.currentMarkupViewMode == .compiled {
+                    Text(AppStrings.Editor.viewModeCompiled)
+                        .font(AppTypographyTokens.caption)
+                        .foregroundStyle(appThemePalette.secondaryTextColor)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                } else {
+                    latexRichToolbar
+                }
+            } else if isRenderPreviewFormat {
+                Text(renderFormatLabel)
+                    .font(AppTypographyTokens.caption)
+                    .foregroundStyle(appThemePalette.secondaryTextColor)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+            } else if viewModel.currentMarkupViewMode == .rich {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         formattingButton(AppStrings.Editor.bold, systemImage: "bold", command: .bold)
@@ -549,6 +600,67 @@ struct MarkdownEditorView: View {
         .background(headerBackgroundColor)
     }
 
+    // LaTeX math symbol palette — inserts snippets at the source cursor.
+    private static let latexPaletteItems: [(String, String)] = [
+        ("x²", "^{2}"), ("xₙ", "_{n}"), ("√", "\\sqrt{}"), ("a/b", "\\frac{}{}"),
+        ("Σ", "\\sum_{i=1}^{n} "), ("∫", "\\int_{a}^{b} "), ("∂", "\\partial "), ("∞", "\\infty "),
+        ("α", "\\alpha "), ("β", "\\beta "), ("π", "\\pi "), ("θ", "\\theta "),
+        ("→", "\\to "), ("≤", "\\leq "), ("≥", "\\geq "), ("×", "\\times "),
+        ("$x$", "$  $"), (AppStrings.LaTeX.paletteMatrix, "\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} ")
+    ]
+
+    // LaTeX WYSIWYG toolbar — real formatting (applied to the rendered
+    // selection via the bridge) plus the math symbol palette.
+    private var latexRichToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                formattingButton(AppStrings.Editor.bold, systemImage: "bold", command: .bold)
+                formattingButton(AppStrings.Editor.italic, systemImage: "italic", command: .italic)
+                formattingButton(AppStrings.Editor.codeBlock, systemImage: "curlybraces.square", command: .codeBlock)
+                Divider().frame(height: 18)
+                formattingButton(AppStrings.Editor.h1, systemImage: "textformat.size.larger", command: .heading1)
+                formattingButton(AppStrings.Editor.h2, systemImage: "textformat.size", command: .heading2)
+                Divider().frame(height: 18)
+                formattingButton(AppStrings.Editor.bulletList, systemImage: "list.bullet", command: .unorderedList)
+                formattingButton(AppStrings.Editor.numberedList, systemImage: "list.number", command: .orderedList)
+                Divider().frame(height: 18)
+                ForEach(Self.latexPaletteItems, id: \.0) { item in
+                    Button {
+                        viewModel.insertLatexSnippet(item.1)
+                    } label: {
+                        Text(item.0).font(.system(size: 13)).frame(minWidth: 22)
+                    }
+                    .help(item.1)
+                    .accessibilityIdentifier("editor.latex.palette.\(item.0)")
+                }
+            }
+            .buttonStyle(.crispyvibesText)
+            .controlSize(.small)
+            .padding(.vertical, 8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var latexMathPalette: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Self.latexPaletteItems, id: \.0) { item in
+                    Button {
+                        viewModel.insertLatexSnippet(item.1)
+                    } label: {
+                        Text(item.0).font(.system(size: 13)).frame(minWidth: 22)
+                    }
+                    .help(item.1)
+                    .accessibilityIdentifier("editor.latex.palette.\(item.0)")
+                }
+            }
+            .buttonStyle(.crispyvibesText)
+            .controlSize(.small)
+            .padding(.vertical, 8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func formattingButton(_ title: String, systemImage: String, command: EditorFormattingCommand) -> some View {
         Button {
             commandRequest = EditorCommandRequest(command: command)
@@ -564,18 +676,19 @@ struct MarkdownEditorView: View {
             selection: Binding(
                 get: { viewModel.currentMarkupViewMode },
                 set: { newMode in
-                    Task { @MainActor in
-                        viewModel.setCurrentMarkupViewMode(newMode)
-                    }
+                    viewModel.setCurrentMarkupViewMode(newMode)
                 }
             )
         ) {
-            Text("Rich").tag(MarkdownViewModel.MarkupViewMode.rich)
-            Text("Source").tag(MarkdownViewModel.MarkupViewMode.source)
+            Text(richModeLabel).tag(MarkdownViewModel.MarkupViewMode.rich)
+            Text(AppStrings.Editor.viewModeSource).tag(MarkdownViewModel.MarkupViewMode.source)
+            if viewModel.documentType == .latex {
+                Text(AppStrings.Editor.viewModeCompiled).tag(MarkdownViewModel.MarkupViewMode.compiled)
+            }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .frame(width: 132)
+        .frame(width: viewModel.documentType == .latex ? 188 : 132)
         .accessibilityIdentifier("editor.mode.toggle")
     }
 }

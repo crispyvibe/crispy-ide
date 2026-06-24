@@ -186,6 +186,25 @@ final class PaneWorkerClientAndFileIconTests: XCTestCase {
         XCTAssertNil(FileIconProvider.iconImage(for: "unknown-ext"))
     }
 
+    func testFileIconProviderMapsLatexExtensionsToTexIcon() {
+        XCTAssertEqual(FileIconProvider.iconName(for: "tex"), "tex")
+        XCTAssertEqual(FileIconProvider.iconName(for: "latex"), "tex")
+        XCTAssertEqual(FileIconProvider.iconName(for: "LTX"), "tex")
+    }
+
+    func testTexIconIsTemplateTintedSoItStaysVisibleOnDarkThemes() {
+        // tex.svg's glyph paths have no explicit fill (default black) and only a
+        // decorative `fill="none"`. It must be treated as monochrome and
+        // template-tinted, otherwise it renders as invisible black on dark.
+        guard let texImage = FileIconProvider.iconImage(for: "tex") else {
+            return XCTFail("tex icon should resolve from bundled SetiIcons")
+        }
+        XCTAssertTrue(texImage.isTemplate, "tex icon must be template-tinted to stay visible")
+
+        // Sanity: a genuinely colored icon must NOT be template-tinted.
+        XCTAssertEqual(FileIconProvider.iconImage(for: "md")?.isTemplate, false)
+    }
+
     func testFileIconProviderPythonMappingHandlesRandomizedCasing() {
         for _ in 0..<120 {
             let randomized = randomizeCasing("py")

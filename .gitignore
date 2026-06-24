@@ -28,6 +28,9 @@ xcuserdata/
 .build/
 .swiftpm/
 
+# Node (web vendoring workspaces, e.g. KaTeX runtime build)
+node_modules/
+
 # Generated local dependency caches
 /.cache/
 
