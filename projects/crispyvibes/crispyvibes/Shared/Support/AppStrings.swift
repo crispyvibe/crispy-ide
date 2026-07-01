@@ -474,6 +474,8 @@ enum AppStrings {
         static let temporary = String(localized: "terminal.temporary")
         static let selectedUnavailable = String(localized: "terminal.selectedUnavailable")
         static let noToolsOnPath = String(localized: "terminal.noToolsOnPath")
+        static let agentCLIMenu = String(localized: "terminal.agentCLIMenu", defaultValue: "Agent CLI")
+        static let noAgentsOnPath = String(localized: "terminal.noAgentsOnPath", defaultValue: "No agents on PATH")
 
         // Board tile actions
         enum Tile {

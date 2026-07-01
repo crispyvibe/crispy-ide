@@ -455,9 +455,12 @@ struct TerminalCommandsMenu: View {
 
     let textColor: Color
     let shortcuts: [TerminalShortcutDefinition]
+    var agentPresets: [TerminalPresetDefinition] = []
+    var showsAgentCLIMenu: Bool = false
     let onRunShortcut: (TerminalShortcutDefinition) -> Void
     let onManageShortcutsRequested: (() -> Void)?
     let onSendSignal: (String) -> Void
+    var onLaunchAgent: (TerminalPresetDefinition, TerminalPresetLaunchMode) -> Void = { _, _ in }
 
     var body: some View {
         Menu {
@@ -468,6 +471,25 @@ struct TerminalCommandsMenu: View {
                 Button("Escape") { onSendSignal("\u{1B}") }
                 Button("Clear Screen (Ctrl+L)") { onSendSignal("\u{0C}") }
                 Button("Quit (Ctrl+\\)") { onSendSignal("\u{1C}") }
+            }
+
+            if showsAgentCLIMenu {
+                Menu(AppStrings.Terminal.agentCLIMenu) {
+                    if agentPresets.isEmpty {
+                        Text(AppStrings.Terminal.noAgentsOnPath)
+                    } else {
+                        ForEach(agentPresets) { preset in
+                            if preset.supportsFullTrust {
+                                Menu(preset.shortLabel) {
+                                    Button(TerminalPresetLaunchMode.standard.title) { onLaunchAgent(preset, .standard) }
+                                    Button(TerminalPresetLaunchMode.fullTrust.title) { onLaunchAgent(preset, .fullTrust) }
+                                }
+                            } else {
+                                Button(preset.shortLabel) { onLaunchAgent(preset, .standard) }
+                            }
+                        }
+                    }
+                }
             }
 
             Menu("tmux") {
