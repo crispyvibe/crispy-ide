@@ -2,24 +2,27 @@
 
 ## Overview
 
-Terminal Presets provides a launcher menu for AI coding tools and CLI presets. Built-in presets are sourced from `CLIToolCatalog`, which maps CLI tool definitions to `TerminalPresetDefinition` entries. Availability is determined by `TerminalPresetAvailabilityDiagnostics`, which checks executables on the system PATH. The view model exposes `availablePresets` (filtered to installed tools) and supports two launch modes: Standard and Full Trust.
+Terminal Presets provides an agent-CLI launcher surfaced through the **Agent CLI** submenu of the terminal commands menu. Built-in presets are sourced from `CLIToolCatalog`, which maps CLI tool definitions to `TerminalPresetDefinition` entries. Availability is determined by `TerminalPresetAvailabilityDiagnostics`, which checks executables on the system PATH. The view model exposes `availablePresets` (filtered to installed tools). Trust mode (Standard / Full Trust) is chosen per agent at launch time rather than via a global persisted selector.
 
 ## Architecture
 
 ### Component Hierarchy
 
 ```
-Terminal Tab Bar
-└── Tools Dropdown Menu
-    ├── Mode Selector (Standard / Full Trust)
-    └── Preset Items (filtered by availability)
-        └── Brand SVG Icon + Preset Title
+TerminalCommandsMenu  (shared: detailed-view toolbar + board tile)
+└── Agent CLI submenu            (rendered when showsAgentCLIMenu == true)
+    ├── "No agents on PATH"      (when availablePresets is empty)
+    └── Per agent (filtered by availability):
+        ├── full-trust-capable → nested submenu: Standard / Full Trust
+        └── otherwise           → single item (Standard)
 
 TerminalPresetServices
 ├── CLIToolCatalog (static preset definitions)
 ├── TerminalPresetAvailabilityDiagnostics (PATH scanning + caching)
 └── TerminalPresetDefinition (id, title, shortLabel, symbolName, command, fullTrustCommand)
 ```
+
+The standalone "Tools" dropdown (sparkles) and its global launch-mode picker were removed; agent launching is unified into `TerminalCommandsMenu`. Standard / Full Trust labels reuse `CLITrustMode.title`.
 
 ### Preset Definition Model
 
@@ -53,12 +56,12 @@ Presets are defined in `CLIToolCatalog` for: Kiro, Claude, Codex, Gemini, OpenCo
 
 ### Preset Launch Flow
 
-1. User selects preset from Tools dropdown.
-2. Resolve command: if current mode is Full Trust and preset has `fullTrustCommand`, use it; otherwise use `defaultCommand`.
-3. Create new terminal tab with preset `shortLabel` as custom name.
-4. Set tab origin to preset-based (not ad-hoc).
-5. Send resolved command to terminal session.
-6. Move keyboard focus to the new session.
+1. User selects an agent from the Agent CLI submenu, choosing `Standard` or `Full Trust` for full-trust-capable agents (others launch in Standard directly).
+2. Resolve command via `TerminalPresetDefinition.command(for:)`: Full Trust uses `fullTrustCommand`, otherwise `defaultCommand`.
+3. Dispatch by surface:
+   - **Detailed view** (`TerminalView.launchAgentPreset(_:mode:)`): create a new terminal tab named with the preset `shortLabel`, set preset-based origin, and send the resolved command to the new session.
+   - **Board tile** (`VibeSpaceTerminalBoardTileCard.launchAgentInTileSession(_:mode:)`): send the resolved command into the tile's existing session.
+4. Move keyboard focus to the target session.
 
 ### Error Flow (Missing Executable)
 
@@ -71,21 +74,20 @@ Presets are defined in `CLIToolCatalog` for: Kiro, Claude, Codex, Gemini, OpenCo
 
 ### Launch Mode
 
-| Mode | Command Source | Persistence |
-|------|---------------|-------------|
-| Standard | `TerminalPresetDefinition.defaultCommand` | Persisted in app storage |
-| Full Trust | `TerminalPresetDefinition.fullTrustCommand` | Persisted in app storage |
+| Mode | Command Source | Selection |
+|------|---------------|-----------|
+| Standard | `TerminalPresetDefinition.defaultCommand` | Per launch (default) |
+| Full Trust | `TerminalPresetDefinition.fullTrustCommand` | Per launch, only offered when the agent defines a full-trust mapping |
 
-If Full Trust is selected and a preset has no `fullTrustCommand`, that preset menu item is disabled.
+Trust mode is chosen at launch time from the agent's submenu; there is no global persisted terminal launch-mode toggle. (The `crispyvibes.terminal.presetLaunchMode` app-storage key still exists but is used by VibeSpace startup-profile settings, not by this launcher.)
 
 ### View Model API
 
 | Method / Property | Description |
 |-------------------|-------------|
 | `availablePresets` | Filtered list of installed preset definitions |
-| `refreshPresets()` | Re-run availability diagnostics |
-| `launchPreset(_:)` | Create tab + send command for selected preset |
-| `currentLaunchMode` | Current Standard/Full Trust selection (persisted) |
+| `refreshAvailablePresets()` | Re-run availability diagnostics |
+| `launchPreset(_:mode:directoryURL:)` | Create tab (detailed view) + send command for the selected preset at the given mode |
 
 ## State Management
 
@@ -98,9 +100,9 @@ If Full Trust is selected and a preset has no `fullTrustCommand`, that preset me
 
 ### Launch Mode
 
-- Persisted in app storage (UserDefaults).
-- Toggled via mode selector in Tools dropdown.
-- Affects command resolution for all subsequent launches.
+- Chosen per launch from the agent's Standard / Full Trust submenu (full-trust-capable agents only).
+- Not persisted by this launcher; each launch resolves the command via `TerminalPresetDefinition.command(for:)`.
+- Affects command resolution only for that launch.
 
 ### Tab Origin Tracking
 
@@ -111,7 +113,7 @@ Tabs created from presets have their `origin` set to preset-based (vs. ad-hoc). 
 - `TerminalViewModel` — tab creation and command dispatch
 - `TerminalSession` — shell process and command execution
 - `CommandPathResolver` — PATH resolution for executable detection
-- UserDefaults — availability cache and launch mode persistence
+- UserDefaults — availability cache
 
 ## Platform Considerations
 
