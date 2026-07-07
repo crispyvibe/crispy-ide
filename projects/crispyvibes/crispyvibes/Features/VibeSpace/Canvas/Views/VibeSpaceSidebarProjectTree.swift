@@ -87,24 +87,7 @@ struct VibeSpaceProjectFilesSectionView: View {
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("vibespace.sidebar.project.\(project.id.uuidString)")
-            .contextMenu {
-                // F021-R13: park the project from the Files-tab right-click menu.
-                Button(AppStrings.VibeSpace.parkProjectAction) {
-                    NotificationCenter.default.post(
-                        name: .parkProjectRequested,
-                        object: nil,
-                        userInfo: [AppCommandUserInfoKey.projectID: project.id]
-                    )
-                }
-                // F021-R18: remove the live project from the right-click menu.
-                Button(AppStrings.VibeSpace.removeProjectAction, role: .destructive) {
-                    NotificationCenter.default.post(
-                        name: .removeProjectRequested,
-                        object: nil,
-                        userInfo: [AppCommandUserInfoKey.projectID: project.id]
-                    )
-                }
-            }
+            .contextMenu { ProjectNodeContextMenu(project: project, onAction: onAction) }
 
             if isExpanded {
                 ProjectFileTreeView(
@@ -216,5 +199,95 @@ struct ProjectFileTreeView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Shared project-node context menu
+
+/// The right-click menu for a project node, shared by both explorer surfaces —
+/// the classic Files pane (`VibeSpaceProjectFilesSectionView`) and the unified
+/// sidebar (`VibeSpaceWorktreeNodeView`) — so the two stay in parity.
+///
+/// Open in Terminal / Reveal in Finder route through the same `FileTreeAction`
+/// handlers the file/folder node menus use, guaranteeing identical behavior.
+struct ProjectNodeContextMenu: View {
+    let project: AnyProjectSession
+    let onAction: (FileTreeAction) -> Void
+    /// Worktree children show Close/Delete Worktree instead of Park/Remove.
+    var isWorktreeChild: Bool = false
+    var canDeleteWorktree: Bool = false
+    var onDeleteWorktree: () -> Void = {}
+
+    /// SSH/remote project — no local filesystem to reveal in Finder.
+    private var isRemote: Bool { project.metadata.hostLabel != nil }
+
+    var body: some View {
+        Group {
+            // Focus the project without toggling its tree expansion.
+            Button(AppStrings.VibeSpace.makeCurrentProjectAction) {
+                post(.makeCurrentProjectRequested)
+            }
+
+            Divider()
+
+            Button(AppStrings.Explorer.openInTerminal) {
+                // Always add a NEW terminal at the project root (not the
+                // select-if-exists behavior of `openOrSelectTab`). Activate +
+                // focus so the project's terminal surface is in view first —
+                // in the unified sidebar a collapsed project isn't wired yet.
+                project.activate()
+                post(.makeCurrentProjectRequested)
+                project.terminal.createTab(
+                    directoryURL: project.rootURL,
+                    customName: nil,
+                    origin: .adHoc,
+                    tmuxSessionName: nil,
+                    startImmediately: true
+                )
+            }
+            if !isRemote {
+                Button(AppStrings.Explorer.revealInFinder) {
+                    onAction(.openInFinder(project.rootURL))
+                }
+            }
+
+            Divider()
+
+            Button(AppStrings.Explorer.createNewFile) {
+                project.activate()
+                project.ensureExplorerLoaded()
+                project.folderExplorer.createNewFileAtSelection()
+            }
+            Button(AppStrings.Explorer.createNewFolder) {
+                project.activate()
+                project.ensureExplorerLoaded()
+                project.folderExplorer.createNewFolderAtSelection()
+            }
+            Button(AppStrings.Explorer.copyPath) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(project.rootURL.path, forType: .string)
+            }
+
+            Divider()
+
+            if isWorktreeChild {
+                Button(AppStrings.Worktree.closeWorktree) { post(.removeProjectRequested) }
+                if canDeleteWorktree {
+                    Button(AppStrings.Worktree.deleteWorktree, role: .destructive) { onDeleteWorktree() }
+                }
+            } else {
+                // F021-R13 / R18: park or remove the live project.
+                Button(AppStrings.VibeSpace.parkProjectAction) { post(.parkProjectRequested) }
+                Button(AppStrings.VibeSpace.removeProjectAction, role: .destructive) { post(.removeProjectRequested) }
+            }
+        }
+    }
+
+    private func post(_ name: Notification.Name) {
+        NotificationCenter.default.post(
+            name: name,
+            object: nil,
+            userInfo: [AppCommandUserInfoKey.projectID: project.id]
+        )
     }
 }

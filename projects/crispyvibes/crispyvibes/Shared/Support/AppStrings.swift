@@ -169,6 +169,8 @@ enum AppStrings {
         static let activateProjectAction = String(localized: "vibespace.activateProject.action", defaultValue: "Activate Project")
         // F021-R18 / R19: remove a project (active or parked) via context menu.
         static let removeProjectAction = String(localized: "vibespace.removeProject.action", defaultValue: "Remove Project")
+        // Make the right-clicked project the current (focused) project.
+        static let makeCurrentProjectAction = String(localized: "vibespace.makeCurrentProject.action", defaultValue: "Make Current Project")
     }
 
     // MARK: - Worktree (F055 / F056: unified sidebar + git worktrees)
@@ -345,6 +347,7 @@ enum AppStrings {
         static let refreshFileList = String(localized: "explorer.refreshFileList")
         static let createNewFile = String(localized: "explorer.createNewFile")
         static let createNewFolder = String(localized: "explorer.createNewFolder")
+        static let copyPath = String(localized: "explorer.copyPath", defaultValue: "Copy Path")
     }
 
     // MARK: - Whiteboard

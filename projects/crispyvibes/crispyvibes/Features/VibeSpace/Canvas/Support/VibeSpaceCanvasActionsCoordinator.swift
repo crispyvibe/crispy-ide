@@ -397,6 +397,14 @@ final class VibeSpaceCanvasActionsCoordinator {
         persistVibeSpaceCatalog()
     }
 
+    /// Focus a project by its identifier (e.g. from the "Make Current Project"
+    /// context-menu command). No-op if the id doesn't resolve to a live project
+    /// in the active vibespace.
+    func focusProject(id: UUID, forceTerminalFocus: Bool = false) {
+        guard let project = activeVibeSpace?.projects.first(where: { $0.id == id }) else { return }
+        focusProject(project, forceTerminalFocus: forceTerminalFocus)
+    }
+
     func focusProject(_ project: AnyProjectSession, forceTerminalFocus: Bool = false) {
         let startTime = Date()
         guard let vibespace = activeVibeSpace,
