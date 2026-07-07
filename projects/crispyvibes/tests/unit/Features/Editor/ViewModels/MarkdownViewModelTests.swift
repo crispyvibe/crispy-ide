@@ -147,8 +147,11 @@ final class MarkdownViewModelTests: XCTestCase {
         XCTAssertTrue(opened)
         XCTAssertTrue(viewModel.isEditableDocumentType(.latex))
         XCTAssertTrue(viewModel.supportsMarkupViewModeToggle)
-        XCTAssertEqual(viewModel.defaultMarkupViewMode, .rich)
-        XCTAssertEqual(viewModel.currentMarkupViewMode, .rich)
+        // LaTeX prefers the full-TeX PDF view when a local toolchain is installed,
+        // otherwise the dependency-free rich view — assert per environment.
+        let expected: MarkdownViewModel.MarkupViewMode = LaTeXNativeCompiler.isToolchainAvailable ? .compiled : .rich
+        XCTAssertEqual(viewModel.defaultMarkupViewMode, expected)
+        XCTAssertEqual(viewModel.currentMarkupViewMode, expected)
     }
 
     func testInsertLatexSnippetQueuesRequestForLatexDocuments() async throws {
