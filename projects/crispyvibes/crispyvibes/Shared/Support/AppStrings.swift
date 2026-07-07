@@ -145,6 +145,540 @@ enum AppStrings {
         static let captureAdded = String(localized: "todos.capture.added")
     }
 
+    // MARK: - Vibe Lanes (F059)
+
+    enum VibeLanes {
+        static let title = String(localized: "vibeLanes.title", defaultValue: "Vibe Lanes")
+        static let dashboard = String(localized: "vibeLanes.dashboard", defaultValue: "Dashboard")
+        static let subtitle = String(
+            localized: "vibeLanes.subtitle",
+            defaultValue: "Agent work, tracked step by step."
+        )
+        static let manageLanes = String(localized: "vibeLanes.manageLanes", defaultValue: "Manage lanes")
+        static let newTask = String(localized: "vibeLanes.newTask", defaultValue: "New task")
+        static let startTask = String(localized: "vibeLanes.startTask", defaultValue: "Start task")
+        static let startFirstTask = String(localized: "vibeLanes.startFirstTask", defaultValue: "Start first task")
+        static let cancel = String(localized: "common.cancel")
+        static let running = String(localized: "vibeLanes.state.running", defaultValue: "Running")
+        static let needsYou = String(localized: "vibeLanes.state.needsYou", defaultValue: "Needs you")
+        static let stopped = String(localized: "vibeLanes.state.stopped", defaultValue: "Stopped")
+        static let completed = String(localized: "vibeLanes.state.completed", defaultValue: "Done")
+        static let allTasks = String(localized: "vibeLanes.allTasks", defaultValue: "All tasks")
+        static let noTasksTitle = String(localized: "vibeLanes.empty.title", defaultValue: "No task runs yet")
+        static let noTasksBody = String(
+            localized: "vibeLanes.empty.body",
+            defaultValue: "Start with a small, well-bounded task."
+        )
+        static let describeTask = String(localized: "vibeLanes.new.describeTask", defaultValue: "Describe the work")
+        static let taskPlaceholder = String(
+            localized: "vibeLanes.new.taskPlaceholder",
+            defaultValue: "Fix the failing payment tests"
+        )
+        static let chooseRoute = String(localized: "vibeLanes.new.chooseRoute", defaultValue: "Choose a route")
+        static let suggested = String(localized: "vibeLanes.new.suggested", defaultValue: "Suggested")
+        static let reviewRun = String(localized: "vibeLanes.new.reviewRun", defaultValue: "Review run")
+        static let project = String(localized: "vibeLanes.project", defaultValue: "Project")
+        static let route = String(localized: "vibeLanes.route", defaultValue: "Route")
+        static let lane = String(localized: "vibeLanes.lane", defaultValue: "Lane")
+        static let lanes = String(localized: "vibeLanes.lanes", defaultValue: "Lanes")
+        static let yourLanes = String(localized: "vibeLanes.yourLanes", defaultValue: "Your lanes")
+        static let newLane = String(localized: "vibeLanes.newLane", defaultValue: "New lane")
+        static let editLane = String(localized: "vibeLanes.editLane", defaultValue: "Edit lane")
+        static let task = String(localized: "vibeLanes.task", defaultValue: "Task")
+        static let currentStep = String(localized: "vibeLanes.currentStep", defaultValue: "Current step")
+        static let checkpoints = String(localized: "vibeLanes.checkpoints", defaultValue: "Checkpoints")
+        static let stop = String(localized: "vibeLanes.stop", defaultValue: "Stop")
+        static let keepGoing = String(localized: "vibeLanes.keepGoing", defaultValue: "Keep going")
+        static let discard = String(localized: "vibeLanes.discard", defaultValue: "Discard")
+        static let open = String(localized: "vibeLanes.open", defaultValue: "Open")
+        static let answer = String(localized: "vibeLanes.answer", defaultValue: "Answer")
+        static let deleteTask = String(localized: "vibeLanes.deleteTask", defaultValue: "Delete")
+        static let taskNotFound = String(localized: "vibeLanes.taskNotFound", defaultValue: "Task not found")
+        static let laneNotFound = String(localized: "vibeLanes.laneNotFound", defaultValue: "Lane not found")
+        static let unavailable = String(localized: "vibeLanes.unavailable", defaultValue: "Vibe Lanes unavailable")
+        static let noLaneDetail = String(localized: "vibeLanes.noLaneDetail", defaultValue: "Reusable task route")
+        static let startFailed = String(
+            localized: "vibeLanes.startFailed",
+            defaultValue: "Could not start this task. Check that the lane still exists."
+        )
+        static let noProjectSelected = String(
+            localized: "vibeLanes.noProjectSelected",
+            defaultValue: "Open or focus a project to start a task. Vibe Lanes run inside a project, not your home folder."
+        )
+        static let reasonAttemptCap = String(localized: "vibeLanes.reason.attemptCap", defaultValue: "Attempt cap")
+        static let reasonTimedOut = String(localized: "vibeLanes.reason.timedOut", defaultValue: "Timed out")
+        static let reasonNoProgress = String(localized: "vibeLanes.reason.noProgress", defaultValue: "No progress")
+        static let reasonFailedCheck = String(localized: "vibeLanes.reason.failedCheck", defaultValue: "Failed check")
+        static let reasonStopped = String(localized: "vibeLanes.reason.stopped", defaultValue: "Stopped")
+        static let reasonStoppedByYou = String(localized: "vibeLanes.reason.stoppedByYou", defaultValue: "Stopped by you")
+        static let latestActivity = String(localized: "vibeLanes.latestActivity", defaultValue: "Latest activity")
+        static let runLog = String(localized: "vibeLanes.runLog", defaultValue: "Run log")
+        static let noRunLog = String(localized: "vibeLanes.noRunLog", defaultValue: "No run activity recorded yet.")
+        static let agentNote = String(localized: "vibeLanes.agentNote", defaultValue: "Agent note")
+        static let checkOutput = String(localized: "vibeLanes.checkOutput", defaultValue: "Check output")
+        static let evidence = String(localized: "vibeLanes.evidence", defaultValue: "Evidence")
+        static let verifierVerdict = String(localized: "vibeLanes.verifierVerdict", defaultValue: "Verifier verdict")
+        static let verifierFeedback = String(localized: "vibeLanes.verifierFeedback", defaultValue: "Verifier feedback")
+        static let openWorkerChat = String(localized: "vibeLanes.openWorkerChat", defaultValue: "Open worker chat")
+        static let openVerifierChat = String(localized: "vibeLanes.openVerifierChat", defaultValue: "Open verifier chat")
+
+        // MARK: Simplified model (Work Definition + Verification Definition)
+        static let openReviewerChat = String(localized: "vibeLanes.openReviewerChat", defaultValue: "Open reviewer chat")
+        static let verificationResult = String(localized: "vibeLanes.verificationResult", defaultValue: "Verification")
+        static let verificationFeedback = String(localized: "vibeLanes.verificationFeedback", defaultValue: "Feedback")
+        static let checkpointDoneWhen = String(localized: "vibeLanes.checkpoint.doneWhen", defaultValue: "Done when")
+        static let checkpointGoal = String(localized: "vibeLanes.checkpoint.goal", defaultValue: "Goal")
+        static let checkpointInstructions = String(localized: "vibeLanes.checkpoint.instructions", defaultValue: "Instructions")
+        static let checkpointSkills = String(localized: "vibeLanes.checkpoint.skills", defaultValue: "Skills")
+        static let checkpointNoSkills = String(localized: "vibeLanes.checkpoint.noSkills", defaultValue: "No skills declared")
+        static let checkpointHandoff = String(localized: "vibeLanes.checkpoint.handoff", defaultValue: "Carry-forward")
+        static let checkpointInputs = String(localized: "vibeLanes.checkpoint.inputs", defaultValue: "Inputs")
+        static let checkpointProduces = String(localized: "vibeLanes.checkpoint.produces", defaultValue: "Produces")
+        static let reasonMissingInput = String(localized: "vibeLanes.reason.missingInput", defaultValue: "Missing input")
+        static let reasonMisAuthoredLane = String(localized: "vibeLanes.reason.misAuthoredLane", defaultValue: "Lane needs an unsupplied input")
+        static let reasonSteerLimitReached = String(localized: "vibeLanes.reason.steerLimitReached", defaultValue: "Steer limit reached")
+        static let supplyInput = String(localized: "vibeLanes.input.supply", defaultValue: "Supply input")
+        static let steerTask = String(localized: "vibeLanes.input.steer", defaultValue: "Steer task")
+        static let continueTask = String(localized: "vibeLanes.input.continue", defaultValue: "Continue")
+        static let steeringGuidance = String(localized: "vibeLanes.input.steeringGuidance", defaultValue: "Steering guidance")
+        static let lastFeedback = String(localized: "vibeLanes.input.lastFeedback", defaultValue: "Last feedback")
+        static let requiredInput = String(localized: "vibeLanes.input.requiredInput", defaultValue: "Required input")
+        static let exhaustedReason = String(localized: "vibeLanes.input.exhaustedReason", defaultValue: "Exhausted reason")
+        static let remainingSteers = String(localized: "vibeLanes.input.remainingSteers", defaultValue: "Remaining steers")
+        static let askUser = String(localized: "vibeLanes.editor.askUser", defaultValue: "Ask user")
+        static let stopOnExhausted = String(localized: "vibeLanes.editor.stopOnExhausted", defaultValue: "Stop")
+        static let escalateOnExhausted = String(localized: "vibeLanes.editor.escalateOnExhausted", defaultValue: "Ask to steer")
+        static let laneNamePlaceholder = String(localized: "vibeLanes.editor.laneName.placeholder", defaultValue: "Lane name")
+        static let laneDescriptionPlaceholder = String(localized: "vibeLanes.editor.laneDescription.placeholder", defaultValue: "Short description")
+        static let deleteLane = String(localized: "vibeLanes.editor.deleteLane", defaultValue: "Delete")
+        static let saved = String(localized: "vibeLanes.editor.saved", defaultValue: "Saved")
+        static let saveLane = String(localized: "vibeLanes.editor.saveLane", defaultValue: "Save lane")
+        static let editorCheckpoint = String(localized: "vibeLanes.editor.checkpoint", defaultValue: "Checkpoint")
+        static let editorWork = String(localized: "vibeLanes.editor.work", defaultValue: "Work")
+        static let editorStepKey = String(localized: "vibeLanes.editor.stepKey", defaultValue: "Step key")
+        static let stepKeyPlaceholder = String(localized: "vibeLanes.editor.stepKey.placeholder", defaultValue: "step-key")
+        static let editorGoal = String(localized: "vibeLanes.editor.goal", defaultValue: "Goal")
+        static let goalPlaceholder = String(localized: "vibeLanes.editor.goal.placeholder", defaultValue: "What to accomplish at this step")
+        static let editorSkillPaths = String(localized: "vibeLanes.editor.skillPaths", defaultValue: "Skill paths")
+        static let addSkillPlaceholder = String(localized: "vibeLanes.editor.skillPaths.placeholder", defaultValue: "Add a skill folder path or SKILL.md file path")
+        static let editorInstructions = String(localized: "vibeLanes.editor.instructions", defaultValue: "Instructions")
+        static let instructionsPlaceholder = String(localized: "vibeLanes.editor.instructions.placeholder", defaultValue: "How to do it")
+        static let editorVerification = String(localized: "vibeLanes.editor.verification", defaultValue: "Verification criteria")
+        static let editorContract = String(localized: "vibeLanes.editor.contract", defaultValue: "Contract")
+        static let editorBounds = String(localized: "vibeLanes.editor.bounds", defaultValue: "Bounds")
+        static let maxAttempts = String(localized: "vibeLanes.editor.maxAttempts", defaultValue: "Max attempts")
+        static let timeLimitMinutes = String(localized: "vibeLanes.editor.timeLimitMinutes", defaultValue: "Time limit (min)")
+        static let whenExhausted = String(localized: "vibeLanes.editor.whenExhausted", defaultValue: "When exhausted")
+        static let add = String(localized: "common.add", defaultValue: "Add")
+        static let addInput = String(localized: "vibeLanes.editor.addInput", defaultValue: "Add input")
+        static let addOutput = String(localized: "vibeLanes.editor.addOutput", defaultValue: "Add output")
+        static let requiresInputs = String(localized: "vibeLanes.editor.requiresInputs", defaultValue: "Required inputs")
+        static let producedOutputs = String(localized: "vibeLanes.editor.producedOutputs", defaultValue: "Produced outputs")
+        static let noRequiredInputs = String(localized: "vibeLanes.editor.noRequiredInputs", defaultValue: "No required inputs")
+        static let noProducedOutputs = String(localized: "vibeLanes.editor.noProducedOutputs", defaultValue: "No produced outputs")
+        static let inputKeyPlaceholder = String(localized: "vibeLanes.editor.inputKey.placeholder", defaultValue: "input-key")
+        static let inputPromptPlaceholder = String(localized: "vibeLanes.editor.inputPrompt.placeholder", defaultValue: "Prompt shown when this input is missing")
+        static let outputKeyPlaceholder = String(localized: "vibeLanes.editor.outputKey.placeholder", defaultValue: "output-key")
+        static let outputDetailPlaceholder = String(localized: "vibeLanes.editor.outputDetail.placeholder", defaultValue: "What this output should reference")
+        static let moveCheckpointLeft = String(localized: "vibeLanes.editor.moveCheckpointLeft", defaultValue: "Move left")
+        static let moveCheckpointRight = String(localized: "vibeLanes.editor.moveCheckpointRight", defaultValue: "Move right")
+        static let keyNormalizationWarning = String(localized: "vibeLanes.editor.keyNormalizationWarning", defaultValue: "Checkpoint keys will be normalized to stable lowercase identifiers on save.")
+        static let pass = String(localized: "vibeLanes.verdict.pass", defaultValue: "PASS")
+        static let fail = String(localized: "vibeLanes.verdict.fail", defaultValue: "FAIL")
+        static let lastVerificationResult = String(localized: "vibeLanes.lastVerificationResult", defaultValue: "Last verification result")
+        static let carryForwardValues = String(localized: "vibeLanes.carryForwardValues", defaultValue: "Carry-forward values")
+        static let reviewerFeedbackBeforeSteering = String(localized: "vibeLanes.input.reviewerFeedbackBeforeSteering", defaultValue: "Reviewer feedback before steering:")
+        static let userSteeringGuidance = String(localized: "vibeLanes.input.userSteeringGuidance", defaultValue: "User steering guidance:")
+        static let activityMissingInput = String(localized: "vibeLanes.activity.missingInput", defaultValue: "A required input was not available from earlier steps")
+        static let activityMissingOutput = String(localized: "vibeLanes.activity.missingOutput", defaultValue: "The step did not report a declared output")
+        static let checkpointNotStarted = String(localized: "vibeLanes.checkpoint.notStarted", defaultValue: "Not started")
+        static let workerThread = String(localized: "vibeLanes.workerThread", defaultValue: "Worker thread")
+        static let reviewerThread = String(localized: "vibeLanes.reviewerThread", defaultValue: "Reviewer thread")
+        static let activity = String(localized: "vibeLanes.activity", defaultValue: "Activity")
+        static let reasonVerificationFailed = String(localized: "vibeLanes.reason.verificationFailed", defaultValue: "Verification failed")
+        static let reasonError = String(localized: "vibeLanes.reason.error", defaultValue: "Tool error")
+        static let activityReviewerChatReady = String(localized: "vibeLanes.activity.reviewerChatReady", defaultValue: "Reviewer chat ready")
+        static let activityReviewerReviewing = String(localized: "vibeLanes.activity.reviewerReviewing", defaultValue: "Reviewer reviewing the outcome")
+        static let activityReviewerAccepted = String(localized: "vibeLanes.activity.reviewerAccepted", defaultValue: "Reviewer accepted the outcome")
+        static let activityReviewerRejected = String(localized: "vibeLanes.activity.reviewerRejected", defaultValue: "Reviewer rejected the outcome; sending feedback to the worker")
+        static let activityWritingHandoff = String(localized: "vibeLanes.activity.writingHandoff", defaultValue: "Writing handoff for the next step")
+        static let activityWritingOutcome = String(localized: "vibeLanes.activity.writingOutcome", defaultValue: "Summarizing the final outcome")
+        static let outcome = String(localized: "vibeLanes.outcome", defaultValue: "Outcome")
+        static let stepHandoff = String(localized: "vibeLanes.stepHandoff", defaultValue: "Handoff")
+
+        static func steerLimit(_ count: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.editor.steerLimit", defaultValue: "Steer limit: %d"),
+                locale: Locale.current,
+                count
+            )
+        }
+
+        static func minutesShort(_ count: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.editor.minutesShort", defaultValue: "%dm"),
+                locale: Locale.current,
+                count
+            )
+        }
+
+        static func steerRequestPrompt(checkpoint: String, reason: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.input.steerPrompt", defaultValue: "Checkpoint %@ exhausted %@. Provide steering guidance or stop."),
+                locale: Locale.current,
+                checkpoint,
+                reason
+            )
+        }
+
+        static func supplyRequestPrompt(keys: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.input.supplyPrompt", defaultValue: "Supply required input: %@"),
+                locale: Locale.current,
+                keys
+            )
+        }
+
+        static let notificationNeedsYouTitle = String(
+            localized: "vibeLanes.notification.needsYouTitle",
+            defaultValue: "A task needs you"
+        )
+
+        static func stepCount(_ count: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.lane.stepCount", defaultValue: "%d steps"),
+                locale: Locale.current,
+                count
+            )
+        }
+
+        static func stepOf(current: Int, total: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.task.stepOf", defaultValue: "Step %d of %d"),
+                locale: Locale.current,
+                current,
+                total
+            )
+        }
+
+        static let stepDefinition = String(
+            localized: "vibeLanes.task.stepDefinition",
+            defaultValue: "Step definition"
+        )
+
+        static let restoreStarterLanes = String(
+            localized: "vibeLanes.lanes.restoreStarters",
+            defaultValue: "Restore starters"
+        )
+
+        static let restoreStarterLanesHelp = String(
+            localized: "vibeLanes.lanes.restoreStartersHelp",
+            defaultValue: "Re-add deleted starter lanes and refresh unedited ones to the latest shipped versions. Lanes you have edited are never changed."
+        )
+
+        static let chooseProject = String(
+            localized: "vibeLanes.newTask.chooseProject",
+            defaultValue: "Choose…"
+        )
+
+        static let useFocusedProject = String(
+            localized: "vibeLanes.newTask.useFocusedProject",
+            defaultValue: "Use focused project"
+        )
+
+        static let noProjectShort = String(
+            localized: "vibeLanes.newTask.noProjectShort",
+            defaultValue: "No project selected"
+        )
+
+        static let agent = String(
+            localized: "vibeLanes.newTask.agent",
+            defaultValue: "Agent"
+        )
+
+        static func defaultAgent(_ name: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.newTask.defaultAgent", defaultValue: "Default (%@)"),
+                locale: Locale.current,
+                name
+            )
+        }
+
+        static let reviewStep = String(
+            localized: "vibeLanes.review.title",
+            defaultValue: "Verify this step"
+        )
+
+        static func reviewRequestPrompt(checkpoint: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.review.prompt", defaultValue: "%@ finished its work. Verify the outcome yourself, then approve or request changes."),
+                locale: Locale.current,
+                checkpoint
+            )
+        }
+
+        static let reviewHint = String(
+            localized: "vibeLanes.review.hint",
+            defaultValue: "Inspect the outcome yourself — project files, diff, or the worker thread — then decide."
+        )
+
+        static let reviewFeedbackPlaceholder = String(
+            localized: "vibeLanes.review.feedbackPlaceholder",
+            defaultValue: "What must change before this passes? (required to request changes)"
+        )
+
+        static let approve = String(
+            localized: "vibeLanes.review.approve",
+            defaultValue: "Approve"
+        )
+
+        static let requestChanges = String(
+            localized: "vibeLanes.review.requestChanges",
+            defaultValue: "Request changes"
+        )
+
+        static let approvedByYou = String(
+            localized: "vibeLanes.review.approvedByYou",
+            defaultValue: "Approved by you"
+        )
+
+        static let editorVerifiedBy = String(
+            localized: "vibeLanes.editor.verifiedBy",
+            defaultValue: "Verified by"
+        )
+
+        static let editorReviewerAgent = String(
+            localized: "vibeLanes.editor.reviewerAgent",
+            defaultValue: "Reviewer agent"
+        )
+
+        static let editorVerifiedByYou = String(
+            localized: "vibeLanes.editor.verifiedByYou",
+            defaultValue: "You"
+        )
+
+        static func notificationNeedsYouBody(task: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.notification.needsYouBody", defaultValue: "“%@” is paused and waiting for your answer."),
+                locale: Locale.current,
+                task
+            )
+        }
+
+        static func misAuthoredContractWarning(checkpoint: String, keys: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.editor.misAuthoredContractWarning", defaultValue: "%@ requires unsupplied non-user input: %@"),
+                locale: Locale.current,
+                checkpoint,
+                keys
+            )
+        }
+
+        static func boundsSummary(attempts: Int, minutes: Int, behavior: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.boundsSummary", defaultValue: "%d attempts, %d min, then %@"),
+                locale: Locale.current,
+                attempts,
+                minutes,
+                behavior
+            )
+        }
+
+        static func activityWorking(checkpoint: String, current: Int, cap: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.working", defaultValue: "Worker on %@, attempt %d of %d"),
+                locale: Locale.current,
+                checkpoint, current, cap
+            )
+        }
+
+        static func activityRunningCommand(_ command: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.runningCommand", defaultValue: "Running check: %@"),
+                locale: Locale.current,
+                command.isEmpty ? String(localized: "vibeLanes.activity.check", defaultValue: "check") : command
+            )
+        }
+
+        static func activityCommandPassed(exitCode: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.commandPassed", defaultValue: "Check passed (exit %d)"),
+                locale: Locale.current,
+                exitCode
+            )
+        }
+
+        static func activityCommandFailed(exitCode: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.commandFailed", defaultValue: "Check failed (exit %d)"),
+                locale: Locale.current,
+                exitCode
+            )
+        }
+        static let activityStarting = String(localized: "vibeLanes.activity.starting", defaultValue: "Starting task")
+        static let activityDone = String(localized: "vibeLanes.activity.done", defaultValue: "Task completed")
+        static let activityWorkerError = String(
+            localized: "vibeLanes.activity.workerError",
+            defaultValue: "The worker agent could not complete this step"
+        )
+        static let activityWorkerChatReady = String(
+            localized: "vibeLanes.activity.workerChatReady",
+            defaultValue: "Worker chat ready"
+        )
+        static let activityVerifierChatReady = String(
+            localized: "vibeLanes.activity.verifierChatReady",
+            defaultValue: "Verifier chat ready"
+        )
+        static let activityVerifierWorking = String(
+            localized: "vibeLanes.activity.verifierWorking",
+            defaultValue: "Verifier reviewing evidence"
+        )
+        static let activityVerifierAccepted = String(
+            localized: "vibeLanes.activity.verifierAccepted",
+            defaultValue: "Verifier accepted the checkpoint"
+        )
+        static let activityVerifierRejected = String(
+            localized: "vibeLanes.activity.verifierRejected",
+            defaultValue: "Verifier rejected the checkpoint; sending feedback to the worker"
+        )
+
+        static func activityCheckpointStarted(_ checkpoint: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.checkpointStarted", defaultValue: "Started checkpoint: %@"),
+                locale: Locale.current,
+                checkpoint
+            )
+        }
+
+        static func activityAgentWorking(checkpoint: String, current: Int, cap: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.agentWorking", defaultValue: "Agent working on %@, attempt %d of %d"),
+                locale: Locale.current,
+                checkpoint,
+                current,
+                cap
+            )
+        }
+
+        static func activityRunningCheck(_ command: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.runningCheck", defaultValue: "Running check: %@"),
+                locale: Locale.current,
+                command.isEmpty ? String(localized: "vibeLanes.activity.check", defaultValue: "check") : command
+            )
+        }
+
+        static func activityCheckPassed(exitCode: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.checkPassed", defaultValue: "Check passed with exit %d"),
+                locale: Locale.current,
+                exitCode
+            )
+        }
+
+        static func activityCheckFailed(exitCode: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.checkFailed", defaultValue: "Check failed with exit %d"),
+                locale: Locale.current,
+                exitCode
+            )
+        }
+
+        static func activityMovingTo(_ checkpoint: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.movingTo", defaultValue: "Moving to checkpoint: %@"),
+                locale: Locale.current,
+                checkpoint
+            )
+        }
+
+        static func activityEscalatingStrategy(_ strategy: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.escalatingStrategy", defaultValue: "Stalled — escalating to strategy: %@"),
+                locale: Locale.current,
+                strategy
+            )
+        }
+
+        static func activityStopped(_ reason: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.stopped", defaultValue: "Stopped: %@"),
+                locale: Locale.current,
+                reason
+            )
+        }
+
+        static func attemptRunning(current: Int, cap: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.status.running", defaultValue: "Attempt %d of %d - Running"),
+                locale: Locale.current,
+                current,
+                cap
+            )
+        }
+
+        static func attempts(_ count: Int) -> String {
+            String(
+                format: count == 1
+                    ? String(localized: "vibeLanes.attempts.singular", defaultValue: "%d attempt")
+                    : String(localized: "vibeLanes.attempts.plural", defaultValue: "%d attempts"),
+                locale: Locale.current,
+                count
+            )
+        }
+
+        static func attemptLabel(_ index: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.checkpoint.attemptN", defaultValue: "Attempt %d"),
+                locale: Locale.current,
+                index
+            )
+        }
+
+        static func doneAttempts(_ count: Int) -> String {
+            String(
+                format: count == 1
+                    ? String(localized: "vibeLanes.status.doneAttempts.singular", defaultValue: "Done - %d attempt")
+                    : String(localized: "vibeLanes.status.doneAttempts.plural", defaultValue: "Done - %d attempts"),
+                locale: Locale.current,
+                count
+            )
+        }
+
+        static func stopped(_ reason: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.status.stopped", defaultValue: "%@ - Stopped"),
+                locale: Locale.current,
+                reason
+            )
+        }
+
+        static func dashboardSubtitle(lane: String, project: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.dashboard.subtitle", defaultValue: "%@ - %@"),
+                locale: Locale.current,
+                lane,
+                project
+            )
+        }
+
+        static func askUserInput(_ key: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.checkpoint.askUserInput", defaultValue: "%@ (ask user)"),
+                locale: Locale.current,
+                key
+            )
+        }
+
+        static func outputDescription(_ detail: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.checkpoint.outputDescription", defaultValue: "Description: %@"),
+                locale: Locale.current,
+                detail
+            )
+        }
+    }
+
     // MARK: - VibeSpace Creation
 
     enum VibeSpaceCreation {
@@ -1109,6 +1643,26 @@ enum AppStrings {
         static let unavailableDescription = String(
             localized: "acp.unavailable.description",
             defaultValue: "This ACP pane could not be restored."
+        )
+        static let managedSessionWaiting = String(
+            localized: "acp.managedSession.waiting",
+            defaultValue: "Waiting for lane session"
+        )
+        static let managedSessionPendingTitle = String(
+            localized: "acp.managedSession.pending.title",
+            defaultValue: "Waiting for lane session"
+        )
+        static let managedSessionPendingDescription = String(
+            localized: "acp.managedSession.pending.description",
+            defaultValue: "The worker or verifier chat will appear here as soon as the lane agent starts."
+        )
+        static let connectedEmptyTimelineTitle = String(
+            localized: "acp.connectedEmptyTimeline.title",
+            defaultValue: "Connected"
+        )
+        static let connectedEmptyTimelineDescription = String(
+            localized: "acp.connectedEmptyTimeline.description",
+            defaultValue: "Waiting for the first agent update."
         )
     }
 

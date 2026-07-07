@@ -90,9 +90,10 @@ struct ACPStandalonePaneContentView: View {
                     showsHeaderSessionControls: false,
                     displayMode: displayMode,
                     historyKey: store.id,
+                    isExternallyManaged: store.isExternallyManaged,
                     isConnecting: store.isConnecting,
                     connectionError: store.connectionError,
-                    onReconnect: { Task { await store.connect(projects: projects) } },
+                    onReconnect: store.isExternallyManaged ? nil : { Task { await store.connect(projects: projects) } },
                     onLinkTargetActivated: onLinkTargetActivated,
                     onFileSystemTargetActivated: onFileSystemTargetActivated
                 )
@@ -191,6 +192,14 @@ struct ACPStandalonePaneContentView: View {
             if store.isConnecting {
                 ProgressView()
                     .controlSize(uiScale.controlSize)
+            } else if store.isExternallyManaged, !store.isConnected {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(uiScale.controlSize)
+                    Text(AppStrings.ACP.managedSessionWaiting)
+                        .font(AppTypographyTokens.caption)
+                        .foregroundStyle(palette.secondaryTextColor)
+                }
             } else if !store.isConnected {
                 Button {
                     Task { await store.connect(projects: projects) }

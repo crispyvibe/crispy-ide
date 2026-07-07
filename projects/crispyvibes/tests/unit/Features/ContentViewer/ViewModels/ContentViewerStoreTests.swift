@@ -171,6 +171,28 @@ final class ContentViewerStoreTests: XCTestCase {
         XCTAssertFalse(splitStore.activeGroup.tabs.contains(where: { $0.id == tab.id }))
     }
 
+    func testOpenVibeLaneACPPaneCreatesPlaceholderForSessionBeforeThreadExists() {
+        let (store, splitStore) = makeSUT()
+        let sessionID = UUID()
+
+        store.openVibeLaneACPPane(
+            target: VibeLaneACPChatTarget(
+                sessionID: sessionID,
+                threadID: nil,
+                projectPath: "/tmp/project"
+            ),
+            projects: []
+        )
+
+        XCTAssertNotNil(store.acpStore(for: sessionID))
+        XCTAssertEqual(splitStore.activeGroup.activeTabID, ContentViewerTab.acpPane(id: sessionID).id)
+        guard let acpStore = store.acpStore(for: sessionID) else {
+            return XCTFail("expected ACP store")
+        }
+        XCTAssertTrue(acpStore.isExternallyManaged)
+        XCTAssertFalse(acpStore.shouldAutoConnect)
+    }
+
     func testClosePaneInvokesBrowserCleanupForContainedWebTabs() {
         let (_, splitStore) = makeSUT()
         let browserID = UUID()

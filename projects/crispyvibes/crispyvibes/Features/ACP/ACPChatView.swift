@@ -21,6 +21,7 @@ struct ACPChatView: View {
     var showsDebugSessionIdentity: Bool = false
     var displayMode: ACPDisplayMode = .detail
     var historyKey: UUID? = nil
+    var isExternallyManaged: Bool = false
     let isConnecting: Bool
     let connectionError: String?
     let onReconnect: (() -> Void)?
@@ -58,21 +59,25 @@ struct ACPChatView: View {
                         onRetry: onReconnect
                     )
                 }
-                ACPTimelineView(
-                    timeline: viewModel.timeline,
-                    agentName: viewModel.agentName,
-                    agentID: viewModel.agentID,
-                    onResend: viewModel.resend(from:),
-                    displayMode: displayMode,
-                    onLinkTargetActivated: onLinkTargetActivated,
-                    onFileSystemTargetActivated: onFileSystemTargetActivated,
-                    vibespaceRoot: viewModel.activeSession?.projectPath.path,
-                    onViewDiff: { rows, label in
-                        diffSpotlightRows = rows
-                        diffSpotlightLabel = label
-                        showDiffSpotlight = true
-                    }
-                )
+                if viewModel.timeline.isEmpty {
+                    connectedEmptyTimelineState
+                } else {
+                    ACPTimelineView(
+                        timeline: viewModel.timeline,
+                        agentName: viewModel.agentName,
+                        agentID: viewModel.agentID,
+                        onResend: viewModel.resend(from:),
+                        displayMode: displayMode,
+                        onLinkTargetActivated: onLinkTargetActivated,
+                        onFileSystemTargetActivated: onFileSystemTargetActivated,
+                        vibespaceRoot: viewModel.activeSession?.projectPath.path,
+                        onViewDiff: { rows, label in
+                            diffSpotlightRows = rows
+                            diffSpotlightLabel = label
+                            showDiffSpotlight = true
+                        }
+                    )
+                }
                 permissionCardOverlay
                 userInputRequestCard
                 Divider()
@@ -190,6 +195,25 @@ struct ACPChatView: View {
         .padding(.vertical, 8)
     }
 
+    private var connectedEmptyTimelineState: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            VStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(uiScale.controlSize)
+                Text(AppStrings.ACP.connectedEmptyTimelineTitle)
+                    .font(AppTypographyTokens.headline)
+                Text(AppStrings.ACP.connectedEmptyTimelineDescription)
+                    .font(AppTypographyTokens.callout)
+                    .foregroundStyle(appThemePalette.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: 360)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private var disconnectedState: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -206,7 +230,14 @@ struct ACPChatView: View {
 
                 // Title + description
                 VStack(spacing: 8) {
-                    if subtitle == nil {
+                    if isExternallyManaged {
+                        Text(AppStrings.ACP.managedSessionPendingTitle)
+                            .font(AppTypographyTokens.headline)
+                        Text(AppStrings.ACP.managedSessionPendingDescription)
+                            .font(AppTypographyTokens.callout)
+                            .foregroundStyle(appThemePalette.secondaryTextColor)
+                            .multilineTextAlignment(.center)
+                    } else if subtitle == nil {
                         Text("No Project Selected")
                             .font(AppTypographyTokens.headline)
                         Text("Select a project above to start a conversation with an AI agent.")

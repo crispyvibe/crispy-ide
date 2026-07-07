@@ -740,6 +740,8 @@ final class RemoteProjectSessionTests: XCTestCase {
             agentConversationStore: agentConversationStore,
             vibespaceCommentStore: VibeSpaceCommentStore(conversationStore: agentConversationStore),
             vibespaceTodoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
+            vibeLaneTaskManager: VibeLaneTaskManager(store: InMemoryVibeLaneStore(lanes: VibeLaneCatalog.starterLanes), worker: VibeLaneUnimplementedWorkRunner()),
+            vibeLaneSurfaceNavigationViewModel: VibeLaneSurfaceNavigationViewModel(),
             commentLifecycleCoordinator: CommentLifecycleCoordinator(store: VibeSpaceCommentStore(conversationStore: agentConversationStore)),
             externalAgentSessionService: ExternalAgentSessionService(),
             acpSessionRegistry: acpSessionRegistry,

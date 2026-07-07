@@ -310,7 +310,7 @@ struct ContentView: View {
             return reference.projectPath
         case .terminal(let projectID, _):
             return projects.first(where: { $0.id == projectID })?.projectIdentifier
-        case .vibeCast, .todos, .acpPane:
+        case .vibeCast, .todos, .vibeLanes, .acpPane:
             return nil
         }
     }
@@ -671,23 +671,30 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openTerminalOnlyVibeSpaceView)) { _ in
                 vibespaceCanvasActionsCoordinator.openTerminalOnlyVibeSpaceView()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleVibeCast)) { _ in
-                if ContentSurfacePolicy.surface(for: .vibeCast, mode: selectedVibeSpaceCanvasMode) == .spotlight {
-                    presentVibeCastSpotlight()
-                } else {
-                    vibespaceCanvasActionsCoordinator.toggleVibeCast()
+            .modifier(ContentViewExtraCommands(
+                onToggleVibeCast: {
+                    if ContentSurfacePolicy.surface(for: .vibeCast, mode: selectedVibeSpaceCanvasMode) == .spotlight {
+                        presentVibeCastSpotlight()
+                    } else {
+                        vibespaceCanvasActionsCoordinator.toggleVibeCast()
+                    }
+                },
+                onToggleTodos: {
+                    if ContentSurfacePolicy.surface(for: .todos, mode: selectedVibeSpaceCanvasMode) == .spotlight {
+                        presentTodosSpotlight()
+                    } else {
+                        vibespaceCanvasActionsCoordinator.toggleTodos()
+                    }
+                },
+                onCreateTerminal: { createTerminalFromToolbar(notification: $0) },
+                onOpenVibeLanes: {
+                    if ContentSurfacePolicy.surface(for: .vibeLanes, mode: selectedVibeSpaceCanvasMode) == .spotlight {
+                        presentVibeLanesSpotlight()
+                    } else {
+                        vibespaceCanvasActionsCoordinator.openVibeLanes()
+                    }
                 }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleTodos)) { _ in
-                if ContentSurfacePolicy.surface(for: .todos, mode: selectedVibeSpaceCanvasMode) == .spotlight {
-                    presentTodosSpotlight()
-                } else {
-                    vibespaceCanvasActionsCoordinator.toggleTodos()
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .createTerminalRequested)) { notification in
-                createTerminalFromToolbar(notification: notification)
-            }
+            ))
             .onReceive(NotificationCenter.default.publisher(for: .openAppSettings)) { _ in
                 appShellStore.presentAppSettings(.general)
             }
@@ -788,5 +795,24 @@ struct ContentView: View {
             .environment(\.composeHistoryStore, appContainer.composeHistoryStore)
             .environmentObject(themeManager)
             .preferredColorScheme(preferredAppColorScheme)
+    }
+}
+
+
+/// F059 — extracted notification handlers to keep `ContentView.body` within the
+/// Swift type-checker's complexity budget. Closures capture ContentView state
+/// where the modifier is applied.
+private struct ContentViewExtraCommands: ViewModifier {
+    let onToggleVibeCast: () -> Void
+    let onToggleTodos: () -> Void
+    let onCreateTerminal: (Notification) -> Void
+    let onOpenVibeLanes: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .toggleVibeCast)) { _ in onToggleVibeCast() }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleTodos)) { _ in onToggleTodos() }
+            .onReceive(NotificationCenter.default.publisher(for: .createTerminalRequested)) { onCreateTerminal($0) }
+            .onReceive(NotificationCenter.default.publisher(for: .openVibeLanes)) { _ in onOpenVibeLanes() }
     }
 }

@@ -84,6 +84,28 @@ class ACPSessionManager: ObservableObject {
         projectSessionsByIdentifier[projectIdentifier]
     }
 
+    /// F059 — connect a headless session bound to a working directory, stored
+    /// per-UUID so multiple Vibe Lane tasks can run independent sessions. Uses
+    /// the background host context (no project session object required).
+    func connectHeadless(
+        id: UUID,
+        workingDirectory: URL,
+        agent: ACPAgentDefinition,
+        origin: String = "vibelane",
+        autoAllowPermissions: Bool = true
+    ) async throws -> ACPSession {
+        (standaloneSessions[id] as? ACPSession)?.disconnect()
+        let session = makeSession(
+            hostContext: .background(workingDirectory: workingDirectory),
+            agent: agent,
+            origin: origin,
+            autoAllowPermissions: autoAllowPermissions
+        )
+        try await session.connect()
+        standaloneSessions[id] = session
+        return session
+    }
+
     func disconnect(projectIdentifier: String) {
         projectSessionsByIdentifier.removeValue(forKey: projectIdentifier)?.disconnect()
     }

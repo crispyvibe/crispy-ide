@@ -167,6 +167,17 @@ struct SplitPaneContentView: View {
             case .todos:
                 if let todosView { todosView() }
                 else { vibeCastUnavailable }
+            case .vibeLanes:
+                VibeLaneSurfaceView(
+                    focusedProjectPath: focusedProjectRootPath,
+                    onOpenACPSession: {
+                        contentViewerStore.openVibeLaneACPPane(
+                            target: $0,
+                            projects: projects,
+                            vibespaceID: vibespaceID
+                        )
+                    }
+                )
             case .webPage(let reference):
                 if let coordinator = dockedBrowserCoordinator {
                     let vm = coordinator.viewModel(for: reference)

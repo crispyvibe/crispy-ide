@@ -31,6 +31,7 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
     @Published private(set) var availableModels: [ACPModelInfo] = []
     /// When set, the user must confirm whether to start a fresh session after resume failed.
     @Published var pendingResumeFailure: String?
+    @Published private(set) var isExternallyManaged = false
     /// The in-flight restore task, awaited by ensureConnected before connecting.
     private var restoreTask: Task<Void, Never>?
 
@@ -171,7 +172,10 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
 
         restoreTask = Task { [weak self] in
             guard let self else { return }
-            async let messagesResult = self.conversationStore.listMessages(threadId: threadId)
+            async let messagesResult = self.conversationStore.listMessages(
+                threadId: threadId,
+                limit: ACPChatViewModel.restoredMessageLimit
+            )
             async let sessionResult = self.conversationStore.getSession(threadId: threadId)
             async let threadResult = self.conversationStore.getThread(id: threadId)
 
@@ -342,7 +346,41 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
     }
 
     func teardown() {
+        if isExternallyManaged {
+            modelObservations.removeAll()
+            chatViewModel.bindStandaloneSession(nil)
+            session = nil
+            return
+        }
         disconnect()
+    }
+
+    func prepareExternalVibeLaneSession(agentID: String, projectPath: String) {
+        isExternallyManaged = true
+        selectedAgentID = agentID
+        selectedProjectIdentifier = projectPath
+        shouldAutoConnect = false
+        connectionError = nil
+        syncAvailableModelsForSelection()
+    }
+
+    func restoreThreadIfNeeded(_ threadID: String) {
+        guard chatViewModel.persistenceContext?.threadID != threadID
+            || chatViewModel.timeline.isEmpty else { return }
+        chatViewModel.restoreThread(threadId: threadID)
+    }
+
+    func attachExistingHeadlessSession(
+        _ connectedSession: ACPSession,
+        agentID: String,
+        preferredModelID: String? = nil
+    ) {
+        prepareExternalVibeLaneSession(agentID: agentID, projectPath: connectedSession.projectPath.path)
+        bindACPSession(
+            connectedSession,
+            agentID: agentID,
+            preferredModelID: preferredModelID
+        )
     }
 
     private func persistSessionMetadata(status: String) {

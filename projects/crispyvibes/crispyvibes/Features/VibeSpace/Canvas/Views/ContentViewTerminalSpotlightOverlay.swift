@@ -236,6 +236,12 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
                                     Text(AppStrings.VibeCast.title)
                                         .font(AppTypographyTokens.caption)
                                         .lineLimit(1)
+                                case .vibeLanes:
+                                    Image(systemName: "rectangle.stack.badge.play")
+                                        .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
+                                    Text(AppStrings.VibeLanes.title)
+                                        .font(AppTypographyTokens.caption)
+                                        .lineLimit(1)
                                 case let .acp(_, _, title, _):
                                     Image(systemName: "sparkles")
                                         .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
@@ -502,6 +508,11 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
                 if case .vibeCast = $0 { return true }
                 return false
             })
+        case .vibeLanes:
+            return items.firstIndex(where: {
+                if case .vibeLanes = $0 { return true }
+                return false
+            })
         case let .acp(tileID, _):
             return items.firstIndex(where: {
                 if case let .acp(id, _, _, _) = $0 { return id == tileID }
@@ -547,6 +558,8 @@ private extension SpotlightItem {
             return "terminal:\(project.id.uuidString):\(tab.id.uuidString)"
         case .vibeCast:
             return "vibeCast"
+        case .vibeLanes:
+            return "vibeLanes"
         case let .acp(tileID, storeID, _, _):
             return "acp:\(tileID.uuidString):\(storeID.uuidString)"
         case let .file(tileID, fileURL):

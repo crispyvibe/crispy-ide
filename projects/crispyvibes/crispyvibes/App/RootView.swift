@@ -8,6 +8,7 @@ struct RootView: View {
         ContentView(container: appContainer)
             .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
             .environment(\.vibespaceTodoStoreEnvironment, appContainer.vibespaceTodoStore)
+            .environment(\.vibeLaneTaskManagerEnvironment, appContainer.vibeLaneTaskManager)
             .environment(\.jupyterServerService, appContainer.jupyterServerService)
             .onReceive(NotificationCenter.default.publisher(for: .openDeveloperTools)) { _ in
                 openWindow(id: "developer-tools")

@@ -174,6 +174,17 @@ struct ContentViewerView: View {
                 }
             case .todos:
                 todosContent
+            case .vibeLanes:
+                VibeLaneSurfaceView(
+                    focusedProjectPath: focusedProjectRootPath,
+                    onOpenACPSession: {
+                        store.openVibeLaneACPPane(
+                            target: $0,
+                            projects: projects,
+                            vibespaceID: vibespaceID
+                        )
+                    }
+                )
             case .webPage(let reference):
                 WebPageTabView(reference: reference, coordinator: dockedBrowserCoordinator, onTitleChanged: { title in
                     activeGroup.updateTabTitle(activeTab.id, title: title)

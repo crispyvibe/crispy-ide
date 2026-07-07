@@ -26,6 +26,10 @@ struct AppContainer {
     let vibespaceCommentStore: VibeSpaceCommentStore
     /// F053: quick todos & sticky notes store for the active vibespace.
     let vibespaceTodoStore: VibeSpaceTodoStore
+    /// F059: Vibe Lanes execution component — owns tasks and runs lanes.
+    let vibeLaneTaskManager: VibeLaneTaskManager
+    /// F059: Vibe Lanes surface route state shared by tab and spotlight presentations.
+    let vibeLaneSurfaceNavigationViewModel: VibeLaneSurfaceNavigationViewModel
     /// F049-R05 + F049-R13: orchestrates anchor relocation + file lifecycle.
     let commentLifecycleCoordinator: CommentLifecycleCoordinator
     let externalAgentSessionService: ExternalAgentSessionService
@@ -373,7 +377,7 @@ struct AppContainer {
     }
 
     @MainActor
-    static func makeDefault() -> AppContainer {
+    static func makeDefault(resumeVibeLaneTasks: Bool = true) -> AppContainer {
         let operationMetricsStore = OperationMetricsStore()
         let acpObservabilityStore = ACPObservabilityStore()
         let acpSessionManager = ACPSessionManager(observabilityStore: acpObservabilityStore)
@@ -381,6 +385,7 @@ struct AppContainer {
         let agentConversationStore = AgentConversationStore()
         let vibespaceCommentStore = VibeSpaceCommentStore(conversationStore: agentConversationStore)
         let vibespaceTodoStore = VibeSpaceTodoStore(conversationStore: agentConversationStore)
+        let appPersistenceStore = AppPersistenceDataStore()
         let commentLifecycleCoordinator = CommentLifecycleCoordinator(store: vibespaceCommentStore)
         let externalAgentSessionService = ExternalAgentSessionService()
         let makeACPStandaloneStore: @MainActor (UUID, UUID?) -> ACPStandaloneSessionStore = { id, vibespaceID in
@@ -397,6 +402,27 @@ struct AppContainer {
             )
         }
         let acpSessionRegistry = ACPSessionRegistry(storeFactory: makeACPStandaloneStore)
+        let vibeLaneAgentRunner = VibeLaneACPAgentRunner(
+            sessionManager: acpSessionManager,
+            sessionRegistry: acpSessionRegistry
+        )
+        let vibeLaneStore = FileVibeLaneStore(
+            directory: appPersistenceStore.appFileURL(relativePath: "VibeLanes", isDirectory: true),
+            catalog: VibeLaneCatalog.starterLanes
+        )
+        let vibeLaneSkillsRoot = appPersistenceStore.appFileURL(relativePath: "VibeLanes/skills", isDirectory: true)
+        VibeLaneSkillLibrary.install(into: vibeLaneSkillsRoot)
+        let vibeLaneHandoffRoot = appPersistenceStore.appFileURL(relativePath: "VibeLanes/handoffs", isDirectory: true)
+        let vibeLaneTaskManager = VibeLaneTaskManager(
+            store: vibeLaneStore,
+            worker: vibeLaneAgentRunner,
+            reviewer: vibeLaneAgentRunner,
+            skillsRoot: vibeLaneSkillsRoot,
+            handoffRoot: vibeLaneHandoffRoot,
+            notifier: VibeLaneUserNotifier()
+        )
+        vibeLaneTaskManager.bootstrap(resumeRunning: resumeVibeLaneTasks)
+        let vibeLaneSurfaceNavigationViewModel = VibeLaneSurfaceNavigationViewModel()
         let dockedAgentPreviewCoordinator = DockedAgentPreviewCoordinator(
             sessionRegistry: acpSessionRegistry
         )
@@ -437,7 +463,6 @@ struct AppContainer {
                 return terminalWorker
             }
         }
-        let appPersistenceStore = AppPersistenceDataStore()
         let vibespacePersistenceStore = VibeSpacePersistenceStore(store: appPersistenceStore)
         let vibespaceManagement = VibeSpaceManagementService(persistenceStore: vibespacePersistenceStore)
         let layoutPersistence = LayoutPersistenceService(persistenceStore: appPersistenceStore)
@@ -544,6 +569,8 @@ struct AppContainer {
             agentConversationStore: agentConversationStore,
             vibespaceCommentStore: vibespaceCommentStore,
             vibespaceTodoStore: vibespaceTodoStore,
+            vibeLaneTaskManager: vibeLaneTaskManager,
+            vibeLaneSurfaceNavigationViewModel: vibeLaneSurfaceNavigationViewModel,
             commentLifecycleCoordinator: commentLifecycleCoordinator,
             externalAgentSessionService: externalAgentSessionService,
             acpSessionRegistry: acpSessionRegistry,
