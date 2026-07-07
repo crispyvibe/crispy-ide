@@ -31,13 +31,18 @@ struct ACPSelectableText: View {
     // MARK: - Markdown
 
     private func markdownView(_ markdown: String) -> some View {
-        MarkdownHTMLView(
-            markdown: markdown,
-            font: font,
-            foregroundColor: foregroundColor ?? palette.primaryTextColor,
-            onLinkTargetActivated: onLinkTargetActivated,
-            onFileSystemTargetActivated: onFileSystemTargetActivated
-        )
+        Text(Self.parseMarkdown(markdown))
+            .font(font)
+            .foregroundStyle(foregroundColor ?? palette.primaryTextColor)
+            .lineSpacing(3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .environment(\.openURL, OpenURLAction { url in
+                ACPTextLinking.handle(
+                    url: url,
+                    onLinkTargetActivated: onLinkTargetActivated,
+                    onFileSystemTargetActivated: onFileSystemTargetActivated
+                )
+            })
     }
 
     // MARK: - Code Block
@@ -68,7 +73,6 @@ struct ACPSelectableText: View {
             Text(Self.highlightCode(code, language: language))
                 .font(.system(size: uiScale.textSize(12), design: .monospaced))
                 .foregroundStyle(foregroundColor ?? palette.primaryTextColor)
-                .textSelection(.enabled)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -124,15 +128,77 @@ struct ACPSelectableText: View {
 
     static func parseMarkdown(_ text: String) -> AttributedString {
         let normalized = normalizeMarkdownLineBreaks(text)
-        var attributed = (try? AttributedString(
+        let parsed = (try? AttributedString(
             markdown: normalized,
             options: AttributedString.MarkdownParsingOptions(
                 interpretedSyntax: .full,
                 failurePolicy: .returnPartiallyParsedIfPossible
             )
         )) ?? AttributedString(text)
-        ACPTextLinking.applyDetectedLinks(to: &attributed, original: text)
+        // SwiftUI Text ignores presentationIntent, so without this step every
+        // paragraph, heading, and list item renders glued together inline.
+        var attributed = rebuildBlockStructure(from: parsed)
+        // Detect links against the FINAL text — ranges computed on the raw
+        // markdown would land shifted once the parser strips syntax characters.
+        ACPTextLinking.applyDetectedLinks(to: &attributed, original: String(attributed.characters))
         return attributed
+    }
+
+    /// Re-materializes the block structure the markdown parser recorded as
+    /// `presentationIntent`: paragraph breaks between blocks, `• ` / `n. `
+    /// prefixes for list items, and bold for headings.
+    private static func rebuildBlockStructure(from parsed: AttributedString) -> AttributedString {
+        var result = AttributedString()
+        var lastBlockIdentity: Int?
+
+        for (intent, range) in parsed.runs[\.presentationIntent] {
+            var segment = AttributedString(parsed[range])
+            segment.presentationIntent = nil
+            guard let intent else {
+                result.append(segment)
+                continue
+            }
+
+            var isHeader = false
+            var listOrdinal: Int?
+            var isOrderedList = false
+            var isBlockQuote = false
+            for component in intent.components {
+                switch component.kind {
+                case .header:
+                    isHeader = true
+                case .listItem(let ordinal):
+                    listOrdinal = ordinal
+                case .orderedList:
+                    isOrderedList = true
+                case .blockQuote:
+                    isBlockQuote = true
+                default:
+                    break
+                }
+            }
+
+            let blockIdentity = intent.components.first?.identity
+            if blockIdentity != lastBlockIdentity {
+                if !result.characters.isEmpty {
+                    // Tight spacing inside lists; a full paragraph break elsewhere.
+                    result.append(AttributedString(listOrdinal != nil ? "\n" : "\n\n"))
+                }
+                if let ordinal = listOrdinal {
+                    result.append(AttributedString(isOrderedList ? "\(ordinal). " : "• "))
+                }
+                if isBlockQuote {
+                    result.append(AttributedString("▎ "))
+                }
+                lastBlockIdentity = blockIdentity
+            }
+
+            if isHeader {
+                segment.inlinePresentationIntent = .stronglyEmphasized
+            }
+            result.append(segment)
+        }
+        return result
     }
 
     /// Ensures single newlines become paragraph breaks for CommonMark compatibility.
@@ -152,17 +218,9 @@ struct ACPSelectableText: View {
                 result.append(curr)
                 continue
             }
-            // List items, headings, and blockquotes get a blank line before them
-            if currTrimmed.hasPrefix("- ") || currTrimmed.hasPrefix("* ")
-                || currTrimmed.hasPrefix("# ") || currTrimmed.hasPrefix("> ")
-                || currTrimmed.first?.isNumber == true && currTrimmed.contains(". ") {
-                result.append("")
-                result.append(curr)
-                continue
-            }
-            // After a list item or heading, add blank line
-            if prevTrimmed.hasPrefix("- ") || prevTrimmed.hasPrefix("* ")
-                || prevTrimmed.hasPrefix("# ") || prevTrimmed.hasPrefix("> ") {
+            // Block starts (bullets, any-level headings, quotes, ordered items)
+            // get a blank line before them; the same after a block line.
+            if isBlockStart(currTrimmed) || isBlockStart(prevTrimmed) {
                 result.append("")
                 result.append(curr)
                 continue
@@ -170,6 +228,25 @@ struct ACPSelectableText: View {
             result.append(curr)
         }
         return result.joined(separator: "\n")
+    }
+
+    /// Whether a trimmed line begins a markdown block: bullet, any-level ATX
+    /// heading (`#` through `######`), blockquote, or ordered-list item.
+    private static func isBlockStart(_ trimmedLine: String) -> Bool {
+        if trimmedLine.hasPrefix("- ") || trimmedLine.hasPrefix("* ") || trimmedLine.hasPrefix("> ") {
+            return true
+        }
+        // ATX headings: 1–6 leading '#' followed by a space.
+        let hashes = trimmedLine.prefix(while: { $0 == "#" })
+        if (1...6).contains(hashes.count), trimmedLine.dropFirst(hashes.count).first == " " {
+            return true
+        }
+        // Ordered list: digits followed by ". ".
+        let digits = trimmedLine.prefix(while: \.isNumber)
+        if !digits.isEmpty, trimmedLine.dropFirst(digits.count).hasPrefix(". ") {
+            return true
+        }
+        return false
     }
 
     // MARK: - Syntax Highlighting
