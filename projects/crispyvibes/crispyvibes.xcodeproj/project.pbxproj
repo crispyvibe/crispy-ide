@@ -519,6 +519,7 @@
 		CBCF01DF80515CE0F3A10F78 /* FileAndTerminalTabModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517062A015F8AC31D71399DE /* FileAndTerminalTabModelTests.swift */; };
 		CC0EC7B8EF2918CF78828C9D /* ConversationSidebarModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BD5FDF4B4E2C01B9F72AD1 /* ConversationSidebarModelTests.swift */; };
 		CCDC8997D1ABDB93ECD16E3E /* CLICommandRouterBrowserListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */; };
+		7D07D07D07D07D07D07D0001 /* CLICommandRouterTodoListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D07D07D07D07D07D07D0002 /* CLICommandRouterTodoListTests.swift */; };
 		CF7E9F73D069C12EABF2BF0A /* MarkdownCodeLanguageKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E32CB088807BC6862F4DA0 /* MarkdownCodeLanguageKind.swift */; };
 		D11111111111111111111111 /* VibeSpaceDragPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = D11111111111111111111101 /* VibeSpaceDragPayload.swift */; };
 		D11111111111111111111112 /* ExplorerItemDropPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D11111111111111111111102 /* ExplorerItemDropPlanner.swift */; };
@@ -734,6 +735,7 @@
 		340EC356A826F1BCC6D77394 /* LayoutPersistencePropertyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LayoutPersistencePropertyTests.swift; sourceTree = "<group>"; };
 		36614E48DD50988227BE2397 /* CLICommandRouterTodoHandlers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterTodoHandlers.swift; sourceTree = "<group>"; };
 		36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterBrowserListTests.swift; sourceTree = "<group>"; };
+		7D07D07D07D07D07D07D0002 /* CLICommandRouterTodoListTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterTodoListTests.swift; sourceTree = "<group>"; };
 		377A365975C80859DF17E71B /* CommentThreadView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentThreadView.swift; sourceTree = "<group>"; };
 		37F8A17EF26817B99BF61226 /* AppThemePaletteTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppThemePaletteTypes.swift; sourceTree = "<group>"; };
 		3837887F0C19BD74F04B16BC /* VibeCastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeCastView.swift; sourceTree = "<group>"; };
@@ -1790,6 +1792,7 @@
 				C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */,
 				5C9C1F8E3A5A38C9C43E8859 /* CLICommandRouterBrowserOpenTests.swift */,
 				36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */,
+				7D07D07D07D07D07D07D0002 /* CLICommandRouterTodoListTests.swift */,
 				AABBCCDD11223344EEFF0001 /* CLISocketServerResilienceTests.swift */,
 				AABBCCDD11223344EEFF0003 /* CLIExecRelayServerTests.swift */,
 				4E7236DCFA9727A2B266A6DD /* CLICommandRouterVibeSpaceProjectTests.swift */,
@@ -4269,6 +4272,7 @@
 				C2D0000000000000000000F1 /* ContentSurfacePolicyTests.swift in Sources */,
 				D2E735AB928E8D15CEA87462 /* CLICommandRouterBrowserOpenTests.swift in Sources */,
 				CCDC8997D1ABDB93ECD16E3E /* CLICommandRouterBrowserListTests.swift in Sources */,
+				7D07D07D07D07D07D07D0001 /* CLICommandRouterTodoListTests.swift in Sources */,
 				AABBCCDD11223344EEFF0002 /* CLISocketServerResilienceTests.swift in Sources */,
 				AABBCCDD11223344EEFF0004 /* CLIExecRelayServerTests.swift in Sources */,
 				550001521069844D02A4B581 /* CLICommandRouterVibeSpaceProjectTests.swift in Sources */,
