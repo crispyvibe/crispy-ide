@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en"><head><base href="file:///Users/manumishra/projects/crispyvibe/crispy-ide-vibe-lanes/specs/features/ai-agents/vibe-lanes/mocks/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vibe Lane — Mock</title>
+<style>
+  :root{
+    --bg:#f6f6fb; --panel:#ffffff; --line:#e8e8f0; --line-soft:#f0f0f6;
+    --text:#1b1b26; --muted:#6f6f7e; --faint:#9a9aab;
+    --indigo:#544ee6; --indigo-2:#6a5cf0; --indigo-soft:#ecebfd;
+    --blue:#4f6bf6; --green:#1aa974; --amber:#ef9d12; --red:#e5484d;
+    --green-soft:#e6f7ef; --amber-soft:#fdf3e1; --red-soft:#fdeceb; --blue-soft:#ecebfd;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --shadow:0 1px 2px rgba(20,20,40,.04),0 4px 16px rgba(20,20,40,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;font-size:14px;}
+  .app{display:flex;min-height:100vh;}
+
+  /* sidebar */
+  .side{width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:22px 14px;}
+  .brand{font-size:20px;font-weight:700;color:var(--indigo);letter-spacing:-.01em;padding:4px 10px 22px;}
+  .nav{display:flex;flex-direction:column;gap:3px;}
+  .nav a{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;color:var(--muted);
+    font-size:14px;font-weight:500;cursor:pointer;text-decoration:none;}
+  .nav a:hover{background:var(--line-soft);}
+  .nav a.on{background:var(--indigo-soft);color:var(--indigo);font-weight:600;}
+  .nav svg{width:18px;height:18px;stroke-width:1.8;}
+  .side .me{margin-top:auto;display:flex;align-items:center;gap:8px;padding:8px 10px;}
+  .avatar{width:30px;height:30px;border-radius:50%;background:var(--indigo-soft);color:var(--indigo);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;}
+
+  /* main */
+  .main{flex:1;padding:34px 40px;overflow:auto;}
+  .h-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:26px;}
+  h1{font-size:30px;font-weight:800;margin:0;letter-spacing:-.02em;}
+  .sub{color:var(--muted);font-size:14px;margin-top:6px;}
+  .btn{font-family:var(--sans);font-size:14px;font-weight:600;border-radius:10px;cursor:pointer;
+    padding:11px 16px;border:1px solid var(--line);background:var(--panel);color:var(--text);
+    display:inline-flex;align-items:center;gap:8px;}
+  .btn.primary{background:var(--indigo);border-color:var(--indigo);color:#fff;}
+  .btn svg{width:16px;height:16px;}
+
+  .screen{display:none;} .screen.on{display:block;}
+
+  /* stat cards */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:30px;}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;
+    display:flex;align-items:center;gap:14px;box-shadow:var(--shadow);}
+  .stat .ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;}
+  .stat .num{font-size:26px;font-weight:800;line-height:1;}
+  .stat .lab{font-size:12.5px;color:var(--muted);margin-top:5px;display:flex;align-items:center;gap:6px;}
+  .stat .lab small{color:var(--faint);}
+  .tagdot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+
+  /* layout split */
+  .split{display:grid;grid-template-columns:1fr 312px;gap:22px;align-items:start;}
+  .col-h{font-size:17px;font-weight:700;margin:2px 0 14px;}
+  .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .viewsel{font-size:13px;color:var(--muted);border:1px solid var(--line);background:var(--panel);
+    border-radius:9px;padding:7px 12px;display:flex;gap:8px;align-items:center;}
+
+  /* task card */
+  .task{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;
+    margin-bottom:14px;display:flex;align-items:center;gap:18px;box-shadow:var(--shadow);cursor:pointer;}
+  .task:hover{border-color:#d8d8ea;}
+  .task .tile{width:46px;height:46px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;}
+  .task .info{width:166px;flex-shrink:0;}
+  .task .info .t{font-weight:650;font-size:14.5px;}
+  .task .info .l{color:var(--muted);font-size:12.5px;margin-top:3px;}
+  .rail{flex:1;display:flex;align-items:flex-start;padding:0 6px;}
+  .step{flex:1;text-align:center;position:relative;}
+  .step::before{content:"";position:absolute;left:-50%;right:50%;top:8px;height:2px;background:var(--line);}
+  .step:first-child::before{display:none;}
+  .step .c{width:18px;height:18px;border-radius:50%;margin:0 auto;border:2px solid #c9c9d6;background:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;position:relative;z-index:1;}
+  .step .l{font-size:10.5px;color:var(--faint);margin-top:7px;white-space:nowrap;}
+  .step.done .c{background:var(--green);border-color:var(--green);}
+  .step.done::before{background:var(--green);}
+  .step.active .c{background:var(--indigo);border-color:var(--indigo);box-shadow:0 0 0 4px var(--indigo-soft);}
+  .step.active::before{background:var(--green);}
+  .step.active .l{color:var(--indigo);font-weight:600;}
+  .step.attn .c{background:#fff;border-color:var(--amber);box-shadow:0 0 0 4px var(--amber-soft);}
+  .step.attn::before{background:var(--green);}
+  .step.attn .l{color:var(--amber);font-weight:600;}
+  .step.fail .c{background:var(--red);border-color:var(--red);}
+  .step.fail::before{background:var(--green);}
+  .step.fail .l{color:var(--red);font-weight:600;}
+  .task .status{width:188px;flex-shrink:0;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:10px;font-size:13px;color:var(--muted);}
+  .status .s-dot{width:8px;height:8px;border-radius:50%;}
+  .chev{color:var(--faint);}
+
+  /* activity */
+  .activity{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 18px;box-shadow:var(--shadow);}
+  .act{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line-soft);}
+  .act:last-of-type{border-bottom:none;}
+  .act .d{width:9px;height:9px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+  .act .at{font-size:13px;font-weight:600;}
+  .act .as{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .act .ag{font-size:11.5px;color:var(--faint);margin-top:3px;}
+  .viewall{color:var(--indigo);font-weight:600;font-size:13px;margin-top:12px;display:inline-block;cursor:pointer;}
+
+  /* ===== lane editor ===== */
+  .crumb{color:var(--muted);font-size:13px;margin-bottom:8px;cursor:pointer;}
+  .badge{font-size:12px;font-weight:600;color:var(--indigo);background:var(--indigo-soft);padding:4px 11px;border-radius:999px;vertical-align:middle;margin-left:12px;}
+  .stepper{display:flex;align-items:center;gap:6px;margin:26px 0 24px;}
+  .pchip{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 14px;
+    display:flex;align-items:center;gap:11px;box-shadow:var(--shadow);}
+  .pchip.cur{border-color:var(--indigo);box-shadow:0 0 0 3px var(--indigo-soft);}
+  .pchip .pn{font-size:18px;font-weight:800;color:var(--text);}
+  .pchip .pl{font-size:12.5px;color:var(--muted);}
+  .pchip .picon{width:34px;height:34px;border-radius:9px;background:var(--indigo-soft);color:var(--indigo);
+    display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+  .pchip.ok .picon{background:var(--green-soft);color:var(--green);}
+  .arrow{color:var(--faint);flex-shrink:0;}
+
+  .split2{display:grid;grid-template-columns:1fr 360px;gap:22px;align-items:start;}
+  .editor{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:var(--shadow);}
+  .editor .eh{display:flex;align-items:center;gap:12px;margin-bottom:22px;}
+  .editor .eh .picon{width:40px;height:40px;border-radius:10px;background:var(--indigo-soft);color:var(--indigo);
+    display:flex;align-items:center;justify-content:center;font-size:17px;}
+  .editor .eh h2{font-size:18px;font-weight:750;margin:0;}
+  .flabel{font-size:13px;font-weight:650;margin:20px 0 9px;}
+  .flabel:first-of-type{margin-top:0;}
+  .inp{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 13px;font-size:14px;
+    font-family:var(--sans);color:var(--text);background:#fff;}
+  .inp.mono{font-family:var(--mono);font-size:13px;display:flex;align-items:center;justify-content:space-between;}
+  textarea.inp{resize:none;line-height:1.5;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{border:1px solid var(--line);border-radius:9px;padding:8px 13px;font-size:13px;background:#fff;}
+  .chip.add{color:var(--indigo);border-style:dashed;border-color:#c7c4f5;cursor:pointer;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .stepperctl{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .stepperctl button{flex:0 0 44px;border:none;background:#fafafe;font-size:18px;color:var(--muted);cursor:pointer;padding:10px 0;}
+  .stepperctl .val{flex:1;text-align:center;font-size:14px;font-weight:600;}
+
+  /* strategies */
+  .strat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:var(--shadow);}
+  .strat .sh{display:flex;align-items:flex-start;gap:12px;}
+  .strat .sico{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+  .strat .stt{font-size:14px;font-weight:700;}
+  .strat .stt b{color:var(--indigo);}
+  .strat .ss{font-size:12.5px;color:var(--muted);margin-top:3px;}
+  .strat .dots{margin-left:auto;color:var(--faint);font-weight:700;cursor:pointer;}
+  .strat .tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px;}
+  .tag{font-size:11.5px;padding:5px 10px;border-radius:8px;font-weight:500;}
+  .addstrat{color:var(--indigo);font-weight:600;font-size:13.5px;border:1px dashed #c7c4f5;border-radius:12px;
+    padding:13px;text-align:center;cursor:pointer;}
+
+  .placeholder{background:var(--panel);border:1px dashed var(--line);border-radius:16px;padding:60px;text-align:center;color:var(--faint);}
+</style>
+<style>[data-crispyvibes-comment]{outline:1px solid rgba(42,144,255,0.55);outline-offset:2px;background:rgba(42,144,255,0.08);transition:background .2s;position:relative;}[data-crispyvibes-comment-status='resolved']{outline-color:rgba(150,150,150,0.5);background:rgba(150,150,150,0.04);}[data-crispyvibes-comment-status='stale']{outline:1.5px dashed rgba(255,165,0,0.7);background:transparent;}.crispyvibes-comment-selected{background:rgba(42,144,255,0.2)!important;outline-width:2px!important;}.crispyvibes-gutter-btn{position:absolute;left:-22px;top:0;width:18px;height:18px;padding:0;margin:0;border:none;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%232a90ff' d='M3 2h10a2 2 0 012 2v6a2 2 0 01-2 2H8l-3 3v-3H3a2 2 0 01-2-2V4a2 2 0 012-2z'/></svg>") no-repeat center / 16px 16px;cursor:pointer;opacity:0.85;}</style></head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="side">
+    <div class="brand">vibe lane</div>
+    <nav class="nav">
+      <a class="on" data-go="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path></svg> Dashboard</a>
+      <a data-go="editor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l9 5-9 5-9-5 9-5z"></path><path d="M3 13l9 5 9-5"></path></svg> Vibe Lanes</a>
+      <a data-go="autos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"></path></svg> Automations</a>
+    </nav>
+    <div class="me"><span class="avatar">V</span><span style="color:var(--muted);font-size:13px;">You</span></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ===================== DASHBOARD ===================== -->
+    <section class="screen on" id="sc-dashboard">
+      <div class="h-row">
+        <div><h1>Dashboard</h1><div class="sub">Autonomous work running through reusable lanes</div></div>
+        <button class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg> New task</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="ico" style="background:var(--blue-soft);color:var(--indigo)">▶</div><div><div class="num">3</div><div class="lab"><span class="tagdot" style="background:var(--indigo)"></span>Running</div></div></div>
+        <div class="stat"><div class="ico" style="background:var(--amber-soft);color:var(--amber)">☻</div><div><div class="num">1</div><div class="lab"><span class="tagdot" style="background:var(--amber)"></span>Needs you</div></div></div>
+        <div class="stat"><div class="ico" style="background:var(--red-soft);color:var(--red)">■</div><div><div class="num">1</div><div class="lab"><span class="tagdot" style="background:var(--red)"></span>Stopped</div></div></div>
+        <div class="stat"><div class="ico" style="background:var(--green-soft);color:var(--green)">✓</div><div><div class="num">8</div><div class="lab"><span class="tagdot" style="background:var(--green)"></span>Completed <small>Today</small></div></div></div>
+      </div>
+
+      <div class="split">
+        <div>
+          <div class="toolbar"><div class="col-h">Active tasks</div><div class="viewsel">View: All ▾</div></div>
+
+          <!-- task 1 -->
+          <div class="task">
+            <div class="tile" style="background:var(--blue-soft);color:var(--indigo)">&lt;/&gt;</div>
+            <div class="info"><div class="t">Fix failing payment tests</div><div class="l">Bug Fix lane</div></div>
+            <div class="rail">
+              <div class="step done"><div class="c">✓</div><div class="l">Understand</div></div>
+              <div class="step active"><div class="c"></div><div class="l">Implement</div></div>
+              <div class="step"><div class="c"></div><div class="l">Verify</div></div>
+              <div class="step"><div class="c"></div><div class="l">Open PR</div></div>
+              <div class="step"><div class="c"></div><div class="l">Review</div></div>
+              <div class="step"><div class="c"></div><div class="l">Merge</div></div>
+            </div>
+            <div class="status"><span class="s-dot" style="background:var(--indigo)"></span>Attempt 2 of 3 · Running<span class="chev">›</span></div>
+          </div>
+
+          <!-- task 2 -->
+          <div class="task">
+            <div class="tile" style="background:var(--red-soft);color:var(--red)">🚀</div>
+            <div class="info"><div class="t">Weekly release</div><div class="l">Release lane</div></div>
+            <div class="rail">
+              <div class="step done"><div class="c">✓</div><div class="l">Plan</div></div>
+              <div class="step done"><div class="c">✓</div><div class="l">Build</div></div>
+              <div class="step done"><div class="c">✓</div><div class="l">Verify</div></div>
+              <div class="step attn"><div class="c"></div><div class="l">Review</div></div>
+              <div class="step"><div class="c"></div><div class="l">Merge</div></div>
+            </div>
+            <div class="status"><span class="s-dot" style="background:var(--amber)"></span>Waiting for approval · Needs you<span class="chev">›</span></div>
+          </div>
+
+          <!-- task 3 -->
+          <div class="task">
+            <div class="tile" style="background:var(--blue-soft);color:var(--indigo)">⎇</div>
+            <div class="info"><div class="t">Update dependencies</div><div class="l">Dependency lane</div></div>
+            <div class="rail">
+              <div class="step active"><div class="c"></div><div class="l">Scan</div></div>
+              <div class="step"><div class="c"></div><div class="l">Update</div></div>
+              <div class="step"><div class="c"></div><div class="l">Verify</div></div>
+              <div class="step"><div class="c"></div><div class="l">Open PR</div></div>
+              <div class="step"><div class="c"></div><div class="l">Review</div></div>
+              <div class="step"><div class="c"></div><div class="l">Merge</div></div>
+            </div>
+            <div class="status"><span class="s-dot" style="background:var(--indigo)"></span>Scheduled run · Running<span class="chev">›</span></div>
+          </div>
+
+          <!-- task 4 -->
+          <div class="task">
+            <div class="tile" style="background:var(--red-soft);color:var(--red)">⛁</div>
+            <div class="info"><div class="t">Database migration</div><div class="l">Data lane</div></div>
+            <div class="rail">
+              <div class="step done"><div class="c">✓</div><div class="l">Plan</div></div>
+              <div class="step fail"><div class="c">✕</div><div class="l">Backup</div></div>
+              <div class="step"><div class="c"></div><div class="l">Migrate</div></div>
+              <div class="step"><div class="c"></div><div class="l">Verify</div></div>
+              <div class="step"><div class="c"></div><div class="l">Release</div></div>
+            </div>
+            <div class="status"><span class="s-dot" style="background:var(--red)"></span>Failed check · Stopped<span class="chev">›</span></div>
+          </div>
+        </div>
+
+        <!-- recent activity -->
+        <div class="activity">
+          <div class="col-h" style="margin-bottom:8px;">Recent activity</div>
+          <div class="act"><span class="d" style="background:var(--indigo)"></span><div><div class="at">Fix failing payment tests</div><div class="as">Attempt 2 started</div><div class="ag">2m ago</div></div></div>
+          <div class="act"><span class="d" style="background:var(--amber)"></span><div><div class="at">Weekly release</div><div class="as">PR opened for approval</div><div class="ag">15m ago</div></div></div>
+          <div class="act"><span class="d" style="background:var(--indigo)"></span><div><div class="at">Update dependencies</div><div class="as">Scan completed</div><div class="ag">28m ago</div></div></div>
+          <div class="act"><span class="d" style="background:var(--red)"></span><div><div class="at">Database migration</div><div class="as">Backup check failed</div><div class="ag">52m ago</div></div></div>
+          <span class="viewall">View all activity →</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== LANE EDITOR ===================== -->
+    <section class="screen" id="sc-editor">
+      <div class="h-row">
+        <div>
+          <div class="crumb" data-go="dashboard">‹ Vibe Lanes</div>
+          <h1>Bug Fix <span class="badge">Draft</span></h1>
+          <div class="sub">Reusable process for fixing bugs and shipping safely.</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"></path></svg> Preview lane</button>
+          <button class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h11l3 3v13H5z"></path><path d="M8 4v6h7"></path></svg> Save lane</button>
+        </div>
+      </div>
+
+      <div class="stepper">
+        <div class="pchip"><span class="picon">💡</span><div><div class="pn">1</div><div class="pl">Understand</div></div></div>
+        <span class="arrow">→</span>
+        <div class="pchip cur"><span class="picon">&lt;/&gt;</span><div><div class="pn">2</div><div class="pl">Implement</div></div></div>
+        <span class="arrow">→</span>
+        <div class="pchip ok"><span class="picon">🛡</span><div><div class="pn">3</div><div class="pl">Verify</div></div></div>
+        <span class="arrow">→</span>
+        <div class="pchip"><span class="picon">⎇</span><div><div class="pn">4</div><div class="pl">Open PR</div></div></div>
+        <span class="arrow">→</span>
+        <div class="pchip"><span class="picon">👁</span><div><div class="pn">5</div><div class="pl">Review</div></div></div>
+        <span class="arrow">→</span>
+        <div class="pchip ok"><span class="picon">✓</span><div><div class="pn">6</div><div class="pl">Merge</div></div></div>
+      </div>
+
+      <div class="split2">
+        <!-- checkpoint editor -->
+        <div class="editor">
+          <div class="eh"><span class="picon">&lt;/&gt;</span><h2>Checkpoint: Implement</h2></div>
+
+          <div class="flabel">Goal</div>
+          <input class="inp" value="Make the smallest safe change to fix the issue.">
+
+          <div class="flabel">Skills</div>
+          <div class="chips">
+            <span class="chip">Code editing</span>
+            <span class="chip">Repository navigation</span>
+            <span class="chip">TypeScript</span>
+            <span class="chip add">+ Add skill</span>
+          </div>
+
+          <div class="flabel">Instructions</div>
+          <textarea class="inp" rows="3">Understand the issue before changing anything.
+Keep the change minimal and follow project conventions.</textarea>
+
+          <div class="flabel">Check</div>
+          <div class="inp mono"><span>npm run test</span><span style="color:var(--faint);cursor:pointer;">⧉</span></div>
+
+          <div class="flabel">Retry policy</div>
+          <div class="grid2">
+            <div>
+              <div style="font-size:12.5px;color:var(--muted);margin-bottom:7px;">Max attempts</div>
+              <div class="stepperctl"><button>−</button><span class="val">3</span><button>+</button></div>
+            </div>
+            <div>
+              <div style="font-size:12.5px;color:var(--muted);margin-bottom:7px;">Time limit</div>
+              <div class="stepperctl"><button>−</button><span class="val">30m</span><button>+</button></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- strategies -->
+        <div>
+          <div class="col-h">Strategies</div>
+
+          <div class="strat">
+            <div class="sh">
+              <span class="sico" style="background:var(--indigo-soft);color:var(--indigo)">⋮⋮</span>
+              <div><div class="stt"><b>1</b> Default strategy</div><div class="ss">Use the standard implementation approach.</div></div>
+              <span class="dots">⋮</span>
+            </div>
+            <div class="tags">
+              <span class="tag" style="background:var(--indigo-soft);color:var(--indigo)">Code editing</span>
+              <span class="tag" style="background:var(--indigo-soft);color:var(--indigo)">Testing</span>
+              <span class="tag" style="background:var(--indigo-soft);color:var(--indigo)">TypeScript</span>
+            </div>
+          </div>
+
+          <div class="strat">
+            <div class="sh">
+              <span class="sico" style="background:var(--amber-soft);color:var(--amber)">🔍</span>
+              <div><div class="stt"><b style="color:var(--amber)">2</b> Debug strategy</div><div class="ss">Use when the default strategy fails.</div></div>
+              <span class="dots">⋮</span>
+            </div>
+            <div class="tags">
+              <span class="tag" style="background:var(--amber-soft);color:var(--amber)">Debugging</span>
+              <span class="tag" style="background:var(--amber-soft);color:var(--amber)">Logging</span>
+              <span class="tag" style="background:var(--amber-soft);color:var(--amber)">Testing</span>
+            </div>
+          </div>
+
+          <div class="strat">
+            <div class="sh">
+              <span class="sico" style="background:var(--red-soft);color:var(--red)">⚑</span>
+              <div><div class="stt"><b style="color:var(--red)">3</b> Escalation strategy</div><div class="ss">Use as a last resort before stopping.</div></div>
+              <span class="dots">⋮</span>
+            </div>
+            <div class="tags">
+              <span class="tag" style="background:var(--red-soft);color:var(--red)">Code review</span>
+              <span class="tag" style="background:var(--red-soft);color:var(--red)">Architecture</span>
+              <span class="tag" style="background:var(--red-soft);color:var(--red)">Docs</span>
+            </div>
+          </div>
+
+          <div class="addstrat">+  Add strategy</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== AUTOMATIONS ===================== -->
+    <section class="screen" id="sc-autos">
+      <div class="h-row"><div><h1>Automations</h1><div class="sub">Schedules and triggers that start tasks on their own.</div></div></div>
+      <div class="placeholder">Recurring &amp; event triggers for lanes (e.g. nightly dependency update) live here.</div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  function go(s){
+    document.querySelectorAll('.screen').forEach(e=>e.classList.remove('on'));
+    document.getElementById('sc-'+s).classList.add('on');
+    document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('on', a.dataset.go===s ||
+      (s==='editor'&&a.dataset.go==='editor')));
+    window.scrollTo(0,0);
+  }
+  document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>go(el.dataset.go));
+  // task rows open the lane editor
+  document.querySelectorAll('.task').forEach(t=>t.onclick=()=>go('editor'));
+</script>
+
+
+</body></html>
