@@ -96,6 +96,13 @@ This document enumerates trust boundaries, attack surfaces, and mitigations.
 - **Likelihood**: Medium — inherent to Unix sockets across crashes.
 - **Mitigation**: On startup, `CLISocketServer` removes any stale socket file at the configured path before `bind`. Safe because the directory is bundle-ID-scoped. If `bind` still fails, the server logs an error and the CLI feature degrades gracefully — agents see `not_connected`.
 
+### F044-T11: Cross-project todo disclosure via `todo.list --scope vibespace`
+
+- **Vector**: An agent scoped to one project calls `todo.list --scope vibespace` to read every todo across sibling projects and vibespace-level todos, widening the context it can see beyond its own project.
+- **Impact**: Information disclosure of todo titles/bodies from sibling projects within the same vibespace.
+- **Likelihood**: Low–Medium — requires the agent to opt into `scope=vibespace`; the default (`scope=project`) never crosses the project boundary.
+- **Mitigation**: `scope=vibespace` is bounded to the *active* vibespace only — it cannot reach todos in other vibespaces or other app instances. The default scope is `project`, which requires a resolvable project and does not widen silently (F044-R90, F044-R91). Cross-project visibility within a vibespace is accepted under the same-user, in-vibespace trust model (see F044-T04): the app's own Todos Project/All toggle already exposes the same data to the user. No secrets are stored in todos by design; users should not paste credentials into todo bodies.
+
 ## Residual Risks
 
 - **R1: In-vibespace agent isolation.** Multiple agents in the same vibespace can affect each other's terminals (F044-T04). v1 mitigation is documentation only. Future: per-terminal ACLs.

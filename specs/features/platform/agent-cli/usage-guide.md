@@ -3,7 +3,7 @@ title: "Agent CLI"
 feature: "F044"
 domain: "platform"
 audience: "agent-author"
-version: "1.1"
+version: "1.2"
 sidebar:
   label: "Agent CLI"
   order: 4
@@ -108,6 +108,26 @@ crispy browser list
 # Opt-in — all browsers in the vibespace, regardless of project
 crispy browser list --scope vibespace
 ```
+
+### List todos
+
+`crispy todo list` mirrors the `browser list` / `shortcut list` scope convention. It defaults to your own project, matching the app's Todos **Project** toggle. Because Crispy always sets `CRISPY_PROJECT_PATH` in spawned terminals, a bare `crispy todo list` only ever shows your project's todos — pass `--scope vibespace` to see everything (the **All** toggle).
+
+```bash
+# Default — todos for the caller's project (CRISPY_PROJECT_PATH)
+crispy todo list
+
+# Opt-in — every todo across the vibespace (all projects + vibespace-level)
+crispy todo list --scope vibespace
+
+# Combine with a status filter
+crispy todo list --scope vibespace --status all
+
+# Target a specific project explicitly (still project scope)
+crispy todo list --project /Users/manu/projects/api
+```
+
+If you run `crispy todo list` somewhere with no project context (no `--project` and no `CRISPY_PROJECT_PATH`), it returns `invalid_params` telling you to pass `--scope vibespace`.
 
 ### Manage vibespace projects
 

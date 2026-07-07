@@ -24,6 +24,7 @@ The CLI ships in stages. Foundation (transport, authorization, env injection, PA
 | Browser | `browser.snapshot`, `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload`, `browser.eval`, `browser.click`, `browser.type`, `browser.wait`, `browser.screenshot`, `browser.console`, `browser.dialog` | deferred |
 | VibeSpace | `vibespace.addProject`, `vibespace.removeProject`, `vibespace.parkProject`, `vibespace.activateProject`, `vibespace.listProjects` | shipped |
 | VibeSpace | `vibespace.list`, `vibespace.current`, `pane.list` | deferred |
+| Todo | `todo.add`, `todo.list`, `todo.complete`, `todo.reopen`, `todo.update`, `todo.remove`, `todo.show`, `todo.message.add` | shipped — surface owned by [F053 Quick Todos](../../vibespace/todos/spec.md), exposed over this transport |
 
 ## Dependencies
 
@@ -118,6 +119,21 @@ Unrecognized methods MUST return error code `unknown_method` with the requested 
 
 Wait-style commands MUST accept a `timeout` parameter (seconds, default per command) and MUST return a `timeout` error if the condition is not met before the deadline.
 
+### Todo Listing
+
+The `todo.*` commands surface the [F053 Quick Todos](../../vibespace/todos/spec.md) model over this transport. Todo scoping requirements are defined here because they follow the same caller-context resolution as the rest of the CLI.
+
+#### F044-R90: Todo list scope parameter
+
+`todo.list` MUST accept a `scope` parameter of `"project"` (default) or `"vibespace"`, mirroring the `browser.list` (F044-R57) and `shortcut.list` (F044-R81) scope convention:
+- `scope=project` (default): lists todos for the caller's project, resolved from the explicit `project` param (preferred) or the `CRISPY_PROJECT_PATH` env var. If neither resolves, the command MUST return `invalid_params` with a message directing the caller to pass `scope=vibespace`.
+- `scope=vibespace`: lists every todo across the active vibespace (all projects plus vibespace-level todos), ignoring project scoping.
+- Any other value MUST return `invalid_params`.
+
+#### F044-R91: No silent scope widening for terminal callers
+
+Because Crispy always injects `CRISPY_PROJECT_PATH` into spawned terminals, a bare `crispy todo list` resolves to project scope. To view sibling-project or vibespace-level todos — matching the app's Todos Project/All toggle — the caller MUST pass `scope=vibespace`. The default MUST NOT silently widen scope to the vibespace when a project context is present.
+
 ## Command Categories
 
 Detailed per-command requirements and scenarios live in category-specific docs:
@@ -131,6 +147,7 @@ Detailed per-command requirements and scenarios live in category-specific docs:
 | Browser | [commands-browser.md](commands-browser.md) | `browser.open`, `browser.snapshot`, `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload`, `browser.eval`, `browser.click`, `browser.type`, `browser.wait`, `browser.screenshot`, `browser.console`, `browser.dialog` |
 | Shortcuts | [commands-shortcuts.md](commands-shortcuts.md) | `shortcut.list`, `shortcut.add` |
 | VibeSpace | [commands-vibespace.md](commands-vibespace.md) | `vibespace.list`, `vibespace.current`, `pane.list`, `vibespace.addProject`, `vibespace.removeProject`, `vibespace.parkProject`, `vibespace.activateProject`, `vibespace.listProjects` |
+| Todo | [F053 Quick Todos](../../vibespace/todos/spec.md) | `todo.add`, `todo.list`, `todo.complete`, `todo.reopen`, `todo.update`, `todo.remove`, `todo.show`, `todo.message.add` |
 
 ## Error Codes
 
@@ -215,6 +232,32 @@ Cross-cutting transport and authorization scenarios are defined here. Per-comman
 **Then** the server accepts both connections
 **And** dispatches each request on its own task without blocking the other
 
+### Scenario F044-S300: `todo list` default scope lists the caller's project
+
+**Given** an agent runs in a terminal whose `CRISPY_PROJECT_PATH` is `/p/alpha`
+**And** the active vibespace has todos in `/p/alpha`, `/p/beta`, and vibespace-level todos
+**When** the agent invokes `crispy todo list`
+**Then** the response contains only the `/p/alpha` todos
+
+### Scenario F044-S301: `todo list --scope vibespace` lists across all projects
+
+**Given** the same vibespace state as F044-S300
+**When** the agent invokes `crispy todo list --scope vibespace`
+**Then** the response contains every todo across all projects plus vibespace-level todos
+**And** project scoping is ignored
+
+### Scenario F044-S302: Default scope without project context errors
+
+**Given** the caller has no explicit `project` param and no `CRISPY_PROJECT_PATH`
+**When** the agent invokes `crispy todo list`
+**Then** the response is `invalid_params`
+**And** the message directs the caller to pass `scope=vibespace`
+
+### Scenario F044-S303: Invalid scope value rejected
+
+**When** the agent invokes `crispy todo list --scope global`
+**Then** the response is `invalid_params` naming the allowed values (`project`, `vibespace`)
+
 ## Acceptance Criteria
 
 - All requirements F044-R01 through F044-R15 implemented and covered by tests
@@ -236,3 +279,4 @@ None at this time.
 | 2026-05-17 | Marked feature implemented; added per-category implementation status table; retired planning docs | Manu |
 | 2026-05-30 | Replaced process-ancestry authorization (F044-R02) with owner-only `0600` socket access so any same-user process (incl. ACP agents, tmux/ssh shells) can use the CLI; removed `CLIProcessAncestry` and the bypass flag. See F051 (Remote Agent CLI). | Manu |
 | 2026-06-03 | Added `vibespace.activateProject` (F044-R83) and `vibespace.listProjects` (F044-R84), completing CLI project lifecycle alongside add/remove/park. | — |
+| 2026-07-07 | Added `todo.list` `--scope <project\|vibespace>` (F044-R90, F044-R91; scenarios F044-S300–S303) mirroring `browser.list`/`shortcut.list`; fixes terminal-invoked `crispy todo list` never reaching sibling-project or vibespace-level todos. See threat-model F044-T11. | — |

@@ -137,7 +137,17 @@ The new `.agentCLI(callerSurfaceID:)` origin is added to the existing `TerminalO
 
 ### Method Namespace
 
-Methods are dotted: `<category>.<action>`. Categories: `system`, `terminal`, `file`, `shelf`, `browser`, `vibespace`, `pane`. Each category has its own spec doc — see [spec.md](spec.md) for the full index.
+Methods are dotted: `<category>.<action>`. Categories: `system`, `terminal`, `file`, `shelf`, `browser`, `vibespace`, `pane`, `todo`. Each category has its own spec doc — see [spec.md](spec.md) for the full index. The `todo.*` handlers (`CLICommandRouterTodoHandlers`) surface the [F053 Quick Todos](../../vibespace/todos/spec.md) store over this transport.
+
+#### Todo scope routing
+
+`todo.list` accepts a `scope` param (`"project"` default, or `"vibespace"`) handled by `CLICommandRouterTodoHandlers.handleTodoList`, parallel to `browser.list`:
+
+- `scope=vibespace` → no project filter; the store returns every todo in the active vibespace (all projects plus vibespace-level).
+- `scope=project` → the handler resolves the project from the explicit `project` param (preferred) or `_env.project_path`; if neither resolves it returns `invalid_params` (the message points the caller to `scope=vibespace`) rather than silently widening scope.
+- any other value → `invalid_params`.
+
+On the Rust side, `TodoCommand::List` carries a `--scope` arg (clap default `"project"`) forwarded as the `scope` param of the `todo.list` request. Coverage: `CLICommandRouterTodoListTests`.
 
 ### Request Schema
 
