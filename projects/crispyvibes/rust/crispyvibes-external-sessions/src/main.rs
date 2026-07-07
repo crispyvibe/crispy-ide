@@ -51,6 +51,9 @@ enum Provider {
     Codex,
     Claude,
     Kiro,
+    #[value(name = "opencode")]
+    OpenCode,
+    Pi,
 }
 
 impl Provider {
@@ -59,6 +62,8 @@ impl Provider {
             Provider::Codex => "codex",
             Provider::Claude => "claude",
             Provider::Kiro => "kiro",
+            Provider::OpenCode => "opencode",
+            Provider::Pi => "pi",
         }
     }
 
@@ -67,6 +72,8 @@ impl Provider {
             Provider::Codex => "Codex",
             Provider::Claude => "Claude Code",
             Provider::Kiro => "Kiro CLI",
+            Provider::OpenCode => "OpenCode",
+            Provider::Pi => "Pi",
         }
     }
 }
@@ -196,15 +203,16 @@ fn search(query: &str, provider_filter: Option<Provider>, limit: usize) -> ScanR
     let mut response = scan(provider_filter, usize::MAX);
     let mut matches = Vec::new();
     for mut session in response.sessions {
-        let haystack = format!(
-            "{}\n{}\n{}\n{}",
-            session.title, session.provider_name, session.project_path, session.session_id
-        )
-        .to_lowercase();
-
-        if haystack.contains(&needle) {
-            session.search_snippet = Some(session.title.clone());
-            session.search_snippets = vec![session.title.clone()];
+        // Match the query against the TITLE only. The ambient directory path is
+        // deliberately excluded — otherwise every session living under a folder
+        // like "crispyvibe" matches a query of "vibe" even when its content has
+        // nothing to do with it.
+        if session.title.to_lowercase().contains(&needle) {
+            // The title is already the row's primary line; don't echo it back as
+            // a snippet (that produced a duplicated second line). Real context
+            // snippets come from body matches below.
+            session.search_snippet = None;
+            session.search_snippets = Vec::new();
             session.match_count = 1;
             matches.push(session);
             continue;
@@ -233,6 +241,9 @@ fn search(query: &str, provider_filter: Option<Provider>, limit: usize) -> ScanR
 }
 
 fn load(provider: Provider, source_path: PathBuf) -> TranscriptResponse {
+    if provider == Provider::OpenCode {
+        return load_opencode(&source_path.to_string_lossy());
+    }
     let mut diagnostics = Vec::new();
     let summary_path = if provider == Provider::Kiro
         && source_path.extension().and_then(|value| value.to_str()) == Some("jsonl")
@@ -317,7 +328,7 @@ fn load(provider: Provider, source_path: PathBuf) -> TranscriptResponse {
 fn providers(filter: Option<Provider>) -> Vec<Provider> {
     match filter {
         Some(provider) => vec![provider],
-        None => vec![Provider::Codex, Provider::Claude, Provider::Kiro],
+        None => vec![Provider::Codex, Provider::Claude, Provider::Kiro, Provider::OpenCode, Provider::Pi],
     }
 }
 
@@ -325,6 +336,11 @@ fn discover_provider(
     provider: Provider,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Vec<ExternalSessionSummary> {
+    // OpenCode stores sessions in a SQLite DB, not per-session files.
+    if provider == Provider::OpenCode {
+        return discover_opencode(diagnostics);
+    }
+
     let Some(root) = provider_root(provider) else {
         return Vec::new();
     };
@@ -333,8 +349,9 @@ fn discover_provider(
     }
 
     let paths = match provider {
-        Provider::Codex | Provider::Claude => collect_files(&root, "jsonl"),
+        Provider::Codex | Provider::Claude | Provider::Pi => collect_files(&root, "jsonl"),
         Provider::Kiro => collect_files(&root, "json"),
+        Provider::OpenCode => Vec::new(),
     };
 
     paths
@@ -359,6 +376,8 @@ fn provider_root(provider: Provider) -> Option<PathBuf> {
         Provider::Codex => home.join(".codex/sessions"),
         Provider::Claude => home.join(".claude/projects"),
         Provider::Kiro => home.join(".kiro/sessions/cli"),
+        Provider::OpenCode => home.join(".local/share/opencode/opencode.db"),
+        Provider::Pi => home.join(".pi/agent/sessions"),
     })
 }
 
@@ -391,6 +410,8 @@ fn summarize_session(
         Provider::Codex => summarize_jsonl(provider, path, diagnostics),
         Provider::Claude => summarize_jsonl(provider, path, diagnostics),
         Provider::Kiro => summarize_kiro(path, diagnostics),
+        Provider::OpenCode => empty_summary(provider, path.to_path_buf()),
+        Provider::Pi => summarize_jsonl(provider, path, diagnostics),
     }
 }
 
@@ -550,6 +571,8 @@ fn enrich_from_jsonl(
             Provider::Codex => enrich_codex(summary, &value),
             Provider::Claude => enrich_claude(summary, &value),
             Provider::Kiro => enrich_kiro(summary, &value),
+            Provider::OpenCode => {}
+            Provider::Pi => enrich_pi(summary, &value),
         }
     }
 }
@@ -643,6 +666,8 @@ fn transcript_entry(provider: Provider, value: &Value) -> Option<TranscriptEntry
         Provider::Codex => codex_entry(value),
         Provider::Claude => claude_entry(value),
         Provider::Kiro => kiro_entry(value),
+        Provider::OpenCode => None,
+        Provider::Pi => pi_entry(value),
     }
 }
 
@@ -715,6 +740,8 @@ fn timestamp_for(provider: Provider, value: &Value) -> Option<String> {
         Provider::Codex => value["timestamp"].as_str().map(str::to_string),
         Provider::Claude => value["timestamp"].as_str().map(str::to_string),
         Provider::Kiro => None,
+        Provider::OpenCode => None,
+        Provider::Pi => value["timestamp"].as_str().map(str::to_string),
     }
 }
 
@@ -794,6 +821,11 @@ fn find_body_matches(
     session: &ExternalSessionSummary,
     needle: &str,
 ) -> Result<Option<BodySearchMatch>, ParseDiagnostic> {
+    // OpenCode has no session file to grep; title/directory matching (handled by
+    // the caller's haystack) is the search surface for it.
+    if session.provider == Provider::OpenCode.id() {
+        return Ok(None);
+    }
     let path = PathBuf::from(&session.source_path);
     let provider = provider_from_id(&session.provider).unwrap_or(Provider::Codex);
     let file = fs::File::open(&path)
@@ -849,6 +881,8 @@ fn provider_from_id(id: &str) -> Option<Provider> {
         "codex" => Some(Provider::Codex),
         "claude" => Some(Provider::Claude),
         "kiro" => Some(Provider::Kiro),
+        "opencode" => Some(Provider::OpenCode),
+        "pi" => Some(Provider::Pi),
         _ => None,
     }
 }
@@ -940,6 +974,313 @@ fn apply_process_name() {
     target_os = "linux"
 )))]
 fn apply_process_name() {}
+
+// ---- Pi support (JSONL) --------------------------------------------------
+//
+// Pi stores sessions as `~/.pi/agent/sessions/<encoded-cwd>/<ts>_<uuid>.jsonl`.
+// The first line is `{"type":"session","id":…,"cwd":…,"timestamp":…}`; message
+// lines are `{"type":"message","message":{"role":…,"content":[{"text":…}]}}`.
+// Resume is `pi --session <id>` (built on the Swift side).
+
+fn enrich_pi(summary: &mut ExternalSessionSummary, value: &Value) {
+    if value["type"].as_str() == Some("session") {
+        if let Some(id) = value["id"].as_str() {
+            summary.session_id = id.to_string();
+        }
+        if let Some(cwd) = value["cwd"].as_str() {
+            summary.project_path = cwd.to_string();
+        }
+        if let Some(ts) = value["timestamp"].as_str() {
+            if summary.created_at.is_empty() {
+                summary.created_at = ts.to_string();
+            }
+            summary.updated_at = ts.to_string();
+        }
+    }
+
+    if let Some(entry) = transcript_entry(Provider::Pi, value) {
+        summary.message_count += 1;
+        if summary.title.is_empty() && entry.role == "user" && !is_bootstrap_text(&entry.text) {
+            summary.title = title_from_text(&entry.text);
+        }
+        if entry.role == "tool" {
+            summary.has_tool_activity = true;
+        }
+        if !entry.timestamp.is_empty() {
+            summary.updated_at = entry.timestamp;
+        }
+    }
+}
+
+fn pi_entry(value: &Value) -> Option<TranscriptEntry> {
+    if value["type"].as_str() != Some("message") {
+        return None;
+    }
+    let message = &value["message"];
+    let role = message["role"].as_str().unwrap_or_default();
+    let text = first_text(message)?;
+    let role = match role {
+        "user" => "user",
+        "assistant" => "assistant",
+        "system" => "system",
+        "tool" | "tool_result" | "tool_use" => "tool",
+        _ => return None,
+    };
+    let timestamp = value["timestamp"].as_str().unwrap_or_default().to_string();
+    Some(TranscriptEntry {
+        role: role.to_string(),
+        timestamp,
+        text,
+        metadata: compact_metadata(value),
+    })
+}
+
+// ---- OpenCode (SQLite) support -------------------------------------------
+//
+// Unlike the file-based agents, OpenCode stores every session in one SQLite DB
+// (`~/.local/share/opencode/opencode.db`, tables `session` / `message` / `part`).
+// We snapshot-copy the (possibly live/WAL) DB and read it read-only, mirroring
+// how cmux reads it. Resume is `opencode --session <id>` (built on the Swift side).
+
+fn opencode_db_path() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    Some(home.join(".local/share/opencode/opencode.db"))
+}
+
+/// Copy the DB (plus `-wal`/`-shm` sidecars) to a temp dir and open read-only,
+/// so a live OpenCode process can't lock us out or hand us a half-written page.
+fn with_opencode_readonly<T>(
+    db_path: &Path,
+    body: impl FnOnce(&rusqlite::Connection) -> rusqlite::Result<T>,
+) -> Result<T> {
+    let unique = format!(
+        "crispyvibes-opencode-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    );
+    let tmp_dir = std::env::temp_dir().join(unique);
+    fs::create_dir_all(&tmp_dir).context("create opencode snapshot dir")?;
+    let snapshot = tmp_dir.join("opencode.db");
+    fs::copy(db_path, &snapshot).context("copy opencode.db")?;
+    for sidecar in ["-wal", "-shm"] {
+        let src = PathBuf::from(format!("{}{}", db_path.to_string_lossy(), sidecar));
+        if src.exists() {
+            let dst = PathBuf::from(format!("{}{}", snapshot.to_string_lossy(), sidecar));
+            let _ = fs::copy(&src, &dst);
+        }
+    }
+    let result = (|| -> rusqlite::Result<T> {
+        let conn = rusqlite::Connection::open_with_flags(
+            &snapshot,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )?;
+        body(&conn)
+    })();
+    let _ = fs::remove_dir_all(&tmp_dir);
+    result.map_err(|error| anyhow::anyhow!(error.to_string()))
+}
+
+fn discover_opencode(diagnostics: &mut Vec<ParseDiagnostic>) -> Vec<ExternalSessionSummary> {
+    let Some(db_path) = opencode_db_path() else {
+        return Vec::new();
+    };
+    if !db_path.exists() {
+        return Vec::new();
+    }
+    let outcome = with_opencode_readonly(&db_path, |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT s.id, s.title, s.directory, s.time_created, s.time_updated,
+                    (SELECT COUNT(*) FROM message WHERE session_id = s.id) AS msg_count
+             FROM session s
+             ORDER BY s.time_updated DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(opencode_summary(
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1).unwrap_or_default(),
+                row.get::<_, String>(2).unwrap_or_default(),
+                row.get::<_, i64>(3).unwrap_or(0),
+                row.get::<_, i64>(4).unwrap_or(0),
+                row.get::<_, i64>(5).unwrap_or(0) as usize,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    });
+    match outcome {
+        Ok(sessions) => sessions,
+        Err(error) => {
+            diagnostics.push(diagnostic(
+                Provider::OpenCode,
+                &db_path,
+                None,
+                "sqlite",
+                error.to_string(),
+            ));
+            Vec::new()
+        }
+    }
+}
+
+fn opencode_summary(
+    id: String,
+    title: String,
+    directory: String,
+    created_ms: i64,
+    updated_ms: i64,
+    message_count: usize,
+) -> ExternalSessionSummary {
+    let epoch_secs = if updated_ms > 0 {
+        (updated_ms / 1000) as u64
+    } else {
+        (created_ms / 1000).max(0) as u64
+    };
+    ExternalSessionSummary {
+        provider: Provider::OpenCode.id().to_string(),
+        provider_name: Provider::OpenCode.display_name().to_string(),
+        session_id: id.clone(),
+        title: if title.trim().is_empty() {
+            "Untitled session".to_string()
+        } else {
+            title
+        },
+        project_path: directory,
+        // OpenCode has no per-session file; the session id is the stable handle
+        // used by `load` and the `opencode --session <id>` resume command.
+        source_path: id,
+        created_at: String::new(),
+        updated_at: String::new(),
+        modified_at_epoch: epoch_secs,
+        message_count,
+        has_tool_activity: false,
+        parse_status: "ok".to_string(),
+        parse_errors: Vec::new(),
+        parent_session_id: None,
+        search_snippet: None,
+        search_snippets: Vec::new(),
+        match_count: 0,
+    }
+}
+
+fn load_opencode(session_id: &str) -> TranscriptResponse {
+    let mut parse_errors = Vec::new();
+    let Some(db_path) = opencode_db_path() else {
+        return empty_opencode_transcript(session_id);
+    };
+    let outcome = with_opencode_readonly(&db_path, |conn| {
+        let summary = conn.query_row(
+            "SELECT s.id, s.title, s.directory, s.time_created, s.time_updated,
+                    (SELECT COUNT(*) FROM message WHERE session_id = s.id)
+             FROM session s WHERE s.id = ?1",
+            [session_id],
+            |row| {
+                Ok(opencode_summary(
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1).unwrap_or_default(),
+                    row.get::<_, String>(2).unwrap_or_default(),
+                    row.get::<_, i64>(3).unwrap_or(0),
+                    row.get::<_, i64>(4).unwrap_or(0),
+                    row.get::<_, i64>(5).unwrap_or(0) as usize,
+                ))
+            },
+        )?;
+
+        let mut stmt = conn.prepare(
+            "SELECT m.data,
+                    (SELECT GROUP_CONCAT(p.data, char(10)) FROM part p WHERE p.message_id = m.id),
+                    m.time_created
+             FROM message m WHERE m.session_id = ?1
+             ORDER BY m.time_created ASC",
+        )?;
+        let rows = stmt.query_map([session_id], |row| {
+            Ok((
+                row.get::<_, String>(0).unwrap_or_default(),
+                row.get::<_, Option<String>>(1).unwrap_or(None),
+                row.get::<_, i64>(2).unwrap_or(0),
+            ))
+        })?;
+        let mut entries = Vec::new();
+        for row in rows {
+            let (msg_data, parts_data, created_ms) = row?;
+            let role = serde_json::from_str::<Value>(&msg_data)
+                .ok()
+                .and_then(|value| value["role"].as_str().map(str::to_string))
+                .unwrap_or_else(|| "assistant".to_string());
+            let text = opencode_parts_text(parts_data.as_deref());
+            if text.trim().is_empty() {
+                continue;
+            }
+            entries.push(TranscriptEntry {
+                role,
+                timestamp: created_ms.to_string(),
+                text,
+                metadata: Value::Null,
+            });
+            if entries.len() >= PREVIEW_ENTRY_LIMIT {
+                break;
+            }
+        }
+        Ok((summary, entries))
+    });
+
+    match outcome {
+        Ok((session, entries)) => TranscriptResponse {
+            session,
+            entries,
+            parse_errors,
+        },
+        Err(error) => {
+            parse_errors.push(diagnostic(
+                Provider::OpenCode,
+                &db_path,
+                None,
+                "sqlite",
+                error.to_string(),
+            ));
+            let mut response = empty_opencode_transcript(session_id);
+            response.session.parse_status = "error".to_string();
+            response.parse_errors = parse_errors;
+            response
+        }
+    }
+}
+
+/// Extract readable text from a message's concatenated `part` JSON blobs.
+/// `part.data` is compact single-line JSON, joined by newlines via GROUP_CONCAT.
+fn opencode_parts_text(parts: Option<&str>) -> String {
+    let Some(parts) = parts else {
+        return String::new();
+    };
+    let mut out: Vec<String> = Vec::new();
+    for blob in parts.split('\n') {
+        if let Ok(value) = serde_json::from_str::<Value>(blob) {
+            let kind = value["type"].as_str().unwrap_or("");
+            if kind == "text" || kind == "reasoning" {
+                if let Some(text) = value["text"].as_str() {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        out.push(trimmed.to_string());
+                    }
+                }
+            }
+        }
+    }
+    out.join("\n")
+}
+
+fn empty_opencode_transcript(session_id: &str) -> TranscriptResponse {
+    TranscriptResponse {
+        session: opencode_summary(session_id.to_string(), String::new(), String::new(), 0, 0, 0),
+        entries: Vec::new(),
+        parse_errors: Vec::new(),
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -295,13 +295,14 @@ enum AppStrings {
         }
 
         enum Conversations {
-            static let crispyvibes = String(localized: "sidebar.conversations.crispyvibes", defaultValue: "Crispy")
-            static let external = String(localized: "sidebar.conversations.external", defaultValue: "External")
+            static let crispyvibes = String(localized: "sidebar.conversations.crispyvibes", defaultValue: "ACP")
+            static let external = String(localized: "sidebar.conversations.external", defaultValue: "Terminal")
         }
 
         enum ExternalSessions {
             static let searchPlaceholder = String(localized: "sidebar.externalSessions.search", defaultValue: "Search external sessions...")
             static let refresh = String(localized: "sidebar.externalSessions.refresh", defaultValue: "Refresh external sessions")
+            static let resumeInTerminal = String(localized: "sidebar.externalSessions.resumeInTerminal", defaultValue: "Open in Terminal")
             static let loading = String(localized: "sidebar.externalSessions.loading", defaultValue: "Loading external sessions")
             static let loadFailed = String(localized: "sidebar.externalSessions.loadFailed", defaultValue: "External sessions unavailable")
             static let emptyTitle = String(localized: "sidebar.externalSessions.empty.title", defaultValue: "No external sessions")

@@ -5,6 +5,8 @@ enum ExternalAgentSessionProvider: String, CaseIterable, Codable, Identifiable {
     case codex
     case claude
     case kiro
+    case opencode
+    case pi
 
     var id: String { rawValue }
 
@@ -13,6 +15,8 @@ enum ExternalAgentSessionProvider: String, CaseIterable, Codable, Identifiable {
         case .codex: "Codex"
         case .claude: "Claude Code"
         case .kiro: "Kiro CLI"
+        case .opencode: "OpenCode"
+        case .pi: "Pi"
         }
     }
 }
@@ -68,14 +72,33 @@ struct ExternalAgentSessionSummary: Identifiable, Codable, Equatable {
     }
 
     var resumeCommand: String {
+        // The session id is treated as untrusted input from the agent's own
+        // on-disk storage. Shell-quote it so it can't inject into the command
+        // that gets run in a terminal (F047-T07).
+        let id = Self.shellQuote(sessionId)
         switch provider {
         case .codex:
-            return "codex resume \(sessionId)"
+            return "codex resume \(id)"
         case .claude:
-            return "claude --resume \(sessionId)"
+            return "claude --resume \(id)"
         case .kiro:
-            return "kiro-cli chat --resume-id \(sessionId)"
+            return "kiro-cli chat --resume-id \(id)"
+        case .opencode:
+            return "opencode --session \(id)"
+        case .pi:
+            return "pi --session \(id)"
         }
+    }
+
+    /// Single-quote a value for safe shell use. Values that are already only
+    /// safe shell-word characters are returned unchanged (keeps normal session
+    /// ids readable); anything else is single-quoted with embedded quotes escaped.
+    private static func shellQuote(_ value: String) -> String {
+        if value.range(of: "[^A-Za-z0-9_./:=+-]", options: .regularExpression) == nil {
+            return value.isEmpty ? "''" : value
+        }
+        let escaped = value.replacingOccurrences(of: "'", with: "'\\''")
+        return "'\(escaped)'"
     }
 
     var shortSessionId: String {

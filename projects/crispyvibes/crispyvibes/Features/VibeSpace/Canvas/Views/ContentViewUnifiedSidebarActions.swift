@@ -87,6 +87,9 @@ extension ContentView {
             onPreviewExternalSession: { transcript in
                 externalAgentSessionPreview = transcript
             },
+            onResumeExternalSession: { session in
+                resumeExternalSessionInTerminal(session)
+            },
             isUnified: appShellStore.vibespaceSidebarUnified,
             onOpenWorktree: { path in
                 _ = vibespaceCanvasActionsCoordinator.addProjectsViaCLI(urls: [URL(fileURLWithPath: path)])
@@ -106,6 +109,30 @@ extension ContentView {
     }
 
     /// Open a new agent (ACP) conversation scoped to a specific worktree.
+    /// Resume a terminal-agent (external CLI) session by opening a new terminal
+    /// tab that runs the agent's resume command (e.g. `claude --resume <id>`) in
+    /// the session's original working directory. Hosted in the focused project's
+    /// terminal so it surfaces in view; falls back to the first active project.
+    private func resumeExternalSessionInTerminal(_ session: ExternalAgentSessionSummary) {
+        guard let project = vibespaceView.focusedProject ?? vibespaceView.activeVibeSpaceProjects.first else { return }
+        let directory = session.projectPath.isEmpty
+            ? project.rootURL
+            : URL(fileURLWithPath: session.projectPath)
+        project.activate()
+        // Append a new terminal tab (index == current count) and run the resume
+        // command there, at the session's cwd.
+        let newTabIndex = project.terminal.tabs.count
+        project.terminal.runStartupCommandOnTab(
+            session.resumeCommand,
+            customName: session.providerName,
+            tabIndex: newTabIndex,
+            origin: .adHoc,
+            defaultDirectory: directory,
+            activateTab: true
+        )
+        vibespaceCanvasActionsCoordinator.focusProject(project, forceTerminalFocus: true)
+    }
+
     /// Surface (board tile vs detail tab) is decided centrally by
     /// `VibeSpaceCanvasActionsCoordinator.present(_:)` based on the active view.
     private func newChat(for project: AnyProjectSession) {
