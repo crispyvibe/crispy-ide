@@ -288,6 +288,57 @@ And P is NOT activated (no live session is created)
 And no confirmation prompt is shown
 ```
 
+### F021-S27 · Active project node exposes the full shared context menu (R20)
+
+```gherkin
+Given project P is open (live) and shown as a project-root node in either explorer surface
+When the user right-clicks P's node
+Then the shared `ProjectNodeContextMenu` renders the full menu:
+  "Make Current Project", "Open in Terminal", "Reveal in Finder",
+  "New File", "New Folder", "Copy Path", "Park Project", "Remove Project"
+And the menu is identical in the classic Files pane and the unified/combined sidebar
+```
+
+### F021-S28 · "Make Current Project" focuses the project (R20)
+
+```gherkin
+Given project P is open and is not the focused project
+When the user selects "Make Current Project" on P's node
+Then `.makeCurrentProjectRequested` is posted with P's project id
+And ContentView routes it to `VibeSpaceCanvasActionsCoordinator.focusProject(id:)`
+And P becomes the focused project, reusing the existing focusProject path
+```
+
+### F021-S29 · "Open in Terminal" always opens a new terminal at the project root (R20)
+
+```gherkin
+Given project P is open
+When the user selects "Open in Terminal" on P's node
+Then the action routes through the same FileTreeAction handler used by file/folder nodes
+And a NEW terminal tab is opened at the project ROOT
+And an existing terminal is never selected in place of adding a new one
+```
+
+### F021-S30 · "Reveal in Finder" is hidden for remote/SSH projects (R20)
+
+```gherkin
+Given project P is open
+When the user right-clicks P's node
+Then "Reveal in Finder" is shown for a local project
+And "Reveal in Finder" is HIDDEN when P is a remote/SSH project
+And for local projects the action routes through the same FileTreeAction handler as file/folder nodes
+```
+
+### F021-S31 · Cross-surface parity via the shared component (R21)
+
+```gherkin
+Given the shared `ProjectNodeContextMenu` backs both explorer surfaces
+When a project node is right-clicked in the classic Files pane and in the unified/combined sidebar
+Then the same menu items, wording, and routing are used in both
+And navigation actions (Open in Terminal, Reveal in Finder, New File, New Folder, Copy Path)
+    behave identically to the equivalent actions on file/folder nodes
+```
+
 ---
 
 ## Requirements
@@ -313,6 +364,8 @@ And no confirmation prompt is shown
 | F021-R17 | Cross-Surface Consistency — click-to-select MUST work across content viewer tabs, terminal tray, board tiles, and detached board windows | implemented |
 | F021-R18 | Remove Active Project — live projects expose a "Remove Project" context-menu action (alongside "Park Project") that removes the project and applies focus fallback; no confirmation prompt | implemented |
 | F021-R19 | Remove Parked Project — parked projects expose a "Remove Project" context-menu action (alongside "Activate Project") that drops the parked entry and clears its associated state without activating it; no confirmation prompt | implemented |
+| F021-R20 | Project Node Context Menu — an active project-root node exposes a full right-click menu via the shared `ProjectNodeContextMenu` component: Make Current Project, Open in Terminal (new terminal at project root), Reveal in Finder (hidden for remote/SSH), New File, New Folder, Copy Path, Park Project, Remove Project. Make Current Project is dispatched via `.makeCurrentProjectRequested` → `VibeSpaceCanvasActionsCoordinator.focusProject(id:)` | implemented |
+| F021-R21 | Cross-Surface Menu Parity — the project-node menu MUST be identical across the classic Files pane and the unified/combined sidebar (same shared component), and its navigation actions (Open in Terminal, Reveal in Finder, New File, New Folder, Copy Path) MUST route through the same FileTreeAction handlers as file/folder nodes so behavior and wording match | implemented |
 
 ---
 
@@ -328,6 +381,8 @@ And no confirmation prompt is shown
 - Single-click on a content-viewer tab whose owning project differs from the focused project switches focus (F021-R15, R16)
 - Click-to-select is idempotent — already-focused projects do not re-trigger focus (F021-R15)
 - "Remove Project" is available on both active and parked project context menus; removing an active project applies focus fallback, removing a parked project drops it without activation; neither prompts for confirmation (F021-R18, R19)
+- Active project-root nodes expose the full shared `ProjectNodeContextMenu` (Make Current Project, Open in Terminal, Reveal in Finder, New File, New Folder, Copy Path, Park Project, Remove Project); Reveal in Finder is hidden for remote/SSH projects; the menu is identical across the classic Files pane and the unified/combined sidebar (F021-R20, R21)
+- "Open in Terminal" always adds a new terminal at the project root; navigation actions route through the same FileTreeAction handlers as file/folder nodes (F021-R20, R21)
 
 ## Test Coverage
 
@@ -355,3 +410,4 @@ And no confirmation prompt is shown
 | 2026-05-22 | Added project parking (F021-R09–R14) and click-to-select project (F021-R15–R17), with scenarios S16–S22 | — |
 | 2026-05-22 | Closed F021-R17 cross-surface coverage: board-tile click-to-select wired via `.boardTileActivated`; terminal-tray and exclusion behaviors documented as inherent in scenarios S23–S24 | — |
 | 2026-06-03 | Added project removal via context menu for active (F021-R18) and parked (F021-R19) projects, with scenarios S25–S26; no confirmation prompt (resolves the prior open question) | — |
+| 2026-07-07 | Expanded the project-node right-click menu into a full shared `ProjectNodeContextMenu` (Make Current Project, Open in Terminal, Reveal in Finder, New File, New Folder, Copy Path, Park/Remove) used across both explorer surfaces (F021-R20, R21), with scenarios S27–S31 | — |
