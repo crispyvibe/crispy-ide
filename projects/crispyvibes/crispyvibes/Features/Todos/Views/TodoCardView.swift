@@ -3,16 +3,21 @@ import SwiftUI
 /// F053 — a single todo card. Reads as a card (surface fill + hairline border),
 /// carries its sticky color as a leading edge, shows a relative timestamp, and
 /// offers complete/color/delete from a context menu; delete also reveals on
-/// hover. Selection = accent border + tint.
+/// hover and confirms *inline* (the trash morphs into Delete?/✓/✕ in place —
+/// no dialog, no mouse travel). Selection = accent border + tint.
 struct TodoCardView: View {
     @Environment(\.appThemePalette) private var palette
     @Environment(\.crispyvibesTheme) private var theme
     @Environment(\.crispyvibesUIScale) private var uiScale
     let todo: Todo
     let isSelected: Bool
+    /// Inline delete-confirm state, owned by the panel so keyboard ⌦ can drive it.
+    let isConfirmingDelete: Bool
     let onSelect: () -> Void
     let onToggle: () -> Void
-    let onDelete: () -> Void
+    let onRequestDelete: () -> Void
+    let onConfirmDelete: () -> Void
+    let onCancelDelete: () -> Void
     let onColor: (TodoStickyColor?) -> Void
     @State private var isHovering = false
 
@@ -44,8 +49,10 @@ struct TodoCardView: View {
             Spacer(minLength: 4)
 
             VStack(alignment: .trailing, spacing: uiScale.spacing(3)) {
-                if isHovering {
-                    Button(action: onDelete) {
+                if isConfirmingDelete {
+                    deleteConfirm
+                } else if isHovering {
+                    Button(action: onRequestDelete) {
                         Image(systemName: "trash")
                             .font(.system(size: uiScale.iconSize(11)))
                             .foregroundStyle(palette.tertiaryTextColor)
@@ -86,8 +93,10 @@ struct TodoCardView: View {
         .onTapGesture(perform: onSelect)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovering = hovering }
+            if !hovering, isConfirmingDelete { onCancelDelete() }
         }
         .animation(.easeOut(duration: 0.15), value: isSelected)
+        .animation(.easeOut(duration: 0.12), value: isConfirmingDelete)
         .contextMenu { contextMenu }
     }
 
@@ -95,6 +104,30 @@ struct TodoCardView: View {
         if isSelected { return palette.accentColor.opacity(0.10) }
         if isHovering { return palette.canvasSecondaryBackgroundColor }
         return palette.canvasSecondaryBackgroundColor.opacity(0.55)
+    }
+
+    /// Inline confirm rendered exactly where the trash was: Delete? ✓ ✕.
+    private var deleteConfirm: some View {
+        HStack(spacing: uiScale.spacing(5)) {
+            Text(AppStrings.Todos.deleteConfirmShort)
+                .font(.system(size: uiScale.textSize(10), weight: .medium))
+                .foregroundStyle(palette.errorColor)
+            Button(action: onConfirmDelete) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: uiScale.iconSize(13)))
+                    .foregroundStyle(palette.errorColor)
+            }
+            .buttonStyle(.plain)
+            .help(AppStrings.Todos.deleteConfirmMessage)
+            Button(action: onCancelDelete) {
+                Image(systemName: "xmark.circle")
+                    .font(.system(size: uiScale.iconSize(13)))
+                    .foregroundStyle(palette.tertiaryTextColor)
+            }
+            .buttonStyle(.plain)
+            .help(AppStrings.Todos.cancel)
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
 
     @ViewBuilder
@@ -122,7 +155,7 @@ struct TodoCardView: View {
             Button(AppStrings.Todos.colorNone) { onColor(nil) }
         }
         Divider()
-        Button(role: .destructive, action: onDelete) {
+        Button(role: .destructive, action: onRequestDelete) {
             Label(AppStrings.Todos.delete, systemImage: "trash")
         }
     }

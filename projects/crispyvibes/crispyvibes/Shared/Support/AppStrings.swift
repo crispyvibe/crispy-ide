@@ -149,7 +149,7 @@ enum AppStrings {
         static let activeSection = String(localized: "todos.section.active", defaultValue: "Active")
         static let completedSection = String(localized: "todos.section.completed", defaultValue: "Completed")
         static let noMatches = String(localized: "todos.search.noMatches", defaultValue: "No matching todos")
-        static let deleteConfirmTitle = String(localized: "todos.delete.confirm.title", defaultValue: "Delete this todo?")
+        static let deleteConfirmShort = String(localized: "todos.delete.confirm.short", defaultValue: "Delete?")
         static let deleteConfirmMessage = String(
             localized: "todos.delete.confirm.message",
             defaultValue: "Its notes and thread are deleted with it. This can't be undone."

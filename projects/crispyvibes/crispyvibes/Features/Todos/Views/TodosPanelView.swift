@@ -19,7 +19,7 @@ struct TodosPanelView: View {
     @State private var draftTitle = ""
     @State private var searchQuery = ""
     @State private var showCompleted = false
-    @State private var pendingDelete: Todo?
+    @State private var confirmingDeleteID: String?
     @FocusState private var quickAddFocused: Bool
     @FocusState private var listFocused: Bool
 
@@ -45,19 +45,6 @@ struct TodosPanelView: View {
         }
         .background(palette.canvasBackgroundColor)
         .task(id: focusedProjectPath) { await store.refresh() }
-        .confirmationDialog(
-            AppStrings.Todos.deleteConfirmTitle,
-            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button(AppStrings.Todos.delete, role: .destructive) {
-                if let todo = pendingDelete { performDelete(todo) }
-                pendingDelete = nil
-            }
-            Button(AppStrings.Todos.cancel, role: .cancel) { pendingDelete = nil }
-        } message: {
-            Text(AppStrings.Todos.deleteConfirmMessage)
-        }
     }
 
     // MARK: Header
@@ -208,8 +195,14 @@ struct TodosPanelView: View {
             .focusEffectDisabled()
             .focused($listFocused)
             .onMoveCommand(perform: moveSelection)
-            .onDeleteCommand { if let todo = selectedTodo() { pendingDelete = todo } }
-            .onExitCommand { selectedTodoID = nil }
+            .onDeleteCommand(perform: deleteCommand)
+            .onExitCommand {
+                if confirmingDeleteID != nil {
+                    confirmingDeleteID = nil
+                } else {
+                    selectedTodoID = nil
+                }
+            }
         }
     }
 
@@ -217,9 +210,16 @@ struct TodosPanelView: View {
         TodoCardView(
             todo: todo,
             isSelected: todo.id == selectedTodoID,
-            onSelect: { selectedTodoID = todo.id; listFocused = true },
+            isConfirmingDelete: todo.id == confirmingDeleteID,
+            onSelect: {
+                selectedTodoID = todo.id
+                confirmingDeleteID = nil
+                listFocused = true
+            },
             onToggle: { toggle(todo) },
-            onDelete: { pendingDelete = todo },
+            onRequestDelete: { confirmingDeleteID = todo.id },
+            onConfirmDelete: { performDelete(todo) },
+            onCancelDelete: { confirmingDeleteID = nil },
             onColor: { color in Task { await store.update(id: todo.id, colorTag: color?.rawValue ?? "") } }
         )
     }
@@ -281,8 +281,19 @@ struct TodosPanelView: View {
     }
 
     private func performDelete(_ todo: Todo) {
+        confirmingDeleteID = nil
         if selectedTodoID == todo.id { selectedTodoID = nil }
         Task { await store.delete(id: todo.id) }
+    }
+
+    /// First ⌦ arms the inline confirm on the selected card; a second ⌦ commits.
+    private func deleteCommand() {
+        guard let todo = selectedTodo() else { return }
+        if confirmingDeleteID == todo.id {
+            performDelete(todo)
+        } else {
+            confirmingDeleteID = todo.id
+        }
     }
 
     private func selectedTodo() -> Todo? {
@@ -299,9 +310,11 @@ struct TodosPanelView: View {
         case .down:
             let next = currentIndex.map { min($0 + 1, ordered.count - 1) } ?? 0
             selectedTodoID = ordered[next].id
+            confirmingDeleteID = nil
         case .up:
             let previous = currentIndex.map { max($0 - 1, 0) } ?? (ordered.count - 1)
             selectedTodoID = ordered[previous].id
+            confirmingDeleteID = nil
         default:
             break
         }

@@ -34,8 +34,8 @@ The target defaults to the project you're currently working in, and updates each
 - Toggle **Project / All** to switch between the focused project's todos and every todo in the VibeSpace; the header shows active/completed counts.
 - Once the list grows, a **search** field appears — it matches titles and notes.
 - Click a card's circle to **complete** it — it responds instantly and moves into the collapsible **Completed (n)** section at the bottom.
-- Right-click a card for **Complete/Reopen**, a **Color** menu (six sticky colors, drawn as the card's leading edge), and **Delete**; hover also reveals Delete. Deleting asks for confirmation — it removes the thread too.
-- With the list focused, use **↑/↓** to move the selection, **⌦** to delete, and **⎋** to clear it.
+- Right-click a card for **Complete/Reopen**, a **Color** menu (six sticky colors, drawn as the card's leading edge), and **Delete**; hover also reveals Delete. Deleting confirms **inline** — the trash turns into `Delete? ✓ ✕` right where you clicked (it removes the thread too); moving off the card disarms it.
+- With the list focused, use **↑/↓** to move the selection, **⌦** to arm delete (press **⌦** again to confirm), and **⎋** to cancel or clear the selection.
 - Click a card to open its detail. In a narrow pane the detail takes over the column with a **Back** button; in a wide pane it sits alongside the list.
 
 ### Notes and threads

@@ -45,25 +45,9 @@ struct TodoDetailView: View {
             draftTitle = todo.title
             draftBody = todo.body ?? ""
             isEditingBody = false
+            confirmDelete = false
             composerText = ""
             await store.refreshMessages(todoID: todo.id)
-        }
-        .confirmationDialog(
-            AppStrings.Todos.deleteConfirmTitle,
-            isPresented: $confirmDelete,
-            titleVisibility: .visible
-        ) {
-            Button(AppStrings.Todos.delete, role: .destructive) {
-                let id = todo.id
-                let back = onBack
-                Task {
-                    await store.delete(id: id)
-                    back?()
-                }
-            }
-            Button(AppStrings.Todos.cancel, role: .cancel) {}
-        } message: {
-            Text(AppStrings.Todos.deleteConfirmMessage)
         }
     }
 
@@ -113,15 +97,50 @@ struct TodoDetailView: View {
                     if !focused { commitTitle() }
                 }
 
-            Button {
-                confirmDelete = true
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: uiScale.iconSize(13)))
-                    .foregroundStyle(palette.tertiaryTextColor)
+            if confirmDelete {
+                // Inline confirm in place of the trash — no dialog, no mouse travel.
+                HStack(spacing: uiScale.spacing(5)) {
+                    Text(AppStrings.Todos.deleteConfirmShort)
+                        .font(.system(size: uiScale.textSize(11), weight: .medium))
+                        .foregroundStyle(palette.errorColor)
+                    Button(action: performDelete) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: uiScale.iconSize(15)))
+                            .foregroundStyle(palette.errorColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help(AppStrings.Todos.deleteConfirmMessage)
+                    Button { confirmDelete = false } label: {
+                        Image(systemName: "xmark.circle")
+                            .font(.system(size: uiScale.iconSize(15)))
+                            .foregroundStyle(palette.tertiaryTextColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help(AppStrings.Todos.cancel)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            } else {
+                Button {
+                    confirmDelete = true
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: uiScale.iconSize(13)))
+                        .foregroundStyle(palette.tertiaryTextColor)
+                }
+                .buttonStyle(.plain)
+                .help(AppStrings.Todos.delete)
             }
-            .buttonStyle(.plain)
-            .help(AppStrings.Todos.delete)
+        }
+        .animation(.easeOut(duration: 0.12), value: confirmDelete)
+    }
+
+    private func performDelete() {
+        confirmDelete = false
+        let id = todo.id
+        let back = onBack
+        Task {
+            await store.delete(id: id)
+            back?()
         }
     }
 
