@@ -127,6 +127,7 @@ enum AppStrings {
         static let emptyTitle = String(localized: "todos.empty.title")
         static let emptyHint = String(localized: "todos.empty.hint")
         static let complete = String(localized: "todos.action.complete")
+        static let reopen = String(localized: "todos.action.reopen", defaultValue: "Reopen")
         static let delete = String(localized: "todos.action.delete")
         static let titlePlaceholder = String(localized: "todos.title.placeholder")
         static let bodyPlaceholder = String(localized: "todos.body.placeholder")
@@ -143,6 +144,24 @@ enum AppStrings {
         static let captureLandsIn = String(localized: "todos.capture.landsIn")
         static let captureNoProject = String(localized: "todos.capture.noProject")
         static let captureAdded = String(localized: "todos.capture.added")
+        static let captureFailed = String(localized: "todos.capture.failed", defaultValue: "Couldn't add todo")
+        static let searchPlaceholder = String(localized: "todos.search.placeholder", defaultValue: "Search todos")
+        static let activeSection = String(localized: "todos.section.active", defaultValue: "Active")
+        static let completedSection = String(localized: "todos.section.completed", defaultValue: "Completed")
+        static let noMatches = String(localized: "todos.search.noMatches", defaultValue: "No matching todos")
+        static let deleteConfirmTitle = String(localized: "todos.delete.confirm.title", defaultValue: "Delete this todo?")
+        static let deleteConfirmMessage = String(
+            localized: "todos.delete.confirm.message",
+            defaultValue: "Its notes and thread are deleted with it. This can't be undone."
+        )
+        static let colorLabel = String(localized: "todos.color.label", defaultValue: "Color")
+        static let colorNone = String(localized: "todos.color.none", defaultValue: "None")
+        static let createdLabel = String(localized: "todos.meta.created", defaultValue: "Created")
+        static let completedLabel = String(localized: "todos.meta.completed", defaultValue: "Completed")
+        static let attachedFile = String(localized: "todos.meta.attachedFile", defaultValue: "Attached file")
+        static let back = String(localized: "todos.action.back", defaultValue: "Back")
+        static let editNotes = String(localized: "todos.action.editNotes", defaultValue: "Edit")
+        static let dismissError = String(localized: "todos.error.dismiss", defaultValue: "Dismiss")
     }
 
     // MARK: - Vibe Lanes (F059)

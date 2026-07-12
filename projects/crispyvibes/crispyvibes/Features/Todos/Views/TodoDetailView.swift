@@ -1,30 +1,37 @@
 import SwiftUI
 
 /// F053 — detail pane for a selected todo. Themed via the app palette and
-/// scaled via `crispyvibesUIScale` (responds to cmd+/cmd-): large editable
-/// title, a quiet markdown notes block (edit/preview), and a flat activity
-/// thread that groups consecutive same-author messages under a single header
-/// with a relative timestamp. Custom composer (no system ring).
+/// scaled via `crispyvibesUIScale`: editable title (commits on Return *and*
+/// focus loss), sticky-color picker, created/completed metadata, an attached
+/// file chip, a markdown notes block with a visible edit affordance, and the
+/// activity thread + composer (see `TodoDetailView+Thread.swift`).
 struct TodoDetailView: View {
-    @Environment(\.appThemePalette) private var palette
-    @Environment(\.crispyvibesTheme) private var theme
-    @Environment(\.crispyvibesUIScale) private var uiScale
+    @Environment(\.appThemePalette) var palette
+    @Environment(\.crispyvibesTheme) var theme
+    @Environment(\.crispyvibesUIScale) var uiScale
     @ObservedObject var store: VibeSpaceTodoStore
     let todo: Todo
+    /// Present in compact hosts: shows a back chevron that returns to the list.
+    var onBack: (() -> Void)?
 
     @State private var draftTitle = ""
     @State private var draftBody = ""
     @State private var isEditingBody = false
-    @State private var composerText = ""
-    @FocusState private var composerFocused: Bool
+    @State private var isHoveringNotes = false
+    @State private var confirmDelete = false
+    @State var composerText = ""
+    @FocusState private var titleFocused: Bool
+    @FocusState var composerFocused: Bool
 
-    private var messages: [TodoMessage] { store.messages(forTodo: todo.id) }
+    var messages: [TodoMessage] { store.messages(forTodo: todo.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if onBack != nil { compactBar }
             ScrollView {
-                VStack(alignment: .leading, spacing: uiScale.spacing(20)) {
+                VStack(alignment: .leading, spacing: uiScale.spacing(18)) {
                     header
+                    metadata
                     notesSection
                     threadSection
                 }
@@ -41,6 +48,43 @@ struct TodoDetailView: View {
             composerText = ""
             await store.refreshMessages(todoID: todo.id)
         }
+        .confirmationDialog(
+            AppStrings.Todos.deleteConfirmTitle,
+            isPresented: $confirmDelete,
+            titleVisibility: .visible
+        ) {
+            Button(AppStrings.Todos.delete, role: .destructive) {
+                let id = todo.id
+                let back = onBack
+                Task {
+                    await store.delete(id: id)
+                    back?()
+                }
+            }
+            Button(AppStrings.Todos.cancel, role: .cancel) {}
+        } message: {
+            Text(AppStrings.Todos.deleteConfirmMessage)
+        }
+    }
+
+    // MARK: Compact navigation
+
+    private var compactBar: some View {
+        HStack {
+            Button(action: { onBack?() }) {
+                HStack(spacing: uiScale.spacing(3)) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: uiScale.iconSize(11), weight: .semibold))
+                    Text(AppStrings.Todos.back)
+                        .font(.system(size: uiScale.textSize(12), weight: .medium))
+                }
+                .foregroundStyle(palette.secondaryTextColor)
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .padding(.horizontal, uiScale.spacing(14))
+        .padding(.top, uiScale.spacing(12))
     }
 
     // MARK: Header
@@ -53,17 +97,91 @@ struct TodoDetailView: View {
                 Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: uiScale.iconSize(18)))
                     .foregroundStyle(todo.isCompleted ? palette.accentColor : palette.tertiaryTextColor)
+                    .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
-            .help(AppStrings.Todos.complete)
+            .help(todo.isCompleted ? AppStrings.Todos.reopen : AppStrings.Todos.complete)
 
             TextField("", text: $draftTitle, prompt: Text(AppStrings.Todos.titlePlaceholder).foregroundStyle(palette.tertiaryTextColor))
                 .font(.system(size: uiScale.textSize(20), weight: .semibold))
                 .foregroundStyle(palette.primaryTextColor)
                 .textFieldStyle(.plain)
                 .strikethrough(todo.isCompleted, color: palette.tertiaryTextColor)
+                .focused($titleFocused)
                 .onSubmit(commitTitle)
+                .onChange(of: titleFocused) { _, focused in
+                    if !focused { commitTitle() }
+                }
+
+            Button {
+                confirmDelete = true
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: uiScale.iconSize(13)))
+                    .foregroundStyle(palette.tertiaryTextColor)
+            }
+            .buttonStyle(.plain)
+            .help(AppStrings.Todos.delete)
         }
+    }
+
+    // MARK: Metadata
+
+    private var metadata: some View {
+        HStack(spacing: uiScale.spacing(10)) {
+            colorPicker
+            metaText("\(AppStrings.Todos.createdLabel) \(TodoTime.relative(todo.createdAt))")
+            if todo.isCompleted, let completedAt = todo.completedAt {
+                metaText("· \(AppStrings.Todos.completedLabel) \(TodoTime.relative(completedAt))")
+            }
+            if let projectName = todo.projectPath.map({ ($0 as NSString).lastPathComponent }) {
+                metaChip(projectName, systemImage: "folder")
+            }
+            if let filePath = todo.filePath, !filePath.isEmpty {
+                metaChip((filePath as NSString).lastPathComponent, systemImage: "doc")
+                    .help("\(AppStrings.Todos.attachedFile): \(filePath)")
+            }
+            Spacer()
+        }
+    }
+
+    private var colorPicker: some View {
+        HStack(spacing: uiScale.spacing(4)) {
+            ForEach(TodoStickyColor.allCases, id: \.self) { color in
+                Button {
+                    let next = todo.stickyColor == color ? "" : color.rawValue
+                    Task { await store.update(id: todo.id, colorTag: next) }
+                } label: {
+                    Circle()
+                        .fill(color.color.opacity(todo.stickyColor == color ? 1.0 : 0.45))
+                        .frame(width: uiScale.iconSize(12), height: uiScale.iconSize(12))
+                        .overlay {
+                            if todo.stickyColor == color {
+                                Circle().stroke(palette.primaryTextColor.opacity(0.6), lineWidth: 1.5)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .help(color.displayName)
+            }
+        }
+    }
+
+    private func metaText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: uiScale.textSize(11)))
+            .foregroundStyle(palette.tertiaryTextColor)
+    }
+
+    private func metaChip(_ text: String, systemImage: String) -> some View {
+        HStack(spacing: uiScale.spacing(3)) {
+            Image(systemName: systemImage).font(.system(size: uiScale.iconSize(9)))
+            Text(text).font(.system(size: uiScale.textSize(10), weight: .medium)).lineLimit(1)
+        }
+        .foregroundStyle(palette.secondaryTextColor)
+        .padding(.horizontal, uiScale.spacing(6))
+        .padding(.vertical, uiScale.spacing(2))
+        .background(palette.canvasSecondaryBackgroundColor, in: Capsule())
     }
 
     // MARK: Notes
@@ -72,134 +190,66 @@ struct TodoDetailView: View {
         VStack(alignment: .leading, spacing: uiScale.spacing(6)) {
             sectionLabel(AppStrings.Todos.notesLabel)
             if isEditingBody {
-                VStack(alignment: .trailing, spacing: uiScale.spacing(8)) {
-                    TextEditor(text: $draftBody)
-                        .font(.system(size: uiScale.textSize(14)))
-                        .foregroundStyle(palette.primaryTextColor)
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: uiScale.chromeSize(90))
-                        .padding(uiScale.spacing(8))
-                        .background(palette.canvasSecondaryBackgroundColor, in: RoundedRectangle(cornerRadius: theme.radius(8)))
-                        .overlay(RoundedRectangle(cornerRadius: theme.radius(8)).stroke(palette.borderColorValue.opacity(0.4), lineWidth: 1))
-                    HStack(spacing: uiScale.spacing(8)) {
-                        Button(AppStrings.Todos.cancel) {
-                            draftBody = todo.body ?? ""
-                            isEditingBody = false
-                        }
-                        .buttonStyle(.crispyvibesText)
-                        Button(AppStrings.Todos.save, action: commitBody)
-                            .buttonStyle(.crispyvibesPrimary)
-                            .keyboardShortcut(.return, modifiers: .command)
-                    }
-                }
+                notesEditor
             } else {
-                Button { isEditingBody = true } label: {
-                    MarkdownText(todo.body ?? "", placeholder: AppStrings.Todos.bodyPlaceholder)
-                        .font(.system(size: uiScale.textSize(14)))
-                        .foregroundStyle((todo.body ?? "").isEmpty ? palette.tertiaryTextColor : palette.secondaryTextColor)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                notesPreview
             }
         }
     }
 
-    // MARK: Thread
-
-    private var threadSection: some View {
-        VStack(alignment: .leading, spacing: uiScale.spacing(12)) {
-            sectionLabel(AppStrings.Todos.thread)
-            if messages.isEmpty {
-                threadEmpty
-            } else {
-                ForEach(groupMessages(messages)) { group in
-                    messageGroup(group)
-                }
-            }
-        }
-    }
-
-    private func messageGroup(_ group: TodoMessageGroup) -> some View {
-        let isAgent = group.authorKind == "agent"
-        return VStack(alignment: .leading, spacing: uiScale.spacing(4)) {
-            HStack(spacing: uiScale.spacing(6)) {
-                ZStack {
-                    Circle()
-                        .fill(isAgent ? palette.accentColor.opacity(0.15) : palette.secondaryTextColor.opacity(0.12))
-                        .frame(width: uiScale.iconSize(20), height: uiScale.iconSize(20))
-                    Image(systemName: isAgent ? "sparkles" : "person.fill")
-                        .font(.system(size: uiScale.iconSize(10)))
-                        .foregroundStyle(isAgent ? palette.accentColor : palette.secondaryTextColor)
-                }
-                Text(isAgent ? AppStrings.Todos.authorAgent : AppStrings.Todos.authorYou)
-                    .font(.system(size: uiScale.textSize(13), weight: .medium))
-                    .foregroundStyle(palette.primaryTextColor)
-                Text(TodoTime.relative(group.messages.first?.createdAt ?? ""))
-                    .font(.system(size: uiScale.textSize(12)))
-                    .foregroundStyle(palette.tertiaryTextColor)
-            }
-            ForEach(group.messages) { message in
-                MarkdownText(message.body, placeholder: "")
-                    .font(.system(size: uiScale.textSize(14)))
-                    .foregroundStyle(palette.secondaryTextColor)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, uiScale.spacing(26))
-                    .modifier(AgentMessageDecoration(isAgent: isAgent, palette: palette, radius: theme.radius(8), scale: uiScale))
-            }
-        }
-    }
-
-    private var threadEmpty: some View {
-        VStack(spacing: uiScale.spacing(4)) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: uiScale.iconSize(24)))
-                .foregroundStyle(palette.tertiaryTextColor)
-            Text(AppStrings.Todos.threadEmpty)
-                .font(.system(size: uiScale.textSize(13)))
-                .foregroundStyle(palette.tertiaryTextColor)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, uiScale.spacing(24))
-    }
-
-    // MARK: Composer
-
-    private var composer: some View {
-        HStack(spacing: uiScale.spacing(8)) {
-            TextField("", text: $composerText, prompt: Text(AppStrings.Todos.messagePlaceholder).foregroundStyle(palette.tertiaryTextColor), axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: uiScale.textSize(13)))
+    private var notesEditor: some View {
+        VStack(alignment: .trailing, spacing: uiScale.spacing(8)) {
+            TextEditor(text: $draftBody)
+                .font(.system(size: uiScale.textSize(14)))
                 .foregroundStyle(palette.primaryTextColor)
-                .lineLimit(1...5)
-                .focused($composerFocused)
-                .onSubmit(sendMessage)
-            if !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button(action: sendMessage) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: uiScale.iconSize(13), weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: uiScale.iconSize(28), height: uiScale.iconSize(28))
-                        .background(palette.accentColor, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .transition(.scale.combined(with: .opacity))
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: uiScale.chromeSize(90))
+                .padding(uiScale.spacing(8))
+                .background(palette.canvasSecondaryBackgroundColor, in: RoundedRectangle(cornerRadius: theme.radius(8)))
+                .overlay(RoundedRectangle(cornerRadius: theme.radius(8)).stroke(palette.accentColor.opacity(0.35), lineWidth: 1))
+                .onExitCommand(perform: cancelBodyEdit)
+            HStack(spacing: uiScale.spacing(8)) {
+                Button(AppStrings.Todos.cancel, action: cancelBodyEdit)
+                    .buttonStyle(.crispyvibesText)
+                Button(AppStrings.Todos.save, action: commitBody)
+                    .buttonStyle(.crispyvibesPrimary)
+                    .keyboardShortcut(.return, modifiers: .command)
             }
         }
-        .padding(.horizontal, uiScale.spacing(12))
-        .padding(.vertical, uiScale.spacing(8))
-        .background(palette.canvasSecondaryBackgroundColor, in: RoundedRectangle(cornerRadius: theme.radius(10)))
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.radius(10))
-                .stroke(composerFocused ? palette.accentColor.opacity(0.4) : palette.borderColorValue.opacity(0.4), lineWidth: 1)
-        )
-        .padding(uiScale.spacing(12))
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: composerText.isEmpty)
+    }
+
+    private var notesPreview: some View {
+        Button { isEditingBody = true } label: {
+            HStack(alignment: .top, spacing: uiScale.spacing(8)) {
+                MarkdownText(todo.body ?? "", placeholder: AppStrings.Todos.bodyPlaceholder)
+                    .font(.system(size: uiScale.textSize(14)))
+                    .foregroundStyle((todo.body ?? "").isEmpty ? palette.tertiaryTextColor : palette.secondaryTextColor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if isHoveringNotes {
+                    HStack(spacing: uiScale.spacing(3)) {
+                        Image(systemName: "pencil").font(.system(size: uiScale.iconSize(10)))
+                        Text(AppStrings.Todos.editNotes).font(.system(size: uiScale.textSize(11), weight: .medium))
+                    }
+                    .foregroundStyle(palette.accentColor)
+                    .transition(.opacity)
+                }
+            }
+            .padding(uiScale.spacing(8))
+            .background(
+                isHoveringNotes ? palette.canvasSecondaryBackgroundColor.opacity(0.6) : Color.clear,
+                in: RoundedRectangle(cornerRadius: theme.radius(8))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) { isHoveringNotes = hovering }
+        }
     }
 
     // MARK: Helpers
 
-    private func sectionLabel(_ text: String) -> some View {
+    func sectionLabel(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.system(size: uiScale.textSize(11), weight: .medium))
             .tracking(0.5)
@@ -208,110 +258,20 @@ struct TodoDetailView: View {
 
     private func commitTitle() {
         let trimmed = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != todo.title else { return }
+        guard !trimmed.isEmpty, trimmed != todo.title else {
+            draftTitle = todo.title
+            return
+        }
         Task { await store.update(id: todo.id, title: trimmed) }
+    }
+
+    private func cancelBodyEdit() {
+        draftBody = todo.body ?? ""
+        isEditingBody = false
     }
 
     private func commitBody() {
         isEditingBody = false
         Task { await store.update(id: todo.id, body: draftBody) }
-    }
-
-    private func sendMessage() {
-        let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        composerText = ""
-        Task { await store.addMessage(todoID: todo.id, body: text) }
-    }
-
-    private func groupMessages(_ msgs: [TodoMessage]) -> [TodoMessageGroup] {
-        var groups: [TodoMessageGroup] = []
-        for message in msgs {
-            if var last = groups.last,
-               last.authorKind == message.authorKind,
-               let lastDate = TodoTime.date(last.messages.last?.createdAt ?? ""),
-               let thisDate = TodoTime.date(message.createdAt),
-               thisDate.timeIntervalSince(lastDate) < 300 {
-                last.messages.append(message)
-                groups[groups.count - 1] = last
-            } else {
-                groups.append(TodoMessageGroup(id: message.id, authorKind: message.authorKind, messages: [message]))
-            }
-        }
-        return groups
-    }
-}
-
-private struct TodoMessageGroup: Identifiable {
-    let id: String
-    let authorKind: String
-    var messages: [TodoMessage]
-}
-
-/// Agent messages get a subtle leading accent rule + surface fill; user
-/// messages stay flat. Keeps the thread calm without chat bubbles.
-private struct AgentMessageDecoration: ViewModifier {
-    let isAgent: Bool
-    let palette: AppThemePalette
-    let radius: CGFloat
-    let scale: CrispyVibesUIScale
-
-    func body(content: Content) -> some View {
-        if isAgent {
-            content
-                .padding(.vertical, scale.spacing(6))
-                .padding(.trailing, scale.spacing(8))
-                .background(palette.canvasSecondaryBackgroundColor.opacity(0.5), in: RoundedRectangle(cornerRadius: radius))
-                .overlay(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(palette.accentColor.opacity(0.4))
-                        .frame(width: scale.spacing(2))
-                        .padding(.vertical, scale.spacing(4))
-                        .padding(.leading, scale.spacing(18))
-                }
-        } else {
-            content
-        }
-    }
-}
-
-private enum TodoTime {
-    static let iso = ISO8601DateFormatter()
-    static let relativeFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter
-    }()
-
-    static func date(_ string: String) -> Date? { iso.date(from: string) }
-
-    static func relative(_ string: String) -> String {
-        guard let date = iso.date(from: string) else { return "" }
-        return relativeFormatter.localizedString(for: date, relativeTo: Date())
-    }
-}
-
-/// Renders inline markdown (bold/italic/code/links), preserving whitespace;
-/// falls back to plain text. Shows a placeholder when empty.
-struct MarkdownText: View {
-    private let attributed: AttributedString
-    private let isEmpty: Bool
-    private let placeholder: String
-
-    init(_ markdown: String, placeholder: String) {
-        self.placeholder = placeholder
-        self.isEmpty = markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        self.attributed = (try? AttributedString(
-            markdown: markdown,
-            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(markdown)
-    }
-
-    var body: some View {
-        if isEmpty {
-            Text(placeholder)
-        } else {
-            Text(attributed).textSelection(.enabled)
-        }
     }
 }

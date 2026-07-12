@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// F053 — the dockable Todos surface. Master list on the left, detail with
-/// notes + activity thread on the right. Themed via the app palette and scaled
-/// via `crispyvibesUIScale` so it responds to cmd+/cmd-.
+/// F053 — the dockable Todos surface. Adapts to its container instead of
+/// demanding a fixed split: wide hosts (spotlight, big panes) show the list
+/// beside the detail; narrow panes collapse to a single column where selecting
+/// a card pushes the detail with a back button. Themed via the app palette and
+/// scaled via `crispyvibesUIScale` so it responds to cmd+/cmd-.
 struct TodosSurfaceView: View {
     @Environment(\.appThemePalette) private var palette
     @Environment(\.crispyvibesUIScale) private var uiScale
@@ -11,36 +13,72 @@ struct TodosSurfaceView: View {
 
     @State private var selectedTodoID: String?
 
+    private var breakpoint: CGFloat { uiScale.chromeSize(620) }
+
     var body: some View {
-        HSplitView {
+        GeometryReader { proxy in
+            if proxy.size.width < breakpoint {
+                compactLayout
+            } else {
+                regularLayout
+            }
+        }
+        .background(palette.canvasBackgroundColor)
+    }
+
+    // MARK: Wide: list + detail side by side
+
+    private var regularLayout: some View {
+        HStack(spacing: 0) {
             TodosPanelView(
                 store: store,
                 focusedProjectPath: focusedProjectPath,
                 selectedTodoID: $selectedTodoID
             )
-            .frame(minWidth: uiScale.chromeSize(240), idealWidth: uiScale.chromeSize(300), maxHeight: .infinity)
+            .frame(width: uiScale.chromeSize(300))
 
-            detail
-                .frame(minWidth: uiScale.chromeSize(340), maxWidth: .infinity, maxHeight: .infinity)
+            Divider().overlay(palette.borderColorValue.opacity(0.35))
+
+            detail(showsBack: false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(palette.canvasBackgroundColor)
+    }
+
+    // MARK: Narrow: single column, detail pushes over the list
+
+    @ViewBuilder
+    private var compactLayout: some View {
+        if let id = selectedTodoID, let todo = store.todo(withID: id) {
+            TodoDetailView(store: store, todo: todo, onBack: { selectedTodoID = nil })
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+        } else {
+            TodosPanelView(
+                store: store,
+                focusedProjectPath: focusedProjectPath,
+                selectedTodoID: $selectedTodoID
+            )
+        }
     }
 
     @ViewBuilder
-    private var detail: some View {
+    private func detail(showsBack: Bool) -> some View {
         if let id = selectedTodoID, let todo = store.todo(withID: id) {
-            TodoDetailView(store: store, todo: todo)
+            TodoDetailView(store: store, todo: todo, onBack: showsBack ? { selectedTodoID = nil } : nil)
         } else {
-            VStack(spacing: uiScale.spacing(6)) {
-                Image(systemName: "sidebar.right")
-                    .font(.system(size: uiScale.iconSize(26)))
-                    .foregroundStyle(palette.tertiaryTextColor)
-                Text(AppStrings.Todos.selectPrompt)
-                    .font(.system(size: uiScale.textSize(14), weight: .medium))
-                    .foregroundStyle(palette.secondaryTextColor)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(palette.canvasBackgroundColor)
+            emptyDetail
         }
+    }
+
+    private var emptyDetail: some View {
+        VStack(spacing: uiScale.spacing(8)) {
+            Image(systemName: "checklist")
+                .font(.system(size: uiScale.iconSize(28)))
+                .foregroundStyle(palette.tertiaryTextColor)
+            Text(AppStrings.Todos.selectPrompt)
+                .font(.system(size: uiScale.textSize(14), weight: .medium))
+                .foregroundStyle(palette.secondaryTextColor)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(palette.canvasBackgroundColor)
     }
 }

@@ -446,6 +446,9 @@
 		ABCD1234ABCD1234ABCD1234 /* VibeSpaceSourceControlViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABCD1234ABCD1234ABCD1235 /* VibeSpaceSourceControlViewModelTests.swift */; };
 		AC0010010000000000000001 /* ACPTransportPromptCompletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0010010000000000000002 /* ACPTransportPromptCompletionTests.swift */; };
 		AC0010010000000000000003 /* ACPSelectableTextMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0010010000000000000004 /* ACPSelectableTextMarkdownTests.swift */; };
+		AC0020010000000000000001 /* TodoCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0020010000000000000002 /* TodoCardView.swift */; };
+		AC0020010000000000000003 /* TodoDetailView+Thread.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0020010000000000000004 /* TodoDetailView+Thread.swift */; };
+		AC0020010000000000000005 /* TodoModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0020010000000000000006 /* TodoModelTests.swift */; };
 		AC0FD49C84289D78F9B704A1 /* AppSettingsSheetViewServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 206C8EB4200B59A816EE2E28 /* AppSettingsSheetViewServices.swift */; };
 		AC38DDE6494D4A5566EC3EF7 /* ContentViewWelcomeActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCAEFE3BD8A91015716AAC0B /* ContentViewWelcomeActions.swift */; };
 		ACPCV010002000200020002 /* ACPChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACPCV010001000100010001 /* ACPChatView.swift */; };
@@ -988,6 +991,9 @@
 		ABCD1234ABCD1234ABCD1235 /* VibeSpaceSourceControlViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceSourceControlViewModelTests.swift; sourceTree = "<group>"; };
 		AC0010010000000000000002 /* ACPTransportPromptCompletionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPTransportPromptCompletionTests.swift; sourceTree = "<group>"; };
 		AC0010010000000000000004 /* ACPSelectableTextMarkdownTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPSelectableTextMarkdownTests.swift; sourceTree = "<group>"; };
+		AC0020010000000000000002 /* TodoCardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoCardView.swift; path = Todos/Views/TodoCardView.swift; sourceTree = "<group>"; };
+		AC0020010000000000000004 /* TodoDetailView+Thread.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "TodoDetailView+Thread.swift"; path = "Todos/Views/TodoDetailView+Thread.swift"; sourceTree = "<group>"; };
+		AC0020010000000000000006 /* TodoModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoModelTests.swift; path = tests/unit/Features/Todos/TodoModelTests.swift; sourceTree = "<group>"; };
 		AC48D35FCD58D084483C9917 /* ACPMarkdownHTMLView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPMarkdownHTMLView.swift; sourceTree = "<group>"; };
 		AC939FB5A606E7578660CFF6 /* TerminalContextSummaryViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalContextSummaryViewModel.swift; sourceTree = "<group>"; };
 		ACPCV010001000100010001 /* ACPChatView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPChatView.swift; sourceTree = "<group>"; };
@@ -1784,7 +1790,9 @@
 			isa = PBXGroup;
 			children = (
 				052F463B82C756B2CD782D33 /* TodosPanelView.swift */,
+				AC0020010000000000000002 /* TodoCardView.swift */,
 				8A27B25FC728E29CA267B700 /* TodoDetailView.swift */,
+				AC0020010000000000000004 /* TodoDetailView+Thread.swift */,
 				EFFA679768A1D8A7C2392526 /* TodosSurfaceView.swift */,
 				6929502A5AE9CA15649651FF /* TodoQuickCaptureOverlay.swift */,
 			);
@@ -2143,6 +2151,7 @@
 			children = (
 				1A29318A4682F8193126C04B /* VibeLaneEngineTests.swift */,
 				2E560CB6F98E328DF6C45AB2 /* VibeLaneTaskManagerTests.swift */,
+				AC0020010000000000000006 /* TodoModelTests.swift */,
 			);
 			name = VibeLanesTests;
 			sourceTree = "<group>";
@@ -4320,6 +4329,8 @@
 				0351684DC70D1835A9A411F9 /* VibeSpaceTodoStore.swift in Sources */,
 				B55E7F9AEC76560D834D7AE5 /* CLICommandRouterTodoHandlers.swift in Sources */,
 				B4F27F84D163A07A52C85BB3 /* TodosPanelView.swift in Sources */,
+				AC0020010000000000000001 /* TodoCardView.swift in Sources */,
+				AC0020010000000000000003 /* TodoDetailView+Thread.swift in Sources */,
 				F157AAD72BD9FF36699FE746 /* TodoMessage.swift in Sources */,
 				AF7DE45178894ED06A93BEF5 /* TodoDetailView.swift in Sources */,
 				C09D89721027C10CCAA0790B /* TodosSurfaceView.swift in Sources */,
@@ -4452,6 +4463,7 @@
 				5B7A9A418FBBDFA90B56171B /* ACPTransportLineSplittingTests.swift in Sources */,
 				AC0010010000000000000001 /* ACPTransportPromptCompletionTests.swift in Sources */,
 				AC0010010000000000000003 /* ACPSelectableTextMarkdownTests.swift in Sources */,
+				AC0020010000000000000005 /* TodoModelTests.swift in Sources */,
 				93A43C758C5A20A048F43BA2 /* CommentAnchorRelocatorTests.swift in Sources */,
 				B33EF8AC8E62493A555EACAE /* VibeLaneEngineTests.swift in Sources */,
 				B0F37E28180E620893A26864 /* VibeLaneTaskManagerTests.swift in Sources */,

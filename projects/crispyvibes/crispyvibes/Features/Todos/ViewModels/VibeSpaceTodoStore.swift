@@ -107,12 +107,23 @@ final class VibeSpaceTodoStore: ObservableObject {
     }
 
     func setCompleted(id: String, completed: Bool) async -> Bool {
-        await mutate(method: "todo.complete", params: ["id": id, "completed": completed])
+        // Optimistic: flip locally so the checkbox responds instantly, then
+        // reconcile with the helper (refresh restores truth on failure).
+        applyOptimistic(id: id) { todo in
+            todo.status = completed ? .completed : .active
+            todo.completedAt = completed ? TodoStoreClock.nowISO() : nil
+        }
+        return await mutate(method: "todo.complete", params: ["id": id, "completed": completed])
     }
 
     @discardableResult
     func delete(id: String) async -> Bool {
-        await mutate(method: "todo.delete", params: ["id": id])
+        // Optimistic removal; the snapshot is restored on failure.
+        let snapshot = todos
+        todos.removeAll { $0.id == id }
+        let ok = await mutate(method: "todo.delete", params: ["id": id])
+        if !ok { todos = snapshot }
+        return ok
     }
 
     // MARK: - Thread
@@ -172,11 +183,20 @@ final class VibeSpaceTodoStore: ObservableObject {
 
     // MARK: - Helpers
 
+    /// Mutate the cached copy of a todo in place (optimistic UI). The follow-up
+    /// `refresh()` inside `mutate` reconciles with the helper's truth.
+    private func applyOptimistic(id: String, _ change: (inout Todo) -> Void) {
+        guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
+        var todo = todos[index]
+        change(&todo)
+        todos[index] = todo
+    }
+
     private func mutate(method: String, params: [String: Any]) async -> Bool {
         guard let result = await conversationStore.send(method: method, params: params) else {
-            recordError("persistence helper unavailable"); return false
+            recordError("persistence helper unavailable"); await refresh(); return false
         }
-        if let err = result.errorMessage { recordError(err); return false }
+        if let err = result.errorMessage { recordError(err); await refresh(); return false }
         await refresh()
         bumpChange()
         return true
@@ -191,4 +211,10 @@ final class VibeSpaceTodoStore: ObservableObject {
         logger.warning("todo op error: \(message, privacy: .public)")
         lastErrorMessage = message
     }
+}
+
+/// Second-precision ISO timestamps matching the persistence helper's format.
+enum TodoStoreClock {
+    private static let iso = ISO8601DateFormatter()
+    static func nowISO() -> String { iso.string(from: Date()) }
 }

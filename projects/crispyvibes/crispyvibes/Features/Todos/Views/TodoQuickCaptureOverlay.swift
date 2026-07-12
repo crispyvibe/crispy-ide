@@ -24,8 +24,15 @@ struct TodoQuickCaptureOverlay: View {
 
     @State private var text = ""
     @State private var selectedPath: String?
-    @State private var didSave = false
+    @State private var phase: Phase = .editing
     @FocusState private var fieldFocused: Bool
+
+    private enum Phase: Equatable {
+        case editing
+        case saving
+        case saved
+        case failed(String)
+    }
 
     private var selectedProjectName: String {
         if let selectedPath, let match = projects.first(where: { $0.id == selectedPath }) {
@@ -43,16 +50,20 @@ struct TodoQuickCaptureOverlay: View {
                 .onTapGesture(perform: onClose)
 
             VStack(spacing: 0) {
-                if didSave {
+                switch phase {
+                case .saved:
                     successView
-                } else {
+                case .editing, .saving, .failed:
                     captureField
+                    if case let .failed(message) = phase {
+                        failureBar(message)
+                    }
                     Divider().overlay(palette.borderColorValue.opacity(0.3))
                     projectFooter
                 }
             }
             .frame(width: uiScale.chromeSize(520))
-            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: didSave)
+            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: phase)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radius(12)))
             .overlay(
                 RoundedRectangle(cornerRadius: theme.radius(12))
@@ -85,6 +96,7 @@ struct TodoQuickCaptureOverlay: View {
                 .font(.system(size: uiScale.textSize(16)))
                 .foregroundStyle(palette.primaryTextColor)
                 .focused($fieldFocused)
+                .disabled(phase == .saving)
                 .onSubmit(save)
         }
         .padding(.horizontal, uiScale.spacing(16))
@@ -128,12 +140,27 @@ struct TodoQuickCaptureOverlay: View {
         .padding(.vertical, uiScale.spacing(8))
     }
 
+    private func failureBar(_ message: String) -> some View {
+        HStack(spacing: uiScale.spacing(6)) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: uiScale.iconSize(11)))
+                .foregroundStyle(palette.warningColor)
+            Text("\(AppStrings.Todos.captureFailed): \(message)")
+                .font(.system(size: uiScale.textSize(11)))
+                .foregroundStyle(palette.secondaryTextColor)
+                .lineLimit(2)
+            Spacer()
+        }
+        .padding(.horizontal, uiScale.spacing(16))
+        .padding(.bottom, uiScale.spacing(8))
+    }
+
     private var successView: some View {
         HStack(spacing: uiScale.spacing(10)) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: uiScale.iconSize(18)))
                 .foregroundStyle(palette.successColor)
-                .symbolEffect(.bounce, value: didSave)
+                .symbolEffect(.bounce, value: phase)
             Text(AppStrings.Todos.captureAdded)
                 .font(.system(size: uiScale.textSize(15), weight: .medium))
                 .foregroundStyle(palette.primaryTextColor)
@@ -147,8 +174,20 @@ struct TodoQuickCaptureOverlay: View {
     private func save() {
         let title = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { onClose(); return }
-        Task { await store.add(title: title, projectPath: selectedPath) }
-        didSave = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { onClose() }
+        guard phase != .saving else { return }
+        phase = .saving
+        let path = selectedPath
+        Task {
+            // Confirm only after the write actually lands; keep the text on
+            // failure so the capture isn't silently lost (spec F053-R03).
+            if await store.add(title: title, projectPath: path) != nil {
+                phase = .saved
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                onClose()
+            } else {
+                phase = .failed(store.lastErrorMessage ?? AppStrings.Todos.captureFailed)
+                fieldFocused = true
+            }
+        }
     }
 }
