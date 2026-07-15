@@ -7,6 +7,9 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
 
     let service: ExternalAgentSessionService
     let onPreviewSession: (ExternalAgentTranscript) -> Void
+    /// Resume this terminal-agent session by running its resume command in a
+    /// new terminal (old Feature C). No-op default keeps previews/tests simple.
+    var onResumeInTerminal: (ExternalAgentSessionSummary) -> Void = { _ in }
 
     @State private var providerFilter: ExternalAgentSessionProvider?
     @State private var searchText = ""
@@ -18,6 +21,7 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
     @State private var isSearching = false
     @State private var loadTask: Task<Void, Never>?
     @State private var searchTask: Task<Void, Never>?
+    @State private var expandedGroups: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,22 +43,8 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
                             detail: AppStrings.Sidebar.ExternalSessions.emptyDescription
                         )
                     } else {
-                        ForEach(groupedSessions) { bucket in
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(spacing: 6) {
-                                    Text(bucket.title)
-                                        .font(AppTypographyTokens.captionSemibold)
-                                        .foregroundStyle(palette.secondaryTextColor)
-                                    Text("\(bucket.sessions.count)")
-                                        .font(AppTypographyTokens.caption2MonospacedDigit)
-                                        .foregroundStyle(palette.secondaryTextColor.opacity(0.7))
-                                    Spacer(minLength: 6)
-                                }
-
-                                ForEach(bucket.sessions) { session in
-                                    externalSessionRow(session)
-                                }
-                            }
+                        ForEach(groupedSessions) { group in
+                            directorySection(group)
                         }
                     }
 
@@ -144,47 +134,100 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
         .buttonStyle(.plain)
     }
 
-    private func externalSessionRow(_ session: ExternalAgentSessionSummary) -> some View {
-        Button {
-            select(session)
+    /// Directory disclosure section (mirrors the ACP pane's project sections):
+    /// a folder header that expands to plain session rows.
+    private func directorySection(_ group: ExternalSessionDirectoryGroup) -> some View {
+        DisclosureGroup(isExpanded: groupBinding(group.id)) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(group.sessions.enumerated()), id: \.element.id) { index, session in
+                    externalSessionRow(session)
+                    if index < group.sessions.count - 1 {
+                        Divider().padding(.leading, 24)
+                    }
+                }
+            }
+            .padding(.leading, 6)
         } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    providerIcon(session.provider)
-                    Text(session.title)
-                        .font(AppTypographyTokens.captionSemibold)
-                        .foregroundStyle(palette.primaryTextColor)
-                        .lineLimit(2)
-                    Spacer(minLength: 6)
-                    if session.parseStatus != "ok" {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(AppTypographyTokens.caption2)
-                            .foregroundStyle(palette.accentColor)
+            HStack(spacing: 8) {
+                Image(systemName: "folder.fill")
+                    .font(AppTypographyTokens.scaledIcon(12, weight: .semibold))
+                    .foregroundStyle(palette.secondaryTextColor)
+                    .frame(width: uiScale.iconSize(14))
+                Text(group.title)
+                    .font(AppTypographyTokens.calloutSemibold)
+                    .foregroundStyle(palette.primaryTextColor)
+                    .lineLimit(1)
+                    .help(group.path)
+                Spacer(minLength: 8)
+                Text("\(group.sessions.count)")
+                    .font(AppTypographyTokens.caption2MonospacedDigit)
+                    .foregroundStyle(palette.secondaryTextColor)
+            }
+            // Toggle on the whole header row, not just the chevron.
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    if expandedGroups.contains(group.id) {
+                        expandedGroups.remove(group.id)
+                    } else {
+                        expandedGroups.insert(group.id)
                     }
                 }
+            }
+        }
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tint(palette.secondaryTextColor)
+        .onAppear { expandedGroups.insert(group.id) }
+    }
 
-                HStack(spacing: 5) {
-                    Text(session.providerName)
-                    Text("-")
-                    Text(session.projectDisplayName)
-                    if !session.relativeTime.isEmpty {
-                        Text("-")
-                        Text(session.relativeTime)
+    private func groupBinding(_ id: String) -> Binding<Bool> {
+        Binding(
+            get: { expandedGroups.contains(id) },
+            set: { if $0 { expandedGroups.insert(id) } else { expandedGroups.remove(id) } }
+        )
+    }
+
+    /// A session row styled identically to the ACP pane's thread rows: brand
+    /// icon + title + relative time + inline hover action buttons on one line.
+    /// The provider/id/match sub-line is dropped; search snippets appear only
+    /// while searching (matching the ACP search-results behavior).
+    private func externalSessionRow(_ session: ExternalAgentSessionSummary) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button { select(session) } label: {
+                    HStack(alignment: .center, spacing: 8) {
+                        providerIcon(session.provider)
+                        Text(session.title)
+                            .font(AppTypographyTokens.caption)
+                            .foregroundStyle(palette.primaryTextColor)
+                            .lineLimit(1)
+                        if session.parseStatus != "ok" {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(AppTypographyTokens.caption2)
+                                .foregroundStyle(palette.accentColor)
+                        }
                     }
-                    if !session.shortSessionId.isEmpty {
-                        Text("-")
-                        Text(session.shortSessionId)
-                            .monospacedDigit()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+
+                Text(session.relativeTime)
+                    .font(AppTypographyTokens.caption2)
+                    .foregroundStyle(palette.secondaryTextColor.opacity(0.6))
+                    .lineLimit(1)
+
+                HStack(spacing: 2) {
+                    SidebarActionButton(icon: "play.rectangle", help: AppStrings.Sidebar.ExternalSessions.resumeInTerminal) {
+                        onResumeInTerminal(session)
                     }
-                    if session.matchCount > 0 {
-                        Text("-")
-                        Text(session.matchCountLabel)
+                    SidebarActionButton(icon: "eye", help: AppStrings.Sidebar.ExternalSessions.preview) {
+                        select(session)
                     }
                 }
-                .font(AppTypographyTokens.caption2)
-                .foregroundStyle(palette.secondaryTextColor)
-                .lineLimit(1)
+            }
 
+            if !searchText.isEmpty {
                 let snippets = session.displaySearchSnippets.prefix(3)
                 if !snippets.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
@@ -195,26 +238,27 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
                                 .lineLimit(2)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 22)
+                    .padding(.top, 2)
                 }
             }
-            .padding(.vertical, 7)
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(selectedSession?.id == session.id
-                        ? palette.canvasSecondaryBackgroundColor.opacity(0.9)
-                        : palette.canvasSecondaryBackgroundColor.opacity(0.35))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(selectedSession?.id == session.id
-                        ? palette.accentColor.opacity(0.6)
-                        : palette.borderColorValue.opacity(0.25), lineWidth: 1)
-            )
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 4)
+        .padding(.leading, 24)
+        .padding(.trailing, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            selectedSession?.id == session.id
+                ? palette.selectionBackgroundColor.opacity(0.25)
+                : Color.clear
+        )
+        .contentShape(Rectangle())
         .contextMenu {
+            Button(AppStrings.Sidebar.ExternalSessions.resumeInTerminal) {
+                onResumeInTerminal(session)
+            }
+            Divider()
             Button(AppStrings.Sidebar.ExternalSessions.copyResumeCommand) {
                 copy(session.resumeCommand)
             }
@@ -224,17 +268,29 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
         }
     }
 
+    /// Map an external provider to the ACP agent id so we can reuse the exact
+    /// brand icons the ACP pane uses (keeps the two panes visually identical).
+    private func providerAgentId(_ provider: ExternalAgentSessionProvider) -> String {
+        switch provider {
+        case .codex: "codex"
+        case .claude: "claudeCode"
+        case .kiro: "kiro"
+        case .opencode: "opencode"
+        case .pi: "pi"
+        }
+    }
+
     @ViewBuilder
     private func providerIcon(_ provider: ExternalAgentSessionProvider) -> some View {
-        let symbol: String = switch provider {
-        case .codex: "sparkles"
-        case .claude: "c.circle"
-        case .kiro: "ghost.fill"
+        if let nsImage = ACPAgentRegistry.agentIconImage(for: providerAgentId(provider), size: 14) {
+            Image(nsImage: nsImage)
+                .frame(width: uiScale.iconSize(14), height: uiScale.iconSize(14))
+                .clipShape(RoundedRectangle(cornerRadius: 2))
+        } else {
+            Circle()
+                .fill(Color.orange)
+                .frame(width: uiScale.iconSize(6), height: uiScale.iconSize(6))
         }
-        Image(systemName: symbol)
-            .font(AppTypographyTokens.scaledIcon(12))
-            .foregroundStyle(palette.accentColor)
-            .frame(width: uiScale.iconSize(14))
     }
 
     private var diagnosticsSection: some View {
@@ -350,40 +406,28 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    private struct ExternalSessionTimeBucket: Identifiable {
+    private struct ExternalSessionDirectoryGroup: Identifiable {
         let id: String
         let title: String
+        let path: String
         let sessions: [ExternalAgentSessionSummary]
     }
 
-    private var groupedSessions: [ExternalSessionTimeBucket] {
-        let now = Date()
-        let calendar = Calendar.current
-        let lastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: now) ?? now
-        var thisWeek: [ExternalAgentSessionSummary] = []
-        var previousWeek: [ExternalAgentSessionSummary] = []
-        var earlier: [ExternalAgentSessionSummary] = []
-
-        for session in sessions.sorted(by: compareSessionsByActivity) {
-            guard let date = session.lastActivityDate else {
-                earlier.append(session)
-                continue
+    /// Group sessions by their working directory (project path), mirroring how
+    /// the ACP pane groups threads by project. Groups are ordered alphabetically
+    /// by directory name; sessions within a group are most-recently-active first.
+    private var groupedSessions: [ExternalSessionDirectoryGroup] {
+        Dictionary(grouping: sessions) { $0.projectPath }
+            .map { path, items in
+                let name = path.isEmpty ? AppStrings.Common.all : URL(fileURLWithPath: path).lastPathComponent
+                return ExternalSessionDirectoryGroup(
+                    id: path.isEmpty ? "__none__" : path,
+                    title: name.isEmpty ? path : name,
+                    path: path,
+                    sessions: items.sorted(by: compareSessionsByActivity)
+                )
             }
-            if calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear) {
-                thisWeek.append(session)
-            } else if calendar.isDate(date, equalTo: lastWeek, toGranularity: .weekOfYear) {
-                previousWeek.append(session)
-            } else {
-                earlier.append(session)
-            }
-        }
-
-        return [
-            ExternalSessionTimeBucket(id: "this-week", title: AppStrings.Sidebar.ExternalSessions.thisWeek, sessions: thisWeek),
-            ExternalSessionTimeBucket(id: "last-week", title: AppStrings.Sidebar.ExternalSessions.lastWeek, sessions: previousWeek),
-            ExternalSessionTimeBucket(id: "earlier", title: AppStrings.Sidebar.ExternalSessions.earlier, sessions: earlier),
-        ]
-        .filter { !$0.sessions.isEmpty }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
     private func compareSessionsByActivity(_ lhs: ExternalAgentSessionSummary, _ rhs: ExternalAgentSessionSummary) -> Bool {

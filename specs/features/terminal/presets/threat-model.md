@@ -2,7 +2,7 @@
 
 ## Overview
 
-Terminal Presets provides a launcher for AI coding tools (Kiro, Claude, Codex, Gemini, OpenCode, Copilot) and user-defined shortcuts. It performs executable availability diagnostics against PATH and fallback directories, then dispatches preset commands into interactive terminal sessions. The threat surface centers on executable path resolution trust, command injection via preset definitions, PATH manipulation affecting diagnostics, and the Full Trust mode escalation boundary.
+Terminal Presets provides a launcher for AI coding-agent CLIs (Kiro, Claude, Codex, Gemini, OpenCode, Copilot), surfaced through the **Agent CLI** submenu of the terminal commands menu in both the detailed-view toolbar and terminal board tiles. It performs executable availability diagnostics against PATH and fallback directories, then dispatches preset commands into interactive terminal sessions — a new tab in the detailed view, or the tile's own session on a board tile. The threat surface centers on executable path resolution trust, command injection via preset definitions, PATH manipulation affecting diagnostics, and the Full Trust escalation boundary (now selected per launch rather than via a persisted global mode).
 
 ## Trust Boundaries
 
@@ -12,7 +12,7 @@ Terminal Presets provides a launcher for AI coding tools (Kiro, Claude, Codex, G
 | Preset definition (hardcoded) ↔ Command dispatch | Built-in preset definitions are compile-time constants in `TerminalPresetDefinition`. Their `defaultCommand` and `fullTrustCommand` strings are trusted app code. |
 | PATH diagnostics ↔ FileManager | `TerminalPresetAvailabilityDiagnostics` checks `FileManager.isExecutableFile(atPath:)` for each candidate path. The PATH is resolved via `CommandPathResolver.searchPaths()`. |
 | UserDefaults ↔ Diagnostics cache | Detected installed tool IDs are cached in UserDefaults with a version key. Stale or tampered cache could show/hide presets incorrectly. |
-| Launch mode (Standard/Full Trust) ↔ Command selection | The `TerminalPresetLaunchMode` determines which command string is dispatched. Full Trust mode uses a different (more permissive) command variant. |
+| Launch mode (Standard/Full Trust) ↔ Command selection | The `TerminalPresetLaunchMode` chosen at launch determines which command string is dispatched. Full Trust uses a more permissive command variant and is only offered for agents that define one. Selection is per launch (not persisted by this launcher). |
 
 ## Attack Surfaces
 
@@ -20,7 +20,7 @@ Terminal Presets provides a launcher for AI coding tools (Kiro, Claude, Codex, G
 2. **Executable availability diagnostics** — `detectInstalledPresetIDs()` extracts the first whitespace-delimited token from `defaultCommand` and checks if it exists on PATH. A malicious binary at a higher-priority PATH location could satisfy the check.
 3. **PATH resolution via `CommandPathResolver.searchPaths()`** — The search paths include user-writable directories (e.g., `~/.local/bin`, Homebrew paths). Symlink or binary substitution attacks are possible.
 4. **UserDefaults diagnostics cache** — Cached installed tool IDs in UserDefaults could be manipulated to force-show a preset that is not actually installed, or hide one that is.
-5. **Full Trust mode command escalation** — `fullTrustCommand` may grant broader permissions to AI tools (e.g., `--dangerously-skip-permissions`). The mode selector persists in app storage.
+5. **Full Trust mode command escalation** — `fullTrustCommand` may grant broader permissions to AI tools (e.g., `--dangerously-skip-permissions`). Full Trust is chosen explicitly per launch and is only offered for agents that define such a command.
 6. **UI test override environment variable** — `CRISPYVIBES_UI_TEST_TERMINAL_TOOLS` can override detected presets. Only active when `CRISPYVIBES_UI_TEST_MODE=1`.
 
 ## Threats
@@ -41,10 +41,10 @@ Terminal Presets provides a launcher for AI coding tools (Kiro, Claude, Codex, G
 
 ### F005-T03: Full Trust mode unintentional escalation
 
-- **Vector:** A user switches to "Full Trust" mode and forgets to switch back. Subsequent preset launches use `fullTrustCommand` which may grant AI tools broader filesystem or execution permissions (e.g., `--dangerously-skip-permissions`).
+- **Vector:** A user selects "Full Trust" when launching an agent. The `fullTrustCommand` grants AI tools broader filesystem or execution permissions (e.g., `--dangerously-skip-permissions`).
 - **Impact:** AI coding tools operate with elevated trust, potentially making destructive changes without confirmation.
-- **Likelihood:** Medium — the mode persists in app storage across restarts. Users may not notice the mode indicator.
-- **Mitigation:** The mode selector is visible in the terminal tab bar UI. Presets without a `fullTrustCommand` are disabled in Full Trust mode (`supportsFullTrust` check). The mode name "Full Trust" is intentionally alarming. An error message is shown if a preset doesn't support the selected mode. Linked NFR: SEC-Data-Protection.
+- **Likelihood:** Low–Medium — Full Trust is an explicit per-launch choice in its own submenu, not a persisted mode that silently carries across launches.
+- **Mitigation:** Full Trust is only offered for agents that define a `fullTrustCommand` (via a nested Standard / Full Trust submenu); agents without one launch in Standard only. The choice is made explicitly per launch and is not persisted by this launcher. The "Full Trust" label is intentionally alarming. Linked NFR: SEC-Data-Protection.
 
 ### F005-T04: Diagnostics cache poisoning via UserDefaults manipulation
 
@@ -72,7 +72,7 @@ Terminal Presets provides a launcher for AI coding tools (Kiro, Claude, Codex, G
 | NFR | Status | Notes |
 |-----|--------|-------|
 | SEC-Input-Sanitization | Compliant | Preset commands are compile-time constants; no user input interpolation; executable names extracted via whitespace split only. |
-| SEC-Data-Protection | Compliant | Mode persisted in app storage (UserDefaults); diagnostics cache versioned; no secrets stored. |
+| SEC-Data-Protection | Compliant | Trust mode selected per launch (not persisted by this launcher); diagnostics cache versioned; no secrets stored. |
 | PERF-Responsiveness | Compliant | Diagnostics complete within 500ms per acceptance criteria; results cached in UserDefaults. |
 | A11Y | Partial | Error banner is dismissible per spec; keyboard navigation of preset menu is standard SwiftUI. |
 | OBS | Compliant | Preset launches logged via terminal lifecycle events. |

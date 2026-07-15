@@ -51,6 +51,8 @@ struct VibeSpaceSidebarPanelView: View {
     let onOpenConversationThread: (ConversationThreadSummary) -> Void
     let onDeleteConversationThread: (String) async -> Void
     let onPreviewExternalSession: (ExternalAgentTranscript) -> Void
+    /// Resume a terminal-agent session in a new terminal (old Feature C).
+    var onResumeExternalSession: (ExternalAgentSessionSummary) -> Void = { _ in }
     /// F056: when true, render the stacked collapsible unified layout instead
     /// of the classic tab-swapped content. Default false (classic).
     var isUnified: Bool = false
@@ -522,7 +524,8 @@ struct VibeSpaceSidebarPanelView: View {
                 guard let json = await agentConversationStore.exportJSON(threadId: threadId) else { return }
                 await MainActor.run { Self.saveFileDialog(content: json, defaultName: "conversation.json") }
             },
-            onPreviewExternalSession: onPreviewExternalSession
+            onPreviewExternalSession: onPreviewExternalSession,
+            onResumeExternalSession: onResumeExternalSession
         )
     }
 }

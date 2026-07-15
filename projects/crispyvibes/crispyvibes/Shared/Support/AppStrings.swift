@@ -861,6 +861,8 @@ enum AppStrings {
         static let activateProjectAction = String(localized: "vibespace.activateProject.action", defaultValue: "Activate Project")
         // F021-R18 / R19: remove a project (active or parked) via context menu.
         static let removeProjectAction = String(localized: "vibespace.removeProject.action", defaultValue: "Remove Project")
+        // Make the right-clicked project the current (focused) project.
+        static let makeCurrentProjectAction = String(localized: "vibespace.makeCurrentProject.action", defaultValue: "Make Current Project")
     }
 
     // MARK: - Worktree (F055 / F056: unified sidebar + git worktrees)
@@ -985,13 +987,14 @@ enum AppStrings {
         }
 
         enum Conversations {
-            static let crispyvibes = String(localized: "sidebar.conversations.crispyvibes", defaultValue: "Crispy")
-            static let external = String(localized: "sidebar.conversations.external", defaultValue: "External")
+            static let crispyvibes = String(localized: "sidebar.conversations.crispyvibes", defaultValue: "ACP")
+            static let external = String(localized: "sidebar.conversations.external", defaultValue: "Terminal")
         }
 
         enum ExternalSessions {
             static let searchPlaceholder = String(localized: "sidebar.externalSessions.search", defaultValue: "Search external sessions...")
             static let refresh = String(localized: "sidebar.externalSessions.refresh", defaultValue: "Refresh external sessions")
+            static let resumeInTerminal = String(localized: "sidebar.externalSessions.resumeInTerminal", defaultValue: "Open in Terminal")
             static let loading = String(localized: "sidebar.externalSessions.loading", defaultValue: "Loading external sessions")
             static let loadFailed = String(localized: "sidebar.externalSessions.loadFailed", defaultValue: "External sessions unavailable")
             static let emptyTitle = String(localized: "sidebar.externalSessions.empty.title", defaultValue: "No external sessions")
@@ -1037,6 +1040,7 @@ enum AppStrings {
         static let refreshFileList = String(localized: "explorer.refreshFileList")
         static let createNewFile = String(localized: "explorer.createNewFile")
         static let createNewFolder = String(localized: "explorer.createNewFolder")
+        static let copyPath = String(localized: "explorer.copyPath", defaultValue: "Copy Path")
     }
 
     // MARK: - Whiteboard
@@ -1166,6 +1170,8 @@ enum AppStrings {
         static let temporary = String(localized: "terminal.temporary")
         static let selectedUnavailable = String(localized: "terminal.selectedUnavailable")
         static let noToolsOnPath = String(localized: "terminal.noToolsOnPath")
+        static let agentCLIMenu = String(localized: "terminal.agentCLIMenu", defaultValue: "Agent CLI")
+        static let noAgentsOnPath = String(localized: "terminal.noAgentsOnPath", defaultValue: "No agents on PATH")
 
         // Board tile actions
         enum Tile {

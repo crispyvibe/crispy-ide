@@ -2,20 +2,22 @@
 
 ## Overview
 
-This feature reads third-party agent session files from the local filesystem. The primary trust boundary is between Crispy and provider-owned files that may contain arbitrary content (prompts, code, secrets, tool output). The Rust helper parses untrusted JSONL data.
+This feature reads third-party agent session files from the local filesystem. The primary trust boundary is between Crispy and provider-owned files that may contain arbitrary content (prompts, code, secrets, tool output). The Rust helper parses untrusted JSONL data and, for OpenCode, an untrusted SQLite database. External data stores are read strictly read-only — file-based providers are opened read-only and OpenCode's live SQLite database is read from a temporary read-only snapshot copy, never written. In addition to copying resume commands, the feature can now run a provider's resume command in a new terminal tab, so the session identifier that is interpolated into that command is a new consideration.
 
 ## Trust Boundaries
 
-1. **Crispy app ↔ Provider session files**: Provider files are untrusted input. Crispy reads but never writes.
+1. **Crispy app ↔ Provider session files/databases**: Provider files and OpenCode's SQLite database are untrusted input. Crispy reads but never writes — the live SQLite DB is copied to a temp snapshot and opened read-only.
 2. **Swift process ↔ Rust helper subprocess**: Communication via stdout JSON. Helper runs with same user privileges.
 3. **Parsed transcript content ↔ SwiftUI rendering**: Transcript text is rendered as plain text, not interpreted as code or HTML.
 
 ## Attack Surfaces
 
 - Provider session files on disk (attacker could plant malicious content)
+- OpenCode SQLite database (untrusted DB content and structure)
 - Rust helper binary (supply chain integrity)
 - JSON decoding of helper output
 - Transcript text rendering in SwiftUI
+- Resume command constructed from a session id and executed in a terminal
 
 ## Threats
 
@@ -54,7 +56,21 @@ This feature reads third-party agent session files from the local filesystem. Th
 - **Likelihood**: Medium — common for agent sessions to contain sensitive output.
 - **Mitigation**: Preview is local-only, never uploaded. No persistent index is created. Content is not logged beyond diagnostic metadata. Users are responsible for their local session content.
 
-## Residual Risks
+### F047-T06: Mutation or corruption of the OpenCode SQLite database
+
+- **Vector**: Opening a live SQLite database for reading while OpenCode is running (or opening it read-write) could lock, corrupt, or mutate the user's real session data, including its `-wal`/`-shm` journal state.
+- **Impact**: Medium — loss or corruption of the user's OpenCode session history.
+- **Likelihood**: Low — only occurs if the DB were opened in place read-write.
+- **Mitigation**: The helper never opens the original database for writing. It copies `opencode.db` plus its `-wal`/`-shm` sidecars into a temp directory, opens the copy read-only, runs all queries against the snapshot, and deletes the snapshot when finished. The original files are only ever read for copying.
+
+### F047-T07: Command injection via session id in resume command
+
+- **Vector**: A crafted or malformed session id could contain shell metacharacters that, when interpolated into a resume command (`opencode --session <id>`, `codex resume <id>`, etc.) and run in a terminal via "Open in Terminal", execute unintended commands.
+- **Impact**: High — arbitrary command execution in the user's terminal with user privileges.
+- **Likelihood**: Low — session ids originate from provider stores the user already controls, but ids are still untrusted input.
+- **Mitigation**: The session id is treated as untrusted. Resume commands are built with the id as a single, quoted/escaped argument (not string-concatenated into a shell line), so metacharacters cannot break out of the argument. "Open in Terminal" runs only the provider's fixed resume command with the id as one argument; it never evaluates arbitrary text from the session content.
+
+
 
 - Transcript content may contain sensitive information visible to anyone with physical access to the machine.
 - Provider file format changes could cause silent parse failures (mitigated by diagnostic surfacing).
@@ -62,6 +78,6 @@ This feature reads third-party agent session files from the local filesystem. Th
 ## NFR Compliance
 
 - **SEC-1**: No network transmission of external transcript data.
-- **SEC-3a**: Provider files are read-only; no mutation.
+- **SEC-3a**: Provider files are read-only; no mutation. OpenCode's SQLite DB is read from a temporary read-only snapshot copy.
 - **REL-1**: Malformed files do not crash the app or helper.
 - **OBS-1**: Parse failures are recorded to AppDiagnostics with full context.

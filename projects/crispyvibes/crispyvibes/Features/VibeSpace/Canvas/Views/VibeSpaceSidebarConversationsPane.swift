@@ -15,6 +15,8 @@ struct VibeSpaceSidebarConversationsPane: View {
     let onExportMarkdown: (String) async -> Void
     let onExportJSON: (String) async -> Void
     let onPreviewExternalSession: (ExternalAgentTranscript) -> Void
+    /// Resume a terminal-agent session in a new terminal (old Feature C).
+    var onResumeExternalSession: (ExternalAgentSessionSummary) -> Void = { _ in }
 
     @State private var threads: [ConversationThreadSummary] = []
     @State private var otherThreads: [ConversationThreadSummary] = []
@@ -66,7 +68,8 @@ struct VibeSpaceSidebarConversationsPane: View {
             } else {
                 VibeSpaceSidebarExternalSessionsPane(
                     service: externalSessionService,
-                    onPreviewSession: onPreviewExternalSession
+                    onPreviewSession: onPreviewExternalSession,
+                    onResumeInTerminal: onResumeExternalSession
                 )
             }
         }
@@ -186,6 +189,8 @@ struct VibeSpaceSidebarConversationsPane: View {
 
                 Spacer(minLength: 8)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { toggleSection("vibespace") }
         }
         .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -238,6 +243,8 @@ struct VibeSpaceSidebarConversationsPane: View {
                     .font(AppTypographyTokens.caption2MonospacedDigit)
                     .foregroundStyle(palette.secondaryTextColor)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { toggleSection(sectionId) }
         }
         .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -394,6 +401,8 @@ struct VibeSpaceSidebarConversationsPane: View {
                     .font(AppTypographyTokens.caption2MonospacedDigit)
                     .foregroundStyle(palette.secondaryTextColor)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { toggleSection("other") }
         }
         .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -407,6 +416,17 @@ struct VibeSpaceSidebarConversationsPane: View {
             get: { expandedSections.contains(id) },
             set: { if $0 { expandedSections.insert(id) } else { expandedSections.remove(id) } }
         )
+    }
+
+    /// Toggle a disclosure section from a tap anywhere on its header row.
+    private func toggleSection(_ id: String) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            if expandedSections.contains(id) {
+                expandedSections.remove(id)
+            } else {
+                expandedSections.insert(id)
+            }
+        }
     }
 
     // MARK: - Search Results
@@ -528,7 +548,9 @@ private enum ConversationSidebarTab {
 
 // MARK: - Sidebar Action Button with hover
 
-private struct SidebarActionButton: View {
+/// Sidebar row action button with hover highlight. Shared by the ACP and
+/// Terminal conversation panes so their row actions look identical.
+struct SidebarActionButton: View {
     @Environment(\.crispyvibesUIScale) private var uiScale
     @State private var isHovered = false
     let icon: String

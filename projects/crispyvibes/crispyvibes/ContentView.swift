@@ -486,6 +486,11 @@ struct ContentView: View {
                 guard let projectID = notification.userInfo?[AppCommandUserInfoKey.projectID] as? UUID else { return }
                 vibespaceCanvasActionsCoordinator.removeProject(id: projectID)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .makeCurrentProjectRequested)) { notification in
+                // Focus the requested project (right-click → "Make Current Project").
+                guard let projectID = notification.userInfo?[AppCommandUserInfoKey.projectID] as? UUID else { return }
+                vibespaceCanvasActionsCoordinator.focusProject(id: projectID)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .removeParkedProjectRequested)) { notification in
                 // F021-R19: remove the requested parked project without activating it.
                 guard let projectPath = notification.userInfo?[AppCommandUserInfoKey.projectPath] as? String else { return }

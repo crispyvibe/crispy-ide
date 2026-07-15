@@ -3,7 +3,7 @@ title: "Unified Project Side Panel"
 feature: "F056"
 domain: "vibespace"
 audience: "user"
-version: "1.1"
+version: "1.2"
 sidebar:
   label: "Workspace Side Panel"
   order: 6
@@ -34,6 +34,9 @@ On a **repository** row, **+** offers **New Worktree…**.
 
 ### Use the Shelf
 Your Shelf appears at the top of the Workspace panel when it has items, with the same open / reveal / rename / delete / remove / clear actions as the classic Files pane.
+
+### Right-click a project or worktree
+Project rows now offer the same right-click menu as the classic Files pane: **Make Current Project**, **Open in Terminal** (a new terminal at the project root), **Reveal in Finder** (hidden for remote/SSH projects), **New File**, **New Folder**, **Copy Path**, **Park Project**, and **Remove Project**. Worktree rows show the same navigation actions but with **Close Worktree** / **Delete Worktree** in place of Park / Remove.
 
 ### Work with worktrees
 Repositories with multiple git worktrees group them under one repository row. A subdirectory you opened as its own project shows as a standalone row, not under that repository. See the **Git Worktrees** guide for open/create/close/delete.

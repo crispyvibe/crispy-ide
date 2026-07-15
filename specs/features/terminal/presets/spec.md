@@ -4,7 +4,9 @@ Status: draft
 
 ## Overview
 
-Terminal Presets provides a launcher menu for AI coding tools and CLI presets. It manages launch mode selection (Standard / Full Trust), tool availability diagnostics, preset execution in named terminal tabs, and error handling for missing executables.
+Terminal Presets provides a launcher for AI coding-agent CLIs from the terminal. Presets are exposed through the **Agent CLI** submenu inside the terminal commands menu (alongside Signals, tmux, and Shortcuts), available both in the detailed-view terminal toolbar and on terminal board tiles. It manages per-agent launch mode selection (Standard / Full Trust), tool availability diagnostics, preset execution, and error handling for missing executables.
+
+Launch behavior differs by surface: the detailed-view launcher opens the agent in a new named terminal tab; a board tile launches the agent into that tile's own session.
 
 ## Dependencies
 
@@ -12,17 +14,19 @@ Terminal Presets provides a launcher menu for AI coding tools and CLI presets. I
 
 ## Requirements
 
-### F005-R01: Preset Mode Selector Controls Launch Mode
+### F005-R01: Per-Agent Launch Mode Selection
 
-When user switches launch mode between `Standard` and `Full Trust`, subsequent preset launches MUST use the selected mode mapping. The selected mode MUST be persisted in app storage.
+Launch mode MUST be selected per agent at launch time, not via a global persisted selector. An agent that defines a full-trust command mapping MUST present a nested submenu offering both `Standard` and `Full Trust`; selecting one MUST launch the agent using that mode's command mapping. An agent without a full-trust mapping MUST launch directly in `Standard` mode from a single menu item.
 
-### F005-R02: Installed Tools Shown in Tools Menu
+### F005-R02: Installed Agents Shown in Agent CLI Menu
 
-Tool diagnostics MUST run against preset executables on PATH and standard fallback install directories. Only installed tool presets MUST be listed with their brand SVG icons (Kiro, Claude, Codex, Gemini, OpenCode, Copilot). Launching a preset MUST create a new terminal tab with preset short name, send the preset command to the terminal session, execute the command, and move keyboard focus to that session.
+Tool diagnostics MUST run against preset executables on PATH and standard fallback install directories. Only installed agent presets MUST be listed (Kiro, Claude, Codex, Gemini, OpenCode, Copilot). When no agents are detected, the menu MUST show a non-actionable "No agents on PATH" item rather than hiding the menu. Launching an agent MUST send the preset command to a terminal session and move keyboard focus to it:
+- In the detailed-view launcher, launching MUST create a new terminal tab named with the preset short label and dispatch the command there.
+- On a terminal board tile, launching MUST dispatch the command into that tile's existing session.
 
-### F005-R03: Full-Trust Unsupported Preset Not Launchable
+### F005-R03: Full-Trust Presented Only When Supported
 
-When current launch mode is `Full Trust` and a preset defines a full-trust command mapping, that preset menu item MUST remain enabled. If a preset has no full-trust command mapping, that preset menu item MUST be disabled.
+An agent that defines a full-trust command mapping MUST expose the Standard / Full Trust nested submenu. An agent with no full-trust mapping MUST NOT present a Full Trust option and MUST launch in Standard mode.
 
 ### F005-R04: Missing Preset Executable Shows Non-Blocking Error
 
@@ -30,44 +34,42 @@ When a preset executable is not present on PATH or fallback install directories,
 
 ## Scenarios
 
-### Scenario F005-S01: Preset mode selector controls launch mode
+### Scenario F005-S01: Per-agent launch mode selection
 
-**Given** terminal preset controls are visible in tab bar
-**When** user switches launch mode between `Standard` and `Full Trust`
-**Then** subsequent preset launches use the selected mode mapping
-**And** the selected mode is persisted in app storage
+**Given** the Agent CLI submenu is open in the terminal commands menu
+**When** the user opens a full-trust-capable agent's nested submenu and picks `Standard` or `Full Trust`
+**Then** the agent launches using the selected mode's command mapping
+**And** agents without a full-trust mapping launch in `Standard` from a single item
 
-### Scenario F005-S02: Installed tools are shown in Tools menu and launch in named tabs
+### Scenario F005-S02: Installed agents are shown and launch per surface
 
-**Given** tool diagnostics runs against preset executables on PATH
-**And** preset command discovery includes app PATH and standard fallback install directories
-**When** user opens the `Tools` dropdown and launches a preset
-**Then** only installed tool presets are listed with their brand SVG icons (Kiro, Claude, Codex, Gemini, OpenCode, Copilot)
-**Then** a new terminal tab is created with preset short name
-**And** preset command is sent to terminal session
-**And** preset command executes in the launched terminal session
-**And** keyboard focus moves to that preset terminal session
+**Given** tool diagnostics runs against preset executables on PATH and standard fallback install directories
+**When** the user opens the **Agent CLI** submenu and launches an agent
+**Then** only installed agents are listed (Kiro, Claude, Codex, Gemini, OpenCode, Copilot), or "No agents on PATH" when none are detected
+**And** from the detailed-view launcher a new terminal tab is created with the preset short name and the command is dispatched there
+**And** from a terminal board tile the command is dispatched into that tile's existing session
+**And** keyboard focus moves to the launched session
 
-### Scenario F005-S03: Full-trust unsupported preset is not launchable
+### Scenario F005-S03: Full trust presented only when supported
 
-**Given** current launch mode is `Full Trust`
-**When** a preset defines a full-trust command mapping
-**Then** that preset menu item remains enabled
-**And** if a preset has no full-trust command mapping, that preset menu item is disabled
+**Given** the Agent CLI submenu is open
+**When** an agent defines a full-trust command mapping
+**Then** that agent shows a nested submenu with `Standard` and `Full Trust`
+**And** an agent without a full-trust mapping shows a single item that launches in `Standard`
 
 ### Scenario F005-S04: Missing preset executable shows non-blocking error
 
-**Given** preset executable is not present on PATH or fallback install directories
-**When** user launches that preset
+**Given** a preset executable is not present on PATH or fallback install directories
+**When** the user launches that preset from the detailed-view launcher
 **Then** no new preset tab is created
 **And** terminal pane shows an inline error banner with dismiss control
 
 ## Acceptance Criteria
 
 - Tool diagnostics complete within 500ms (PERF-4).
-- Preset launch creates tab and sends command within 200ms (PERF-3).
+- Preset launch creates tab (detailed view) or dispatches to the tile session (board) and sends command within 200ms (PERF-3).
 - Missing executable error is non-blocking and dismissible (A11Y-2).
-- Preset mode persists across app restarts (REL-1).
+- Trust mode is chosen per agent at launch; no global terminal launch-mode toggle is required (the Agent CLI menu always renders when enabled, showing "No agents on PATH" when empty).
 - Preset launches logged (OBS-1).
 
 ## Open Questions
@@ -79,3 +81,4 @@ When a preset executable is not present on PATH or fallback install directories,
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-04-15 | Migrated from docs/features/terminal/feature.md (TRM-029–032) | — |
+| 2026-07-01 | Launcher moved into the terminal commands menu as the "Agent CLI" submenu (detailed view + board tiles); replaced the standalone Tools dropdown and global launch-mode selector with per-agent Standard/Full Trust nesting; board tiles launch into the tile session | — |

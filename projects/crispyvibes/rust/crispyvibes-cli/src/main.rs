@@ -179,6 +179,11 @@ enum TodoCommand {
         /// Status filter: active, completed, all.
         #[arg(long, default_value = "active")]
         status: String,
+        /// Ownership scope: "project" (default, todos for the caller's project)
+        /// or "vibespace" (all todos across every project in the active
+        /// vibespace, opt-in for cross-project listings).
+        #[arg(long, default_value = "project")]
+        scope: String,
     },
     /// Mark a todo completed.
     Complete {
@@ -742,9 +747,9 @@ fn run(cli: Cli) -> Result<(), String> {
             "todo.add",
             json!({ "text": text, "project": project, "body": body, "color": color, "file": file }),
         ),
-        Command::Todo(TodoCommand::List { project, status }) => (
+        Command::Todo(TodoCommand::List { project, status, scope }) => (
             "todo.list",
-            json!({ "project": project, "status": status }),
+            json!({ "project": project, "status": status, "scope": scope }),
         ),
         Command::Todo(TodoCommand::Complete { id }) => (
             "todo.complete",

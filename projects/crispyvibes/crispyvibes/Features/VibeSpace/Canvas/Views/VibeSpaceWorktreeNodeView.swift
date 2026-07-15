@@ -89,9 +89,19 @@ struct VibeSpaceWorktreeNodeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if indent {
-                header.contextMenu { worktreeContextMenu }
+                header.contextMenu {
+                    ProjectNodeContextMenu(
+                        project: project,
+                        onAction: onProjectAction,
+                        isWorktreeChild: true,
+                        canDeleteWorktree: canDelete,
+                        onDeleteWorktree: onDeleteWorktree
+                    )
+                }
             } else {
-                header
+                header.contextMenu {
+                    ProjectNodeContextMenu(project: project, onAction: onProjectAction)
+                }
             }
 
             if isExpanded {
@@ -122,20 +132,6 @@ struct VibeSpaceWorktreeNodeView: View {
     }
 
     private var changeCount: Int { visibleChanges.count }
-
-    @ViewBuilder
-    private var worktreeContextMenu: some View {
-        Button(AppStrings.Worktree.closeWorktree) {
-            NotificationCenter.default.post(
-                name: .removeProjectRequested,
-                object: nil,
-                userInfo: [AppCommandUserInfoKey.projectID: project.id]
-            )
-        }
-        if canDelete {
-            Button(AppStrings.Worktree.deleteWorktree, role: .destructive) { onDeleteWorktree() }
-        }
-    }
 
     private func toggleExpanded() {
         if !isExpanded { project.activate(); project.ensureExplorerLoaded() }

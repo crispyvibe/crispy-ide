@@ -86,6 +86,10 @@ extension Notification.Name {
     /// (active) project context menu.
     /// userInfo: `[AppCommandUserInfoKey.projectID: UUID]`.
     static let removeProjectRequested = Notification.Name("removeProjectRequested")
+    /// Posted when the user selects "Make Current Project" on a live project
+    /// context menu — focuses the project without toggling its tree expansion.
+    /// userInfo: `[AppCommandUserInfoKey.projectID: UUID]`.
+    static let makeCurrentProjectRequested = Notification.Name("makeCurrentProjectRequested")
     /// F021-R19: posted when the user selects "Remove Project" on a parked
     /// project context menu.
     /// userInfo: `[AppCommandUserInfoKey.projectPath: String]`.

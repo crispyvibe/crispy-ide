@@ -3,7 +3,7 @@ title: "VibeSpace Projects"
 feature: "F021"
 domain: "vibespace"
 audience: "user"
-version: "1.1"
+version: "1.2"
 sidebar:
   label: "Projects"
   order: 2
@@ -122,6 +122,20 @@ VibeSpace Projects covers project creation, focus management, add/remove operati
 | Focus shortcut not working | Verify the shortcut assignment in VibeSpace Settings → Shortcuts. Ensure no conflict with other shortcuts. |
 | Stacked card shows no terminal | The project's terminal hasn't hydrated yet. It will show "Loading Terminal" until ready. |
 | Close button missing | The close icon is in the focused project's header. Stacked cards don't have a direct close — focus the project first. |
+
+## Project Context Menu
+
+Right-clicking a project row exposes a full menu, and it's the same menu whether you're in the classic **Files** pane or the **Workspace** (unified) side panel:
+
+- **Make Current Project** — focuses the project and makes it current (same as clicking its stacked card).
+- **Open in Terminal** — always opens a *new* terminal tab at the project root (it never just re-selects an existing terminal).
+- **Reveal in Finder** — reveals the project folder in Finder. Hidden for remote/SSH projects.
+- **New File** / **New Folder** — creates an item at the project root.
+- **Copy Path** — copies the project's path to the clipboard.
+- **Park Project** — see *Parking Projects* below.
+- **Remove Project** — see *Removing Projects* below.
+
+Open in Terminal, Reveal in Finder, New File, New Folder, and Copy Path behave exactly like the same actions on a file or folder row, so the wording and results are consistent everywhere.
 
 ## Parking Projects
 

@@ -135,6 +135,8 @@ struct ExternalAgentSessionPreviewPanel: View {
         case .codex: "sparkles"
         case .claude: "c.circle"
         case .kiro: "ghost.fill"
+        case .opencode: "chevron.left.forwardslash.chevron.right"
+        case .pi: "p.circle"
         }
         Image(systemName: symbol)
             .font(AppTypographyTokens.scaledIcon(12))

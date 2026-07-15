@@ -42,8 +42,30 @@ extension CLICommandRouter {
         guard ["active", "completed", "all"].contains(status) else {
             return todoInvalidParams(request, "status must be active, completed, or all")
         }
+
+        // Scope filtering (parallels `browser.list`): `project` (default) lists
+        // todos for the caller's project; `vibespace` lists every todo across
+        // all projects in the active vibespace. An explicit `project` param is
+        // honored under project scope even when the caller's env project differs.
+        let scope = request.params?["scope"]?.stringValue ?? "project"
+        let projectFilter: String?
+        switch scope {
+        case "vibespace":
+            projectFilter = nil
+        case "project":
+            guard let resolved = resolvedTodoProjectPath(request) else {
+                return todoInvalidParams(
+                    request,
+                    "todo.list scope=project requires CRISPY_PROJECT_PATH or a `project` param — pass scope=vibespace to list across projects"
+                )
+            }
+            projectFilter = resolved
+        default:
+            return todoInvalidParams(request, "scope must be \"project\" (default) or \"vibespace\"")
+        }
+
         await store.refresh()
-        let items = store.filtered(byProject: resolvedTodoProjectPath(request)).filter { todo in
+        let items = store.filtered(byProject: projectFilter).filter { todo in
             switch status {
             case "active": return !todo.isCompleted
             case "completed": return todo.isCompleted

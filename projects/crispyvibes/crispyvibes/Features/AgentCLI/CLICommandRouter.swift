@@ -698,6 +698,7 @@ final class CLICommandRouter {
                 params: [
                     .init(name: "project", type: "string", required: false, description: "Project path filter; defaults to the caller's project, omit context for all."),
                     .init(name: "status", type: "string", required: false, description: "Status filter: active, completed, all.", defaultValue: .string("active")),
+                    .init(name: "scope", type: "string", required: false, description: "Ownership scope: 'project' (default, caller's project) or 'vibespace' (all projects in the active vibespace).", defaultValue: .string("project")),
                 ],
                 result: [.init(name: "todos", type: "array", description: "Array of todos.")],
                 errors: ["invalid_params", "vibespace_not_found", "not_connected"]

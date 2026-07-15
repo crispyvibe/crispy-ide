@@ -261,11 +261,14 @@ struct VibeSpaceTerminalBoardTileCard: View {
             TerminalCommandsMenu(
                 textColor: appThemePalette.secondaryTextColor,
                 shortcuts: shortcutDefinitions,
+                agentPresets: terminalViewModel.availablePresets,
+                showsAgentCLIMenu: true,
                 onRunShortcut: { shortcut in
                     onRunShortcut?(shortcut)
                 },
                 onManageShortcutsRequested: onManageShortcutsRequested,
-                onSendSignal: sendSignalToTileSession(_:)
+                onSendSignal: sendSignalToTileSession(_:),
+                onLaunchAgent: launchAgentInTileSession(_:mode:)
             )
             .accessibilityIdentifier("vibespace.terminal-board.tile.commands")
 
@@ -307,5 +310,11 @@ struct VibeSpaceTerminalBoardTileCard: View {
 
     private func sendSignalToTileSession(_ text: String) {
         terminalViewModel.session(for: terminalTabID)?.sendRawText(text)
+    }
+
+    private func launchAgentInTileSession(_ preset: TerminalPresetDefinition, mode: TerminalPresetLaunchMode) {
+        guard let session = terminalViewModel.session(for: terminalTabID) else { return }
+        session.requestKeyboardFocus()
+        session.sendUICommand(preset.command(for: mode))
     }
 }

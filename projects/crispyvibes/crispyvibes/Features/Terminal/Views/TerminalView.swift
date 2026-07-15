@@ -31,8 +31,6 @@ struct TerminalView: View {
     var additionalHeaderControls: AnyView? = nil
     var shortcutProvider: VibeSpaceShortcutProvider?
     var dragContentViewerTabProvider: ((TerminalTab) -> ContentViewerTab?)? = nil
-    @AppStorage(AppPreferences.terminalPresetLaunchModeKey)
-    private var terminalPresetLaunchMode = TerminalPresetLaunchMode.standard.rawValue
     @State private var expandedTabID: UUID?
     @State private var cachedStyling: TerminalStyling?
     @State private var isSplitMode = false
@@ -83,10 +81,6 @@ struct TerminalView: View {
         self.additionalHeaderControls = additionalHeaderControls
         self.shortcutProvider = shortcutProvider
         self.dragContentViewerTabProvider = dragContentViewerTabProvider
-    }
-
-    private var selectedLaunchMode: TerminalPresetLaunchMode {
-        TerminalPresetLaunchMode(rawValue: terminalPresetLaunchMode) ?? .standard
     }
 
     private var expandedTab: TerminalTab? {
@@ -373,55 +367,13 @@ struct TerminalView: View {
         TerminalCommandsMenu(
             textColor: styling.secondaryTextColor,
             shortcuts: activeShortcuts,
+            agentPresets: viewModel.availablePresets,
+            showsAgentCLIMenu: true,
             onRunShortcut: runShortcut(_:),
             onManageShortcutsRequested: onManageShortcutsRequested,
-            onSendSignal: sendSignalToActiveSession(_:)
+            onSendSignal: sendSignalToActiveSession(_:),
+            onLaunchAgent: launchAgentPreset(_:mode:)
         )
-    }
-
-    private var aiToolsMenu: some View {
-        Menu {
-            Picker("Launch Mode", selection: $terminalPresetLaunchMode) {
-                ForEach(TerminalPresetLaunchMode.allCases) { mode in
-                    Text(mode.title).tag(mode.rawValue)
-                }
-            }
-            .pickerStyle(.inline)
-
-            Section("Tools") {
-                if viewModel.availablePresets.isEmpty {
-                    Text(AppStrings.Terminal.noToolsOnPath)
-                } else {
-                    ForEach(viewModel.availablePresets) { preset in
-                        Button {
-                            launchPreset(preset)
-                        } label: {
-                            Label {
-                                Text(preset.shortLabel)
-                            } icon: {
-                                if preset.isCustomIcon {
-                                    Image(nsImage: Self.scaledPresetIcon(named: preset.symbolName, size: 16))
-                                } else {
-                                    Image(systemName: preset.symbolName)
-                                }
-                            }
-                        }
-                        .disabled(selectedLaunchMode == .fullTrust && !preset.supportsFullTrust)
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "sparkles")
-                .font(AppTypographyTokens.scaledIcon(12))
-                .foregroundStyle(styling.secondaryTextColor)
-                .frame(width: uiScale.iconSize(24), height: uiScale.iconSize(24))
-                .contentShape(Rectangle())
-        }
-        .menuStyle(.borderlessButton)
-        .tint(styling.secondaryTextColor)
-        .fixedSize()
-        .help("Launch AI tools and CLI presets")
-        .accessibilityIdentifier("terminal.aitools.menu")
     }
 
     private var activeShortcuts: [TerminalShortcutDefinition] {
@@ -569,7 +521,6 @@ struct TerminalView: View {
                 activeTerminalHeaderActions
             }
             commandsMenu
-            aiToolsMenu
             if let additionalHeaderControls {
                 additionalHeaderControls
             }
@@ -599,23 +550,11 @@ struct TerminalView: View {
         }
     }
 
-    private static func scaledPresetIcon(named name: String, size: CGFloat) -> NSImage {
-        guard let original = NSImage(named: name) else {
-            return NSImage(size: NSSize(width: size, height: size))
-        }
-        let img = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
-            original.draw(in: rect)
-            return true
-        }
-        img.isTemplate = original.isTemplate
-        return img
-    }
-
-    private func launchPreset(_ preset: TerminalPresetDefinition) {
+    private func launchAgentPreset(_ preset: TerminalPresetDefinition, mode: TerminalPresetLaunchMode) {
         onTerminalInteraction?()
         viewModel.launchPreset(
             preset,
-            mode: selectedLaunchMode,
+            mode: mode,
             directoryURL: viewModel.activeTab?.workingDirectory ?? defaultDirectory
         )
         if let activeTabID = viewModel.activeTabID {

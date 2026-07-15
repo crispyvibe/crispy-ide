@@ -44,6 +44,9 @@ Each worktree node MUST offer creation actions contextual to the active view: Fi
 ### F056-R07: Performance
 Only the active view's body builds; collapsed nodes don't load file trees or fetch threads. Worktree/thread discovery re-runs only on vibespace/project-set change or worktree mutation.
 
+### F056-R09: Project & worktree node context menus
+Project-root nodes MUST expose the shared `ProjectNodeContextMenu` (F021-R20/R21) — previously they had no context menu. Worktree child nodes MUST show the same navigation actions (Make Current Project, Open in Terminal, Reveal in Finder, New File, New Folder, Copy Path) but substitute **Close Worktree** / **Delete Worktree** (F055) for Park Project / Remove Project.
+
 ## Scenarios
 
 ### Scenario F056-S01: Zero-click focused files
@@ -77,6 +80,12 @@ classic tab) returns to the classic layout. The two never share one panel.
 **When** the panel renders
 **Then** the Shelf section appears above the project nodes with its open/reveal/rename/delete/remove/clear actions.
 
+### Scenario F056-S07: Project root exposes the shared context menu
+**Given** the Workspace panel is showing a project-root node
+**When** the user right-clicks the node
+**Then** the shared `ProjectNodeContextMenu` renders (Make Current Project, Open in Terminal, Reveal in Finder, New File, New Folder, Copy Path, Park Project, Remove Project) — matching the classic Files pane.
+**And** for a worktree child node, the same navigation actions appear with Close Worktree / Delete Worktree in place of Park / Remove.
+
 ## Acceptance Criteria
 - Workspace is its own rail destination and the default side-panel layout; selecting a classic tab exits it
 - Per-project nodes with Files/Changes/Chats header toggles; focused auto-expands
@@ -93,3 +102,4 @@ classic tab) returns to the classic layout. The two never share one panel.
 |------|--------|--------|
 | 2026-06-04 | Initial draft — opt-in unified per-project sidebar, view toggles, repo clubbing, friendly changes, creation affordances | — |
 | 2026-06-19 | Promoted to dedicated "Workspace" rail destination, default-on (R01/S04); Shelf folded in at top (R08/S06); grouping uses `ProjectGitPlacement` worktree-root identity, subdirectory projects standalone (R04/S05); dedicated `UnifiedSidebarViewModel` mediates state | — |
+| 2026-07-07 | Project-root nodes now expose the shared `ProjectNodeContextMenu` (previously had none); worktree children use the same navigation actions with Close/Delete Worktree in place of Park/Remove (R09/S07) | — |
