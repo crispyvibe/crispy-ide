@@ -302,6 +302,213 @@ final class FolderExplorerViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.loadingDirectoryIDs.isEmpty)
     }
 
+    func testDirectoryRefreshesAreSerializedAndNewestSnapshotWins() async throws {
+        let sources = tempRoot.appendingPathComponent("Sources", isDirectory: true)
+        let oldFile = sources.appendingPathComponent("old.swift")
+        let newFile = sources.appendingPathComponent("new.swift")
+        let stalePayload = String(
+            decoding: try JSONEncoder().encode([
+                WorkerFileNode(
+                    path: oldFile.path,
+                    isDirectory: false,
+                    isHidden: false,
+                    isGitIgnored: false,
+                    children: nil
+                )
+            ]),
+            as: UTF8.self
+        )
+        let currentPayload = String(
+            decoding: try JSONEncoder().encode([
+                WorkerFileNode(
+                    path: newFile.path,
+                    isDirectory: false,
+                    isHidden: false,
+                    isGitIgnored: false,
+                    children: nil
+                )
+            ]),
+            as: UTF8.self
+        )
+        let worker = BlockingDirectoryTreeWorker(responses: [stalePayload, currentPayload])
+        let serializedViewModel = FolderExplorerViewModel(worker: worker)
+        let sourcesItem = FileItem(
+            url: sources,
+            isDirectory: true,
+            children: [FileItem(url: oldFile, isDirectory: false)]
+        )
+        serializedViewModel.rootURL = tempRoot
+        serializedViewModel.loadedDirectoryIDs = [tempRoot.path, sources.path]
+        serializedViewModel.expandedDirectoryIDs = [sources.path]
+        serializedViewModel.replaceRootItems([sourcesItem])
+
+        serializedViewModel.refreshChildren(of: sourcesItem, showLoadingState: false)
+        await worker.waitForFirstExecution()
+        serializedViewModel.refreshChildren(of: sourcesItem, showLoadingState: false)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        let countWhileBlocked = await worker.executeCount
+        XCTAssertEqual(countWhileBlocked, 1)
+
+        await worker.releaseFirstExecution()
+        let latestSnapshotApplied = await waitForCondition(timeout: 3) {
+            serializedViewModel.rootItems
+                .first(where: { $0.id == sources.path })?
+                .children?
+                .map(\.displayName) == ["new.swift"]
+        }
+        XCTAssertTrue(latestSnapshotApplied)
+        let finalCount = await worker.executeCount
+        XCTAssertEqual(finalCount, 2)
+    }
+
+    func testWatcherChangesDeferredOnGitTabRefreshWhenFilesTabReturns() async throws {
+        viewModel.setRootFolder(tempRoot)
+        let ready = await waitForCondition(timeout: 8) {
+            self.viewModel.workerStatus == .ready
+                && self.viewModel.loadedDirectoryIDs.contains(self.tempRoot.path)
+        }
+        XCTAssertTrue(ready)
+
+        viewModel.activeSidebarTab = .git
+        let newFile = tempRoot.appendingPathComponent("from-watcher.swift")
+        try Data("print(\"new\")\n".utf8).write(to: newFile)
+        let event = DirectoryWatcher.Event(
+            path: newFile.path,
+            kind: .created,
+            isDirectory: false,
+            rawFlags: 0
+        )
+        viewModel.pendingExternalRefreshPaths = [newFile.path]
+        viewModel.pendingExternalRefreshEvents = [newFile.path: event]
+        viewModel.consumeExternalRefreshQueue()
+
+        XCTAssertFalse(viewModel.rootItems.contains(where: { $0.id == newFile.path }))
+        XCTAssertTrue(viewModel.deferredTreeRefreshPaths.contains(newFile.path))
+
+        viewModel.activeSidebarTab = .files
+        let appeared = await waitForCondition(timeout: 8) {
+            self.viewModel.rootItems.contains(where: { $0.id == newFile.path })
+        }
+        XCTAssertTrue(appeared)
+        XCTAssertTrue(viewModel.deferredTreeRefreshPaths.isEmpty)
+    }
+
+    func testCreateStartsRenameOnlyAfterNewItemIsInTree() async throws {
+        viewModel.setRootFolder(tempRoot)
+        let ready = await waitForCondition(timeout: 8) {
+            self.viewModel.workerStatus == .ready
+                && self.viewModel.loadedDirectoryIDs.contains(self.tempRoot.path)
+        }
+        XCTAssertTrue(ready)
+
+        viewModel.createNewFile(in: nil)
+        let renameStartedOnVisibleItem = await waitForCondition(timeout: 8) {
+            guard let renamingItemID = self.viewModel.renamingItemID else { return false }
+            return self.viewModel.findItem(withID: renamingItemID) != nil
+        }
+
+        XCTAssertTrue(renameStartedOnVisibleItem)
+        XCTAssertEqual(viewModel.renamingItemID, viewModel.selectedItemID)
+    }
+
+    func testDeleteRefreshesParentAndRemovesTreeItem() async throws {
+        let doomedFile = tempRoot.appendingPathComponent("delete-me.swift")
+        try Data("print(\"bye\")\n".utf8).write(to: doomedFile)
+        viewModel.setRootFolder(tempRoot)
+        let loaded = await waitForCondition(timeout: 8) {
+            self.viewModel.rootItems.contains(where: { $0.id == doomedFile.path })
+        }
+        XCTAssertTrue(loaded)
+
+        guard let doomedItem = viewModel.findItem(withID: doomedFile.path) else {
+            return XCTFail("Expected file in tree before deletion.")
+        }
+        viewModel.deleteItem(doomedItem)
+
+        let removed = await waitForCondition(timeout: 8) {
+            !FileManager.default.fileExists(atPath: doomedFile.path)
+                && self.viewModel.findItem(withID: doomedFile.path) == nil
+        }
+        XCTAssertTrue(removed)
+    }
+
+    func testRefreshClearsSelectionRemovedOutsideTheApp() async throws {
+        let sources = tempRoot.appendingPathComponent("Sources", isDirectory: true)
+        let selectedFile = sources.appendingPathComponent("selected.swift")
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        try Data("print(\"selected\")\n".utf8).write(to: selectedFile)
+
+        viewModel.setRootFolder(tempRoot)
+        let rootLoaded = await waitForCondition(timeout: 8) {
+            self.viewModel.findItem(withID: sources.path) != nil
+        }
+        XCTAssertTrue(rootLoaded)
+
+        guard let sourcesItem = viewModel.findItem(withID: sources.path) else {
+            return XCTFail("Expected Sources in the tree.")
+        }
+        viewModel.toggleExpansion(for: sourcesItem)
+        let childLoaded = await waitForCondition(timeout: 8) {
+            self.viewModel.findItem(withID: selectedFile.path) != nil
+        }
+        XCTAssertTrue(childLoaded)
+
+        guard let selectedItem = viewModel.findItem(withID: selectedFile.path) else {
+            return XCTFail("Expected selected.swift in the tree.")
+        }
+        viewModel.select(selectedItem)
+        viewModel.startRenaming(item: selectedItem)
+        try FileManager.default.removeItem(at: selectedFile)
+
+        let refreshed = await viewModel.refreshDirectoryContents(at: sources, showLoadingState: false)
+
+        XCTAssertTrue(refreshed)
+        XCTAssertNil(viewModel.selectedItemID)
+        XCTAssertNil(viewModel.selectedFileURL)
+        XCTAssertNil(viewModel.renamingItemID)
+        XCTAssertEqual(viewModel.selectedFolderURL?.standardizedFileURL.path, sources.standardizedFileURL.path)
+
+        guard let refreshedSources = viewModel.findItem(withID: sources.path) else {
+            return XCTFail("Expected Sources after refreshing its children.")
+        }
+        viewModel.select(refreshedSources)
+        try FileManager.default.removeItem(at: sources)
+
+        let rootRefreshed = await viewModel.refreshDirectoryContents(at: tempRoot, showLoadingState: false)
+
+        XCTAssertTrue(rootRefreshed)
+        XCTAssertNil(viewModel.selectedItemID)
+        XCTAssertNil(viewModel.selectedFileURL)
+        XCTAssertEqual(viewModel.selectedFolderURL?.standardizedFileURL.path, tempRoot.standardizedFileURL.path)
+    }
+
+    func testCreateAtStaleFolderSelectionFallsBackToExistingProjectDirectory() async throws {
+        let removedFolder = tempRoot.appendingPathComponent("Removed", isDirectory: true)
+        try FileManager.default.createDirectory(at: removedFolder, withIntermediateDirectories: true)
+
+        viewModel.setRootFolder(tempRoot)
+        let loaded = await waitForCondition(timeout: 8) {
+            self.viewModel.findItem(withID: removedFolder.path) != nil
+        }
+        XCTAssertTrue(loaded)
+
+        guard let removedFolderItem = viewModel.findItem(withID: removedFolder.path) else {
+            return XCTFail("Expected Removed in the tree.")
+        }
+        viewModel.select(removedFolderItem)
+        try FileManager.default.removeItem(at: removedFolder)
+
+        viewModel.createNewFileAtSelection()
+        let createdAtRoot = await waitForCondition(timeout: 8) {
+            self.viewModel.selectedFileURL?.deletingLastPathComponent().standardizedFileURL.path
+                == self.tempRoot.standardizedFileURL.path
+        }
+
+        XCTAssertTrue(createdAtRoot)
+        XCTAssertEqual(viewModel.selectedFolderURL?.standardizedFileURL.path, tempRoot.standardizedFileURL.path)
+    }
+
     func testCreateRenameDeleteWorkflowAndSelectionMapping() async throws {
         viewModel.setRootFolder(tempRoot)
         let ready = await waitForCondition(timeout: 8) { self.viewModel.workerStatus == .ready }
@@ -802,6 +1009,39 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(outlineView.selectedRow, fileRow)
     }
 
+    func testSelectionSyncClearsNativeSelectionWhenSelectedItemDisappears() {
+        let firstFile = FileItem(url: URL(fileURLWithPath: "/tmp/project/first.swift"), isDirectory: false)
+        let secondFile = FileItem(url: URL(fileURLWithPath: "/tmp/project/second.swift"), isDirectory: false)
+        var actions: [FileTreeAction] = []
+        var renameText = ""
+        let treeView = AppKitTreeView(
+            rootItems: [firstFile, secondFile],
+            expandedIDs: [],
+            loadingIDs: [],
+            selectedID: firstFile.id,
+            renamingID: nil,
+            searchQuery: "",
+            allowsScrolling: true,
+            renameText: Binding(
+                get: { renameText },
+                set: { renameText = $0 }
+            ),
+            onAction: { actions.append($0) },
+            onTransferDrop: { _ in false }
+        )
+
+        let (coordinator, _, outlineView, _) = makeMountedOutline(for: treeView)
+        coordinator.syncSelection()
+        XCTAssertGreaterThanOrEqual(outlineView.selectedRow, 0)
+
+        coordinator.selectedID = "/tmp/project/deleted.swift"
+        coordinator.syncSelection()
+
+        XCTAssertEqual(outlineView.selectedRow, -1)
+        XCTAssertFalse(coordinator.handleKeyDown(keyEvent(characters: "\r")))
+        XCTAssertTrue(actions.isEmpty)
+    }
+
     func testRootBackgroundContextMenuProvidesCreationActions() throws {
         let rootDirectory = FileItem(
             url: URL(fileURLWithPath: "/tmp/project/Sources"),
@@ -1230,6 +1470,41 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.node(for: updatedDirectory).item.children, [child])
     }
 
+    func testRefreshNodeCachePrunesItemsRemovedFromTree() {
+        let child = FileItem(url: URL(fileURLWithPath: "/tmp/project/Sources/removed.swift"), isDirectory: false)
+        let directory = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Sources"),
+            isDirectory: true,
+            children: [child]
+        )
+        var renameText = ""
+        let treeView = AppKitTreeView(
+            rootItems: [directory],
+            expandedIDs: [directory.id],
+            loadingIDs: [],
+            selectedID: nil,
+            renamingID: nil,
+            searchQuery: "",
+            allowsScrolling: true,
+            renameText: Binding(
+                get: { renameText },
+                set: { renameText = $0 }
+            ),
+            onAction: { _ in },
+            onTransferDrop: { _ in false }
+        )
+
+        let coordinator = treeView.makeCoordinator()
+        coordinator.refreshNodeCache(with: [directory])
+        XCTAssertNotNil(coordinator.nodeCache[child.id])
+
+        let refreshedDirectory = FileItem(url: directory.url, isDirectory: true, children: [])
+        coordinator.refreshNodeCache(with: [refreshedDirectory])
+
+        XCTAssertNil(coordinator.nodeCache[child.id])
+        XCTAssertNotNil(coordinator.nodeCache[directory.id])
+    }
+
     func testLoadingDirectoryUsesInlineLoadingNode() {
         let directory = makeDirectoryItem(path: "/tmp/project/Sources")
         var renameText = ""
@@ -1547,6 +1822,63 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
             return XCTFail("Expected toggleExpansion action second, got \(actions[1]).")
         }
         XCTAssertEqual(toggledItem, expectedItem)
+    }
+}
+
+private actor BlockingDirectoryTreeWorker: PaneWorkerExecuting {
+    private let responses: [String]
+    private var executionCountValue = 0
+    private var firstExecutionStartedContinuation: CheckedContinuation<Void, Never>?
+    private var firstExecutionReleaseContinuation: CheckedContinuation<Void, Never>?
+    private var firstExecutionWasReleased = false
+
+    init(responses: [String]) {
+        self.responses = responses
+    }
+
+    var executeCount: Int { executionCountValue }
+
+    func restart() async {}
+
+    func waitForFirstExecution() async {
+        if executionCountValue >= 1 { return }
+        await withCheckedContinuation { continuation in
+            firstExecutionStartedContinuation = continuation
+        }
+    }
+
+    func releaseFirstExecution() {
+        firstExecutionWasReleased = true
+        firstExecutionReleaseContinuation?.resume()
+        firstExecutionReleaseContinuation = nil
+    }
+
+    func execute(
+        _ method: PaneWorkerMethod,
+        arguments: [String: String],
+        timeout: TimeInterval
+    ) async throws -> String? {
+        guard method == .listTree else {
+            throw PaneWorkerError.workerFailure("Unexpected method: \(method.rawValue)")
+        }
+        guard executionCountValue < responses.count else {
+            throw PaneWorkerError.workerFailure("No response available")
+        }
+
+        let response = responses[executionCountValue]
+        executionCountValue += 1
+
+        if executionCountValue == 1 {
+            firstExecutionStartedContinuation?.resume()
+            firstExecutionStartedContinuation = nil
+            if !firstExecutionWasReleased {
+                await withCheckedContinuation { continuation in
+                    firstExecutionReleaseContinuation = continuation
+                }
+            }
+        }
+
+        return response
     }
 }
 

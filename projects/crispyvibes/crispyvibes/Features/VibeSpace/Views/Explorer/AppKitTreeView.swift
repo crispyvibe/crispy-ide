@@ -117,6 +117,9 @@ struct AppKitTreeView: NSViewRepresentable {
         let previousRowCount = outline.numberOfRows
 
         let oldRoots = coordinator.rootItems
+        let searchChanged = coordinator.searchQuery != searchQuery
+        let treeMutationChanged = coordinator.treeMutationRevision != treeMutationRevision
+        let rootsChanged = !rootItemsMatch(oldRoots, rootItems)
         coordinator.rootItems = rootItems
         coordinator.loadingIDs = loadingIDs
         coordinator.selectedID = selectedID
@@ -128,14 +131,17 @@ struct AppKitTreeView: NSViewRepresentable {
         coordinator.onTransferDrop = onTransferDrop
         coordinator.rootURL = rootURL
         coordinator.projectRootURLs = projectRootURLs
-        coordinator.refreshNodeCache(with: rootItems)
+        if rootsChanged || treeMutationChanged || searchChanged {
+            coordinator.refreshNodeCache(with: rootItems)
+        }
         coordinator.reconcilePendingExpansionStates(using: expandedIDs)
-
-        // Determine if tree structure changed
-        let rootsChanged = !rootItemsMatch(oldRoots, rootItems)
 
         if rootsChanged {
             applyRootDiff(outline: outline, coordinator: coordinator, oldRoots: oldRoots, newRoots: rootItems)
+            _ = coordinator.consumePendingTreeMutationRevision()
+            coordinator.syncExpansionState()
+        } else if searchChanged {
+            outline.reloadData()
             coordinator.syncExpansionState()
         } else {
             // Skip subtree reloads once the rename field editor is active so AppKit
@@ -221,11 +227,14 @@ struct AppKitTreeView: NSViewRepresentable {
     ) {
         let oldIDs = oldRoots.map(\.id)
         let newIDs = newRoots.map(\.id)
+        let oldItemsByID = Dictionary(uniqueKeysWithValues: oldRoots.map { ($0.id, $0) })
 
-        // Fast path: if order and set are identical, just reload existing nodes in place
+        // Metadata-only root changes do not require rebuilding expanded subtrees.
         if oldIDs == newIDs {
-            for node in coordinator.rootNodes() {
-                outline.reloadItem(node, reloadChildren: true)
+            for item in newRoots where oldItemsByID[item.id] != item {
+                if let node = coordinator.nodeCache[item.id] {
+                    outline.reloadItem(node, reloadChildren: false)
+                }
             }
             return
         }
@@ -234,9 +243,11 @@ struct AppKitTreeView: NSViewRepresentable {
         let newSet = Set(newIDs)
         let removed = oldSet.subtracting(newSet)
         let added = newSet.subtracting(oldSet)
+        let oldSurvivorOrder = oldIDs.filter(newSet.contains)
+        let newSurvivorOrder = newIDs.filter(oldSet.contains)
 
-        // Pure reorder — no adds/removes, fall back to full reload
-        if removed.isEmpty, added.isEmpty {
+        // Incremental indexes are only valid when surviving rows keep order.
+        if oldSurvivorOrder != newSurvivorOrder {
             outline.reloadData()
             return
         }
@@ -253,10 +264,10 @@ struct AppKitTreeView: NSViewRepresentable {
             outline.insertItems(at: indicesToInsert, inParent: nil, withAnimation: .slideDown)
         }
 
-        // Reload surviving items to pick up any property changes
-        for item in newRoots where !added.contains(item.id) {
+        // Reload surviving rows to pick up metadata without recreating children.
+        for item in newRoots where !added.contains(item.id) && oldItemsByID[item.id] != item {
             if let node = coordinator.nodeCache[item.id] {
-                outline.reloadItem(node, reloadChildren: true)
+                outline.reloadItem(node, reloadChildren: false)
             }
         }
     }

@@ -48,6 +48,7 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 3. A new item is created and immediately enters inline rename mode.
 4. Type the desired name and press Enter to confirm.
 5. If a name collision exists, a unique path is generated automatically.
+6. If the previously selected folder was removed outside Crispy, creation uses its nearest existing parent in the project.
 
 ### Renaming Items
 
@@ -64,6 +65,7 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 2. A destructive confirmation dialog appears.
 3. Confirm to remove the item from disk.
 4. Dependent selections under the deleted subtree are cleared.
+5. Items removed outside Crispy are also deselected when their directory refreshes.
 
 ### Opening Files
 
@@ -113,6 +115,7 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 
 - Clicking a disclosure arrow expands/collapses the row without changing the current selection.
 - File system events trigger targeted directory refreshes (not full tree reloads) — only affected directories update.
+- Changes received while another sidebar tab is active are applied when you return to Files.
 - Watcher-triggered refreshes run silently without loading spinners.
 - Tree mutation tracking prevents redundant reloads when multiple events arrive in a batch.
 - Each project header includes dedicated refresh, new file, and new folder buttons that target that specific project regardless of focus.
@@ -124,7 +127,7 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 | Issue | Solution |
 |-------|----------|
 | Directory won't expand | Check for loading indicator. If stuck, use the project header refresh button. For remote projects, verify SSH connection. |
-| Files not appearing after creation | The tree should auto-refresh via file watcher. Click the refresh button if needed. |
+| Files not appearing after creation | The affected folder refreshes before inline rename begins. If the worker reports an error, dismiss it and retry the operation. |
 | Error alert on operation | Sidebar operation failures surface as dismissible alerts. Read the message and retry. |
 | Remote explorer shows no files | Check SSH connection status in the toolbar. Use explicit refresh once connected. |
 | Git status not showing | Ensure the project is inside a git repository. Check source control settings for ignored directories. |

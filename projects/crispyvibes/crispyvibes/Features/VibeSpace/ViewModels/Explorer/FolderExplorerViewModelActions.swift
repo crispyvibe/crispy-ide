@@ -94,11 +94,11 @@ extension FolderExplorerViewModel {
     }
 
     func createNewFileAtSelection() {
-        createItem(named: "untitled", isFolder: false, inDirectoryURL: selectedFolderURL ?? rootURL)
+        createItem(named: "untitled", isFolder: false, inDirectoryURL: creationDirectoryAtSelection())
     }
 
     func createNewFolderAtSelection() {
-        createItem(named: "New Folder", isFolder: true, inDirectoryURL: selectedFolderURL ?? rootURL)
+        createItem(named: "New Folder", isFolder: true, inDirectoryURL: creationDirectoryAtSelection())
     }
 
     func startRenaming(item: FileItem) {
@@ -153,7 +153,10 @@ extension FolderExplorerViewModel {
                         newURL: destinationURL.standardizedFileURL
                     )
                 )
-                self.refreshTree()
+                _ = await self.refreshDirectoryContents(
+                    at: oldURL.deletingLastPathComponent(),
+                    showLoadingState: false
+                )
             } catch {
                 self.userFacingError = "Rename failed: \(error.localizedDescription)"
                 self.workerStatus = .unavailable("Explorer worker unavailable")
@@ -184,7 +187,10 @@ extension FolderExplorerViewModel {
                     self.selectedItemID = nil
                 }
 
-                self.refreshTree()
+                _ = await self.refreshDirectoryContents(
+                    at: item.url.deletingLastPathComponent(),
+                    showLoadingState: false
+                )
             } catch {
                 self.userFacingError = "Delete failed: \(error.localizedDescription)"
                 self.workerStatus = .unavailable("Explorer worker unavailable")

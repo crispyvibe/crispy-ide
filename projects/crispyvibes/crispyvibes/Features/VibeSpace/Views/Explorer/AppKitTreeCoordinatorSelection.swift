@@ -75,10 +75,16 @@ extension AppKitTreeView.Coordinator {
         guard let outline = outlineView else { return }
         guard renamingID == nil else { return }
         guard let selectedID else {
+            lastSelectedItemWasFile = false
             deselectAll(in: outline)
             return
         }
-        guard let node = nodeCache[selectedID] else { return }
+        guard let node = nodeCache[selectedID] else {
+            lastSelectedItemWasFile = false
+            deselectAll(in: outline)
+            return
+        }
+        lastSelectedItemWasFile = !node.item.isDirectory
         let row = outline.row(forItem: node)
         guard row >= 0 else {
             deselectAll(in: outline)
