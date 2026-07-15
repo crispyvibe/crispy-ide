@@ -89,6 +89,7 @@ The Markdown Editor provides a rich editing experience for `.md`, `.markdown`, a
 
 - MDX files (`.mdx`) open in the same markdown editor with identical behavior.
 - Content sync uses Turndown to convert HTML back to markdown — formatting is preserved as canonical markdown syntax.
+- Tables remain GFM markdown pipe tables after rich-mode edits, including column alignment and escaped pipe characters.
 - The editor automatically recovers from WKWebView crashes by re-rendering content with no data loss.
 - Code blocks within markdown receive syntax highlighting based on the specified language fence.
 - The formatting toolbar provides: Bold, Italic, Headings (H1–H6), Ordered List, Unordered List, Blockquote, Code Block, and Horizontal Rule.
@@ -101,4 +102,5 @@ The Markdown Editor provides a rich editing experience for `.md`, `.markdown`, a
 | Link button does nothing | Ensure text is selected before clicking Link. The editor requires a selection to create a link. |
 | Theme not applying | Close and reopen the file to force theme token re-injection. |
 | Table dimensions rejected | Ensure row and column values are valid positive integers. |
+| Table changed to HTML | Reopen the file after updating Crispy. Rich-mode table edits are stored as GFM markdown instead of HTML. |
 | Source view out of sync | Toggle back to rich view — content state is preserved. If issues persist, save and reopen. |

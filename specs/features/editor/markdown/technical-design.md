@@ -15,7 +15,10 @@ Markdown editing uses a dual-mode architecture: a rich rendered view (default) b
 1. Markdown source loaded from disk.
 2. Rich mode: source injected into `WKWebView` via `MarkupRenderedEditor` in markdown mode.
 3. User edits in rich mode produce HTML.
-4. HTML converted back to canonical markdown via **Turndown** library.
+4. The live editor DOM is converted back to canonical markdown via **Turndown**.
+   - Tables use a dedicated GFM serializer that emits header, alignment separator, and body rows.
+   - Editor-only comment gutter controls are removed from serialized output.
+   - Passing the DOM node directly avoids creating and reparsing a second full `innerHTML` string.
 5. Canonical markdown sent to native `MarkdownViewModel` as `rawContent`.
 6. Autosave writes `rawContent` to disk.
 
@@ -47,6 +50,9 @@ Segmented control switches between Rich and Source. Mode stored per document key
 - Rich mode edits → Turndown converts HTML to markdown → `rawContent` updated in view model.
 - Source mode edits → direct `rawContent` update.
 - Content injection and format commands deferred until `WKWebView` signals readiness via `editorReady`.
+- Browser-to-native values are recorded before publishing through SwiftUI, preventing a synchronous native echo from rerendering the editing DOM.
+- Unchanged native echoes are ignored. Unavoidable rerenders snapshot and restore the document-wide text selection offsets.
+- Comment bridge registration and decoration payloads are idempotent, preventing observable update loops and DOM churn while typing.
 
 ### Guided Authoring
 
@@ -86,3 +92,5 @@ Segmented control switches between Rich and Source. Mode stored per document key
 
 - Autosave debounce: 0.45 seconds.
 - Content injection deferred until `editorReady` to avoid race conditions.
+- Rich-editor synchronization is debounced and deduplicated.
+- Markdown serialization operates on a cloned DOM node instead of an `innerHTML` string parse, reducing peak memory for table-heavy documents.

@@ -146,7 +146,7 @@ Status values:
 | `EDT-020` | `active` | `no` | CrispyVibesUITests.UITestPlaceholder/testExplorerSelectionUpdatesEditorTitle | `docs/features/editor/rich-text-shared/feature.md:45` | Formatting ribbon is visible for editable markdown/HTML |
 | `EDT-021` | `active` | `no` | — | `docs/features/editor/rich-text-shared/feature.md:50` | Formatting command request is sent to rendering surface |
 | `EDT-022` | `active` | `no` | — | `docs/features/editor/rich-text-shared/feature.md:56` | Supported formatting commands |
-| `EDT-023` | `active` | `no` | — | `docs/features/editor/markdown/feature.md:12` | Markdown mode stores canonical markdown content |
+| `EDT-023` | `active` | `no` | CrispyVibesUnitTests.MarkdownRuntimeTests/testMarkdownTableRoundTripsAsGFMWithoutHTML<br>CrispyVibesUnitTests.MarkdownRuntimeTests/testMarkdownRerenderPreservesCaretTextOffset<br>CrispyVibesUnitTests.MarkdownRuntimeTests/testMarkdownRerenderPreservesCaretInsideTableCell | `docs/features/editor/markdown/feature.md:12` | Markdown mode stores canonical markdown content |
 | `EDT-024` | `active` | `no` | CrispyVibesUnitTests.MarkdownViewModelTests/testOpenHTMLEditAndSaveRoundTrip | `docs/features/editor/html/feature.md:12` | HTML mode stores full HTML document content |
 | `EDT-025` | `active` | `no` | — | `docs/features/editor/html/feature.md:18` | HTML mode injects base tag for relative assets |
 | `EDT-026` | `active` | `no` | — | `docs/features/editor/markdown/feature.md:18` | Markdown code blocks are syntax-highlighted |

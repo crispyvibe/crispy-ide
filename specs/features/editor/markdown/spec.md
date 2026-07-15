@@ -40,6 +40,9 @@ The markdown editor detects WKWebView crashes and re-renders content automatical
 ### F008-R11: Theme Token Injection
 Approximately 50 CSS custom properties are injected into the WKWebView to reflect the active theme.
 
+### F008-R12: Stable Rich-Editor Selection and Sync
+Rich-mode content synchronization MUST preserve the user's caret or selection. Native content echoes and comment-decoration refreshes MUST NOT trigger recursive view updates or replace the live editing DOM.
+
 ---
 
 ## Scenarios
@@ -56,6 +59,7 @@ Given markdown editor is active
 When user edits rendered content
 Then HTML is converted back to markdown via Turndown
 And markdown source is sent to native view model
+And rendered tables are stored as GFM pipe-table syntax rather than HTML table elements
 
 ### F008-S03: Markdown code blocks are syntax-highlighted
 Given markdown content contains code fences
@@ -150,3 +154,11 @@ Given a markdown document is rendered
 When the active theme changes or content loads
 Then approximately 50 CSS custom properties are injected into the WKWebView
 And rendered content reflects the current theme
+
+### F008-S14: Rich editing preserves the caret during synchronization
+Given a markdown document is open in rich mode
+And the caret is within editable text or a table cell
+When edited content synchronizes to the native document buffer
+Or native content is rendered back into the rich editor
+Then the caret remains at the equivalent text offset
+And repeated bridge registration or unchanged decoration payloads do not publish another view update

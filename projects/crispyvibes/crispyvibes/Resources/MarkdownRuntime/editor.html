@@ -417,14 +417,104 @@
   <script src="auto-render.min.js"></script>
   <script nonce="crispyvibes-editor">
     const editor = document.getElementById("editor");
-    const turndownService = new TurndownService({
+    const turndownOptions = {
       headingStyle: "atx",
       codeBlockStyle: "fenced",
       bulletListMarker: "-",
       emDelimiter: "*"
+    };
+    const turndownService = new TurndownService(turndownOptions);
+    const tableCellTurndownService = new TurndownService(turndownOptions);
+
+    function escapeMarkdownTablePipes(value) {
+      const source = String(value || "");
+      let result = "";
+      for (let index = 0; index < source.length; index++) {
+        const character = source[index];
+        if (character === "|") {
+          let precedingBackslashes = 0;
+          for (let cursor = result.length - 1; cursor >= 0 && result[cursor] === "\\"; cursor--) {
+            precedingBackslashes++;
+          }
+          if (precedingBackslashes % 2 === 0) {
+            result += "\\";
+          }
+        }
+        result += character;
+      }
+      return result;
+    }
+
+    function markdownForTableCell(cell) {
+      if (!cell) return "";
+      const clone = cell.cloneNode(true);
+      clone.querySelectorAll(".crispyvibes-gutter-btn").forEach((node) => node.remove());
+      return escapeMarkdownTablePipes(
+        tableCellTurndownService
+          .turndown(clone)
+          .replace(/\r?\n+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+      );
+    }
+
+    function markdownTableAlignment(cell) {
+      if (!cell) return "---";
+      const alignment = String(
+        cell.getAttribute("align") ||
+        (cell.style && cell.style.textAlign) ||
+        ""
+      ).toLowerCase();
+      if (alignment === "center") return ":---:";
+      if (alignment === "right") return "---:";
+      if (alignment === "left") return ":---";
+      return "---";
+    }
+
+    function markdownTableRow(cells, columnCount) {
+      const values = Array.from({ length: columnCount }, (_, index) => {
+        return markdownForTableCell(cells[index]);
+      });
+      return `| ${values.join(" | ")} |`;
+    }
+
+    function markdownFromTable(table) {
+      const rows = Array.from(table.rows || []);
+      if (rows.length === 0) return "";
+
+      const explicitHeader = table.tHead && table.tHead.rows.length > 0
+        ? table.tHead.rows[0]
+        : null;
+      const headerRow = explicitHeader || rows[0];
+      const bodyRows = rows.filter((row) => row !== headerRow);
+      const columnCount = rows.reduce(
+        (maximum, row) => Math.max(maximum, row.cells ? row.cells.length : 0),
+        0
+      );
+      if (columnCount === 0) return "";
+
+      const headerCells = Array.from(headerRow.cells || []);
+      const separator = Array.from({ length: columnCount }, (_, index) => {
+        return markdownTableAlignment(headerCells[index]);
+      });
+      const markdownRows = [
+        markdownTableRow(headerCells, columnCount),
+        `| ${separator.join(" | ")} |`,
+        ...bodyRows.map((row) => markdownTableRow(Array.from(row.cells || []), columnCount))
+      ];
+      return `\n\n${markdownRows.join("\n")}\n\n`;
+    }
+
+    turndownService.addRule("gfmTable", {
+      filter: "table",
+      replacement: function(_content, node) {
+        return markdownFromTable(node);
+      }
     });
-    // Keep table elements as raw HTML so inserted tables persist across save/reopen.
-    turndownService.keep(["table", "thead", "tbody", "tfoot", "tr", "th", "td"]);
+
+    turndownService.remove(function(node) {
+      return node.nodeType === 1 && node.classList.contains("crispyvibes-gutter-btn");
+    });
 
     // Convert rendered mermaid diagrams back to fenced code blocks using stored source.
     turndownService.addRule("mermaid", {
@@ -478,6 +568,8 @@
     var activeDialog = null;
     var imageCandidateRequestCounter = 0;
     var markdownBaseHref = "";
+    var lastSynchronizedMarkdown = null;
+    var lastSynchronizedHTML = null;
     const imageCandidateRequestHandlers = new Map();
 
     function applyThemeTokens(tokens) {
@@ -606,6 +698,7 @@
     }
 
     function renderMarkdown(markdown, baseHref) {
+      cancelPendingSync();
       suppressSync = true;
       teardownHTMLFrame();
       editor.setAttribute("contenteditable", "true");
@@ -625,6 +718,7 @@
     }
 
     function renderHTML(html, baseHref) {
+      cancelPendingSync();
       suppressSync = true;
       markdownBaseHref = "";
       editor.setAttribute("contenteditable", "false");
@@ -650,32 +744,60 @@
     }
 
     function syncToNative() {
+      cancelPendingSync();
       if (suppressSync) return;
       if (!window.webkit || !window.webkit.messageHandlers || !window.webkit.messageHandlers.contentChanged) return;
 
-      if (editorMode === "html") {
-        window.webkit.messageHandlers.contentChanged.postMessage(currentHTMLFromFrame());
-      } else {
-        const markdown = turndownService.turndown(editor.innerHTML);
-        window.webkit.messageHandlers.contentChanged.postMessage(markdown);
+      try {
+        if (editorMode === "html") {
+          const html = currentHTMLFromFrame();
+          if (html === lastSynchronizedHTML) return;
+          window.webkit.messageHandlers.contentChanged.postMessage(html);
+          lastSynchronizedHTML = html;
+        } else {
+          const markdown = turndownService.turndown(editor);
+          if (markdown === lastSynchronizedMarkdown) return;
+          window.webkit.messageHandlers.contentChanged.postMessage(markdown);
+          lastSynchronizedMarkdown = markdown;
+        }
+      } catch (error) {
+        console.error("Unable to synchronize editor content.", error);
       }
     }
 
+    function cancelPendingSync() {
+      if (!pendingTimer) return;
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+
     function scheduleSync() {
-      if (pendingTimer) {
-        clearTimeout(pendingTimer);
-      }
+      cancelPendingSync();
       pendingTimer = setTimeout(syncToNative, 220);
     }
 
     window.crispyvibesSetMarkdown = function(markdown, baseHref) {
+      const source = markdown || "";
+      if (editorMode === "markdown" && source === lastSynchronizedMarkdown) {
+        return;
+      }
+      const selectionSnapshot = editorMode === "markdown"
+        ? markdownTextSelectionSnapshot()
+        : null;
       editorMode = "markdown";
-      renderMarkdown(markdown || "", baseHref || "");
+      lastSynchronizedMarkdown = source;
+      renderMarkdown(source, baseHref || "");
+      restoreMarkdownTextSelection(selectionSnapshot);
     };
 
     window.crispyvibesSetHTML = function(html, baseHref) {
+      const source = html || "";
+      if (editorMode === "html" && source === lastSynchronizedHTML) {
+        return;
+      }
       editorMode = "html";
-      renderHTML(html || "", baseHref || "");
+      lastSynchronizedHTML = source;
+      renderHTML(source, baseHref || "");
     };
 
     window.crispyvibesApplyFormattingCommand = function(command) {
@@ -972,6 +1094,66 @@
 
     function markdownCaretSnapshot() {
       return markdownRangeSnapshot({ requireNonEmptySelection: false });
+    }
+
+    function markdownTextSelectionSnapshot() {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return null;
+      const range = selection.getRangeAt(0);
+      if (!range || !editor.contains(range.commonAncestorContainer)) return null;
+      try {
+        const prefix = range.cloneRange();
+        prefix.selectNodeContents(editor);
+        prefix.setEnd(range.startContainer, range.startOffset);
+        return {
+          start: prefix.toString().length,
+          end: prefix.toString().length + range.toString().length
+        };
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function markdownTextPosition(offset) {
+      const targetOffset = Math.max(0, Number(offset) || 0);
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+      let consumed = 0;
+      let node = walker.nextNode();
+      let lastTextNode = null;
+      while (node) {
+        const length = String(node.textContent || "").length;
+        if (targetOffset <= consumed + length) {
+          return { node, offset: Math.max(0, targetOffset - consumed) };
+        }
+        consumed += length;
+        lastTextNode = node;
+        node = walker.nextNode();
+      }
+      if (lastTextNode) {
+        return {
+          node: lastTextNode,
+          offset: String(lastTextNode.textContent || "").length
+        };
+      }
+      return { node: editor, offset: 0 };
+    }
+
+    function restoreMarkdownTextSelection(snapshot) {
+      if (!snapshot) return false;
+      const selection = window.getSelection();
+      if (!selection) return false;
+      try {
+        const start = markdownTextPosition(snapshot.start);
+        const end = markdownTextPosition(Math.max(snapshot.start, snapshot.end));
+        const range = document.createRange();
+        range.setStart(start.node, start.offset);
+        range.setEnd(end.node, end.offset);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
 
     function markdownRangeSnapshot(options) {

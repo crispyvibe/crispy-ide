@@ -107,7 +107,7 @@ EDT-019	active	CrispyVibesUITests.UITestPlaceholder/testEditorFindAndReplaceKeyb
 EDT-020	active	CrispyVibesUITests.UITestPlaceholder/testExplorerSelectionUpdatesEditorTitle
 EDT-021	active	
 EDT-022	active	
-EDT-023	active	
+EDT-023	active	CrispyVibesUnitTests.MarkdownRuntimeTests/testMarkdownTableRoundTripsAsGFMWithoutHTML; CrispyVibesUnitTests.MarkdownRuntimeTests/testMarkdownRerenderPreservesCaretTextOffset; CrispyVibesUnitTests.MarkdownRuntimeTests/testMarkdownRerenderPreservesCaretInsideTableCell
 EDT-024	active	CrispyVibesUnitTests.MarkdownViewModelTests/testOpenHTMLEditAndSaveRoundTrip
 EDT-025	active	
 EDT-026	active	

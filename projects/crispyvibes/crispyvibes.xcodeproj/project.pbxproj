@@ -204,6 +204,8 @@
 		925F4EB8E767E980A3F9F1C6 /* GitDiffPreviewParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45184A9D9E2893F75D5A2AB4 /* GitDiffPreviewParsing.swift */; };
 		92B06328100B2AD7FA928723 /* AppThemePaletteTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F8A17EF26817B99BF61226 /* AppThemePaletteTypes.swift */; };
 		93A43C758C5A20A048F43BA2 /* CommentAnchorRelocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F26FC2BEE5DCBEBDBDF7692 /* CommentAnchorRelocatorTests.swift */; };
+		A8C001000000000000000001 /* MarkdownRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C001000000000000000003 /* MarkdownRuntimeTests.swift */; };
+		A8C001000000000000000002 /* CodeEditorCommentBridgeStabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C001000000000000000004 /* CodeEditorCommentBridgeStabilityTests.swift */; };
 		93FFFF6B9927D0B41702B83B /* TerminalSessionAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 198FC39D6403581793135228 /* TerminalSessionAppearance.swift */; };
 		95244885A7F9873771A98E78 /* EditorDropZoneOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D057D20F79F8DE3AD7C8756 /* EditorDropZoneOverlay.swift */; };
 		95C59CC8111B80C96DFB78B4 /* BoardSpatialNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 967D7A8F95E9085063F44D87 /* BoardSpatialNavigation.swift */; };
@@ -701,6 +703,8 @@
 		0D057D20F79F8DE3AD7C8756 /* EditorDropZoneOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorDropZoneOverlay.swift; sourceTree = "<group>"; };
 		0D8EB8B8342C31938D394917 /* VibeSpaceMultiProjectUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceMultiProjectUITests.swift; sourceTree = "<group>"; };
 		0F26FC2BEE5DCBEBDBDF7692 /* CommentAnchorRelocatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentAnchorRelocatorTests.swift; sourceTree = "<group>"; };
+		A8C001000000000000000003 /* MarkdownRuntimeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownRuntimeTests.swift; sourceTree = "<group>"; };
+		A8C001000000000000000004 /* CodeEditorCommentBridgeStabilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CodeEditorCommentBridgeStabilityTests.swift; sourceTree = "<group>"; };
 		126E91B4976C63221AAF2FDB /* CodeEditorCommentBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CodeEditorCommentBridge.swift; sourceTree = "<group>"; };
 		132A680C12159B6827A422A2 /* TerminalSessionDelegateAndView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalSessionDelegateAndView.swift; sourceTree = "<group>"; };
 		136156E9F56987AB0BA1B754 /* BoardHitTesting.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BoardHitTesting.swift; sourceTree = "<group>"; };
@@ -2103,6 +2107,7 @@
 			isa = PBXGroup;
 			children = (
 				0F26FC2BEE5DCBEBDBDF7692 /* CommentAnchorRelocatorTests.swift */,
+				A8C001000000000000000004 /* CodeEditorCommentBridgeStabilityTests.swift */,
 			);
 			name = Comments;
 			path = Comments;
@@ -3025,6 +3030,7 @@
 			children = (
 				C99C9C15D74A9A0AA1C73543 /* TextProcessorServiceTests.swift */,
 				SEC00003000000000000FILE /* EditorHTMLSecurityTests.swift */,
+				A8C001000000000000000003 /* MarkdownRuntimeTests.swift */,
 				EE83452DC02F821972872F31 /* AutosaveSchedulerTests.swift */,
 			);
 			name = Services;
@@ -4343,6 +4349,8 @@
 				5B7A9A418FBBDFA90B56171B /* ACPTransportLineSplittingTests.swift in Sources */,
 				AC0010010000000000000001 /* ACPTransportPromptCompletionTests.swift in Sources */,
 				93A43C758C5A20A048F43BA2 /* CommentAnchorRelocatorTests.swift in Sources */,
+				A8C001000000000000000001 /* MarkdownRuntimeTests.swift in Sources */,
+				A8C001000000000000000002 /* CodeEditorCommentBridgeStabilityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
