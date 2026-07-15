@@ -24,7 +24,7 @@ The tree MUST sort folders before files, case-insensitively. Hidden items MUST b
 
 ### F024-R03: Selection
 
-Selecting a file MUST update both file and folder selection. Selecting a folder MUST update folder selection and clear file selection. Selecting a file from a non-focused project MUST focus that project.
+Selecting a file MUST update both file and folder selection. Selecting a folder MUST update folder selection and clear file selection. Selecting a file from a non-focused project MUST focus that project. A successful directory refresh MUST clear selection and rename state for items no longer present and move a removed folder selection to the nearest existing ancestor.
 
 ### F024-R04: Expansion and Lazy Loading
 
@@ -36,7 +36,7 @@ Search MUST filter recursively with ancestry preservation and highlight matching
 
 ### F024-R06: Create, Rename, Delete
 
-Create file/folder MUST enter immediate inline rename mode with collision handling. Rename MUST validate names and remap selections. Delete MUST require confirmation and clear dependent selections.
+Create file/folder MUST enter immediate inline rename mode with collision handling. Creation from a stale folder selection MUST fall back to the nearest existing project directory. Rename MUST validate names and remap selections. Delete MUST require confirmation and clear dependent selections.
 
 ### F024-R07: Context Menu and Header Actions
 
@@ -69,6 +69,10 @@ Sidebar operation failures MUST surface user-facing dismissible alerts.
 ### F024-R14: Disclosure Toggles Work Across All Visible Projects
 
 Clicking a visible project or directory disclosure control MUST expand or collapse that row regardless of whether its project is currently focused. Using the disclosure control MUST NOT change the current selection by itself.
+
+### F024-R15: Consistent Incremental Refresh
+
+Refreshes for the same directory MUST be serialized and coalesced so an older snapshot cannot overwrite newer filesystem state. Watcher changes received while the Files tab or initial tree load is inactive MUST be retained and applied when the tree becomes active. File mutations MUST refresh the affected parent before starting inline rename or completing their visible update.
 
 ## Scenarios
 
@@ -400,6 +404,34 @@ Note: This action exists in the view model but is not currently wired into any c
 **Then** only directories with pending mutations are reloaded in NSOutlineView
 **And** redundant reloads for unchanged directories are skipped
 
+### Scenario F024-S46: Concurrent refreshes cannot restore stale entries
+
+**Given** a directory refresh is in flight
+**When** another refresh for the same directory is requested
+**Then** the second request is coalesced into one follow-up pass
+**And** the older snapshot cannot overwrite the follow-up result
+
+### Scenario F024-S47: Watcher changes survive an inactive Files tab
+
+**Given** filesystem changes arrive while the Git tab is active or before the initial tree load completes
+**When** the Files tree becomes active and loaded
+**Then** the pending paths are refreshed
+**And** additions and deletions appear without a manual refresh
+
+### Scenario F024-S48: Creation waits for a visible tree item
+
+**Given** the user creates a file or folder
+**When** the worker returns the created path
+**Then** the affected parent directory is refreshed
+**And** inline rename starts only after the created item exists in the tree
+
+### Scenario F024-S49: Outline updates preserve unchanged subtrees
+
+**Given** a root-level or targeted directory mutation occurs
+**When** NSOutlineView applies the update
+**Then** unchanged expanded subtrees are not recursively reloaded
+**And** cached nodes removed from the model are pruned
+
 ## Acceptance Criteria
 
 - Tree load completes within 200ms for projects with up to 10,000 files (PERF-3).
@@ -417,3 +449,4 @@ Note: This action exists in the view model but is not currently wired into any c
 |------|--------|--------|
 | 2026-04-15 | Migrated from docs/features/sidebar (SDB-001–SDB-006, SDB-009–SDB-011, SDB-014, SDB-016) and docs/features/sidebar/folder-explorer (SDF-001–SDF-019, SDF-021–SDF-023, SDF-025–SDF-031) | — |
 | 2026-04-16 | Added targeted watcher refresh (S42), silent subtree refresh (S43), disclosure toggle (S44), tree mutation tracking (S45) | — |
+| 2026-07-14 | Added serialized refreshes, deferred watcher replay, deterministic create/rename visibility, and incremental outline updates (S46-S49) | — |

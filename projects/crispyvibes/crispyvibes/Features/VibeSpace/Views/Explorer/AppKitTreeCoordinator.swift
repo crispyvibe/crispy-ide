@@ -96,12 +96,21 @@ extension AppKitTreeView {
         }
 
         func refreshNodeCache(with items: [FileItem]) {
-            for item in items {
-                _ = node(for: item)
-                if let children = item.children {
-                    refreshNodeCache(with: children)
+            var liveIDs: Set<String> = []
+
+            func refresh(_ currentItems: [FileItem]) {
+                for item in currentItems {
+                    liveIDs.insert(item.id)
+                    _ = node(for: item)
+                    if let children = item.children {
+                        refresh(children)
+                    }
                 }
             }
+
+            refresh(items)
+            nodeCache = nodeCache.filter { liveIDs.contains($0.key) }
+            loadingNodeCache = loadingNodeCache.filter { liveIDs.contains($0.key) }
         }
 
         // MARK: NSOutlineViewDataSource

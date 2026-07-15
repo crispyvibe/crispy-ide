@@ -49,7 +49,7 @@ Directories respond only to select and toggle-expansion.
 
 ### Create, Rename, Delete
 
-- **Create** — default names: "untitled" (file), "New Folder" (folder). Targets selected folder or project root. Enters inline rename mode immediately.
+- **Create** — default names: "untitled" (file), "New Folder" (folder). Targets the selected folder or project root; a stale selected folder falls back to its nearest existing project ancestor. Enters inline rename mode immediately.
 - **Rename** — inline editing state. Committed via worker. On success: selections updated, rename event published (consumed by open editors), tree refreshed. Empty/whitespace names rejected silently.
 - **Delete** — via worker. Selections pointing to deleted item or descendants cleared. Tree refreshed.
 
@@ -99,6 +99,23 @@ Watcher-triggered refreshes use `showLoadingState: false` to avoid loading spinn
 - `consumePendingTreeMutationRevision()` — returns and clears pending revision, preventing redundant reloads when revision hasn't changed.
 - `reloadChangedDirectoryNodes()` replaces `reloadExpandedNodes()` — only reloads NSOutlineView items whose directory IDs appear in `changedDirectoryIDs`.
 
+### Refresh Coordination
+
+- Root loads, watcher updates, lazy child loads, and mutation refreshes use the same per-directory refresh coordinator.
+- Only one `listTree` request per directory can be in flight. Additional requests coalesce into one follow-up pass, and their callers wait for that pass.
+- A tree-session identifier prevents responses from a previous project/root session from applying after the root changes.
+- Watcher paths received while Files is inactive or the initial root load is incomplete are retained. Returning to Files, or completing the initial load, replays those paths.
+- Create refreshes and expands the affected parent before setting selection and inline rename state. Rename, delete, move, and copy refresh only their affected parent directories.
+- Successful directory snapshots reconcile selection and rename paths inside that directory. Missing items are cleared, and a removed selected folder falls back to its nearest surviving ancestor.
+
+### Outline Reconciliation
+
+- Selection and rename-only SwiftUI updates do not recursively walk the node cache.
+- Root insertions/removals use `NSOutlineView` incremental operations. Surviving root rows reload only when their metadata changed and never recursively reload unchanged children.
+- Targeted directory mutations reload only the changed parent node with children.
+- Node-cache entries absent from the current model are pruned during tree reconciliation.
+- If the selected model ID has no cached node or visible row, native outline selection is cleared so keyboard actions cannot target an adjacent row selected implicitly by AppKit.
+
 ### Disclosure vs Expansion Toggle
 
 - `requestDisclosureToggle` — triggered by clicking the disclosure arrow; expands/collapses without changing selection.
@@ -140,4 +157,5 @@ The vibespace-level source control watcher filters observed paths before queuein
 - Search debounce: 180 milliseconds.
 - Directory watcher debounce: 300 milliseconds.
 - Watcher path cap: 256 simultaneous paths.
+- At most one active directory listing per directory, plus one coalesced follow-up pass.
 - Drag-and-drop transfer timeout: 20 seconds per item.
