@@ -23,6 +23,8 @@ struct ContentViewerView: View {
     /// is a file, the comments side-panel docks on the right.
     var commentStore: VibeSpaceCommentStore? = nil
     @Environment(\.vibespaceTodoStoreEnvironment) private var todoStore
+    @Environment(\.todoLanePipelineBridgeEnvironment) private var todoPipelineBridge
+    @Environment(\.vibeLaneSurfaceNavigationEnvironment) private var vibeLaneNavigation
     @State private var dropZone: EditorDropZone?
     @State private var isDropTargeted = false
 
@@ -183,6 +185,9 @@ struct ContentViewerView: View {
                             projects: projects,
                             vibespaceID: vibespaceID
                         )
+                    },
+                    onOpenFileTarget: { target in
+                        openTodoFileAction(target.url.path, target.line)
                     }
                 )
             case .webPage(let reference):
@@ -287,7 +292,13 @@ struct ContentViewerView: View {
     @ViewBuilder
     private var todosContent: some View {
         if let todoStore {
-            TodosSurfaceView(store: todoStore, focusedProjectPath: focusedProjectRootPath)
+            TodosSurfaceView(
+                store: todoStore,
+                focusedProjectPath: focusedProjectRootPath,
+                onRefine: refineTodoAction,
+                onOpenFile: openTodoFileAction,
+                onOpenLaneTask: openLaneTaskAction
+            )
         } else {
             ContentUnavailableView(AppStrings.Todos.title, systemImage: "checklist")
         }
@@ -296,7 +307,69 @@ struct ContentViewerView: View {
     private func todosViewFactory() -> (() -> AnyView)? {
         guard let todoStore else { return nil }
         let path = focusedProjectRootPath
-        return { AnyView(TodosSurfaceView(store: todoStore, focusedProjectPath: path)) }
+        let refine = refineTodoAction
+        let openFile = openTodoFileAction
+        let openTask = openLaneTaskAction
+        return { AnyView(TodosSurfaceView(store: todoStore, focusedProjectPath: path, onRefine: refine, onOpenFile: openFile, onOpenLaneTask: openTask)) }
+    }
+
+    /// F060 — the linked-task chip jumps straight to the task's detail: point
+    /// the shared lanes navigation at the task, then open/activate the surface.
+    private var openLaneTaskAction: ((UUID) -> Void)? {
+        guard let vibeLaneNavigation else { return nil }
+        return { taskID in
+            vibeLaneNavigation.show(.detail(taskID))
+            store.openVibeLanes()
+        }
+    }
+
+    /// F060 — file links open like any file: absolute path, optional line
+    /// anchor, project optional (standalone tabs for external paths).
+    private var openTodoFileAction: (String, Int?) -> Void {
+        { path, line in
+            store.openFileInTab(
+                at: URL(fileURLWithPath: path),
+                line: line,
+                projectIdentifier: projects.first {
+                    path.hasPrefix($0.rootURL.standardizedFileURL.path + "/")
+                }?.projectIdentifier
+            )
+        }
+    }
+
+    /// F060 — open (or reattach) the todo's refine chat as an ACP pane. New
+    /// sessions are seeded by the bridge; reattach resolves the persisted
+    /// session ID through the registry and falls back to a fresh session.
+    private var refineTodoAction: ((Todo) -> Void)? {
+        guard let bridge = todoPipelineBridge else { return nil }
+        return { todo in
+            let projectPath = todo.projectPath ?? focusedProjectRootPath
+            let project = projects.first { $0.rootURL.standardizedFileURL.path == projectPath }
+                ?? projects.first
+            Task { @MainActor in
+                await bridge.openRefineSession(
+                    todoID: todo.id,
+                    reattach: { sessionID in
+                        guard let id = UUID(uuidString: sessionID),
+                              store.sessionRegistry.store(forID: id) != nil else { return false }
+                        store.ensureACPPaneTab(id: id)
+                        return true
+                    },
+                    openNew: {
+                        let pane = store.openACPPane(
+                            focusedProject: project,
+                            preferredAgentID: AppPreferences.acpDefaultAgentID(),
+                            vibespaceID: vibespaceID
+                        )
+                        return (pane.id.uuidString, { prompt in
+                            Task { @MainActor in
+                                _ = await pane.chatViewModel.sendProgrammatic(prompt)
+                            }
+                        })
+                    }
+                )
+            }
+        }
     }
 
     private func vibeCastViewFactory() -> (() -> AnyView)? {

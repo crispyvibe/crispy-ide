@@ -170,6 +170,12 @@ async fn dispatch(conn: &libsql::Connection, req: Request) -> Response {
         "todo.message.add" => handlers_todos::todo_message_add(conn, id, params).await,
         "todo.message.list" => handlers_todos::todo_message_list(conn, id, params).await,
 
+        // F060 — Todo lane pipeline
+        "todo.file.add" => handlers_todos::todo_file_add(conn, id, params).await,
+        "todo.file.remove" => handlers_todos::todo_file_remove(conn, id, params).await,
+        "todo.file.list" => handlers_todos::todo_file_list(conn, id, params).await,
+        "todo.pipeline.set" => handlers_todos::todo_pipeline_set(conn, id, params).await,
+
         // Board stubs
         m if m.starts_with("board.") => handlers_board::stub(id, m),
 

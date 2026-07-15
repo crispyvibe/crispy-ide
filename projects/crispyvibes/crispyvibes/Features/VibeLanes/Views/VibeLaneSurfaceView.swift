@@ -19,6 +19,9 @@ struct VibeLaneSurfaceView: View {
     @Environment(\.appThemePalette) private var palette
     let focusedProjectPath: String?
     let onOpenACPSession: (VibeLaneACPChatTarget) -> Void
+    /// F060: opens detected file-path links (outcome, handoffs, activity log)
+    /// in the content viewer. nil = links fall back to the system handler.
+    let onOpenFileTarget: ((TerminalFileSystemTarget) -> Void)?
 
     @StateObject private var fallbackNavigation = VibeLaneSurfaceNavigationViewModel()
 
@@ -28,10 +31,12 @@ struct VibeLaneSurfaceView: View {
 
     init(
         focusedProjectPath: String? = nil,
-        onOpenACPSession: @escaping (VibeLaneACPChatTarget) -> Void = { _ in }
+        onOpenACPSession: @escaping (VibeLaneACPChatTarget) -> Void = { _ in },
+        onOpenFileTarget: ((TerminalFileSystemTarget) -> Void)? = nil
     ) {
         self.focusedProjectPath = focusedProjectPath
         self.onOpenACPSession = onOpenACPSession
+        self.onOpenFileTarget = onOpenFileTarget
     }
 
     var body: some View {
@@ -48,6 +53,16 @@ struct VibeLaneSurfaceView: View {
                     .background(palette.canvasBackgroundColor)
             }
         }
+        // F060 — path links detected in lane text open like terminal-board
+        // paths; plain web links keep their default behavior.
+        .environment(\.openURL, OpenURLAction { url in
+            guard let onOpenFileTarget else { return .systemAction(url) }
+            return ACPTextLinking.handle(
+                url: url,
+                onLinkTargetActivated: nil,
+                onFileSystemTargetActivated: onOpenFileTarget
+            )
+        })
     }
 }
 

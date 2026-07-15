@@ -342,6 +342,77 @@ final class VibeLaneTaskManagerTests: XCTestCase {
         manager.shutdown()
     }
 
+    /// F060: seeded carry-forward is stored at creation (trimmed, empties
+    /// dropped) so a dispatched todo can satisfy the first checkpoint's
+    /// requires contract without an immediate Supply pause.
+    func test_createTask_seedsInitialCarryForward() {
+        let lane = VibeLaneCatalog.fixABug
+        let store = InMemoryVibeLaneStore(lanes: [lane])
+        let manager = makeManager(store: store)
+        manager.bootstrap()
+        let task = manager.createTask(
+            laneID: lane.id,
+            title: "Fix tests",
+            projectPath: "/tmp",
+            initialCarryForward: ["repro": "  run UITests/login  ", "blank": "   "]
+        )
+        XCTAssertEqual(task?.carryForward, ["repro": "run UITests/login"], "values trim; empty values drop")
+        XCTAssertEqual(store.loadTasks().first?.carryForward, ["repro": "run UITests/login"])
+        manager.shutdown()
+    }
+
+    /// F060: nil / all-empty seeds leave carryForward nil (back-compatible).
+    func test_createTask_withoutSeed_leavesCarryForwardNil() {
+        let lane = VibeLaneCatalog.fixABug
+        let store = InMemoryVibeLaneStore(lanes: [lane])
+        let manager = makeManager(store: store)
+        manager.bootstrap()
+        let task = manager.createTask(laneID: lane.id, title: "t", projectPath: "/tmp", initialCarryForward: ["x": " "])
+        XCTAssertNil(task?.carryForward)
+        manager.shutdown()
+    }
+
+    /// F060: every persisted state transition (old != new) fires the observer;
+    /// same-state upserts do not.
+    func test_onTaskStateChanged_firesPerTransition() {
+        let lane = VibeLaneCatalog.fixABug
+        let store = InMemoryVibeLaneStore(lanes: [lane])
+        let manager = makeManager(store: store)
+        var seen: [(VibeLaneTaskState, VibeLaneTaskState)] = []
+        manager.onTaskStateChanged = { _, old, new in seen.append((old, new)) }
+        manager.bootstrap()
+        let task = manager.createTask(laneID: lane.id, title: "t", projectPath: "/tmp")!
+        XCTAssertTrue(seen.isEmpty, "insertion is not a transition")
+        var same = task
+        same.updatedAt = Date()
+        manager.upsert(same)
+        XCTAssertTrue(seen.isEmpty, "same-state upsert must not fire")
+        manager.stop(id: task.id)
+        XCTAssertEqual(seen.count, 1)
+        XCTAssertEqual(seen.first?.0, .running)
+        XCTAssertEqual(seen.first?.1, .stopped)
+        manager.shutdown()
+    }
+
+    /// F060: catalog summary exposes each lane's first-checkpoint requires
+    /// keys; lane references resolve by UUID or unique name (ambiguity fails).
+    func test_catalogSummary_andLaneResolution() {
+        let lane = askUserLane()
+        let store = InMemoryVibeLaneStore(lanes: [lane])
+        let manager = makeManager(store: store)
+        manager.bootstrap()
+
+        let summary = manager.catalogSummary()
+        XCTAssertEqual(summary.count, 1)
+        XCTAssertEqual(summary.first?.laneID, lane.id)
+        XCTAssertEqual(summary.first?.firstCheckpointRequires, ["dataset": true])
+
+        XCTAssertEqual(manager.resolveLaneReference(lane.id.uuidString), .resolved(lane.id))
+        XCTAssertEqual(manager.resolveLaneReference("ASK LANE"), .resolved(lane.id), "name match is case-insensitive")
+        XCTAssertEqual(manager.resolveLaneReference("no-such-lane"), .notFound)
+        manager.shutdown()
+    }
+
     /// stop() marks the task stoppedByUser.
     func test_stop_marksStoppedByUser() {
         let lane = VibeLaneCatalog.fixABug

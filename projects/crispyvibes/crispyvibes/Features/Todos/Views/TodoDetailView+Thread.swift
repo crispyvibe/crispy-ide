@@ -42,7 +42,7 @@ extension TodoDetailView {
             }
             VStack(alignment: .leading, spacing: uiScale.spacing(4)) {
                 ForEach(group.messages) { message in
-                    MarkdownText(message.body, placeholder: "")
+                    MarkdownText(message.body, placeholder: "", baseDirectory: linkBaseDirectory)
                         .font(.system(size: uiScale.textSize(14)))
                         .foregroundStyle(palette.secondaryTextColor)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -143,18 +143,29 @@ struct AgentMessageDecoration: ViewModifier {
 
 /// Renders inline markdown (bold/italic/code/links), preserving whitespace;
 /// falls back to plain text. Shows a placeholder when empty.
+///
+/// F060: file/folder paths in the text become clickable, exactly like
+/// terminal-board output — absolute paths always, project-relative paths when
+/// they resolve to an existing file under `baseDirectory`. Clicks route
+/// through the enclosing view's `openURL` environment (see TodoDetailView).
 struct MarkdownText: View {
     private let attributed: AttributedString
     private let isEmpty: Bool
     private let placeholder: String
 
-    init(_ markdown: String, placeholder: String) {
+    init(_ markdown: String, placeholder: String, baseDirectory: URL? = nil) {
         self.placeholder = placeholder
         self.isEmpty = markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        self.attributed = (try? AttributedString(
+        var parsed = (try? AttributedString(
             markdown: markdown,
             options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         )) ?? AttributedString(markdown)
+        ACPTextLinking.applyDetectedLinks(
+            to: &parsed,
+            original: String(parsed.characters),
+            baseDirectory: baseDirectory
+        )
+        self.attributed = parsed
     }
 
     var body: some View {

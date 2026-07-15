@@ -9,6 +9,9 @@ struct RootView: View {
             .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
             .environment(\.vibespaceTodoStoreEnvironment, appContainer.vibespaceTodoStore)
             .environment(\.vibeLaneTaskManagerEnvironment, appContainer.vibeLaneTaskManager)
+            .environment(\.todoLanePipelineBridgeEnvironment, appContainer.todoLanePipelineBridge)
+            .environment(\.todoTriageCoordinatorEnvironment, appContainer.todoTriageCoordinator)
+            .environment(\.vibeLaneSurfaceNavigationEnvironment, appContainer.vibeLaneSurfaceNavigationViewModel)
             .environment(\.jupyterServerService, appContainer.jupyterServerService)
             .onReceive(NotificationCenter.default.publisher(for: .openDeveloperTools)) { _ in
                 openWindow(id: "developer-tools")

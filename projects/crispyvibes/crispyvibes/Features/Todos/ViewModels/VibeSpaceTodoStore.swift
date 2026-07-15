@@ -18,6 +18,10 @@ final class VibeSpaceTodoStore: ObservableObject {
     /// Thread messages per todo id, fetched on demand for the detail view.
     @Published private(set) var messagesByTodo: [String: [TodoMessage]] = [:]
 
+    /// F060 — file links per todo id, fetched on demand like thread messages.
+    /// Written only by the +Pipeline extension (same-file-family discipline).
+    @Published var fileLinksByTodo: [String: [TodoFileLink]] = [:]
+
     /// Bumps on every successful write so views can coalesce-refresh.
     @Published private(set) var lastChangeID: UUID = UUID()
 
@@ -211,6 +215,21 @@ final class VibeSpaceTodoStore: ObservableObject {
         logger.warning("todo op error: \(message, privacy: .public)")
         lastErrorMessage = message
     }
+
+    // MARK: - Pipeline plumbing (F060, used by the +Pipeline extension)
+
+    /// Send a pipeline RPC and unwrap its value; records errors like `mutate`
+    /// but leaves refresh/change-bump policy to the caller.
+    func sendPipeline(method: String, params: [String: Any]) async -> [String: Any]? {
+        guard let result = await conversationStore.send(method: method, params: params) else {
+            recordError("persistence helper unavailable"); return nil
+        }
+        if let err = result.errorMessage { recordError(err); return nil }
+        return result.value ?? [:]
+    }
+
+    /// Extension-visible change bump (keeps `bumpChange` private to this file).
+    func noteChanged() { bumpChange() }
 }
 
 /// Second-precision ISO timestamps matching the persistence helper's format.

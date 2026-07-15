@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use libsql::Connection;
 
-const CURRENT_VERSION: i64 = 4;
+const CURRENT_VERSION: i64 = 5;
 
 pub async fn run_migrations(conn: &Connection) -> Result<i64> {
     conn.execute(
@@ -24,6 +24,9 @@ pub async fn run_migrations(conn: &Connection) -> Result<i64> {
     }
     if version < 4 {
         migrate_v4(conn).await.context("V4 migration")?;
+    }
+    if version < 5 {
+        migrate_v5(conn).await.context("V5 migration")?;
     }
 
     Ok(CURRENT_VERSION)
@@ -331,6 +334,38 @@ async fn migrate_v4(conn: &Connection) -> Result<()> {
         )",
         "CREATE INDEX IF NOT EXISTS idx_todo_messages_todo ON todo_messages(todo_id, created_at)",
         "INSERT INTO schema_version (version) VALUES (4)",
+    ];
+
+    for stmt in stmts {
+        conn.execute(stmt, ()).await.with_context(|| {
+            let preview: String = stmt.chars().take(60).collect();
+            format!("execute: {preview}...")
+        })?;
+    }
+
+    Ok(())
+}
+
+
+/// F060 — Todo lane pipeline. Adds pipeline columns to `todos` (`lane_task_id`
+/// links an F059 lane task, `refinement_session_id` a refine session,
+/// `triage_json` stores the validated triage result blob) and a `todo_files`
+/// table for per-todo file links. The legacy `file_path` column stays; links
+/// are additive (read-side merge — no destructive migration).
+async fn migrate_v5(conn: &Connection) -> Result<()> {
+    let stmts = [
+        "ALTER TABLE todos ADD COLUMN lane_task_id TEXT",
+        "ALTER TABLE todos ADD COLUMN refinement_session_id TEXT",
+        "ALTER TABLE todos ADD COLUMN triage_json TEXT",
+        "CREATE TABLE IF NOT EXISTS todo_files (
+            id         TEXT PRIMARY KEY,
+            todo_id    TEXT NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+            path       TEXT NOT NULL,
+            line       INTEGER,
+            created_at TEXT NOT NULL
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_todo_files_todo ON todo_files(todo_id, created_at)",
+        "INSERT INTO schema_version (version) VALUES (5)",
     ];
 
     for stmt in stmts {

@@ -59,6 +59,12 @@ enum AppPreferences {
     static let acpDefaultReasoningLevelKey = "crispyvibes.agent.defaultReasoningLevel"
     static let acpCustomAgentsKey = "crispyvibes.agent.customAgents"
 
+    // MARK: Todo Lane Pipeline (F060)
+    /// Auto-triage mode for todos (off | projectTodosOnly | allTodos).
+    static let todoTriageModeKey = "crispyvibes.todos.triageMode"
+    /// On lane task done — true auto-completes the todo, false offers one-tap.
+    static let todoAutoCompleteOnDoneKey = "crispyvibes.todos.autoCompleteOnDone"
+
     // MARK: Services
     static let textServiceCLIProfileKey = "crispyvibes.services.cliProfile"
     static let textServiceCLITrustModeKey = "crispyvibes.services.cliTrustMode"
@@ -495,6 +501,28 @@ enum AppPreferences {
         } else {
             userDefaults.removeObject(forKey: acpDefaultAgentIDKey)
         }
+    }
+
+    // MARK: - Todo Lane Pipeline (F060)
+
+    static func todoTriageMode(userDefaults: UserDefaults = .standard) -> TodoTriageMode {
+        guard let raw = userDefaults.string(forKey: todoTriageModeKey),
+              let mode = TodoTriageMode(rawValue: raw) else {
+            return .projectTodosOnly
+        }
+        return mode
+    }
+
+    static func setTodoTriageMode(_ mode: TodoTriageMode, userDefaults: UserDefaults = .standard) {
+        userDefaults.set(mode.rawValue, forKey: todoTriageModeKey)
+    }
+
+    static func todoAutoCompleteOnDone(userDefaults: UserDefaults = .standard) -> Bool {
+        userDefaults.bool(forKey: todoAutoCompleteOnDoneKey)   // default false = one-tap
+    }
+
+    static func setTodoAutoCompleteOnDone(_ enabled: Bool, userDefaults: UserDefaults = .standard) {
+        userDefaults.set(enabled, forKey: todoAutoCompleteOnDoneKey)
     }
 
     static func resolvedACPDefaultAgent(

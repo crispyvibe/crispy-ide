@@ -176,6 +176,13 @@ struct SplitPaneContentView: View {
                             projects: projects,
                             vibespaceID: vibespaceID
                         )
+                    },
+                    onOpenFileTarget: { target in
+                        contentViewerStore.openFileInTab(
+                            at: target.url,
+                            line: target.line,
+                            column: target.column
+                        )
                     }
                 )
             case .webPage(let reference):

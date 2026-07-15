@@ -2,6 +2,13 @@ import Foundation
 import XCTest
 @testable import CrispyVibes
 
+/// F060 test double: container construction needs a triage runner; tests here
+/// never trigger triage, so it just returns nil.
+@MainActor
+private final class NoopTriageRunner: TodoTriageRunning {
+    func runTriage(prompt: String, projectPath: String) async -> String? { nil }
+}
+
 @MainActor
 final class RemoteProjectSessionTests: XCTestCase {
     private var container: AppContainer!
@@ -741,6 +748,15 @@ final class RemoteProjectSessionTests: XCTestCase {
             vibespaceCommentStore: VibeSpaceCommentStore(conversationStore: agentConversationStore),
             vibespaceTodoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
             vibeLaneTaskManager: VibeLaneTaskManager(store: InMemoryVibeLaneStore(lanes: VibeLaneCatalog.starterLanes), worker: VibeLaneUnimplementedWorkRunner()),
+            todoLanePipelineBridge: TodoLanePipelineBridge(
+                todoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
+                laneManager: VibeLaneTaskManager(store: InMemoryVibeLaneStore(lanes: []), worker: VibeLaneUnimplementedWorkRunner())
+            ),
+            todoTriageCoordinator: TodoTriageCoordinator(
+                todoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
+                laneManager: VibeLaneTaskManager(store: InMemoryVibeLaneStore(lanes: []), worker: VibeLaneUnimplementedWorkRunner()),
+                runner: NoopTriageRunner()
+            ),
             vibeLaneSurfaceNavigationViewModel: VibeLaneSurfaceNavigationViewModel(),
             commentLifecycleCoordinator: CommentLifecycleCoordinator(store: VibeSpaceCommentStore(conversationStore: agentConversationStore)),
             externalAgentSessionService: ExternalAgentSessionService(),

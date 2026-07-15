@@ -312,6 +312,11 @@ Steer answer.
 
 ## Change History
 
+- 2026-07-12 — Agent CLI surface: `lane.*` / `lane.task.*` commands give R10's
+  create/stop/answer/delete task and create/update/delete lane controls a
+  second caller through the same task manager (see
+  `specs/features/platform/agent-cli/commands-lanes.md`).
+
 - 2026-07-06 — Human verification: a checkpoint may be authored with
   `humanReview`, pausing after the work turn for the user's approve /
   request-changes verdict (Review request kind). Per-task project path and ACP

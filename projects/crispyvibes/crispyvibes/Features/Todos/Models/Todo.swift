@@ -23,6 +23,12 @@ struct Todo: Identifiable, Hashable, Sendable {
     let createdAt: String
     var updatedAt: String
     var completedAt: String?
+    // F060 pipeline fields. laneTaskID links the todo to at most one Vibe Lane
+    // task; triage is the structured background-triage result. All optional —
+    // a todo with none of them is exactly an F053 todo.
+    var laneTaskID: String? = nil
+    var refinementSessionID: String? = nil
+    var triage: TodoTriage? = nil
 
     var isCompleted: Bool { status == .completed }
 }
@@ -94,5 +100,8 @@ extension Todo {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.completedAt = json["completedAt"] as? String
+        self.laneTaskID = json["laneTaskId"] as? String
+        self.refinementSessionID = json["refinementSessionId"] as? String
+        self.triage = TodoTriage.decode(from: json["triageJson"] as? String)
     }
 }

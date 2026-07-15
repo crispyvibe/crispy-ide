@@ -35,6 +35,16 @@ final class CLICommandRouter {
     /// todos via the same Rust-backed store the UI uses.
     weak var vibespaceTodoStore: VibeSpaceTodoStore?
 
+    /// F060: late-bound reference to the todo↔lane bridge so `todo.dispatch`
+    /// routes through the same code path as the UI dispatch sheet. nil = the
+    /// pipeline is unavailable and the command reports that (F060-R09).
+    weak var todoLanePipelineBridge: TodoLanePipelineBridge?
+
+    /// F059: late-bound reference to the Vibe Lanes execution component so the
+    /// `lane.*` commands drive the exact same manager the UI uses (F059-R10).
+    /// nil = Vibe Lanes is unavailable and the commands report that.
+    weak var vibeLaneTaskManager: VibeLaneTaskManager?
+
     init(
         appBundleName: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Crispy",
         appVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0",
@@ -114,6 +124,26 @@ final class CLICommandRouter {
         }
         self.vibespaceTodoStore = store
         agentCLILogger.notice("vibespace todo store attached")
+    }
+
+    /// F060: late-bound idempotent injection of the todo↔lane pipeline bridge.
+    func attachTodoLanePipelineBridge(_ bridge: TodoLanePipelineBridge) {
+        if todoLanePipelineBridge != nil {
+            agentCLILogger.notice("todo lane pipeline bridge attach skipped (already attached)")
+            return
+        }
+        self.todoLanePipelineBridge = bridge
+        agentCLILogger.notice("todo lane pipeline bridge attached")
+    }
+
+    /// F059: late-bound idempotent injection of the Vibe Lanes task manager.
+    func attachVibeLaneTaskManager(_ manager: VibeLaneTaskManager) {
+        if vibeLaneTaskManager != nil {
+            agentCLILogger.notice("vibe lane task manager attach skipped (already attached)")
+            return
+        }
+        self.vibeLaneTaskManager = manager
+        agentCLILogger.notice("vibe lane task manager attached")
     }
 
     func dispatch(_ request: CLIRequest) async -> CLIResponse {
@@ -753,6 +783,220 @@ final class CLICommandRouter {
                 errors: ["invalid_params", "internal_error", "not_connected"]
             ),
             handler: { [unowned self] req in await self.handleTodoMessageAdd(req) }
+        ),
+
+        // MARK: Todo Lane Pipeline (F060)
+        CommandRegistration(
+            method: "todo.file.add",
+            descriptor: CommandDescriptor(
+                summary: "Attach a file link (path[:line]) to a todo (F060-R01). Links are live references, never copies.",
+                params: [
+                    .init(name: "id", type: "string", required: true, description: "Todo ID."),
+                    .init(name: "path", type: "string", required: true, description: "File path, optionally with a :line anchor."),
+                ],
+                result: [.init(name: "id", type: "string", description: "ID of the created link.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoFileAdd(req) }
+        ),
+        CommandRegistration(
+            method: "todo.file.remove",
+            descriptor: CommandDescriptor(
+                summary: "Remove a file link from a todo by path.",
+                params: [
+                    .init(name: "id", type: "string", required: true, description: "Todo ID."),
+                    .init(name: "path", type: "string", required: true, description: "Linked file path to remove."),
+                ],
+                result: [.init(name: "removed", type: "boolean", description: "True if removed.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoFileRemove(req) }
+        ),
+        CommandRegistration(
+            method: "todo.file.list",
+            descriptor: CommandDescriptor(
+                summary: "List a todo's file links with their missing/present state.",
+                params: [.init(name: "id", type: "string", required: true, description: "Todo ID.")],
+                result: [.init(name: "files", type: "array", description: "Links: {path, line?, missing}.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoFileList(req) }
+        ),
+        CommandRegistration(
+            method: "todo.triage.show",
+            descriptor: CommandDescriptor(
+                summary: "Show a todo's structured triage result (F060-R06), or {status: none}.",
+                params: [.init(name: "id", type: "string", required: true, description: "Todo ID.")],
+                result: [.init(name: "triage", type: "string", description: "Triage result JSON.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoTriageShow(req) }
+        ),
+        CommandRegistration(
+            method: "todo.dispatch",
+            descriptor: CommandDescriptor(
+                summary: "Dispatch a todo to a Vibe Lane (F060-R03/R09). Same semantics as the UI: one active task per todo; unresolved required inputs fail unless allowUnresolved.",
+                params: [
+                    .init(name: "id", type: "string", required: true, description: "Todo ID."),
+                    .init(name: "lane", type: "string", required: true, description: "Lane name or UUID."),
+                    .init(name: "inputs", type: "object", required: false, description: "Explicit carry-forward inputs (highest priority)."),
+                    .init(name: "allowUnresolved", type: "boolean", required: false, description: "Proceed even when required inputs are unresolved.", defaultValue: .bool(false)),
+                ],
+                result: [.init(name: "taskId", type: "string", description: "ID of the created lane task.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleTodoDispatch(req) }
+        ),
+
+        // MARK: Vibe Lanes (F059)
+        CommandRegistration(
+            method: "lane.list",
+            descriptor: CommandDescriptor(
+                summary: "List all authored lanes (F059-R01): id, name, version, and checkpoint route.",
+                params: [],
+                result: [.init(name: "lanes", type: "array", description: "Lane summaries: {id, name, version, description?, steerLimit, checkpointCount, route, starter}.")],
+                errors: ["not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneList(req) }
+        ),
+        CommandRegistration(
+            method: "lane.show",
+            descriptor: CommandDescriptor(
+                summary: "Show one lane's full definition, including every checkpoint's work, verification, bounds, and carry-forward contract.",
+                params: [.init(name: "lane", type: "string", required: true, description: "Lane name or UUID.")],
+                result: [.init(name: "lane", type: "object", description: "Full lane definition.")],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneShow(req) }
+        ),
+        CommandRegistration(
+            method: "lane.create",
+            descriptor: CommandDescriptor(
+                summary: "Create a lane (F059-R01). Without `checkpoints` it gets one empty starter checkpoint to edit.",
+                params: [
+                    .init(name: "name", type: "string", required: true, description: "Lane name."),
+                    .init(name: "description", type: "string", required: false, description: "What the lane is for."),
+                    .init(name: "steerLimit", type: "integer", required: false, description: "How many Steer escalations the lane allows.", defaultValue: .int(1)),
+                    .init(name: "checkpoints", type: "array", required: false, description: "Checkpoint definitions in the lane schema: [{key, order, work:{goal, instructions?, skills?}, verify:{definition, humanReview?}, bounds?:{maxAttempts, timeoutSeconds, onExhausted}, requires?, produces?}]."),
+                ],
+                result: [.init(name: "lane", type: "object", description: "The created lane definition.")],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneCreate(req) }
+        ),
+        CommandRegistration(
+            method: "lane.update",
+            descriptor: CommandDescriptor(
+                summary: "Edit a lane (F059-R01). Bumps the lane version; running tasks keep the version they pinned. Only provided fields change.",
+                params: [
+                    .init(name: "lane", type: "string", required: true, description: "Lane name or UUID."),
+                    .init(name: "name", type: "string", required: false, description: "New lane name."),
+                    .init(name: "description", type: "string", required: false, description: "New description (empty string clears it)."),
+                    .init(name: "steerLimit", type: "integer", required: false, description: "New steer limit."),
+                    .init(name: "checkpoints", type: "array", required: false, description: "Full replacement checkpoint list (same schema as lane.create)."),
+                ],
+                result: [.init(name: "lane", type: "object", description: "The updated lane definition.")],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneUpdate(req) }
+        ),
+        CommandRegistration(
+            method: "lane.delete",
+            descriptor: CommandDescriptor(
+                summary: "Delete a lane. In-flight and finished tasks keep resolving the revision they pinned.",
+                params: [.init(name: "lane", type: "string", required: true, description: "Lane name or UUID.")],
+                result: [.init(name: "deleted", type: "boolean", description: "True if the lane was deleted.")],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneDelete(req) }
+        ),
+        CommandRegistration(
+            method: "lane.restoreStarters",
+            descriptor: CommandDescriptor(
+                summary: "Bring back deleted starter lanes and refresh pristine ones to the latest shipped content (F059-R01).",
+                params: [],
+                result: [.init(name: "lanes", type: "array", description: "Lane summaries after restoration.")],
+                errors: ["not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneRestoreStarters(req) }
+        ),
+        CommandRegistration(
+            method: "lane.task.create",
+            descriptor: CommandDescriptor(
+                summary: "Start a task: run `input` through a lane on a project (F059-R03). Same semantics as the UI create-task flow.",
+                params: [
+                    .init(name: "lane", type: "string", required: true, description: "Lane name or UUID."),
+                    .init(name: "input", type: "string", required: true, description: "The per-run instruction (task input/title)."),
+                    .init(name: "project", type: "string", required: false, description: "Absolute project path. Defaults to the caller's CRISPY_PROJECT_PATH."),
+                    .init(name: "agent", type: "string", required: false, description: "ACP agent id for worker/reviewer sessions. Defaults to the app-wide agent."),
+                    .init(name: "inputs", type: "object", required: false, description: "Initial carry-forward values (same trust class as Supply answers)."),
+                ],
+                result: [.init(name: "task", type: "object", description: "The created task summary.")],
+                errors: ["invalid_params", "internal_error", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneTaskCreate(req) }
+        ),
+        CommandRegistration(
+            method: "lane.task.list",
+            descriptor: CommandDescriptor(
+                summary: "List tasks with counts by state (F059-R09). Needs-input tasks sort first.",
+                params: [
+                    .init(name: "state", type: "string", required: false, description: "Filter: running | needsInput | stopped | done."),
+                    .init(name: "project", type: "string", required: false, description: "Filter by project path."),
+                ],
+                result: [
+                    .init(name: "tasks", type: "array", description: "Task summaries."),
+                    .init(name: "counts", type: "object", description: "{running, needsInput, stopped, done}."),
+                ],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneTaskList(req) }
+        ),
+        CommandRegistration(
+            method: "lane.task.show",
+            descriptor: CommandDescriptor(
+                summary: "Show one task in detail: checkpoint runs, carry-forward, last verification, outcome, and any open input request.",
+                params: [.init(name: "id", type: "string", required: true, description: "Task UUID.")],
+                result: [.init(name: "task", type: "object", description: "Full task detail.")],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneTaskShow(req) }
+        ),
+        CommandRegistration(
+            method: "lane.task.answer",
+            descriptor: CommandDescriptor(
+                summary: "Answer a task's open input request (F059-R07). Supply: pass `values`. Steer: pass `guidance`. Review: pass `approve` (+ `feedback` when rejecting).",
+                params: [
+                    .init(name: "id", type: "string", required: true, description: "Task UUID."),
+                    .init(name: "values", type: "object", required: false, description: "Supply answers keyed by missing input key."),
+                    .init(name: "guidance", type: "string", required: false, description: "Steer guidance fed to the worker as feedback."),
+                    .init(name: "approve", type: "boolean", required: false, description: "Review verdict. false requires `feedback`."),
+                    .init(name: "feedback", type: "string", required: false, description: "Review rejection feedback (looped back to the worker)."),
+                ],
+                result: [.init(name: "task", type: "object", description: "The resumed task summary.")],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneTaskAnswer(req) }
+        ),
+        CommandRegistration(
+            method: "lane.task.stop",
+            descriptor: CommandDescriptor(
+                summary: "Stop a running or needs-input task (F059-R10).",
+                params: [.init(name: "id", type: "string", required: true, description: "Task UUID.")],
+                result: [.init(name: "task", type: "object", description: "The stopped task summary.")],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneTaskStop(req) }
+        ),
+        CommandRegistration(
+            method: "lane.task.delete",
+            descriptor: CommandDescriptor(
+                summary: "Delete a task and its persisted handoff files.",
+                params: [.init(name: "id", type: "string", required: true, description: "Task UUID.")],
+                result: [.init(name: "deleted", type: "boolean", description: "True if the task was deleted.")],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneTaskDelete(req) }
         ),
     ] + Self.browserForwardedRegistrations
 

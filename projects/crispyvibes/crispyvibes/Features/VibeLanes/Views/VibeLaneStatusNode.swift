@@ -285,6 +285,11 @@ struct VibeLaneProgressBar: View {
 @MainActor
 struct VibeLaneMarkdownText: View {
     let markdown: String
+    /// F060: when set, file/folder paths in the text render as clickable links
+    /// (absolute always; relative when they exist under this directory) — the
+    /// same detection terminal boards and ACP chat use. Clicks route through
+    /// the enclosing `openURL` environment.
+    var linkBaseDirectory: URL? = nil
     @Environment(\.appThemePalette) private var palette
     @Environment(\.crispyvibesUIScale) private var uiScale
 
@@ -338,9 +343,15 @@ struct VibeLaneMarkdownText: View {
     }
 
     private func inline(_ string: String) -> AttributedString {
-        (try? AttributedString(
+        var attributed = (try? AttributedString(
             markdown: string,
             options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         )) ?? AttributedString(string)
+        ACPTextLinking.applyDetectedLinks(
+            to: &attributed,
+            original: String(attributed.characters),
+            baseDirectory: linkBaseDirectory
+        )
+        return attributed
     }
 }

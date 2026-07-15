@@ -385,6 +385,19 @@ final class VibeLaneEngine {
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
+    /// Every passed checkpoint's handoff path, in lane order — the full journey,
+    /// fed to the final outcome prompt so the report is grounded in what each
+    /// step actually recorded rather than end-of-session memory (F060 feedback).
+    private func allHandoffPaths(task: VibeLaneTask) -> [String] {
+        guard handoffRoot != nil else { return [] }
+        return lane.orderedCheckpoints.compactMap { checkpoint -> String? in
+            guard task.run(forKey: checkpoint.key)?.status == .passed,
+                  let url = handoffFileURL(taskID: task.id, checkpointKey: checkpoint.key),
+                  FileManager.default.fileExists(atPath: url.path) else { return nil }
+            return url.path
+        }
+    }
+
     // MARK: - Carry-forward contract (declared inputs/outputs)
 
     private func missingRequiredInputs(
@@ -476,7 +489,10 @@ final class VibeLaneEngine {
     private func produceFinalOutcome(checkpoint: VibeLaneCheckpoint, task: inout VibeLaneTask) async -> String {
         setActivity(&task, AppStrings.VibeLanes.activityWritingOutcome, kind: .worker)
         let turn = await worker.work(
-            prompt: Self.finalOutcomePrompt(taskTitle: task.title),
+            prompt: Self.finalOutcomePrompt(
+                taskTitle: task.title,
+                handoffPaths: allHandoffPaths(task: task)
+            ),
             projectPath: task.projectPath,
             sessionRef: task.workerSessionRef,
             agentID: task.agentID
@@ -487,25 +503,50 @@ final class VibeLaneEngine {
         return text.isEmpty ? "Task completed: \(task.title)." : text
     }
 
-    static func finalOutcomePrompt(taskTitle: String) -> String {
-        """
-        All checkpoints for this task are complete and verified. Write the FINAL OUTCOME summary the user \
-        will read on the task's Done screen.
+    static func finalOutcomePrompt(taskTitle: String, handoffPaths: [String] = []) -> String {
+        var prompt = """
+        All checkpoints for this task are complete and verified. Write the FINAL OUTCOME report the user \
+        will read on the task's Done screen — it is the single artifact they judge this task by, so make \
+        every line earn its place. Ground every claim in the actual repository state: re-check files and \
+        results before citing them; never repeat a claim from memory you can verify on disk.
 
         ## Task
         \(taskTitle)
 
-        Use exactly this structure, concrete and under ~15 lines total:
+        Rules:
+        - Concrete over general: exact file paths (path:line where useful), commands run, test names and \
+        counts, commit refs, URLs. A reader should be able to click/verify every reference.
+        - No process narration ("first I explored…"), no praise, no restating the task.
+        - If something is partially done or was descoped, say so plainly under Follow-ups.
+
+        Use exactly this structure:
 
         ## Outcome
-        What was produced and whether it fully satisfies the task.
+        2–4 sentences: what now exists that didn't before, and whether it fully satisfies the task.
+
+        ## What changed
+        Bullet list of the files/artifacts that changed, each with its path and a clause on what changed \
+        in it. Include new tests here.
+
+        ## How it's verified
+        The exact checks that prove it works: commands + their results, test suites + pass counts, or \
+        manual verification steps taken. Quote real numbers.
 
         ## Where it lives
-        Files, PRs, commits, or URLs — exact paths and references.
+        Branch, commits, PRs, or URLs — exact references.
 
         ## Follow-ups
-        Anything deferred, risky, or recommended next. Write "None" if empty.
+        Deferred work, known risks, and the recommended next action. Write "None" if truly empty.
         """
+        if !handoffPaths.isEmpty {
+            prompt += """
+            \n
+            The step-by-step journey is in these handoff files — read them to recall earlier steps' \
+            outcomes before writing (do not copy them verbatim):
+            \(handoffPaths.map { "- \($0)" }.joined(separator: "\n"))
+            """
+        }
+        return prompt
     }
 
     static func handoffPrompt(checkpoint: VibeLaneCheckpoint) -> String {

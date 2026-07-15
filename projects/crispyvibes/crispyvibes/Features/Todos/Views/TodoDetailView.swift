@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// F053 — detail pane for a selected todo. Themed via the app palette and
@@ -9,16 +10,43 @@ struct TodoDetailView: View {
     @Environment(\.appThemePalette) var palette
     @Environment(\.crispyvibesTheme) var theme
     @Environment(\.crispyvibesUIScale) var uiScale
+    // F060: nil when the pipeline is absent — every pipeline affordance
+    // disappears and the pane renders exactly as F053.
+    @Environment(\.todoLanePipelineBridgeEnvironment) var pipelineBridge
+    @Environment(\.todoTriageCoordinatorEnvironment) var triageCoordinator
+    @Environment(\.vibeLaneTaskManagerEnvironment) var laneManager
     @ObservedObject var store: VibeSpaceTodoStore
     let todo: Todo
     /// Present in compact hosts: shows a back chevron that returns to the list.
     var onBack: (() -> Void)?
+    /// F060: project used for dispatch when the todo is vibespace-level.
+    var focusedProjectPath: String?
+    /// F060: opens/reattaches the refine chat for this todo. nil = host can't
+    /// present ACP panes (e.g. spotlight) — the button hides.
+    var onRefine: ((Todo) -> Void)?
+    /// F060: opens a linked file in the content viewer (path, line anchor).
+    var onOpenFile: ((String, Int?) -> Void)?
+    /// F060: jumps to the linked lane task's detail in the Vibe Lanes surface.
+    var onOpenLaneTask: ((UUID) -> Void)?
+
+    @State var isDropTargetedForLinks = false
+    /// Environment objects aren't auto-observed; tick on their changes so the
+    /// triage indicator and lane-task chip stay live (matches TodoCardView).
+    @State private var pipelineTick = 0
+    /// F060: shared inline file-search trigger (F038) for the notes editor and
+    /// thread composer — same component VibeCast and the ACP chat embed.
+    @StateObject var inlineTrigger = TerminalInlineTriggerController()
+    @AppStorage(AppPreferences.terminalComposeInlineTriggerKey)
+    var configuredInlineTrigger = AppPreferences.defaultTerminalComposeInlineTrigger
 
     @State private var draftTitle = ""
-    @State private var draftBody = ""
-    @State private var isEditingBody = false
+    // draftBody/isEditingBody are internal (not private) so the +InlineTrigger
+    // extension can route insertions into whichever field is being edited.
+    @State var draftBody = ""
+    @State var isEditingBody = false
     @State private var isHoveringNotes = false
     @State private var confirmDelete = false
+    @State private var showDispatchSheet = false
     @State var composerText = ""
     @FocusState private var titleFocused: Bool
     @FocusState var composerFocused: Bool
@@ -32,6 +60,7 @@ struct TodoDetailView: View {
                 VStack(alignment: .leading, spacing: uiScale.spacing(18)) {
                     header
                     metadata
+                    fileLinksSection
                     notesSection
                     threadSection
                 }
@@ -41,13 +70,53 @@ struct TodoDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.canvasBackgroundColor)
+        .overlay {
+            if isDropTargetedForLinks {
+                RoundedRectangle(cornerRadius: theme.radius(10))
+                    .stroke(palette.accentColor.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [6]))
+                    .padding(uiScale.spacing(6))
+                    .allowsHitTesting(false)
+            }
+        }
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargetedForLinks) { providers in
+            handleFileDrop(providers: providers)
+        }
+        .overlay(alignment: .bottom) {
+            inlineTriggerPanel
+                .padding(.bottom, uiScale.spacing(64))
+        }
+        .onChange(of: draftBody) { _, newValue in
+            if isEditingBody { inlineTrigger.syncBufferText(newValue) }
+        }
+        .onChange(of: composerText) { _, newValue in
+            if !isEditingBody { inlineTrigger.syncBufferText(newValue) }
+        }
+        .onKeyPress(phases: .down) { press in
+            inlineTriggerKeyHandler(press)
+        }
+        .onDisappear { inlineTrigger.shutdown() }
+        .onReceive(pipelinePulse) { _ in pipelineTick &+= 1 }
+        // F060 — detected path links (in notes and thread messages) open in
+        // the content viewer like terminal-board paths; web links pass through.
+        .environment(\.openURL, OpenURLAction { url in
+            ACPTextLinking.handle(
+                url: url,
+                onLinkTargetActivated: nil,
+                onFileSystemTargetActivated: { target in
+                    onOpenFile?(target.url.path, target.line)
+                }
+            )
+        })
         .task(id: todo.id) {
             draftTitle = todo.title
             draftBody = todo.body ?? ""
             isEditingBody = false
             confirmDelete = false
             composerText = ""
+            configureInlineTrigger()
+            inlineTrigger.reconcileBufferText("")
             await store.refreshMessages(todoID: todo.id)
+            await store.refreshFileLinks(todoID: todo.id)
         }
     }
 
@@ -161,6 +230,137 @@ struct TodoDetailView: View {
                     .help("\(AppStrings.Todos.attachedFile): \(filePath)")
             }
             Spacer()
+            pipelineStatus
+            if !todo.isCompleted, let onRefine {
+                refineButton(onRefine)
+            }
+            if pipelineBridge != nil, !todo.isCompleted, linkedTask == nil || linkedTask?.isTerminal == true {
+                sendToLaneButton
+            }
+        }
+    }
+
+    // MARK: F060 pipeline status
+
+    private var pipelinePulse: AnyPublisher<Void, Never> {
+        let triage = triageCoordinator?.objectWillChange.map { _ in () }.eraseToAnyPublisher()
+            ?? Empty<Void, Never>().eraseToAnyPublisher()
+        let lanes = laneManager?.objectWillChange.map { _ in () }.eraseToAnyPublisher()
+            ?? Empty<Void, Never>().eraseToAnyPublisher()
+        return triage.merge(with: lanes).eraseToAnyPublisher()
+    }
+
+    /// Base for resolving project-relative paths in notes/thread text.
+    var linkBaseDirectory: URL? {
+        (todo.projectPath ?? focusedProjectPath).map { URL(fileURLWithPath: $0) }
+    }
+
+    private var linkedTask: VibeLaneTask? {
+        guard let linked = todo.laneTaskID,
+              let taskID = UUID(uuidString: linked) else { return nil }
+        return laneManager?.task(withID: taskID)
+    }
+
+    /// Live pipeline state in the metadata row: triage progress while an agent
+    /// analyzes the todo, and the linked lane task as a clickable chip that
+    /// jumps to its detail in Vibe Lanes.
+    @ViewBuilder private var pipelineStatus: some View {
+        if triageCoordinator?.activeTodoIDs.contains(todo.id) == true, linkedTask == nil {
+            HStack(spacing: uiScale.spacing(4)) {
+                ProgressView().controlSize(.mini)
+                Text(AppStrings.TodoPipeline.triagingIndicator)
+                    .font(.system(size: uiScale.textSize(10), weight: .medium))
+                    .foregroundStyle(palette.tertiaryTextColor)
+            }
+            .help(AppStrings.TodoPipeline.triagingHelp)
+        }
+        if let task = linkedTask {
+            laneTaskChip(task)
+        }
+    }
+
+    private func laneTaskChip(_ task: VibeLaneTask) -> some View {
+        let laneName = laneManager?.resolvedLane(for: task)?.name ?? AppStrings.VibeLanes.title
+        let (label, icon): (String, String) = {
+            switch task.state {
+            case .running: return (AppStrings.VibeLanes.running, "play.circle")
+            case .needsInput: return (AppStrings.VibeLanes.needsYou, "person.crop.circle.badge.exclamationmark")
+            case .stopped: return (AppStrings.VibeLanes.stopped, "stop.circle")
+            case .done: return (AppStrings.VibeLanes.completed, "checkmark.circle")
+            }
+        }()
+        let urgent = task.state == .needsInput
+        return Button {
+            onOpenLaneTask?(task.id)
+        } label: {
+            HStack(spacing: uiScale.spacing(4)) {
+                Image(systemName: icon)
+                    .font(.system(size: uiScale.iconSize(10)))
+                Text("\(label) · \(laneName)")
+                    .font(.system(size: uiScale.textSize(10), weight: .medium))
+                    .lineLimit(1)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: uiScale.iconSize(7), weight: .semibold))
+                    .opacity(0.6)
+            }
+            .foregroundStyle(urgent ? palette.errorColor : palette.accentColor)
+            .padding(.horizontal, uiScale.spacing(7))
+            .padding(.vertical, uiScale.spacing(3))
+            .background((urgent ? palette.errorColor : palette.accentColor).opacity(0.12), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(onOpenLaneTask == nil)
+        .help(AppStrings.TodoPipeline.openLaneTaskHelp)
+    }
+
+    // F060: opens the seeded refine chat (reattaches when the session lives).
+    private func refineButton(_ action: @escaping (Todo) -> Void) -> some View {
+        Button {
+            action(todo)
+        } label: {
+            HStack(spacing: uiScale.spacing(3)) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: uiScale.iconSize(10)))
+                Text(todo.refinementSessionID == nil
+                     ? AppStrings.TodoPipeline.refine
+                     : AppStrings.TodoPipeline.resumeRefine)
+                    .font(.system(size: uiScale.textSize(10), weight: .medium))
+            }
+            .foregroundStyle(palette.secondaryTextColor)
+            .padding(.horizontal, uiScale.spacing(7))
+            .padding(.vertical, uiScale.spacing(3))
+            .background(palette.canvasSecondaryBackgroundColor, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(AppStrings.TodoPipeline.refineHelp)
+    }
+
+    // F060: dispatch entry point. Disabled (with a hint) while a linked lane
+    // task is still active; the sheet itself is the same bridge path the CLI uses.
+    @ViewBuilder private var sendToLaneButton: some View {
+        Button {
+            showDispatchSheet = true
+        } label: {
+            HStack(spacing: uiScale.spacing(3)) {
+                Image(systemName: "arrow.right.circle")
+                    .font(.system(size: uiScale.iconSize(10)))
+                Text(AppStrings.TodoPipeline.sendToLane)
+                    .font(.system(size: uiScale.textSize(10), weight: .medium))
+            }
+            .foregroundStyle(palette.accentColor)
+            .padding(.horizontal, uiScale.spacing(7))
+            .padding(.vertical, uiScale.spacing(3))
+            .background(palette.accentColor.opacity(0.12), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showDispatchSheet) {
+            if let bridge = pipelineBridge {
+                TodoDispatchSheet(
+                    bridge: bridge,
+                    todo: todo,
+                    fallbackProjectPath: todo.projectPath ?? focusedProjectPath
+                )
+            }
         }
     }
 
@@ -240,7 +440,7 @@ struct TodoDetailView: View {
     private var notesPreview: some View {
         Button { isEditingBody = true } label: {
             HStack(alignment: .top, spacing: uiScale.spacing(8)) {
-                MarkdownText(todo.body ?? "", placeholder: AppStrings.Todos.bodyPlaceholder)
+                MarkdownText(todo.body ?? "", placeholder: AppStrings.Todos.bodyPlaceholder, baseDirectory: linkBaseDirectory)
                     .font(.system(size: uiScale.textSize(14)))
                     .foregroundStyle((todo.body ?? "").isEmpty ? palette.tertiaryTextColor : palette.secondaryTextColor)
                     .frame(maxWidth: .infinity, alignment: .leading)

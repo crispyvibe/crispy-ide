@@ -14,6 +14,9 @@ use crate::util::now_iso;
 
 const MAX_TITLE_CHARS: usize = 500;
 const MAX_BODY_CHARS: usize = 10_000;
+const MAX_LINK_PATH_CHARS: usize = 1_024;
+const MAX_LINKS_PER_TODO: usize = 32;
+const MAX_TRIAGE_CHARS: usize = 20_000;
 
 // --- todo.add ---
 
@@ -68,6 +71,9 @@ async fn do_todo_add(conn: &Connection, p: &Value) -> Result<Value> {
         "createdAt": ts.clone(),
         "updatedAt": ts,
         "completedAt": null,
+        "laneTaskId": null,
+        "refinementSessionId": null,
+        "triageJson": null,
     }))
 }
 
@@ -103,7 +109,8 @@ async fn do_todo_list(conn: &Connection, p: &Value) -> Result<Value> {
 
     let sql = format!(
         "SELECT id, vibespace_id, project_path, title, body, color_tag, file_path, status,
-                due_at, reminder_at, created_at, updated_at, completed_at
+                due_at, reminder_at, created_at, updated_at, completed_at,
+                lane_task_id, refinement_session_id, triage_json
          FROM todos WHERE {} ORDER BY updated_at DESC",
         where_clauses.join(" AND ")
     );
@@ -131,6 +138,9 @@ fn row_to_todo_value(row: &libsql::Row) -> Result<Value> {
         "createdAt": row.get::<String>(10)?,
         "updatedAt": row.get::<String>(11)?,
         "completedAt": row.get::<Option<String>>(12)?,
+        "laneTaskId": row.get::<Option<String>>(13)?,
+        "refinementSessionId": row.get::<Option<String>>(14)?,
+        "triageJson": row.get::<Option<String>>(15)?,
     }))
 }
 
@@ -256,14 +266,17 @@ async fn do_todo_show(conn: &Connection, p: &Value) -> Result<Value> {
         .await?
         .ok_or_else(|| anyhow!("todo not found: {}", todo_id))?;
     let messages = list_messages(conn, todo_id).await?;
+    let files = list_files(conn, todo_id).await?;
     let mut obj = todo.as_object().cloned().unwrap_or_default();
     obj.insert("messages".to_string(), Value::Array(messages));
+    obj.insert("files".to_string(), Value::Array(files));
     Ok(Value::Object(obj))
 }
 
 async fn fetch_todo(conn: &Connection, todo_id: &str) -> Result<Option<Value>> {
     let sql = "SELECT id, vibespace_id, project_path, title, body, color_tag, file_path, status,
-                      due_at, reminder_at, created_at, updated_at, completed_at
+                      due_at, reminder_at, created_at, updated_at, completed_at,
+                      lane_task_id, refinement_session_id, triage_json
                FROM todos WHERE id = ?1";
     let mut rows = conn.query(sql, libsql::params![todo_id]).await?;
     match rows.next().await? {
@@ -349,6 +362,192 @@ async fn list_messages(conn: &Connection, todo_id: &str) -> Result<Vec<Value>> {
         }));
     }
     Ok(out)
+}
+
+// --- todo.file.add ---
+
+pub async fn todo_file_add(conn: &Connection, id: String, params: Value) -> Response {
+    match do_todo_file_add(conn, &params).await {
+        Ok(v) => Response::ok(id, v),
+        Err(e) => Response::err(id, -32000, e.to_string()),
+    }
+}
+
+async fn do_todo_file_add(conn: &Connection, p: &Value) -> Result<Value> {
+    let link_id = p["id"].as_str().ok_or_else(|| anyhow!("id required"))?;
+    let todo_id = p["todoId"].as_str().ok_or_else(|| anyhow!("todoId required"))?;
+    let path = p["path"].as_str().ok_or_else(|| anyhow!("path required"))?;
+    if path.trim().is_empty() {
+        bail!("path must not be empty");
+    }
+    if path.chars().count() > MAX_LINK_PATH_CHARS {
+        bail!("limit_exceeded: path exceeds {} characters", MAX_LINK_PATH_CHARS);
+    }
+    let line = match p.get("line") {
+        None | Some(Value::Null) => None,
+        Some(v) => {
+            let n = v.as_i64().ok_or_else(|| anyhow!("line must be an integer"))?;
+            if n < 1 {
+                bail!("line must be >= 1");
+            }
+            Some(n)
+        }
+    };
+
+    let mut rows = conn
+        .query(
+            "SELECT COUNT(*) FROM todo_files WHERE todo_id = ?1",
+            libsql::params![todo_id],
+        )
+        .await?;
+    let count = match rows.next().await? {
+        Some(row) => row.get::<i64>(0)?,
+        None => 0,
+    };
+    if count as usize >= MAX_LINKS_PER_TODO {
+        bail!("limit_exceeded: todo already has {} file links", MAX_LINKS_PER_TODO);
+    }
+
+    let ts = now_iso();
+    // Foreign key (ON DELETE CASCADE, PRAGMA foreign_keys=ON) rejects orphans.
+    conn.execute(
+        "INSERT INTO todo_files (id, todo_id, path, line, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        libsql::params![link_id, todo_id, path, line, ts.clone()],
+    )
+    .await?;
+
+    Ok(json!({
+        "id": link_id,
+        "todoId": todo_id,
+        "path": path,
+        "line": line,
+        "createdAt": ts,
+    }))
+}
+
+// --- todo.file.remove ---
+
+pub async fn todo_file_remove(conn: &Connection, id: String, params: Value) -> Response {
+    match do_todo_file_remove(conn, &params).await {
+        Ok(v) => Response::ok(id, v),
+        Err(e) => Response::err(id, -32000, e.to_string()),
+    }
+}
+
+async fn do_todo_file_remove(conn: &Connection, p: &Value) -> Result<Value> {
+    let todo_id = p["todoId"].as_str().ok_or_else(|| anyhow!("todoId required"))?;
+    let path = p["path"].as_str().ok_or_else(|| anyhow!("path required"))?;
+    let affected = conn
+        .execute(
+            "DELETE FROM todo_files WHERE todo_id = ?1 AND path = ?2",
+            libsql::params![todo_id, path],
+        )
+        .await?;
+    Ok(json!({ "deletedCount": affected as i64 }))
+}
+
+// --- todo.file.list ---
+
+pub async fn todo_file_list(conn: &Connection, id: String, params: Value) -> Response {
+    match do_todo_file_list(conn, &params).await {
+        Ok(v) => Response::ok(id, v),
+        Err(e) => Response::err(id, -32000, e.to_string()),
+    }
+}
+
+async fn do_todo_file_list(conn: &Connection, p: &Value) -> Result<Value> {
+    let todo_id = p["todoId"].as_str().ok_or_else(|| anyhow!("todoId required"))?;
+    Ok(json!({ "files": list_files(conn, todo_id).await? }))
+}
+
+async fn list_files(conn: &Connection, todo_id: &str) -> Result<Vec<Value>> {
+    let sql = "SELECT id, todo_id, path, line, created_at
+               FROM todo_files WHERE todo_id = ?1 ORDER BY created_at ASC";
+    let mut rows = conn.query(sql, libsql::params![todo_id]).await?;
+    let mut out = Vec::new();
+    while let Some(row) = rows.next().await? {
+        out.push(json!({
+            "id": row.get::<String>(0)?,
+            "todoId": row.get::<String>(1)?,
+            "path": row.get::<String>(2)?,
+            "line": row.get::<Option<i64>>(3)?,
+            "createdAt": row.get::<String>(4)?,
+        }));
+    }
+    Ok(out)
+}
+
+// --- todo.pipeline.set ---
+
+pub async fn todo_pipeline_set(conn: &Connection, id: String, params: Value) -> Response {
+    match do_todo_pipeline_set(conn, &params).await {
+        Ok(v) => Response::ok(id, v),
+        Err(e) => Response::err(id, -32000, e.to_string()),
+    }
+}
+
+async fn do_todo_pipeline_set(conn: &Connection, p: &Value) -> Result<Value> {
+    let todo_id = p["id"].as_str().ok_or_else(|| anyhow!("id required"))?;
+
+    let mut sets: Vec<String> = Vec::new();
+    let mut vals: Vec<libsql::Value> = Vec::new();
+
+    // Partial update: absent keys are untouched; explicit JSON null clears.
+    match p.get("laneTaskId") {
+        None => {}
+        Some(Value::Null) => sets.push("lane_task_id = NULL".to_string()),
+        Some(v) => {
+            let s = v.as_str().ok_or_else(|| anyhow!("laneTaskId must be a string or null"))?;
+            vals.push(s.into());
+            sets.push(format!("lane_task_id = ?{}", vals.len()));
+        }
+    }
+    match p.get("refinementSessionId") {
+        None => {}
+        Some(Value::Null) => sets.push("refinement_session_id = NULL".to_string()),
+        Some(v) => {
+            let s = v
+                .as_str()
+                .ok_or_else(|| anyhow!("refinementSessionId must be a string or null"))?;
+            vals.push(s.into());
+            sets.push(format!("refinement_session_id = ?{}", vals.len()));
+        }
+    }
+    match p.get("triageJson") {
+        None => {}
+        Some(Value::Null) => sets.push("triage_json = NULL".to_string()),
+        Some(v) => {
+            let s = v.as_str().ok_or_else(|| anyhow!("triageJson must be a string or null"))?;
+            if s.chars().count() > MAX_TRIAGE_CHARS {
+                bail!("limit_exceeded: triageJson exceeds {} characters", MAX_TRIAGE_CHARS);
+            }
+            let parsed: Value =
+                serde_json::from_str(s).map_err(|_| anyhow!("triageJson must be valid JSON"))?;
+            if !parsed.is_object() {
+                bail!("triageJson must be a JSON object");
+            }
+            vals.push(s.into());
+            sets.push(format!("triage_json = ?{}", vals.len()));
+        }
+    }
+
+    if sets.is_empty() {
+        bail!("no updatable fields provided");
+    }
+
+    let ts = now_iso();
+    vals.push(ts.clone().into());
+    sets.push(format!("updated_at = ?{}", vals.len()));
+
+    vals.push(todo_id.into());
+    let sql = format!("UPDATE todos SET {} WHERE id = ?{}", sets.join(", "), vals.len());
+
+    let affected = conn.execute(&sql, libsql::params_from_iter(vals)).await?;
+    if affected == 0 {
+        bail!("todo not found: {}", todo_id);
+    }
+    Ok(json!({ "id": todo_id, "updatedAt": ts }))
 }
 
 #[cfg(test)]
@@ -455,5 +654,191 @@ mod tests {
         do_todo_delete(&conn, &json!({"id": "t1"})).await.unwrap();
         let after = do_todo_message_list(&conn, &json!({"todoId": "t1"})).await.unwrap();
         assert_eq!(after["messages"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn v5_migration_is_idempotent() {
+        let conn = test_conn().await;
+        // test_conn already migrated to v5; a second run must be a no-op
+        // (the guarded ALTER TABLEs would fail if re-executed).
+        let version = crate::schema::run_migrations(&conn).await.unwrap();
+        assert_eq!(version, 5);
+        let version_again = crate::schema::run_migrations(&conn).await.unwrap();
+        assert_eq!(version_again, 5);
+    }
+
+    #[tokio::test]
+    async fn file_links_roundtrip_and_cascade() {
+        let conn = test_conn().await;
+        do_todo_add(&conn, &json!({"id": "t1", "vibespaceId": "vs1", "title": "Link me"}))
+            .await
+            .unwrap();
+
+        let added = do_todo_file_add(
+            &conn,
+            &json!({"id": "f1", "todoId": "t1", "path": "src/main.rs", "line": 42}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(added["path"], "src/main.rs");
+        assert_eq!(added["line"], 42);
+
+        // line is optional
+        do_todo_file_add(&conn, &json!({"id": "f2", "todoId": "t1", "path": "README.md"}))
+            .await
+            .unwrap();
+
+        let listed = do_todo_file_list(&conn, &json!({"todoId": "t1"})).await.unwrap();
+        let files = listed["files"].as_array().unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0]["id"], "f1");
+        assert_eq!(files[1]["line"], Value::Null);
+
+        // todo.show carries the links alongside the thread.
+        let shown = do_todo_show(&conn, &json!({"id": "t1"})).await.unwrap();
+        assert_eq!(shown["files"].as_array().unwrap().len(), 2);
+
+        // remove by (todoId, path)
+        let removed = do_todo_file_remove(&conn, &json!({"todoId": "t1", "path": "README.md"}))
+            .await
+            .unwrap();
+        assert_eq!(removed["deletedCount"], 1);
+        let removed_again = do_todo_file_remove(&conn, &json!({"todoId": "t1", "path": "README.md"}))
+            .await
+            .unwrap();
+        assert_eq!(removed_again["deletedCount"], 0);
+
+        // Deleting the todo cascades to its file links.
+        do_todo_delete(&conn, &json!({"id": "t1"})).await.unwrap();
+        let after = do_todo_file_list(&conn, &json!({"todoId": "t1"})).await.unwrap();
+        assert_eq!(after["files"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn file_add_validates_path_line_and_count() {
+        let conn = test_conn().await;
+        do_todo_add(&conn, &json!({"id": "t1", "vibespaceId": "vs1", "title": "Limits"}))
+            .await
+            .unwrap();
+
+        // empty path
+        let err = do_todo_file_add(&conn, &json!({"id": "f1", "todoId": "t1", "path": "  "}))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("path must not be empty"));
+
+        // oversized path
+        let long_path = "a".repeat(MAX_LINK_PATH_CHARS + 1);
+        let err = do_todo_file_add(&conn, &json!({"id": "f1", "todoId": "t1", "path": long_path}))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("limit_exceeded"));
+
+        // line below 1
+        let err = do_todo_file_add(
+            &conn,
+            &json!({"id": "f1", "todoId": "t1", "path": "src/a.rs", "line": 0}),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("line must be >= 1"));
+
+        // missing todo is rejected by the FK
+        assert!(do_todo_file_add(&conn, &json!({"id": "f1", "todoId": "missing", "path": "x"}))
+            .await
+            .is_err());
+
+        // per-todo link cap
+        for i in 0..MAX_LINKS_PER_TODO {
+            do_todo_file_add(
+                &conn,
+                &json!({"id": format!("f{i}"), "todoId": "t1", "path": format!("src/{i}.rs")}),
+            )
+            .await
+            .unwrap();
+        }
+        let err = do_todo_file_add(&conn, &json!({"id": "f-over", "todoId": "t1", "path": "src/over.rs"}))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("limit_exceeded"));
+    }
+
+    #[tokio::test]
+    async fn pipeline_set_partial_update_and_clear() {
+        let conn = test_conn().await;
+        do_todo_add(&conn, &json!({"id": "t1", "vibespaceId": "vs1", "title": "Pipeline"}))
+            .await
+            .unwrap();
+
+        // set laneTaskId only
+        let upd = do_todo_pipeline_set(&conn, &json!({"id": "t1", "laneTaskId": "task-1"}))
+            .await
+            .unwrap();
+        assert_eq!(upd["id"], "t1");
+        assert!(upd["updatedAt"].as_str().is_some());
+
+        // set the other two; laneTaskId untouched
+        do_todo_pipeline_set(
+            &conn,
+            &json!({"id": "t1", "refinementSessionId": "sess-1", "triageJson": "{\"status\":\"done\"}"}),
+        )
+        .await
+        .unwrap();
+
+        let shown = do_todo_show(&conn, &json!({"id": "t1"})).await.unwrap();
+        assert_eq!(shown["laneTaskId"], "task-1");
+        assert_eq!(shown["refinementSessionId"], "sess-1");
+        assert_eq!(shown["triageJson"], "{\"status\":\"done\"}");
+
+        // pipeline fields surface through todo.list too
+        let listed = do_todo_list(&conn, &json!({"vibespaceId": "vs1", "status": "all"}))
+            .await
+            .unwrap();
+        assert_eq!(listed["todos"][0]["laneTaskId"], "task-1");
+
+        // explicit JSON null clears a field without touching the others
+        do_todo_pipeline_set(&conn, &json!({"id": "t1", "laneTaskId": null}))
+            .await
+            .unwrap();
+        let shown = do_todo_show(&conn, &json!({"id": "t1"})).await.unwrap();
+        assert_eq!(shown["laneTaskId"], Value::Null);
+        assert_eq!(shown["refinementSessionId"], "sess-1");
+
+        // no fields provided
+        let err = do_todo_pipeline_set(&conn, &json!({"id": "t1"})).await.unwrap_err();
+        assert!(err.to_string().contains("no updatable fields provided"));
+
+        // missing todo
+        let err = do_todo_pipeline_set(&conn, &json!({"id": "missing", "laneTaskId": "x"}))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("todo not found"));
+    }
+
+    #[tokio::test]
+    async fn pipeline_set_validates_triage_json() {
+        let conn = test_conn().await;
+        do_todo_add(&conn, &json!({"id": "t1", "vibespaceId": "vs1", "title": "Triage"}))
+            .await
+            .unwrap();
+
+        // oversized blob
+        let big = format!("{{\"pad\":\"{}\"}}", "x".repeat(MAX_TRIAGE_CHARS));
+        let err = do_todo_pipeline_set(&conn, &json!({"id": "t1", "triageJson": big}))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("limit_exceeded"));
+
+        // not valid JSON
+        let err = do_todo_pipeline_set(&conn, &json!({"id": "t1", "triageJson": "not json"}))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("valid JSON"));
+
+        // valid JSON but not an object
+        let err = do_todo_pipeline_set(&conn, &json!({"id": "t1", "triageJson": "[1,2]"}))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("JSON object"));
     }
 }

@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// F053 — a single todo card. Reads as a card (surface fill + hairline border),
@@ -9,6 +10,9 @@ struct TodoCardView: View {
     @Environment(\.appThemePalette) private var palette
     @Environment(\.crispyvibesTheme) private var theme
     @Environment(\.crispyvibesUIScale) private var uiScale
+    // F060: live pipeline signals — triage in flight and the linked lane task.
+    @Environment(\.todoTriageCoordinatorEnvironment) private var triageCoordinator
+    @Environment(\.vibeLaneTaskManagerEnvironment) private var laneManager
     let todo: Todo
     let isSelected: Bool
     /// Inline delete-confirm state, owned by the panel so keyboard ⌦ can drive it.
@@ -20,6 +24,9 @@ struct TodoCardView: View {
     let onCancelDelete: () -> Void
     let onColor: (TodoStickyColor?) -> Void
     @State private var isHovering = false
+    /// Environment objects aren't auto-observed; tick on their changes so the
+    /// triage indicator and lane-task chip update live.
+    @State private var pipelineTick = 0
 
     var body: some View {
         HStack(alignment: .top, spacing: uiScale.spacing(10)) {
@@ -44,6 +51,7 @@ struct TodoCardView: View {
                         .foregroundStyle(palette.tertiaryTextColor)
                         .lineLimit(1)
                 }
+                triageChips
             }
 
             Spacer(minLength: 4)
@@ -98,6 +106,85 @@ struct TodoCardView: View {
         .animation(.easeOut(duration: 0.15), value: isSelected)
         .animation(.easeOut(duration: 0.12), value: isConfirmingDelete)
         .contextMenu { contextMenu }
+        .onReceive(pipelinePulse) { _ in pipelineTick &+= 1 }
+    }
+
+    private var pipelinePulse: AnyPublisher<Void, Never> {
+        let triage = triageCoordinator?.objectWillChange.map { _ in () }.eraseToAnyPublisher()
+            ?? Empty<Void, Never>().eraseToAnyPublisher()
+        let lanes = laneManager?.objectWillChange.map { _ in () }.eraseToAnyPublisher()
+            ?? Empty<Void, Never>().eraseToAnyPublisher()
+        return triage.merge(with: lanes).eraseToAnyPublisher()
+    }
+
+    /// F060 — pipeline signals under the title, in priority order: the linked
+    /// lane task's live state, else a triage-in-flight indicator, else the
+    /// triage result chips. Purely additive; hidden for plain todos.
+    @ViewBuilder private var triageChips: some View {
+        if let taskChip = linkedTaskChipModel {
+            HStack(spacing: uiScale.spacing(4)) {
+                triageChip(text: taskChip.text, systemImage: taskChip.icon, accent: taskChip.accent)
+            }
+            .padding(.top, uiScale.spacing(2))
+        } else if !todo.isCompleted, triageCoordinator?.activeTodoIDs.contains(todo.id) == true {
+            HStack(spacing: uiScale.spacing(4)) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text(AppStrings.TodoPipeline.triagingIndicator)
+                    .font(.system(size: uiScale.textSize(9), weight: .medium))
+                    .foregroundStyle(palette.tertiaryTextColor)
+            }
+            .padding(.top, uiScale.spacing(2))
+        } else if !todo.isCompleted,
+                  let triage = todo.triage, triage.status == .done,
+                  triage.suggestedLane != nil || triage.openQuestionCount > 0 {
+            HStack(spacing: uiScale.spacing(4)) {
+                if let lane = triage.suggestedLane {
+                    triageChip(text: lane.name, systemImage: "arrow.right.circle", accent: true)
+                }
+                if triage.openQuestionCount > 0 {
+                    triageChip(
+                        text: AppStrings.TodoPipeline.triageQuestionCount(triage.openQuestionCount),
+                        systemImage: "questionmark.circle",
+                        accent: false
+                    )
+                }
+            }
+            .padding(.top, uiScale.spacing(2))
+        }
+    }
+
+    /// The linked lane task rendered as a state chip ("Running · Fix a bug").
+    private var linkedTaskChipModel: (text: String, icon: String, accent: Bool)? {
+        guard let linked = todo.laneTaskID,
+              let taskID = UUID(uuidString: linked),
+              let manager = laneManager,
+              let task = manager.task(withID: taskID) else { return nil }
+        let laneName = manager.resolvedLane(for: task)?.name ?? AppStrings.VibeLanes.title
+        switch task.state {
+        case .running:
+            return ("\(AppStrings.VibeLanes.running) · \(laneName)", "play.circle", true)
+        case .needsInput:
+            return ("\(AppStrings.VibeLanes.needsYou) · \(laneName)", "person.crop.circle.badge.exclamationmark", true)
+        case .stopped:
+            return ("\(AppStrings.VibeLanes.stopped) · \(laneName)", "stop.circle", false)
+        case .done:
+            return ("\(AppStrings.VibeLanes.completed) · \(laneName)", "checkmark.circle", false)
+        }
+    }
+
+    private func triageChip(text: String, systemImage: String, accent: Bool) -> some View {
+        HStack(spacing: uiScale.spacing(3)) {
+            Image(systemName: systemImage).font(.system(size: uiScale.iconSize(8)))
+            Text(text).font(.system(size: uiScale.textSize(9), weight: .medium)).lineLimit(1)
+        }
+        .foregroundStyle(accent ? palette.accentColor : palette.secondaryTextColor)
+        .padding(.horizontal, uiScale.spacing(5))
+        .padding(.vertical, uiScale.spacing(2))
+        .background(
+            (accent ? palette.accentColor : palette.borderColorValue).opacity(0.12),
+            in: Capsule()
+        )
     }
 
     private var cardFill: Color {

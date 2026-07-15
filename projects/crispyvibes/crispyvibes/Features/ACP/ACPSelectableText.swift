@@ -10,6 +10,10 @@ struct ACPSelectableText: View {
     var foregroundColor: Color? = nil
     let onLinkTargetActivated: ((URL) -> Void)?
     let onFileSystemTargetActivated: ((TerminalFileSystemTarget) -> Void)?
+    /// F060: resolves repo-relative paths (`src/Foo.swift:12`) into clickable
+    /// links when the file exists under this directory. Environment-provided
+    /// (set once per chat surface) so nested message views need no plumbing.
+    @Environment(\.acpLinkBaseDirectory) private var linkBaseDirectory
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -31,7 +35,7 @@ struct ACPSelectableText: View {
     // MARK: - Markdown
 
     private func markdownView(_ markdown: String) -> some View {
-        Text(Self.parseMarkdown(markdown))
+        Text(Self.parseMarkdown(markdown, baseDirectory: linkBaseDirectory))
             .font(font)
             .foregroundStyle(foregroundColor ?? palette.primaryTextColor)
             .lineSpacing(3)
@@ -126,7 +130,7 @@ struct ACPSelectableText: View {
 
     // MARK: - Markdown Parsing
 
-    static func parseMarkdown(_ text: String) -> AttributedString {
+    static func parseMarkdown(_ text: String, baseDirectory: URL? = nil) -> AttributedString {
         let normalized = normalizeMarkdownLineBreaks(text)
         let parsed = (try? AttributedString(
             markdown: normalized,
@@ -140,7 +144,7 @@ struct ACPSelectableText: View {
         var attributed = rebuildBlockStructure(from: parsed)
         // Detect links against the FINAL text — ranges computed on the raw
         // markdown would land shifted once the parser strips syntax characters.
-        ACPTextLinking.applyDetectedLinks(to: &attributed, original: String(attributed.characters))
+        ACPTextLinking.applyDetectedLinks(to: &attributed, original: String(attributed.characters), baseDirectory: baseDirectory)
         return attributed
     }
 
@@ -324,6 +328,13 @@ enum ACPTextLinking {
     private static let filePattern = try! NSRegularExpression(
         pattern: #"(?<![A-Za-z0-9])(/(?:[^\s:()]+/?)+)(?::(\d+))?(?::(\d+))?"#
     )
+    /// Repo-relative paths like `src/Parser.swift:42`. Requires ≥1 slash and a
+    /// file extension in the last component to avoid prose like "and/or";
+    /// matches are linked ONLY when the resolved file exists (F060 — clickable
+    /// paths in lane logs, handoffs, and todo threads).
+    private static let relativeFilePattern = try! NSRegularExpression(
+        pattern: #"(?<![\w/.~-])((?:[\w@+.-]+/)+[\w@+.-]*\.\w+)(?::(\d+))?(?::(\d+))?"#
+    )
     private static let bareURLPattern = try! NSRegularExpression(
         pattern: #"(?<!["=])((?:https?|file)://[^\s<]+)"#
     )
@@ -332,7 +343,11 @@ enum ACPTextLinking {
         .underlineStyle: NSUnderlineStyle.single.rawValue,
     ]
 
-    static func applyDetectedLinks(to attributed: inout AttributedString, original: String) {
+    static func applyDetectedLinks(
+        to attributed: inout AttributedString,
+        original: String,
+        baseDirectory: URL? = nil
+    ) {
         let nsRange = NSRange(original.startIndex..<original.endIndex, in: original)
 
         if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
@@ -356,6 +371,32 @@ enum ACPTextLinking {
                   let upper = AttributedString.Index(wholeRange.upperBound, within: attributed) else { continue }
             attributed[lower..<upper].link = linkURL
         }
+
+        // Relative paths resolve against baseDirectory and link only when the
+        // file actually exists — existence is the false-positive filter.
+        guard let baseDirectory else { return }
+        for match in relativeFilePattern.matches(in: original, options: [], range: nsRange) {
+            guard let pathRange = Range(match.range(at: 1), in: original) else { continue }
+            let relative = String(original[pathRange])
+            let resolved = baseDirectory.appendingPathComponent(relative).standardizedFileURL.path
+            guard FileManager.default.fileExists(atPath: resolved) else { continue }
+            let line = Range(match.range(at: 2), in: original).flatMap { Int(String(original[$0])) }
+            let column = Range(match.range(at: 3), in: original).flatMap { Int(String(original[$0])) }
+            guard let linkURL = fileURL(path: resolved, line: line, column: column) else { continue }
+            let wholeRange = Range(match.range, in: original) ?? pathRange
+            guard let lower = AttributedString.Index(wholeRange.lowerBound, within: attributed),
+                  let upper = AttributedString.Index(wholeRange.upperBound, within: attributed),
+                  attributed[lower..<upper].link == nil else { continue }
+            attributed[lower..<upper].link = linkURL
+        }
+    }
+
+    /// Convenience: plain string → AttributedString with detected links (used
+    /// by non-markdown surfaces like the lane activity log).
+    static func linkified(_ string: String, baseDirectory: URL? = nil) -> AttributedString {
+        var attributed = AttributedString(string)
+        applyDetectedLinks(to: &attributed, original: string, baseDirectory: baseDirectory)
+        return attributed
     }
 
     static func applyDetectedLinks(to attributed: NSMutableAttributedString) {
@@ -500,5 +541,19 @@ struct MermaidDiagramView: View {
             image = await MermaidRenderer.shared.render(source: source, isDark: colorScheme == .dark)
             isLoading = false
         }
+    }
+}
+
+
+/// F060: per-surface base directory for resolving relative path links in chat
+/// text. Set at the chat-view root from the active session's project path.
+private struct ACPLinkBaseDirectoryKey: EnvironmentKey {
+    static let defaultValue: URL? = nil
+}
+
+extension EnvironmentValues {
+    var acpLinkBaseDirectory: URL? {
+        get { self[ACPLinkBaseDirectoryKey.self] }
+        set { self[ACPLinkBaseDirectoryKey.self] = newValue }
     }
 }

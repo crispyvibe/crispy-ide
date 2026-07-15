@@ -27,6 +27,10 @@ final class VibeLaneTaskManager: ObservableObject {
     let handoffRoot: URL?
     /// Notifies the user when a task transitions into Needs you. nil = silent (tests).
     let notifier: VibeLaneNotifying?
+    /// F060 — observes every persisted state transition (old != new). The todo
+    /// pipeline bridge is the sole consumer; nil = no observer. Fired from
+    /// `upsert`, the single writer of `tasks`, so no transition can bypass it.
+    var onTaskStateChanged: ((UUID, VibeLaneTaskState, VibeLaneTaskState) -> Void)?
     let clock: VibeLaneClock
     let maxConcurrent: Int
     /// Conservative default cap on tasks running concurrently across all projects.
@@ -123,13 +127,20 @@ final class VibeLaneTaskManager: ObservableObject {
         laneID: UUID,
         title: String,
         projectPath: String,
-        agentID: String? = nil
+        agentID: String? = nil,
+        initialCarryForward: [String: String]? = nil
     ) -> VibeLaneTask? {
         guard let lane = lane(withID: laneID), let first = lane.firstCheckpoint else {
             logger.warning("createTask: lane \(laneID.uuidString, privacy: .public) not found or empty")
             return nil
         }
         store.archiveLaneRevision(lane)
+        // F060 — seeded carry-forward lets a dispatched todo satisfy the first
+        // checkpoint's `requires` contract without an immediate Supply pause.
+        // Same trust class as Supply answers; empty values are dropped.
+        let seeded = initialCarryForward?
+            .mapValues { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.value.isEmpty }
         let task = VibeLaneTask(
             projectPath: projectPath,
             title: title,
@@ -138,6 +149,7 @@ final class VibeLaneTaskManager: ObservableObject {
             agentID: agentID,
             state: .running,
             currentCheckpointKey: first.key,
+            carryForward: (seeded?.isEmpty == false) ? seeded : nil,
             repoBaselineRef: VibeLaneGit.head(projectPath)
         )
         upsert(task)
@@ -313,6 +325,9 @@ final class VibeLaneTaskManager: ObservableObject {
             tasks[idx] = task
             if task.state == .needsInput, previous.state != .needsInput {
                 notifier?.notifyNeedsInput(task)
+            }
+            if task.state != previous.state {
+                onTaskStateChanged?(task.id, previous.state, task.state)
             }
         } else {
             tasks.insert(task, at: 0)

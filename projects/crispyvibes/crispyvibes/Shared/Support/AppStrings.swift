@@ -164,6 +164,145 @@ enum AppStrings {
         static let dismissError = String(localized: "todos.error.dismiss", defaultValue: "Dismiss")
     }
 
+    // MARK: - Todo Lane Pipeline (F060)
+
+    enum TodoPipeline {
+        static let sendToLane = String(localized: "todoPipeline.sendToLane", defaultValue: "Send to Lane…")
+        static let refine = String(localized: "todoPipeline.refine", defaultValue: "Refine")
+        static let refineHelp = String(
+            localized: "todoPipeline.refineHelp",
+            defaultValue: "Chat with an agent to sharpen this todo into a dispatchable task."
+        )
+        static let dispatch = String(localized: "todoPipeline.dispatch", defaultValue: "Dispatch")
+        static let chooseLane = String(localized: "todoPipeline.chooseLane", defaultValue: "Choose a lane")
+        static let unresolvedInputs = String(
+            localized: "todoPipeline.unresolvedInputs",
+            defaultValue: "This lane still needs:"
+        )
+        static let dispatchAnyway = String(
+            localized: "todoPipeline.dispatchAnyway",
+            defaultValue: "Dispatch anyway (asks later)"
+        )
+        static let taskRunning = String(
+            localized: "todoPipeline.taskRunning",
+            defaultValue: "A lane task is already running for this todo."
+        )
+        static let dispatchFailed = String(
+            localized: "todoPipeline.dispatchFailed",
+            defaultValue: "Dispatch failed. Check the lane and project, then try again."
+        )
+        static func threadDispatched(laneName: String) -> String {
+            String(
+                format: String(localized: "todoPipeline.thread.dispatched", defaultValue: "Dispatched to lane “%@”."),
+                locale: Locale.current, laneName
+            )
+        }
+        static func threadNeedsInput(requestKind: String) -> String {
+            String(
+                format: String(
+                    localized: "todoPipeline.thread.needsInput",
+                    defaultValue: "The lane task needs your input (%@). Open Vibe Lanes to answer."
+                ),
+                locale: Locale.current, requestKind
+            )
+        }
+        static func threadStopped(reason: String) -> String {
+            String(
+                format: String(localized: "todoPipeline.thread.stopped", defaultValue: "The lane task stopped (%@)."),
+                locale: Locale.current, reason
+            )
+        }
+        static let threadDone = String(
+            localized: "todoPipeline.thread.done",
+            defaultValue: "The lane task finished — the work passed its final checkpoint."
+        )
+        static let triageSummaryHeader = String(
+            localized: "todoPipeline.triage.summaryHeader",
+            defaultValue: "Triage:"
+        )
+        static func triageSuggestedLane(_ name: String, reason: String?) -> String {
+            let base = String(
+                format: String(localized: "todoPipeline.triage.suggestedLane", defaultValue: "Suggested lane: %@"),
+                locale: Locale.current, name
+            )
+            guard let reason, !reason.isEmpty else { return base }
+            return "\(base) — \(reason)"
+        }
+        static let triageNotLaneShaped = String(
+            localized: "todoPipeline.triage.notLaneShaped",
+            defaultValue: "This doesn't look like lane work."
+        )
+        static let triageQuestionsIntro = String(
+            localized: "todoPipeline.triage.questionsIntro",
+            defaultValue: "Open questions before dispatch:"
+        )
+        static func triageContextFiles(_ names: String) -> String {
+            String(
+                format: String(localized: "todoPipeline.triage.contextFiles", defaultValue: "Possibly relevant: %@"),
+                locale: Locale.current, names
+            )
+        }
+        static func triageQuestionCount(_ count: Int) -> String {
+            String(
+                format: String(localized: "todoPipeline.triage.questionCount", defaultValue: "%d questions"),
+                locale: Locale.current, count
+            )
+        }
+        static let settingsCardTitle = String(
+            localized: "todoPipeline.settings.cardTitle",
+            defaultValue: "Todo Pipeline"
+        )
+        static let settingsCardDescription = String(
+            localized: "todoPipeline.settings.cardDescription",
+            defaultValue: "Background triage and lane dispatch behavior for todos."
+        )
+        static let settingsTriageModeTitle = String(
+            localized: "todoPipeline.settings.triageMode",
+            defaultValue: "Auto-triage"
+        )
+        static let settingsTriageModeDetail = String(
+            localized: "todoPipeline.settings.triageModeDetail",
+            defaultValue: "After you capture a todo, an agent quietly finds related files, drafts questions, and suggests a lane."
+        )
+        static let settingsTriageOff = String(localized: "todoPipeline.settings.triageOff", defaultValue: "Off")
+        static let settingsTriageProjectOnly = String(
+            localized: "todoPipeline.settings.triageProjectOnly",
+            defaultValue: "Project todos only"
+        )
+        static let settingsTriageAll = String(localized: "todoPipeline.settings.triageAll", defaultValue: "All todos")
+        static let settingsAutoCompleteTitle = String(
+            localized: "todoPipeline.settings.autoComplete",
+            defaultValue: "Complete the todo when its lane task finishes"
+        )
+        static let filesLabel = String(localized: "todoPipeline.filesLabel", defaultValue: "Files")
+        static let openFile = String(localized: "todoPipeline.openFile", defaultValue: "Open")
+        static let removeLink = String(localized: "todoPipeline.removeLink", defaultValue: "Remove link")
+        static let missingFileHint = String(
+            localized: "todoPipeline.missingFileHint",
+            defaultValue: "File not found — it may have been moved or deleted"
+        )
+        static let externalFileHint = String(
+            localized: "todoPipeline.externalFileHint",
+            defaultValue: "Outside this project"
+        )
+        static let triagingIndicator = String(
+            localized: "todoPipeline.triaging",
+            defaultValue: "Triaging…"
+        )
+        static let triagingHelp = String(
+            localized: "todoPipeline.triagingHelp",
+            defaultValue: "An agent is analyzing this todo — related files, questions, and a lane suggestion."
+        )
+        static let openLaneTaskHelp = String(
+            localized: "todoPipeline.openLaneTaskHelp",
+            defaultValue: "Open this task in Vibe Lanes"
+        )
+        static let resumeRefine = String(
+            localized: "todoPipeline.resumeRefine",
+            defaultValue: "Resume refine"
+        )
+    }
+
     // MARK: - Vibe Lanes (F059)
 
     enum VibeLanes {

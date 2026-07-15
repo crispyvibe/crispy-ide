@@ -162,6 +162,11 @@ extension VibeLaneTaskDetailView {
 
     // MARK: - Activity timeline
 
+    /// Base for resolving relative paths in activity-log details (F060).
+    var logLinkBaseDirectory: URL? {
+        task.map { URL(fileURLWithPath: $0.projectPath) }
+    }
+
     /// Compact chronological feed, newest last. Expanded while the task is live
     /// (so it visibly streams), collapsed once terminal; the user can override.
     @ViewBuilder
@@ -246,7 +251,9 @@ extension VibeLaneTaskDetailView {
                     .foregroundStyle(isLatestLive ? palette.primaryTextColor : palette.secondaryTextColor)
                     .lineLimit(2)
                 if let detail = entry.detail, !detail.isEmpty {
-                    Text(detail)
+                    // F060: paths in log details are clickable (absolute or
+                    // task-project-relative), like terminal-board output.
+                    Text(ACPTextLinking.linkified(detail, baseDirectory: logLinkBaseDirectory))
                         .font(.system(size: uiScale.textSize(10), design: .monospaced))
                         .foregroundStyle(palette.tertiaryTextColor)
                         .textSelection(.enabled)

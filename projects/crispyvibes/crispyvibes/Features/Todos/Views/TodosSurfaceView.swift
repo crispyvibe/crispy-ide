@@ -10,6 +10,12 @@ struct TodosSurfaceView: View {
     @Environment(\.crispyvibesUIScale) private var uiScale
     @ObservedObject var store: VibeSpaceTodoStore
     let focusedProjectPath: String?
+    /// F060: forwarded to the detail pane's Refine button (nil = hidden).
+    var onRefine: ((Todo) -> Void)?
+    /// F060: opens a linked file in the content viewer (path, line anchor).
+    var onOpenFile: ((String, Int?) -> Void)?
+    /// F060: jumps to the linked lane task's detail in Vibe Lanes.
+    var onOpenLaneTask: ((UUID) -> Void)?
 
     @State private var selectedTodoID: String?
 
@@ -49,8 +55,16 @@ struct TodosSurfaceView: View {
     @ViewBuilder
     private var compactLayout: some View {
         if let id = selectedTodoID, let todo = store.todo(withID: id) {
-            TodoDetailView(store: store, todo: todo, onBack: { selectedTodoID = nil })
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+            TodoDetailView(
+                store: store,
+                todo: todo,
+                onBack: { selectedTodoID = nil },
+                focusedProjectPath: focusedProjectPath,
+                onRefine: onRefine,
+                onOpenFile: onOpenFile,
+                onOpenLaneTask: onOpenLaneTask
+            )
+            .transition(.move(edge: .trailing).combined(with: .opacity))
         } else {
             TodosPanelView(
                 store: store,
@@ -63,7 +77,15 @@ struct TodosSurfaceView: View {
     @ViewBuilder
     private func detail(showsBack: Bool) -> some View {
         if let id = selectedTodoID, let todo = store.todo(withID: id) {
-            TodoDetailView(store: store, todo: todo, onBack: showsBack ? { selectedTodoID = nil } : nil)
+            TodoDetailView(
+                store: store,
+                todo: todo,
+                onBack: showsBack ? { selectedTodoID = nil } : nil,
+                focusedProjectPath: focusedProjectPath,
+                onRefine: onRefine,
+                onOpenFile: onOpenFile,
+                onOpenLaneTask: onOpenLaneTask
+            )
         } else {
             emptyDetail
         }

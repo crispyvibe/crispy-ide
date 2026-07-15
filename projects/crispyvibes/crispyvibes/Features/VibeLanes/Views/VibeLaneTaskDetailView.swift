@@ -40,7 +40,8 @@ struct VibeLaneTaskDetailView: View {
     /// the step has attempt history). Reset when the selection changes.
     @State var definitionExpanded: Bool?
 
-    private var task: VibeLaneTask? { manager.task(withID: taskID) }
+    // Internal (not private): the +RunLog extension reads it (F060 link base).
+    var task: VibeLaneTask? { manager.task(withID: taskID) }
     var lane: VibeLaneDefinition? { task.flatMap { manager.resolvedLane(for: $0) } }
 
     /// Whether the split renders side-by-side (enough width) or stacked.
@@ -299,7 +300,7 @@ struct VibeLaneTaskDetailView: View {
                     Label(AppStrings.VibeLanes.outcome, systemImage: "flag.checkered")
                         .font(.system(size: uiScale.textSize(12), weight: .semibold))
                         .foregroundStyle(.green)
-                    VibeLaneMarkdownText(markdown: text)
+                    VibeLaneMarkdownText(markdown: text, linkBaseDirectory: URL(fileURLWithPath: task.projectPath))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }

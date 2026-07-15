@@ -106,6 +106,9 @@ struct ACPChatView: View {
         .onChange(of: viewModel.isConnected) { _, _ in
             syncInlineTriggerConfiguration()
         }
+        // F060: relative paths in messages resolve against the session's
+        // project and become clickable when they exist on disk.
+        .environment(\.acpLinkBaseDirectory, viewModel.activeSession?.projectPath)
         .onChange(of: viewModel.activeSession?.projectPath.path) { _, _ in
             syncInlineTriggerConfiguration()
         }

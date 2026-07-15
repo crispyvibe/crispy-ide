@@ -16,7 +16,7 @@
 
 ## Features
 
-Next available prefix: F060. Numbers are never reused. (F052 Whiteboarding, F053 Quick Todos & Sticky Notes, F055 Git Worktrees, F056 Unified Project Side Panel, F057 LaTeX Editor, and F058 Document Render Previews are implemented. F054 Mind Maps is reserved/planned but deprioritized — see `specs/planning/whiteboards-todos-mindmaps-design.md`. F059 Vibe Lanes is in draft.)
+Next available prefix: F061. Numbers are never reused. (F052 Whiteboarding, F053 Quick Todos & Sticky Notes, F055 Git Worktrees, F056 Unified Project Side Panel, F057 LaTeX Editor, and F058 Document Render Previews are implemented. F054 Mind Maps is reserved/planned but deprioritized — see `specs/planning/whiteboards-todos-mindmaps-design.md`. F059 Vibe Lanes and F060 Todo Lane Pipeline are in draft.)
 
 | Prefix | Feature | Domain | Folder | Status |
 |--------|---------|--------|--------|--------|
@@ -76,6 +76,7 @@ Next available prefix: F060. Numbers are never reused. (F052 Whiteboarding, F053
 | F057 | LaTeX Editor | D4 | `editor/latex` | implemented |
 | F058 | Document Render Previews | D4 | `editor/document-previews` | implemented |
 | F059 | Vibe Lanes | D7 | `ai-agents/vibe-lanes` | draft |
+| F060 | Todo Lane Pipeline | D7 | `ai-agents/todo-lane-pipeline` | implemented |
 
 ## NFR Index
 

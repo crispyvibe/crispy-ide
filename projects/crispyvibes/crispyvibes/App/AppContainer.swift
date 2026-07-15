@@ -28,6 +28,12 @@ struct AppContainer {
     let vibespaceTodoStore: VibeSpaceTodoStore
     /// F059: Vibe Lanes execution component — owns tasks and runs lanes.
     let vibeLaneTaskManager: VibeLaneTaskManager
+    /// F060: todo↔lane bridge — dispatch, carry-forward mapping, lifecycle
+    /// fan-in. Retained here; the CLI router only holds it weakly.
+    let todoLanePipelineBridge: TodoLanePipelineBridge
+    /// F060: background triage over settled todos (debounced, capped, silent
+    /// on failure). Activated at construction; mode read from preferences.
+    let todoTriageCoordinator: TodoTriageCoordinator
     /// F059: Vibe Lanes surface route state shared by tab and spotlight presentations.
     let vibeLaneSurfaceNavigationViewModel: VibeLaneSurfaceNavigationViewModel
     /// F049-R05 + F049-R13: orchestrates anchor relocation + file lifecycle.
@@ -545,6 +551,26 @@ struct AppContainer {
         let cliCommandRouter = CLICommandRouter(shelfStore: shelfStore)
         cliCommandRouter.attachVibeSpaceCommentStore(vibespaceCommentStore)
         cliCommandRouter.attachVibeSpaceTodoStore(vibespaceTodoStore)
+        // F060 — todo↔lane bridge: dispatch + lifecycle fan-in. Wired above
+        // both features; neither imports the other (F060-R10).
+        let todoLanePipelineBridge = TodoLanePipelineBridge(
+            todoStore: vibespaceTodoStore,
+            laneManager: vibeLaneTaskManager
+        )
+        cliCommandRouter.attachTodoLanePipelineBridge(todoLanePipelineBridge)
+        // F059 — lane.* / lane.task.* CLI commands drive the same task manager
+        // the UI observes (F059-R10; one code path, two callers).
+        cliCommandRouter.attachVibeLaneTaskManager(vibeLaneTaskManager)
+        let todoTriageCoordinator = TodoTriageCoordinator(
+            todoStore: vibespaceTodoStore,
+            laneManager: vibeLaneTaskManager,
+            runner: TodoTriageACPRunner(
+                sessionManager: acpSessionManager,
+                sessionRegistry: acpSessionRegistry
+            )
+        )
+        todoTriageCoordinator.modeProvider = { AppPreferences.todoTriageMode() }
+        todoTriageCoordinator.activate()
         let cliSocketServer = CLISocketServer(router: cliCommandRouter)
         return AppContainer(
             appPersistenceStore: appPersistenceStore,
@@ -570,6 +596,8 @@ struct AppContainer {
             vibespaceCommentStore: vibespaceCommentStore,
             vibespaceTodoStore: vibespaceTodoStore,
             vibeLaneTaskManager: vibeLaneTaskManager,
+            todoLanePipelineBridge: todoLanePipelineBridge,
+            todoTriageCoordinator: todoTriageCoordinator,
             vibeLaneSurfaceNavigationViewModel: vibeLaneSurfaceNavigationViewModel,
             commentLifecycleCoordinator: commentLifecycleCoordinator,
             externalAgentSessionService: externalAgentSessionService,

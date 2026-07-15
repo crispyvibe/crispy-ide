@@ -140,7 +140,7 @@ extension VibeLaneTaskDetailView {
                     }
                 }
                 if let summary = nonEmpty(run?.summary), !summary.lowercased().hasPrefix("passed at attempt") {
-                    carryForward(summary)
+                    carryForward(summary, projectPath: task.projectPath)
                 }
 
                 // …and the authored definition is reference material, collapsed
@@ -374,12 +374,12 @@ extension VibeLaneTaskDetailView {
         }
     }
 
-    private func carryForward(_ text: String) -> some View {
+    private func carryForward(_ text: String, projectPath: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Label(AppStrings.VibeLanes.checkpointHandoff, systemImage: "arrow.turn.down.right")
                 .font(.system(size: uiScale.textSize(11), weight: .semibold))
                 .foregroundStyle(palette.tertiaryTextColor)
-            VibeLaneMarkdownText(markdown: text)
+            VibeLaneMarkdownText(markdown: text, linkBaseDirectory: URL(fileURLWithPath: projectPath))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
