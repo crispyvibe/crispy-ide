@@ -11,7 +11,12 @@ final class FolderExplorerViewModel: ObservableObject {
     @Published var rootURL: URL?
     @Published var rootItems: [FileItem] = []
     @Published private(set) var displayedItems: [FileItem] = []
-    @Published var activeSidebarTab: SidebarTab = .files
+    @Published var activeSidebarTab: SidebarTab = .files {
+        didSet {
+            guard activeSidebarTab == .files, oldValue != .files else { return }
+            resumeDeferredTreeRefreshIfNeeded()
+        }
+    }
     @Published var expandedDirectoryIDs: Set<String> = []
     @Published var searchQuery = ""
     @Published var selectedItemID: String?
@@ -42,14 +47,17 @@ final class FolderExplorerViewModel: ObservableObject {
     let renameEvents = PassthroughSubject<ExplorerRenameEvent, Never>()
     let treeLoadTimeout: TimeInterval = 45
     let observedFileSystemChanges = PassthroughSubject<Set<String>, Never>()
-    var refreshRequestID = UUID()
     var gitRefreshRequestID = UUID()
+    var treeSessionID = UUID()
     var loadedDirectoryIDs: Set<String> = []
     var pendingExternalRefreshWorkItem: DispatchWorkItem?
     var pendingExternalRefreshPaths: Set<String> = []
     var pendingExternalRefreshEvents: [String: DirectoryWatcher.Event] = [:]
-    var isTreeRefreshInFlight = false
-    var queuedTreeRefreshTrigger: TreeRefreshTrigger?
+    var deferredTreeRefreshPaths: Set<String> = []
+    var deferredTreeRefreshEvents: [String: DirectoryWatcher.Event] = [:]
+    var directoryRefreshInFlight: Set<String> = []
+    var queuedDirectoryRefreshPaths: Set<String> = []
+    var directoryRefreshWaiters: [String: [CheckedContinuation<Bool, Never>]] = [:]
     private var displayedItemsComputationTask: Task<Void, Never>?
     private var displayedItemsComputationRequestID = UUID()
     private var subscriptions = Set<AnyCancellable>()
@@ -95,6 +103,7 @@ final class FolderExplorerViewModel: ObservableObject {
         pendingExternalRefreshWorkItem = nil
         displayedItemsComputationTask?.cancel()
         displayedItemsComputationTask = nil
+        treeSessionID = UUID()
     }
 
     private func bindDisplayedItems() {

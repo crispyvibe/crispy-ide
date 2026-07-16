@@ -100,6 +100,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
                 let serializedBaseURL = Self.serializeForJavaScript(baseURLString)
                 script = "window.crispyvibesSetHTML(\(serializedContent), \(serializedBaseURL));"
             }
+            parent.commentBridge?.invalidateRichModeDecorations()
             webView.evaluateJavaScript(script)
             lastInjectedContent = parent.content
             lastMode = parent.mode
@@ -142,10 +143,11 @@ struct MarkupRenderedEditor: NSViewRepresentable {
             case "contentChanged":
                 guard let content = message.body as? String else { return }
                 guard content != parent.content else { return }
-                parent.content = content
+                // Record the browser's value before publishing through SwiftUI.
+                // A synchronous view update must not inject the same content back
+                // into the web view and replace its live selection.
                 lastInjectedContent = content
-                // After content edits, decorations need a refresh.
-                syncCommentDecorationsIfNeeded()
+                parent.content = content
 
             case "requestImageCandidates":
                 handleImageCandidateRequest(message.body)

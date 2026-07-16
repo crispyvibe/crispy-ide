@@ -32,6 +32,7 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
     private var scrollObservation: NSObjectProtocol?
     private var boundsObservation: NSObjectProtocol?
     private var activeSurface: ActiveSurface = .text
+    private var lastRichDecorationScript: String?
 
     // MARK: - CommentSurfaceBridge
 
@@ -220,6 +221,8 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         let selected = selectedThreadID.map { "\"\($0)\"" } ?? "null"
         let js = "if(window.crispyvibesComments){window.crispyvibesComments.setComments(\(json), \(selected));}"
+        guard js != lastRichDecorationScript else { return }
+        lastRichDecorationScript = js
         wv.evaluateJavaScript(js, completionHandler: nil)
     }
 
@@ -233,10 +236,24 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
 
     /// Register the rich-mode WKWebView with the bridge.
     func observeRichMode(webView: WKWebView) {
+        let registrationChanged = richModeWebView !== webView
+        let surfaceChanged: Bool
+        switch activeSurface {
+        case .text: surfaceChanged = true
+        case .rich: surfaceChanged = false
+        }
+        guard registrationChanged || surfaceChanged else { return }
         self.richModeWebView = webView
         activeSurface = .rich
+        if registrationChanged {
+            lastRichDecorationScript = nil
+        }
         // Bump tick so any observers know the editor surface has switched.
         geometryTick &+= 1
+    }
+
+    func invalidateRichModeDecorations() {
+        lastRichDecorationScript = nil
     }
 
     /// Convert the textView's current selection into a `CommentAnchor`-ready
@@ -314,7 +331,13 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
         // If a different scroll view is being registered, tear down the old
         // observers so we don't leak notifications from a deallocated view
         // (and so the overlay can re-bind to the new geometry).
-        if enclosingScroll !== scrollView || self.textView !== textView {
+        let registrationChanged = enclosingScroll !== scrollView || self.textView !== textView
+        let surfaceChanged: Bool
+        switch activeSurface {
+        case .text: surfaceChanged = false
+        case .rich: surfaceChanged = true
+        }
+        if registrationChanged {
             if let token = scrollObservation { NotificationCenter.default.removeObserver(token) }
             if let token = boundsObservation { NotificationCenter.default.removeObserver(token) }
             scrollObservation = nil
@@ -345,8 +368,9 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
                 Task { @MainActor in self?.geometryTick &+= 1 }
             }
         }
-        // Bump once so the overlay re-renders with the latest geometry.
-        geometryTick &+= 1
+        if registrationChanged || surfaceChanged {
+            geometryTick &+= 1
+        }
     }
 
     deinit {

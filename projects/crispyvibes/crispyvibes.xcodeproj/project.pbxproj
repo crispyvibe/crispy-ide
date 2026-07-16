@@ -218,6 +218,8 @@
 		92B06328100B2AD7FA928723 /* AppThemePaletteTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F8A17EF26817B99BF61226 /* AppThemePaletteTypes.swift */; };
 		939ED71B15FF98B8B4606059 /* VibeLaneNewTaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2632CCD47C9B45D78CA6A42 /* VibeLaneNewTaskView.swift */; };
 		93A43C758C5A20A048F43BA2 /* CommentAnchorRelocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F26FC2BEE5DCBEBDBDF7692 /* CommentAnchorRelocatorTests.swift */; };
+		A8C001000000000000000001 /* MarkdownRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C001000000000000000003 /* MarkdownRuntimeTests.swift */; };
+		A8C001000000000000000002 /* CodeEditorCommentBridgeStabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C001000000000000000004 /* CodeEditorCommentBridgeStabilityTests.swift */; };
 		93FFFF6B9927D0B41702B83B /* TerminalSessionAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 198FC39D6403581793135228 /* TerminalSessionAppearance.swift */; };
 		95244885A7F9873771A98E78 /* EditorDropZoneOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D057D20F79F8DE3AD7C8756 /* EditorDropZoneOverlay.swift */; };
 		957E6F16A24C5E3FEB74957A /* VibeLaneTaskDetailView+Checkpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55FD12203C5C37515029A80 /* VibeLaneTaskDetailView+Checkpoints.swift */; };
@@ -748,6 +750,8 @@
 		0D057D20F79F8DE3AD7C8756 /* EditorDropZoneOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorDropZoneOverlay.swift; sourceTree = "<group>"; };
 		0D8EB8B8342C31938D394917 /* VibeSpaceMultiProjectUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceMultiProjectUITests.swift; sourceTree = "<group>"; };
 		0F26FC2BEE5DCBEBDBDF7692 /* CommentAnchorRelocatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentAnchorRelocatorTests.swift; sourceTree = "<group>"; };
+		A8C001000000000000000003 /* MarkdownRuntimeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownRuntimeTests.swift; sourceTree = "<group>"; };
+		A8C001000000000000000004 /* CodeEditorCommentBridgeStabilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CodeEditorCommentBridgeStabilityTests.swift; sourceTree = "<group>"; };
 		126E91B4976C63221AAF2FDB /* CodeEditorCommentBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CodeEditorCommentBridge.swift; sourceTree = "<group>"; };
 		12CAC0E23C24AD54378D4EAA /* TodoLanePipelineBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoLanePipelineBridge.swift; path = crispyvibes/Features/AIAgents/TodoLanePipeline/TodoLanePipelineBridge.swift; sourceTree = "<group>"; };
 		132A680C12159B6827A422A2 /* TerminalSessionDelegateAndView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalSessionDelegateAndView.swift; sourceTree = "<group>"; };
@@ -2210,6 +2214,7 @@
 			isa = PBXGroup;
 			children = (
 				0F26FC2BEE5DCBEBDBDF7692 /* CommentAnchorRelocatorTests.swift */,
+				A8C001000000000000000004 /* CodeEditorCommentBridgeStabilityTests.swift */,
 			);
 			name = Comments;
 			path = Comments;
@@ -3173,6 +3178,7 @@
 			children = (
 				C99C9C15D74A9A0AA1C73543 /* TextProcessorServiceTests.swift */,
 				SEC00003000000000000FILE /* EditorHTMLSecurityTests.swift */,
+				A8C001000000000000000003 /* MarkdownRuntimeTests.swift */,
 				EE83452DC02F821972872F31 /* AutosaveSchedulerTests.swift */,
 			);
 			name = Services;
@@ -4535,6 +4541,8 @@
 				E539E26F06B29CCE8B717771 /* TodoTriageCoordinatorTests.swift in Sources */,
 				E9D23F024AFC976406CB9418 /* TodoLanePipelineBridgeTests.swift in Sources */,
 				ABAC103CE1D6F1C0FC4455CE /* CLICommandRouterLaneHandlersTests.swift in Sources */,
+				A8C001000000000000000001 /* MarkdownRuntimeTests.swift in Sources */,
+				A8C001000000000000000002 /* CodeEditorCommentBridgeStabilityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

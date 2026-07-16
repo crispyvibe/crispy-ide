@@ -59,7 +59,7 @@ The File Explorer provides a tree-based file browser for all projects in the act
 - **Vector:** A project contains a directory with millions of files (e.g., `node_modules` without `.gitignore`). Expanding this directory loads all immediate children, consuming memory and causing UI stalls.
 - **Impact:** UI freeze; memory exhaustion.
 - **Likelihood:** Medium — large `node_modules` directories are common.
-- **Mitigation:** Directory loading is lazy (only expanded directories are fetched). The tree uses targeted refresh (only affected directories reload on file system events). Git-ignored items are visually de-emphasized but still loaded. Consider adding a child count limit per directory expansion with a "show more" affordance. Tree load target is 200ms for up to 10,000 files. Linked NFR: PERF-Responsiveness.
+- **Mitigation:** Directory loading is lazy (only expanded directories are fetched). The tree uses targeted refresh, serializes requests per directory, coalesces event bursts, and does not recursively rebuild unchanged expanded subtrees. Deleted nodes are pruned from the AppKit cache. Git-ignored items are visually de-emphasized but still loaded. Consider adding a child count limit per directory expansion with a "show more" affordance. Tree load target is 200ms for up to 10,000 files. Linked NFR: PERF-Responsiveness.
 
 ### F024-T06: Information disclosure via Copy Path
 

@@ -41,6 +41,8 @@ extension FolderExplorerViewModel {
         Task { [weak self] in
             guard let self else { return }
             do {
+                var directoriesToRefresh: Set<URL> = []
+
                 for plan in normalizedPlans {
                     let resultingPath = try await self.worker.execute(
                         plan.operation.workerMethod,
@@ -58,10 +60,20 @@ extension FolderExplorerViewModel {
                     if plan.operation == .move {
                         let destinationURL = URL(fileURLWithPath: resultingPath)
                         self.updateSelections(afterMoving: plan.sourceURL, to: destinationURL)
+                        if let rootURL = self.rootURL,
+                           self.isSamePathOrDescendant(plan.sourceURL, of: rootURL) {
+                            directoriesToRefresh.insert(plan.sourceURL.deletingLastPathComponent())
+                        }
                     }
+                    directoriesToRefresh.insert(plan.targetDirectoryURL)
                 }
 
-                self.refreshTree()
+                for directoryURL in directoriesToRefresh.sorted(by: { $0.path < $1.path }) {
+                    _ = await self.refreshDirectoryContents(
+                        at: directoryURL,
+                        showLoadingState: false
+                    )
+                }
             } catch {
                 let title = normalizedPlans.first?.operation.failureTitle ?? "Transfer"
                 self.userFacingError = "\(title) failed: \(error.localizedDescription)"

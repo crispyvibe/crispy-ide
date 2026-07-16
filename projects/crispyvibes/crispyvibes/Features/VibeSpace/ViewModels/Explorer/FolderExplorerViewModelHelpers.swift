@@ -35,43 +35,101 @@ extension FolderExplorerViewModel {
     }
 
     func loadChildrenIfNeeded(of item: FileItem) {
+        guard !loadedDirectoryIDs.contains(item.id), !loadingDirectoryIDs.contains(item.id) else { return }
         refreshChildren(of: item, showLoadingState: true)
     }
 
     func refreshChildren(of item: FileItem, showLoadingState: Bool) {
         guard item.isDirectory else { return }
-        if showLoadingState {
-            guard !loadedDirectoryIDs.contains(item.id), !loadingDirectoryIDs.contains(item.id) else { return }
-            loadingDirectoryIDs.insert(item.id)
-        } else {
-            guard !loadingDirectoryIDs.contains(item.id) else { return }
-        }
-
-        let directoryPath = item.url.path
 
         Task { [weak self] in
             guard let self else { return }
-            do {
-                let payload = try await self.worker.execute(
-                    .listTree,
-                    arguments: ["rootPath": directoryPath],
-                    timeout: self.treeLoadTimeout
-                )
+            _ = await self.refreshDirectoryContents(
+                at: item.url,
+                showLoadingState: showLoadingState
+            )
+        }
+    }
 
-                let children = try self.decodeFileItems(from: payload)
-                self.replaceChildren(ofPath: directoryPath, with: children)
-                self.loadedDirectoryIDs.insert(item.id)
-                if showLoadingState {
-                    self.loadingDirectoryIDs.remove(item.id)
-                }
-                self.workerStatus = .ready
-            } catch {
-                if showLoadingState {
-                    self.loadingDirectoryIDs.remove(item.id)
-                }
-                self.workerStatus = .unavailable("Explorer worker unavailable")
-                self.userFacingError = "Failed to load \(item.displayName): \(error.localizedDescription)"
+    /// Serializes refreshes per directory and coalesces bursts into at most one
+    /// follow-up pass. Callers that arrive during an in-flight request wait for
+    /// the follow-up pass, preventing an older snapshot from winning the race.
+    func refreshDirectoryContents(
+        at directoryURL: URL,
+        showLoadingState: Bool
+    ) async -> Bool {
+        let directoryPath = directoryURL.standardizedFileURL.path
+        if showLoadingState {
+            loadingDirectoryIDs.insert(directoryPath)
+        }
+
+        if directoryRefreshInFlight.contains(directoryPath) {
+            queuedDirectoryRefreshPaths.insert(directoryPath)
+            return await withCheckedContinuation { continuation in
+                directoryRefreshWaiters[directoryPath, default: []].append(continuation)
             }
+        }
+
+        directoryRefreshInFlight.insert(directoryPath)
+        var refreshed = false
+
+        repeat {
+            queuedDirectoryRefreshPaths.remove(directoryPath)
+            refreshed = await performDirectoryRefresh(atPath: directoryPath)
+        } while queuedDirectoryRefreshPaths.contains(directoryPath)
+
+        directoryRefreshInFlight.remove(directoryPath)
+        loadingDirectoryIDs.remove(directoryPath)
+
+        let waiters = directoryRefreshWaiters.removeValue(forKey: directoryPath) ?? []
+        waiters.forEach { $0.resume(returning: refreshed) }
+        return refreshed
+    }
+
+    private func performDirectoryRefresh(atPath directoryPath: String) async -> Bool {
+        let requestSessionID = treeSessionID
+
+        do {
+            let payload = try await worker.execute(
+                .listTree,
+                arguments: ["rootPath": directoryPath],
+                timeout: treeLoadTimeout
+            )
+            guard requestSessionID == treeSessionID else { return false }
+
+            let children = try decodeFileItems(from: payload)
+            let rootPath = rootURL?.standardizedFileURL.path
+
+            if directoryPath == rootPath {
+                let mergedItems = mergeRootItemsPreservingLoadedChildren(with: children)
+                if rootItems != mergedItems {
+                    replaceRootItems(mergedItems)
+                    recordTreeMutation(changedDirectoryIDs: [directoryPath])
+                }
+            } else if findItem(withID: directoryPath) != nil {
+                replaceChildren(ofPath: directoryPath, with: children)
+            } else {
+                workerStatus = .ready
+                return false
+            }
+
+            reconcileSelectionAfterRefreshingDirectory(atPath: directoryPath)
+            loadedDirectoryIDs.insert(directoryPath)
+            workerStatus = .ready
+            if directoryPath == rootPath {
+                resumeDeferredTreeRefreshIfNeeded()
+            }
+            return true
+        } catch {
+            guard requestSessionID == treeSessionID else { return false }
+            workerStatus = .unavailable("Explorer worker unavailable")
+            if directoryPath == rootURL?.standardizedFileURL.path {
+                userFacingError = "Failed to read \(directoryPath): \(error.localizedDescription)"
+            } else {
+                let displayName = URL(fileURLWithPath: directoryPath).lastPathComponent
+                userFacingError = "Failed to load \(displayName): \(error.localizedDescription)"
+            }
+            return false
         }
     }
 
@@ -104,8 +162,21 @@ extension FolderExplorerViewModel {
                     throw PaneWorkerError.invalidResponse
                 }
 
-                let newURL = URL(fileURLWithPath: createdPath)
-                self.refreshTree()
+                let newURL = URL(fileURLWithPath: createdPath).standardizedFileURL
+                let normalizedDirectoryURL = directoryURL.standardizedFileURL
+                if normalizedDirectoryURL.path != self.rootURL?.standardizedFileURL.path {
+                    self.expandedDirectoryIDs.insert(normalizedDirectoryURL.path)
+                }
+
+                let refreshed = await self.refreshDirectoryContents(
+                    at: normalizedDirectoryURL,
+                    showLoadingState: false
+                )
+                guard refreshed, self.findItem(withID: newURL.path) != nil else {
+                    self.userFacingError = "Created \(newURL.lastPathComponent), but could not refresh its folder."
+                    return
+                }
+
                 self.renamingItemID = newURL.path
                 self.renameText = newURL.lastPathComponent
                 self.selectedItemID = newURL.path
@@ -115,7 +186,7 @@ extension FolderExplorerViewModel {
                     self.selectedFileURL = nil
                 } else {
                     self.selectedFileURL = newURL
-                    self.selectedFolderURL = directoryURL
+                    self.selectedFolderURL = normalizedDirectoryURL
                     self.openRequest = ExplorerOpenRequest(fileURL: newURL, action: .preview)
                 }
             } catch {
@@ -133,6 +204,27 @@ extension FolderExplorerViewModel {
             return item.url
         }
         return item.url.deletingLastPathComponent()
+    }
+
+    func creationDirectoryAtSelection() -> URL? {
+        guard let rootURL = rootURL?.standardizedFileURL else { return nil }
+        var candidate = (selectedFolderURL ?? rootURL).standardizedFileURL
+        guard isPath(candidate.path, within: rootURL.path) else { return rootURL }
+
+        while true {
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory),
+               isDirectory.boolValue {
+                return candidate
+            }
+            guard candidate.path != rootURL.path else { return rootURL }
+
+            let parent = candidate.deletingLastPathComponent().standardizedFileURL
+            guard parent.path != candidate.path, isPath(parent.path, within: rootURL.path) else {
+                return rootURL
+            }
+            candidate = parent
+        }
     }
 
     func filter(item: FileItem, query: String) -> FileItem? {
@@ -347,29 +439,7 @@ extension FolderExplorerViewModel {
     }
 
     func refreshRootDirectoryFromWatcher() {
-        guard let rootURL else { return }
-        let rootPath = rootURL.standardizedFileURL.path
-
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let payload = try await self.worker.execute(
-                    .listTree,
-                    arguments: ["rootPath": rootPath],
-                    timeout: self.treeLoadTimeout
-                )
-
-                let decodedItems = try self.decodeFileItems(from: payload)
-                let mergedItems = self.mergeRootItemsPreservingLoadedChildren(with: decodedItems)
-                guard self.rootItems != mergedItems else { return }
-                self.replaceRootItems(mergedItems)
-                self.loadedDirectoryIDs.insert(rootPath)
-                self.recordTreeMutation(changedDirectoryIDs: [rootPath])
-            } catch {
-                self.workerStatus = .unavailable("Explorer worker unavailable")
-                self.userFacingError = "Failed to read \(rootPath): \(error.localizedDescription)"
-            }
-        }
+        refreshTree(trigger: .watcher)
     }
 
     func recordTreeMutation(changedDirectoryIDs: Set<String>) {
@@ -447,6 +517,57 @@ extension FolderExplorerViewModel {
                   pathsReferToSameLocation(URL(fileURLWithPath: selectedID), as: oldURL) {
             selectedItemID = newURL.standardizedFileURL.path
         }
+    }
+
+    private func reconcileSelectionAfterRefreshingDirectory(atPath directoryPath: String) {
+        guard activeSidebarTab == .files,
+              let rootURL = rootURL?.standardizedFileURL else {
+            return
+        }
+
+        if let selectedItemID,
+           isPath(selectedItemID, within: directoryPath),
+           findItem(withID: selectedItemID) == nil {
+            self.selectedItemID = nil
+        }
+
+        if let selectedFileURL,
+           isPath(selectedFileURL.standardizedFileURL.path, within: directoryPath),
+           findItem(withID: selectedFileURL.standardizedFileURL.path) == nil {
+            self.selectedFileURL = nil
+        }
+
+        if let renamingItemID,
+           isPath(renamingItemID, within: directoryPath),
+           findItem(withID: renamingItemID) == nil {
+            self.renamingItemID = nil
+            renameText = ""
+        }
+
+        guard let selectedFolderURL = selectedFolderURL?.standardizedFileURL,
+              isPath(selectedFolderURL.path, within: directoryPath),
+              selectedFolderURL.path != rootURL.path,
+              findItem(withID: selectedFolderURL.path)?.isDirectory != true else {
+            return
+        }
+
+        var fallback = selectedFolderURL.deletingLastPathComponent().standardizedFileURL
+        while fallback.path != rootURL.path,
+              findItem(withID: fallback.path)?.isDirectory != true {
+            let parent = fallback.deletingLastPathComponent().standardizedFileURL
+            guard parent.path != fallback.path, isPath(parent.path, within: rootURL.path) else {
+                fallback = rootURL
+                break
+            }
+            fallback = parent
+        }
+        self.selectedFolderURL = fallback
+    }
+
+    private func isPath(_ candidatePath: String, within directoryPath: String) -> Bool {
+        candidatePath == directoryPath || candidatePath.hasPrefix(
+            directoryPath.hasSuffix("/") ? directoryPath : directoryPath + "/"
+        )
     }
 
     func isSamePathOrDescendant(_ candidate: URL?, of container: URL) -> Bool {

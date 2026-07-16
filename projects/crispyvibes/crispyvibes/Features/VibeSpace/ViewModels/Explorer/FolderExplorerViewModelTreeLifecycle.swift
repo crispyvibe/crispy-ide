@@ -3,7 +3,7 @@ import Foundation
 extension FolderExplorerViewModel {
     func setRootFolder(_ url: URL) {
         rootURL = url.standardizedFileURL
-        activeSidebarTab = defaultSidebarTab
+        treeSessionID = UUID()
         selectedItemID = nil
         selectedFileURL = nil
         selectedFolderURL = rootURL
@@ -28,10 +28,11 @@ extension FolderExplorerViewModel {
         pendingExternalRefreshWorkItem = nil
         pendingExternalRefreshPaths.removeAll()
         pendingExternalRefreshEvents.removeAll()
-        isTreeRefreshInFlight = false
-        queuedTreeRefreshTrigger = nil
+        deferredTreeRefreshPaths.removeAll()
+        deferredTreeRefreshEvents.removeAll()
         treeMutationRevision = 0
         changedDirectoryIDs = []
+        activeSidebarTab = defaultSidebarTab
         refreshTree(trigger: .manual)
     }
 
@@ -57,8 +58,9 @@ extension FolderExplorerViewModel {
             self.pendingExternalRefreshWorkItem = nil
             self.pendingExternalRefreshPaths.removeAll()
             self.pendingExternalRefreshEvents.removeAll()
-            self.isTreeRefreshInFlight = false
-            self.queuedTreeRefreshTrigger = nil
+            self.deferredTreeRefreshPaths.removeAll()
+            self.deferredTreeRefreshEvents.removeAll()
+            self.treeSessionID = UUID()
             self.treeMutationRevision = 0
             self.changedDirectoryIDs = []
             self.refreshTree(trigger: .manual)
@@ -77,52 +79,21 @@ extension FolderExplorerViewModel {
             gitHistoryEntries = []
             gitActiveHistoryScope = nil
             gitHistoryIsLoading = false
-            isTreeRefreshInFlight = false
-            queuedTreeRefreshTrigger = nil
             return
         }
 
-        if isTreeRefreshInFlight {
-            if queuedTreeRefreshTrigger == nil || trigger == .manual {
-                queuedTreeRefreshTrigger = trigger
-            }
-            return
+        if trigger == .manual {
+            workerStatus = .busy("Loading folders")
         }
-
-        isTreeRefreshInFlight = true
-        let requestID = UUID()
-        refreshRequestID = requestID
-        workerStatus = .busy("Loading folders")
 
         Task { [weak self] in
             guard let self else { return }
-            defer {
-                self.isTreeRefreshInFlight = false
-                if let queuedTrigger = self.queuedTreeRefreshTrigger {
-                    self.queuedTreeRefreshTrigger = nil
-                    self.refreshTree(trigger: queuedTrigger)
-                }
-            }
-
-            do {
-                let payload = try await self.worker.execute(
-                    .listTree,
-                    arguments: ["rootPath": rootURL.path],
-                    timeout: self.treeLoadTimeout
-                )
-                guard self.refreshRequestID == requestID else { return }
-
-                let decodedItems = try self.decodeFileItems(from: payload)
-                let mergedItems = self.mergeRootItemsPreservingLoadedChildren(with: decodedItems)
-                self.replaceRootItems(mergedItems)
-                self.loadedDirectoryIDs = [rootURL.path]
-                self.loadingDirectoryIDs.removeAll()
-                self.workerStatus = .ready
+            let refreshed = await self.refreshDirectoryContents(
+                at: rootURL,
+                showLoadingState: false
+            )
+            if refreshed {
                 self.refreshGitStateIfNeeded(afterTreeRefresh: trigger)
-            } catch {
-                guard self.refreshRequestID == requestID else { return }
-                self.userFacingError = "Failed to read \(rootURL.path): \(error.localizedDescription)"
-                self.workerStatus = .unavailable("Explorer worker unavailable")
             }
         }
     }
@@ -257,32 +228,42 @@ extension FolderExplorerViewModel {
     func consumeExternalRefreshQueue() {
         guard let rootURL else { return }
         let rootPath = rootURL.standardizedFileURL.path
-        let changedPaths = pendingExternalRefreshPaths
-        let changedEvents = pendingExternalRefreshEvents
+        let newlyChangedPaths = pendingExternalRefreshPaths
+        let newlyChangedEvents = pendingExternalRefreshEvents
         pendingExternalRefreshPaths.removeAll()
         pendingExternalRefreshEvents.removeAll()
+        pendingExternalRefreshWorkItem = nil
 
-        if !changedPaths.isEmpty {
+        if !newlyChangedPaths.isEmpty {
             // The owning ProjectSession posts `.fileSystemContentsDidChange`
             // (fast, for editor/docked reload). Here we only republish to
             // source control, which observes `observedFileSystemChanges`.
-            observedFileSystemChanges.send(changedPaths)
+            observedFileSystemChanges.send(newlyChangedPaths)
         }
 
         guard activeSidebarTab == .files else {
+            deferredTreeRefreshPaths.formUnion(newlyChangedPaths)
+            deferredTreeRefreshEvents.merge(newlyChangedEvents) { _, latest in latest }
             return
         }
+
+        let changedPaths = deferredTreeRefreshPaths.union(newlyChangedPaths)
+        var changedEvents = deferredTreeRefreshEvents
+        changedEvents.merge(newlyChangedEvents) { _, latest in latest }
+        deferredTreeRefreshPaths.removeAll()
+        deferredTreeRefreshEvents.removeAll()
 
         // The session starts watching at hydration, so events can arrive before
         // the explorer tree has ever been loaded (e.g. terminal-only board mode).
-        // The change was already republished above; skip tree work until loaded
-        // to preserve lazy tree loading.
-        guard !loadedDirectoryIDs.isEmpty else { return }
-
-        guard !changedPaths.isEmpty else {
-            refreshTree(trigger: .watcher)
+        // Keep these paths dirty until the initial load completes so an older
+        // in-flight root snapshot cannot make the new tree stale.
+        guard !loadedDirectoryIDs.isEmpty else {
+            deferredTreeRefreshPaths.formUnion(changedPaths)
+            deferredTreeRefreshEvents.merge(changedEvents) { _, latest in latest }
             return
         }
+
+        guard !changedPaths.isEmpty else { return }
 
         let directoryRefreshTargets = watcherRefreshTargetDirectoryPaths(
             for: changedPaths,
@@ -313,5 +294,16 @@ extension FolderExplorerViewModel {
             return
         }
         refreshGitStatus()
+    }
+
+    func resumeDeferredTreeRefreshIfNeeded() {
+        guard activeSidebarTab == .files else { return }
+        guard !pendingExternalRefreshPaths.isEmpty || !deferredTreeRefreshPaths.isEmpty else { return }
+
+        pendingExternalRefreshWorkItem?.cancel()
+        pendingExternalRefreshWorkItem = nil
+        Task { @MainActor [weak self] in
+            self?.consumeExternalRefreshQueue()
+        }
     }
 }
