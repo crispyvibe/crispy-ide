@@ -1,5 +1,27 @@
 import SwiftUI
 
+enum AppThemePresetCategory: String, CaseIterable, Identifiable {
+    case core
+    case editorClassic
+    case seasonal
+    case world
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .core:
+            return "Core"
+        case .editorClassic:
+            return "Editor Classics"
+        case .seasonal:
+            return "Seasonal"
+        case .world:
+            return "Around the World"
+        }
+    }
+}
+
 enum AppThemePreset: String, CaseIterable, Identifiable {
     case system
     case midnightMono
@@ -173,6 +195,26 @@ enum AppThemePreset: String, CaseIterable, Identifiable {
             return "Custom Vibes"
         }
     }
+
+    var category: AppThemePresetCategory {
+        switch self {
+        case .nordFrost, .draculaNight, .solarizedNight, .latteBloom, .alucardLight,
+             .beachDay, .gruvboxDark, .rosePine, .tokyoNight, .mochaMood, .oneDark,
+             .synthwave84, .rosePineDawn:
+            return .editorClassic
+        case .christmas, .stPatrick, .diwali, .fourthOfJuly, .valentine, .halloween:
+            return .seasonal
+        case .kintsugi, .ukiyoe, .yushi, .denglong, .shuimo, .sichou, .hanbok,
+             .cheongja, .dancheong, .mehendi, .rangoli, .mayur, .tiranga:
+            return .world
+        case .system, .midnightMono, .graphiteDark, .oceanDusk, .forestNight,
+             .sunlitPaper, .pearlLight, .mintLight, .mallGoth, .gasStationSlushie,
+             .citrusDeadline, .mossyFaxMachine, .arcadeCarpet, .tomatoBisque, .poolTile,
+             .radioactiveSpreadsheet, .ph, .lavenderHaze, .highContrast,
+             .highContrastLight, .blossomPink, .midnightPink, .custom:
+            return .core
+        }
+    }
 }
 
 enum AppThemeColorRole: String, CaseIterable, Identifiable {
@@ -186,6 +228,7 @@ enum AppThemeColorRole: String, CaseIterable, Identifiable {
     case error
     case selectionBackground
     case terminalForeground
+    case mutedForeground
 
     var id: String { rawValue }
 
@@ -211,6 +254,8 @@ enum AppThemeColorRole: String, CaseIterable, Identifiable {
             return "Selection Background"
         case .terminalForeground:
             return "Terminal Foreground"
+        case .mutedForeground:
+            return "Muted Foreground"
         }
     }
 
@@ -236,6 +281,8 @@ enum AppThemeColorRole: String, CaseIterable, Identifiable {
             return "Selection highlight color for selected content."
         case .terminalForeground:
             return "Default editor and terminal text color."
+        case .mutedForeground:
+            return "Secondary labels, metadata, and de-emphasized text."
         }
     }
 
@@ -261,6 +308,8 @@ enum AppThemeColorRole: String, CaseIterable, Identifiable {
             return \.selectionBackground
         case .terminalForeground:
             return \.terminalForeground
+        case .mutedForeground:
+            return \.mutedForeground
         }
     }
 }

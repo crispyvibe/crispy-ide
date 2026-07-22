@@ -57,10 +57,10 @@ Select a preset and the entire app updates immediately. A preview strip shows fi
 
 1. Select **Custom Vibes** from the preset list.
 2. If you're switching from another preset, the current palette is copied as your starting point.
-3. Edit any of the 10 color roles using the color pickers or by typing hex values (`#RRGGBB` or `#RRGGBBAA`).
+3. Edit any of the 11 color roles using the color pickers or by typing hex values (`#RRGGBB` or `#RRGGBBAA`).
 4. Changes apply live as you edit.
 
-The 10 editable color roles:
+The 11 editable color roles:
 
 | Role | What it controls |
 |------|-----------------|
@@ -74,6 +74,7 @@ The 10 editable color roles:
 | Error | Error and destructive states |
 | Selection Background | Text and item selection highlight |
 | Terminal Foreground | Default text color in editors and terminals |
+| Muted Foreground | Secondary labels, metadata, and de-emphasized text |
 
 Additional colors (text shades, Git status badges, caret color) are derived automatically from your palette.
 

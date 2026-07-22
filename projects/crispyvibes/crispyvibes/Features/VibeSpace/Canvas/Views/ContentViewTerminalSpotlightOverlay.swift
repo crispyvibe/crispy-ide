@@ -161,163 +161,204 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
     private var spotlightTabStrip: some View {
         let items = flatSpotlightItems
         let currentIdx = spotlightItemIndex ?? 0
-        let maxVisible = 5
-        let style = TerminalTabChipStyle(palette: activeThemePalette)
+        // File-tab styling: the current tab is a solid canvas-colored card with
+        // a border (matching the editor's file tabs), so it clearly pops off
+        // the translucent capsule; inactive tabs stay flat and quiet.
+        let style = TerminalTabChipStyle(
+            activeBackground: activeThemePalette.canvasBackgroundColor,
+            inactiveBackground: .clear,
+            activeBorderColor: activeThemePalette.borderColorValue.opacity(0.75),
+            inactiveBorderColor: .clear,
+            selectedTextColor: activeThemePalette.primaryTextColor,
+            inactiveTextColor: activeThemePalette.secondaryTextColor
+        )
         if items.count > 1 {
-            let maxPageStart = max(items.count - maxVisible, 0)
-            let clampedPage = max(0, min(tabPageOffset.wrappedValue, maxPageStart))
-            let selectedVisibleStart: Int = {
-                guard items.count > maxVisible else { return 0 }
-                if currentIdx < clampedPage {
-                    return currentIdx
-                }
-                if currentIdx >= clampedPage + maxVisible {
-                    return min(max(currentIdx - maxVisible + 1, 0), maxPageStart)
-                }
-                return clampedPage
-            }()
-            let windowStart = items.count <= maxVisible ? 0 : selectedVisibleStart
-            let windowEnd = min(items.count, windowStart + maxVisible)
-            let canPageBack = windowStart > 0
-            let canPageForward = windowEnd < items.count
-
-            HStack(spacing: 4) {
-                Button {
-                    guard canPageBack else { return }
-                    withAnimation(.easeInOut(duration: 0.16)) {
-                        tabPageOffset.wrappedValue = max(0, windowStart - maxVisible)
-                    }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(AppTypographyTokens.scaledIcon(9, weight: .semibold))
-                        .foregroundStyle(activeThemePalette.secondaryTextColor)
-                        .frame(width: uiScale.iconSize(20), height: uiScale.iconSize(20))
-                }
-                .buttonStyle(.plain)
-                .disabled(!canPageBack)
-                .opacity(canPageBack ? 1 : 0)
-
-                ForEach(tabStripEntries(items: items, windowStart: windowStart, windowEnd: windowEnd)) { entry in
-                    let index = entry.index
-                    let item = entry.item
-                    let isCurrent = index == currentIdx
-                    let accent: TerminalTabChipAccent? = {
-                        switch item {
-                        case let .terminal(project, tab):
-                            guard let color = projectColorTag(project)?.color else { return nil }
-                            let isTabActive = project.terminal.tabActivityStateOrInactive(for: tab.id).isActive
-                            return TerminalTabChipAccent(isActive: isTabActive, color: color)
-                        case let .acp(_, _, _, accentColor):
-                            guard let accentColor else { return nil }
-                            return TerminalTabChipAccent(isActive: false, color: accentColor)
-                        default:
-                            return nil
-                        }
-                    }()
-                    Button {
-                        guard !isCurrent else { return }
-                        onSwitchSpotlight(index - currentIdx)
-                    } label: {
-                        TerminalTabChipChrome(
-                            isSelected: isCurrent,
-                            style: style,
-                            accent: accent,
-                            showsActivityUnderline: true
-                        ) {
-                            HStack(spacing: 6) {
-                                switch item {
-                                case let .terminal(project, tab):
-                                    Text(tab.title.isEmpty ? project.title : tab.title)
-                                        .font(AppTypographyTokens.caption)
-                                        .lineLimit(1)
-                                case .vibeCast:
-                                    Image(systemName: "antenna.radiowaves.left.and.right")
-                                        .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
-                                    Text(AppStrings.VibeCast.title)
-                                        .font(AppTypographyTokens.caption)
-                                        .lineLimit(1)
-                                case let .acp(_, _, title, _):
-                                    Image(systemName: "sparkles")
-                                        .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
-                                    Text(title)
-                                        .font(AppTypographyTokens.caption)
-                                        .lineLimit(1)
-                                case let .file(_, fileURL):
-                                    Image(systemName: "doc.text")
-                                        .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
-                                    Text(fileURL.lastPathComponent)
-                                        .font(AppTypographyTokens.caption)
-                                        .lineLimit(1)
-                                case let .browser(_, url):
-                                    Image(systemName: "globe")
-                                        .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
-                                    Text(url.host ?? url.absoluteString)
-                                        .font(AppTypographyTokens.caption)
-                                        .lineLimit(1)
-                                }
-                            }
-                            .foregroundStyle(isCurrent ? style.selectedTextColor : style.inactiveTextColor)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .opacity(isDraggedTab(item) && dropTarget != nil ? 0.62 : 1)
-                    .scaleEffect(isDraggedTab(item) && dropTarget != nil ? 0.98 : 1)
-                    .shadow(
-                        color: isDraggedTab(item) && dropTarget != nil ? Color.black.opacity(0.22) : .clear,
-                        radius: 5,
-                        x: 0,
-                        y: 2
-                    )
-                    .overlay {
-                        dropIndicator(for: item)
-                    }
-                    .background {
-                        GeometryReader { proxy in
-                            Color.clear.onDrop(
-                                of: [UTType.plainText, UTType.text],
-                                delegate: SpotlightTabDropDelegate(
-                                    item: item,
-                                    targetSize: proxy.size,
-                                    setDropTarget: { dropTarget = $0 },
-                                    clearDropTarget: { dropTarget = nil },
-                                    previewDrop: { placement in
-                                        handleSpotlightTabHover(on: item, placement: placement)
-                                    },
-                                    performDrop: { providers, placement in
-                                        handleSpotlightTabDrop(providers, on: item, placement: placement)
-                                    }
+            HStack(spacing: 8) {
+                ScrollViewReader { scrollProxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 3) {
+                            ForEach(tabStripEntries(items: items)) { entry in
+                                spotlightTabChip(
+                                    entry: entry,
+                                    currentIdx: currentIdx,
+                                    style: style
                                 )
-                            )
+                                .id(entry.index)
+                            }
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 5)
                     }
-                    .animation(.easeInOut(duration: 0.12), value: draggedTerminalIdentity)
-                    .animation(.easeInOut(duration: 0.12), value: dropTarget)
-                    .onDrag {
-                        makeSpotlightTabDragProvider(for: item)
+                    .frame(maxWidth: uiScale.chromeSize(560))
+                    .fixedSize(horizontal: true, vertical: false)
+                    .mask(scrollEdgeFade)
+                    .onAppear {
+                        scrollProxy.scrollTo(currentIdx, anchor: .center)
+                    }
+                    .onChange(of: currentIdx) { _, newIdx in
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            scrollProxy.scrollTo(newIdx, anchor: .center)
+                        }
                     }
                 }
 
-                Button {
-                    guard canPageForward else { return }
-                    withAnimation(.easeInOut(duration: 0.16)) {
-                        tabPageOffset.wrappedValue = min(maxPageStart, windowStart + maxVisible)
-                    }
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(AppTypographyTokens.scaledIcon(9, weight: .semibold))
+                if items.count > 5 {
+                    Text("\(currentIdx + 1)/\(items.count)")
+                        .font(AppTypographyTokens.caption2)
+                        .monospacedDigit()
                         .foregroundStyle(activeThemePalette.secondaryTextColor)
-                        .frame(width: uiScale.iconSize(20), height: uiScale.iconSize(20))
+                        .padding(.trailing, 12)
                 }
-                .buttonStyle(.plain)
-                .disabled(!canPageForward)
-                .opacity(canPageForward ? 1 : 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(activeThemePalette.canvasSecondaryBackgroundColor)
-            )
+            .background {
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Capsule(style: .continuous)
+                            .fill(activeThemePalette.canvasSecondaryBackgroundColor.opacity(0.55))
+                    }
+                    .overlay {
+                        Capsule(style: .continuous)
+                            .stroke(activeThemePalette.borderColorValue.opacity(0.35), lineWidth: 1)
+                    }
+                    .shadow(color: Color.black.opacity(0.18), radius: 12, x: 0, y: 4)
+            }
+        }
+    }
+
+    /// Fades the strip's clipped edges so overflow reads as "scroll for more"
+    /// rather than tabs being abruptly cut off.
+    private var scrollEdgeFade: some View {
+        HStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                .frame(width: 16)
+            Rectangle().fill(Color.black)
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: 16)
+        }
+    }
+
+    @ViewBuilder
+    private func spotlightTabChip(
+        entry: SpotlightTabStripEntry,
+        currentIdx: Int,
+        style: TerminalTabChipStyle
+    ) -> some View {
+        let index = entry.index
+        let item = entry.item
+        let isCurrent = index == currentIdx
+        let accent: TerminalTabChipAccent? = {
+            switch item {
+            case let .terminal(project, tab):
+                guard let color = projectColorTag(project)?.color else { return nil }
+                let isTabActive = project.terminal.tabActivityStateOrInactive(for: tab.id).isActive
+                return TerminalTabChipAccent(isActive: isTabActive, color: color, width: 2.5)
+            case let .acp(_, _, _, accentColor):
+                guard let accentColor else { return nil }
+                return TerminalTabChipAccent(isActive: false, color: accentColor, width: 2.5)
+            default:
+                return nil
+            }
+        }()
+        Button {
+            guard !isCurrent else { return }
+            onSwitchSpotlight(index - currentIdx)
+        } label: {
+            TerminalTabChipChrome(
+                isSelected: isCurrent,
+                style: style,
+                accent: accent,
+                showsActivityUnderline: true,
+                cornerRadiusToken: 9
+            ) {
+                let titleFont: Font = isCurrent ? AppTypographyTokens.captionSemibold : AppTypographyTokens.caption
+                HStack(spacing: 6) {
+                    switch item {
+                    case .terminal:
+                        Text(entry.displayTitle)
+                            .font(titleFont)
+                            .lineLimit(1)
+                    case .vibeCast:
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
+                        Text(entry.displayTitle)
+                            .font(titleFont)
+                            .lineLimit(1)
+                    case .acp:
+                        Image(systemName: "sparkles")
+                            .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
+                        Text(entry.displayTitle)
+                            .font(titleFont)
+                            .lineLimit(1)
+                    case .file:
+                        Image(systemName: "doc.text")
+                            .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
+                        Text(entry.displayTitle)
+                            .font(titleFont)
+                            .lineLimit(1)
+                    case .browser:
+                        Image(systemName: "globe")
+                            .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
+                        Text(entry.displayTitle)
+                            .font(titleFont)
+                            .lineLimit(1)
+                    }
+                    if let ordinal = entry.ordinal {
+                        Text("\(ordinal)")
+                            .font(AppTypographyTokens.scaledSystem(9, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(
+                                isCurrent ? style.selectedTextColor.opacity(0.72) : style.inactiveTextColor.opacity(0.72)
+                            )
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(
+                                Capsule().fill(activeThemePalette.primaryTextColor.opacity(0.08))
+                            )
+                    }
+                }
+                .foregroundStyle(isCurrent ? style.selectedTextColor : style.inactiveTextColor)
+            }
+        }
+        .buttonStyle(.plain)
+        .opacity(isDraggedTab(item) && dropTarget != nil ? 0.62 : 1)
+        .scaleEffect(isDraggedTab(item) && dropTarget != nil ? 0.98 : 1)
+        .shadow(
+            color: {
+                if isDraggedTab(item) && dropTarget != nil { return Color.black.opacity(0.22) }
+                if isCurrent { return Color.black.opacity(0.28) }
+                return .clear
+            }(),
+            radius: isCurrent && !(isDraggedTab(item) && dropTarget != nil) ? 4 : 5,
+            x: 0,
+            y: 2
+        )
+        .overlay {
+            dropIndicator(for: item)
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear.onDrop(
+                    of: [UTType.plainText, UTType.text],
+                    delegate: SpotlightTabDropDelegate(
+                        item: item,
+                        targetSize: proxy.size,
+                        setDropTarget: { dropTarget = $0 },
+                        clearDropTarget: { dropTarget = nil },
+                        previewDrop: { placement in
+                            handleSpotlightTabHover(on: item, placement: placement)
+                        },
+                        performDrop: { providers, placement in
+                            handleSpotlightTabDrop(providers, on: item, placement: placement)
+                        }
+                    )
+                )
+            }
+        }
+        .animation(.easeInOut(duration: 0.12), value: draggedTerminalIdentity)
+        .animation(.easeInOut(duration: 0.12), value: dropTarget)
+        .onDrag {
+            makeSpotlightTabDragProvider(for: item)
         }
     }
 
@@ -325,14 +366,40 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
         items
     }
 
-    private func tabStripEntries(
-        items: [SpotlightItem],
-        windowStart: Int,
-        windowEnd: Int
-    ) -> [SpotlightTabStripEntry] {
-        guard windowStart < windowEnd else { return [] }
-        return (windowStart..<windowEnd).map { index in
-            SpotlightTabStripEntry(index: index, item: items[index])
+    /// Builds one entry per item, numbering duplicates ("cmux 1", "cmux 2")
+    /// so identically-titled tabs stay distinguishable in the strip.
+    private func tabStripEntries(items: [SpotlightItem]) -> [SpotlightTabStripEntry] {
+        let titles = items.map { Self.baseTitle(for: $0) }
+        var totals: [String: Int] = [:]
+        for title in titles {
+            totals[title, default: 0] += 1
+        }
+        var seen: [String: Int] = [:]
+        return items.enumerated().map { index, item in
+            let title = titles[index]
+            seen[title, default: 0] += 1
+            let ordinal = (totals[title] ?? 0) > 1 ? seen[title] : nil
+            return SpotlightTabStripEntry(
+                index: index,
+                item: item,
+                displayTitle: title,
+                ordinal: ordinal
+            )
+        }
+    }
+
+    private static func baseTitle(for item: SpotlightItem) -> String {
+        switch item {
+        case let .terminal(project, tab):
+            return tab.title.isEmpty ? project.title : tab.title
+        case .vibeCast:
+            return AppStrings.VibeCast.title
+        case let .acp(_, _, title, _):
+            return title
+        case let .file(_, fileURL):
+            return fileURL.lastPathComponent
+        case let .browser(_, url):
+            return url.host ?? url.absoluteString
         }
     }
 
@@ -534,6 +601,9 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
 private struct SpotlightTabStripEntry: Identifiable {
     let index: Int
     let item: SpotlightItem
+    let displayTitle: String
+    /// 1-based position among identically-titled items; nil when the title is unique.
+    let ordinal: Int?
 
     var id: String {
         item.tabStripIdentity

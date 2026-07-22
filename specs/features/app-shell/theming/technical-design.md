@@ -2,7 +2,7 @@
 
 ## Overview
 
-The theme system provides a centralized palette of 10 color roles, 28 presets (including a user-editable custom preset), typography controls, and container style settings. All app surfaces consume colors from the resolved palette. Theme state is persisted to UserDefaults and restored on launch.
+The theme system provides a centralized palette of 11 color roles, presets (including a user-editable custom preset), typography controls, and container style settings. All app surfaces consume colors from the resolved palette. Theme state is persisted to UserDefaults and restored on launch.
 
 ## Architecture
 
@@ -28,7 +28,7 @@ When a non-System preset is active, a warning banner appears in settings explain
 
 ### Palette Color Roles
 
-Each palette defines 10 editable color roles:
+Each palette defines 11 editable color roles:
 
 | Role | Key | Usage |
 |------|-----|-------|
@@ -42,10 +42,25 @@ Each palette defines 10 editable color roles:
 | Error | `error` | Error and destructive states |
 | Selection Background | `selectionBackground` | Selection highlight color |
 | Terminal Foreground | `terminalForeground` | Default editor and terminal text color |
+| Muted Foreground | `mutedForeground` | Secondary labels, metadata, de-emphasized text |
 
 ### Derived Colors (computed, not user-editable)
 
-`accentStrong`, `selectionText`, `terminalCaret` (= accent), `terminalSelectionBackground`, `primaryTextColor`, `secondaryTextColor`, `tertiaryTextColor`, `directoryIconColor`, git status colors (added / modified / deleted / renamed / conflict).
+`accentStrong`, `selectionText`, `terminalCaret` (= accent), `terminalSelectionBackground`, `primaryTextColor`, `secondaryTextColor` (= muted foreground), `tertiaryTextColor` (muted blended toward canvas), `directoryIconColor`, git status colors (added / modified / deleted / renamed / conflict).
+
+Custom theme JSON persisted before `mutedForeground` existed decodes with a derived value (the old terminal-foreground/border blend) so existing custom themes keep their look.
+
+### Contrast Floors
+
+All built-in presets are guarded by `AppThemePaletteContrastTests`, which asserts per-role WCAG contrast floors against the palette's own surfaces:
+
+| Role | Floor |
+|------|-------|
+| `terminalForeground` | ≥ 6.0 vs window, canvas, canvas secondary |
+| `mutedForeground` | ≥ 4.5 vs window, canvas, canvas secondary |
+| `accent` / `success` / `warning` / `error` | ≥ 3.0 vs canvas and canvas secondary |
+| `borderColor` | 1.3–3.1 vs canvas (hairline: visible, not loud; high-contrast presets exempt from ceiling) |
+| `selectionBackground` | Matches theme polarity (dark themes select dark, light select light); selection text ≥ 4.5 |
 
 ### Theme Presets
 

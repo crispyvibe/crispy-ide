@@ -49,27 +49,41 @@ extension AppSettingsSheetView {
                         detail: "System adapts to light/dark. Other presets keep a fixed palette."
                     ) {
                         Picker("Theme preset", selection: selectedThemePresetBinding) {
-                            ForEach(AppThemePreset.allCases.sorted { $0.title < $1.title }) { preset in
-                                Text(preset.title).tag(preset)
+                            ForEach(groupedThemePresets, id: \.category) { group in
+                                Section(group.category.title) {
+                                    ForEach(group.presets) { preset in
+                                        Text(preset.title).tag(preset)
+                                    }
+                                }
+                            }
+                            Section {
+                                Text(AppThemePreset.custom.title).tag(AppThemePreset.custom)
                             }
                         }
                         .pickerStyle(.menu)
                         .accessibilityIdentifier("app.settings.theme.preset")
                     }
 
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 148), spacing: 8)],
-                        alignment: .leading,
-                        spacing: 8
-                    ) {
-                        ForEach(nonCustomThemePresets) { preset in
-                            ThemePresetQuickButton(
-                                preset: preset,
-                                palette: previewPalette(for: preset),
-                                isSelected: selectedThemePresetBinding.wrappedValue == preset,
-                                onSelect: { applyThemePreset(preset) }
-                            )
-                            .accessibilityIdentifier("app.settings.theme.quick.\(preset.rawValue)")
+                    ForEach(groupedThemePresets, id: \.category) { group in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(group.category.title)
+                                .font(AppTypographyTokens.caption)
+                                .foregroundStyle(appThemePalette.secondaryTextColor)
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 148), spacing: 8)],
+                                alignment: .leading,
+                                spacing: 8
+                            ) {
+                                ForEach(group.presets) { preset in
+                                    ThemePresetQuickButton(
+                                        preset: preset,
+                                        palette: previewPalette(for: preset),
+                                        isSelected: selectedThemePresetBinding.wrappedValue == preset,
+                                        onSelect: { applyThemePreset(preset) }
+                                    )
+                                    .accessibilityIdentifier("app.settings.theme.quick.\(preset.rawValue)")
+                                }
+                            }
                         }
                     }
 
