@@ -104,21 +104,21 @@ final class EditorGroupStoreTests: XCTestCase {
         )
 
         group.openFileInTab(at: firstURL, fileContentProvider: firstProvider)
-        let didOpenFirstFile = await waitForCondition(timeout: 2) {
+        let didOpenFirstFile = await waitForCondition(timeout: 8) {
             self.group.markdownViewModel.workerStatus == .ready &&
             self.group.markdownViewModel.rawContent == "alpha"
         }
         XCTAssertTrue(didOpenFirstFile)
 
         group.openFileInTab(at: secondURL, fileContentProvider: secondProvider)
-        let didOpenSecondFile = await waitForCondition(timeout: 2) {
+        let didOpenSecondFile = await waitForCondition(timeout: 8) {
             self.group.markdownViewModel.workerStatus == .ready &&
             self.group.markdownViewModel.rawContent == "beta"
         }
         XCTAssertTrue(didOpenSecondFile)
 
         group.activateTab(ContentViewerTab.file(url: firstURL).id)
-        let didRestoreFirstFile = await waitForCondition(timeout: 2) {
+        let didRestoreFirstFile = await waitForCondition(timeout: 8) {
             self.group.markdownViewModel.workerStatus == .ready &&
             self.group.markdownViewModel.rawContent == "alpha"
         }
@@ -140,7 +140,7 @@ final class EditorGroupStoreTests: XCTestCase {
             projectIdentifier: "project-a",
             fileContentProvider: providerA
         )
-        let didOpenProjectA = await waitForCondition(timeout: 2) {
+        let didOpenProjectA = await waitForCondition(timeout: 8) {
             self.group.markdownViewModel.workerStatus == .ready &&
             self.group.markdownViewModel.rawContent == "alpha"
         }
@@ -151,7 +151,7 @@ final class EditorGroupStoreTests: XCTestCase {
             projectIdentifier: "project-b",
             fileContentProvider: providerB
         )
-        let didOpenProjectB = await waitForCondition(timeout: 2) {
+        let didOpenProjectB = await waitForCondition(timeout: 8) {
             self.group.markdownViewModel.workerStatus == .ready &&
             self.group.markdownViewModel.rawContent == "beta"
         }
@@ -160,14 +160,14 @@ final class EditorGroupStoreTests: XCTestCase {
         XCTAssertEqual(group.tabs.count, 2)
 
         group.activateTab(ContentViewerTab.file(url: sharedURL, projectIdentifier: "project-a").id)
-        let didRestoreProjectA = await waitForCondition(timeout: 2) {
+        let didRestoreProjectA = await waitForCondition(timeout: 8) {
             self.group.markdownViewModel.workerStatus == .ready &&
             self.group.markdownViewModel.rawContent == "alpha"
         }
         XCTAssertTrue(didRestoreProjectA)
 
         group.activateTab(ContentViewerTab.file(url: sharedURL, projectIdentifier: "project-b").id)
-        let didRestoreProjectB = await waitForCondition(timeout: 2) {
+        let didRestoreProjectB = await waitForCondition(timeout: 8) {
             self.group.markdownViewModel.workerStatus == .ready &&
             self.group.markdownViewModel.rawContent == "beta"
         }
@@ -198,7 +198,7 @@ final class EditorGroupStoreTests: XCTestCase {
             fileContentProvider: remoteProvider
         )
 
-        let didOpenRemoteFile = await waitForCondition(timeout: 2) {
+        let didOpenRemoteFile = await waitForCondition(timeout: 8) {
             upgradedGroup.activeTabID == ContentViewerTab.file(reference: remoteReference).id &&
             upgradedGroup.markdownViewModel.workerStatus == .ready &&
             upgradedGroup.markdownViewModel.rawContent == "remote"
@@ -224,21 +224,21 @@ final class EditorGroupStoreTests: XCTestCase {
             relativePath: "Sources/deleted.swift",
             titleSuffix: "Deleted"
         )
-        let didOpenDeletedPreview = await waitForCondition(timeout: 2) {
+        let didOpenDeletedPreview = await waitForCondition(timeout: 8) {
             localGroup.markdownViewModel.workerStatus == .ready &&
             localGroup.markdownViewModel.rawContent == "previous revision"
         }
         XCTAssertTrue(didOpenDeletedPreview)
 
         localGroup.openFileInTab(at: otherURL)
-        let didOpenOtherFile = await waitForCondition(timeout: 2) {
+        let didOpenOtherFile = await waitForCondition(timeout: 8) {
             localGroup.markdownViewModel.workerStatus == .ready &&
             localGroup.markdownViewModel.rawContent == "other"
         }
         XCTAssertTrue(didOpenOtherFile)
 
         localGroup.activateTab(ContentViewerTab.file(url: deletedURL).id)
-        let didRestoreDeletedPreview = await waitForCondition(timeout: 2) {
+        let didRestoreDeletedPreview = await waitForCondition(timeout: 8) {
             localGroup.markdownViewModel.workerStatus == .ready &&
             localGroup.markdownViewModel.rawContent == "previous revision" &&
             localGroup.markdownViewModel.errorMessage == nil

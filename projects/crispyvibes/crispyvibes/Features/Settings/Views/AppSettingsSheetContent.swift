@@ -329,6 +329,13 @@ struct AppSettingsSheetView: View {
             .sorted { $0.title < $1.title }
     }
 
+    var groupedThemePresets: [(category: AppThemePresetCategory, presets: [AppThemePreset])] {
+        AppThemePresetCategory.allCases.compactMap { category in
+            let presets = nonCustomThemePresets.filter { $0.category == category }
+            return presets.isEmpty ? nil : (category, presets)
+        }
+    }
+
     var globalTextColorBinding: Binding<Color> {
         Binding(
             get: { themePreviewPalette.terminalForegroundColor },
