@@ -136,7 +136,7 @@ final class MarkdownViewModelTests: XCTestCase {
         )
     }
 
-    func testLatexDocumentOpensEditableInRichMode() async throws {
+    func testLatexDocumentOpensEditableInToolchainAwareDefaultMode() async throws {
         let fileURL = tempRoot.appendingPathComponent("paper.tex")
         try Data("\\documentclass{article}\n\\begin{document}\nHello $x^2$.\n\\end{document}\n".utf8).write(to: fileURL)
 
@@ -147,11 +147,15 @@ final class MarkdownViewModelTests: XCTestCase {
         XCTAssertTrue(opened)
         XCTAssertTrue(viewModel.isEditableDocumentType(.latex))
         XCTAssertTrue(viewModel.supportsMarkupViewModeToggle)
-        // LaTeX prefers the full-TeX PDF view when a local toolchain is installed,
-        // otherwise the dependency-free rich view — assert per environment.
-        let expected: MarkdownViewModel.MarkupViewMode = LaTeXNativeCompiler.isToolchainAvailable ? .compiled : .rich
-        XCTAssertEqual(viewModel.defaultMarkupViewMode, expected)
-        XCTAssertEqual(viewModel.currentMarkupViewMode, expected)
+        // LaTeX prefers the full-TeX PDF view when a local toolchain is
+        // installed, otherwise the dependency-free rich view.
+        let expectedDefault: MarkdownViewModel.MarkupViewMode =
+            LaTeXNativeCompiler.isToolchainAvailable ? .compiled : .rich
+        XCTAssertEqual(viewModel.defaultMarkupViewMode, expectedDefault)
+        XCTAssertEqual(viewModel.currentMarkupViewMode, expectedDefault)
+
+        viewModel.setCurrentMarkupViewMode(.rich)
+        XCTAssertEqual(viewModel.currentMarkupViewMode, .rich)
     }
 
     func testInsertLatexSnippetQueuesRequestForLatexDocuments() async throws {

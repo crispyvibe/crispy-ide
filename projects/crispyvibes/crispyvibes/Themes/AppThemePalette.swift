@@ -12,6 +12,7 @@ struct AppThemePalette: Codable, Equatable {
     var error: ProjectColorTag
     var selectionBackground: ProjectColorTag
     var terminalForeground: ProjectColorTag
+    var mutedForeground: ProjectColorTag
 
     init(
         windowBackground: ProjectColorTag,
@@ -23,7 +24,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: ProjectColorTag,
         error: ProjectColorTag,
         selectionBackground: ProjectColorTag,
-        terminalForeground: ProjectColorTag
+        terminalForeground: ProjectColorTag,
+        mutedForeground: ProjectColorTag? = nil
     ) {
         self.windowBackground = windowBackground
         self.canvasBackground = canvasBackground
@@ -35,6 +37,22 @@ struct AppThemePalette: Codable, Equatable {
         self.error = error
         self.selectionBackground = selectionBackground
         self.terminalForeground = terminalForeground
+        self.mutedForeground = mutedForeground
+            ?? Self.legacyMutedForeground(terminalForeground: terminalForeground, borderColor: borderColor)
+    }
+
+    // Fallback for palettes authored before mutedForeground existed (e.g. persisted
+    // custom themes): reproduces the old secondary-text blend so they keep their look.
+    private static func legacyMutedForeground(
+        terminalForeground: ProjectColorTag,
+        borderColor: ProjectColorTag
+    ) -> ProjectColorTag {
+        ProjectColorTag(
+            red: terminalForeground.red * 0.54 + borderColor.red * 0.46,
+            green: terminalForeground.green * 0.54 + borderColor.green * 0.46,
+            blue: terminalForeground.blue * 0.54 + borderColor.blue * 0.46,
+            alpha: terminalForeground.alpha * 0.54 + borderColor.alpha * 0.46
+        )
     }
 
     static let midnightMono = AppThemePalette(
@@ -46,86 +64,93 @@ struct AppThemePalette: Codable, Equatable {
         success: colorToken("#53D8A5"),
         warning: colorToken("#E3B36D"),
         error: colorToken("#E06F78"),
-        selectionBackground: colorToken("#C7DBFF"),
-        terminalForeground: colorToken("#DCE3EF")
+        selectionBackground: colorToken("#004CD5"),
+        terminalForeground: colorToken("#DCE3EF"),
+        mutedForeground: colorToken("#878B93")
     )
 
     static let graphiteDark = AppThemePalette(
         windowBackground: colorToken("#0B1118"),
         canvasBackground: colorToken("#10151E"),
         canvasSecondaryBackground: colorToken("#1A2230"),
-        borderColor: colorToken("#8FA2C0"),
+        borderColor: colorToken("#3D4F6C"),
         accent: colorToken("#8AA8FF"),
         success: colorToken("#5FD7B8"),
         warning: colorToken("#E5B56D"),
         error: colorToken("#E37D87"),
-        selectionBackground: colorToken("#BED0FF"),
-        terminalForeground: colorToken("#DFE6F2")
+        selectionBackground: colorToken("#0042ED"),
+        terminalForeground: colorToken("#DFE6F2"),
+        mutedForeground: colorToken("#9097A1")
     )
 
     static let systemLight = AppThemePalette(
         windowBackground: colorToken("#F0F0F0"),
         canvasBackground: colorToken("#FFFFFF"),
         canvasSecondaryBackground: colorToken("#F7F8FA"),
-        borderColor: colorToken("#E5E5E5"),
+        borderColor: colorToken("#C9C9C9"),
         accent: colorToken("#005FB8"),
-        success: colorToken("#2EA043"),
+        success: colorToken("#2E9F43"),
         warning: colorToken("#895503"),
-        error: colorToken("#F85149"),
+        error: colorToken("#F84E46"),
         selectionBackground: colorToken("#BED6ED"),
-        terminalForeground: colorToken("#3B3B3B")
+        terminalForeground: colorToken("#3B3B3B"),
+        mutedForeground: colorToken("#616161")
     )
 
     static let systemDark = AppThemePalette(
         windowBackground: colorToken("#181818"),
         canvasBackground: colorToken("#1F1F1F"),
         canvasSecondaryBackground: colorToken("#222222"),
-        borderColor: colorToken("#2B2B2B"),
+        borderColor: colorToken("#424242"),
         accent: colorToken("#0078D4"),
         success: colorToken("#2EA043"),
         warning: colorToken("#9E6A03"),
         error: colorToken("#F85149"),
         selectionBackground: colorToken("#264778"),
-        terminalForeground: colorToken("#CCCCCC")
+        terminalForeground: colorToken("#CCCCCC"),
+        mutedForeground: colorToken("#969696")
     )
 
     static let oceanDusk = AppThemePalette(
         windowBackground: colorToken("#0A1721"),
         canvasBackground: colorToken("#0E1E2B"),
         canvasSecondaryBackground: colorToken("#153042"),
-        borderColor: colorToken("#7EA8C7"),
+        borderColor: colorToken("#315772"),
         accent: colorToken("#57B7FF"),
         success: colorToken("#3ED6A4"),
         warning: colorToken("#E8BC74"),
         error: colorToken("#E67A86"),
-        selectionBackground: colorToken("#B8E2FF"),
-        terminalForeground: colorToken("#D7E8F3")
+        selectionBackground: colorToken("#005C9B"),
+        terminalForeground: colorToken("#D7E8F3"),
+        mutedForeground: colorToken("#94A5B1")
     )
 
     static let forestNight = AppThemePalette(
         windowBackground: colorToken("#0D1613"),
         canvasBackground: colorToken("#111D18"),
         canvasSecondaryBackground: colorToken("#1D2F28"),
-        borderColor: colorToken("#A2B8A7"),
+        borderColor: colorToken("#425647"),
         accent: colorToken("#79D39A"),
         success: colorToken("#6EDFB2"),
         warning: colorToken("#E6C17A"),
         error: colorToken("#E89191"),
-        selectionBackground: colorToken("#CDEFD7"),
-        terminalForeground: colorToken("#DEE9E2")
+        selectionBackground: colorToken("#216635"),
+        terminalForeground: colorToken("#DEE9E2"),
+        mutedForeground: colorToken("#98A39D")
     )
 
     static let nordFrost = AppThemePalette(
         windowBackground: colorToken("#2E3440"),
         canvasBackground: colorToken("#3B4252"),
         canvasSecondaryBackground: colorToken("#434C5E"),
-        borderColor: colorToken("#4C566A"),
+        borderColor: colorToken("#576279"),
         accent: colorToken("#88C0D0"),
         success: colorToken("#A3BE8C"),
         warning: colorToken("#EBCB8B"),
-        error: colorToken("#BF616A"),
-        selectionBackground: colorToken("#81A1C1"),
-        terminalForeground: colorToken("#ECEFF4")
+        error: colorToken("#D08B92"),
+        selectionBackground: colorToken("#3C5C7B"),
+        terminalForeground: colorToken("#ECEFF4"),
+        mutedForeground: colorToken("#C9CDD4")
     )
 
     static let draculaNight = AppThemePalette(
@@ -137,8 +162,9 @@ struct AppThemePalette: Codable, Equatable {
         success: colorToken("#50FA7B"),
         warning: colorToken("#FFB86C"),
         error: colorToken("#FF5555"),
-        selectionBackground: colorToken("#6272A4"),
-        terminalForeground: colorToken("#F8F8F2")
+        selectionBackground: colorToken("#4B5881"),
+        terminalForeground: colorToken("#F8F8F2"),
+        mutedForeground: colorToken("#AFB0B0")
     )
 
     static let solarizedNight = AppThemePalette(
@@ -149,48 +175,52 @@ struct AppThemePalette: Codable, Equatable {
         accent: colorToken("#268BD2"),
         success: colorToken("#859900"),
         warning: colorToken("#B58900"),
-        error: colorToken("#DC322F"),
-        selectionBackground: colorToken("#6C71C4"),
-        terminalForeground: colorToken("#93A1A1")
+        error: colorToken("#E1504E"),
+        selectionBackground: colorToken("#484EB2"),
+        terminalForeground: colorToken("#B2BCBC"),
+        mutedForeground: colorToken("#A1AEB0")
     )
 
     static let sunlitPaper = AppThemePalette(
         windowBackground: colorToken("#F5EFE3"),
         canvasBackground: colorToken("#FFFDF7"),
         canvasSecondaryBackground: colorToken("#FAF5E8"),
-        borderColor: colorToken("#4B4A45"),
+        borderColor: colorToken("#AFADA8"),
         accent: colorToken("#2767D8"),
         success: colorToken("#2F8A57"),
         warning: colorToken("#A06D10"),
         error: colorToken("#CC4A4A"),
         selectionBackground: colorToken("#D6E4FF"),
-        terminalForeground: colorToken("#2E2B26")
+        terminalForeground: colorToken("#2E2B26"),
+        mutedForeground: colorToken("#64615C")
     )
 
     static let pearlLight = AppThemePalette(
         windowBackground: colorToken("#F3ECE5"),
         canvasBackground: colorToken("#FFFCF9"),
         canvasSecondaryBackground: colorToken("#F8F3EE"),
-        borderColor: colorToken("#4A4742"),
+        borderColor: colorToken("#B0ACA6"),
         accent: colorToken("#2E6EDB"),
         success: colorToken("#2E8A62"),
         warning: colorToken("#A06E14"),
         error: colorToken("#C74E4E"),
         selectionBackground: colorToken("#DDE8FF"),
-        terminalForeground: colorToken("#2B2925")
+        terminalForeground: colorToken("#2B2925"),
+        mutedForeground: colorToken("#625F5C")
     )
 
     static let mintLight = AppThemePalette(
         windowBackground: colorToken("#EAF4EF"),
         canvasBackground: colorToken("#F7FFFB"),
         canvasSecondaryBackground: colorToken("#F1FAF5"),
-        borderColor: colorToken("#3F5148"),
+        borderColor: colorToken("#9DB2A7"),
         accent: colorToken("#1E7C67"),
         success: colorToken("#2B8E6F"),
         warning: colorToken("#8A6A1A"),
         error: colorToken("#BE5058"),
         selectionBackground: colorToken("#CFECE2"),
-        terminalForeground: colorToken("#22312B")
+        terminalForeground: colorToken("#22312B"),
+        mutedForeground: colorToken("#586560")
     )
 
     static let latteBloom = AppThemePalette(
@@ -199,11 +229,12 @@ struct AppThemePalette: Codable, Equatable {
         canvasSecondaryBackground: colorToken("#E6E9EF"),
         borderColor: colorToken("#9CA0B0"),
         accent: colorToken("#1E66F5"),
-        success: colorToken("#40A02B"),
-        warning: colorToken("#DF8E1D"),
+        success: colorToken("#3B9328"),
+        warning: colorToken("#B47317"),
         error: colorToken("#D20F39"),
-        selectionBackground: colorToken("#7287FD"),
-        terminalForeground: colorToken("#4C4F69")
+        selectionBackground: colorToken("#A0AEFE"),
+        terminalForeground: colorToken("#494C65"),
+        mutedForeground: colorToken("#53566E")
     )
 
     static let alucardLight = AppThemePalette(
@@ -211,12 +242,13 @@ struct AppThemePalette: Codable, Equatable {
         canvasBackground: colorToken("#DEDCCF"),
         canvasSecondaryBackground: colorToken("#ECE9DF"),
         borderColor: colorToken("#9E9A8F"),
-        accent: colorToken("#0081D6"),
-        success: colorToken("#089108"),
-        warning: colorToken("#A39514"),
-        error: colorToken("#DE5735"),
-        selectionBackground: colorToken("#815CD6"),
-        terminalForeground: colorToken("#2C2A26")
+        accent: colorToken("#007CCE"),
+        success: colorToken("#088C08"),
+        warning: colorToken("#857A10"),
+        error: colorToken("#D54723"),
+        selectionBackground: colorToken("#BCA9E9"),
+        terminalForeground: colorToken("#2C2A26"),
+        mutedForeground: colorToken("#413F3A")
     )
 
     static let beachDay = AppThemePalette(
@@ -225,63 +257,68 @@ struct AppThemePalette: Codable, Equatable {
         canvasSecondaryBackground: colorToken("#F8F1DE"),
         borderColor: colorToken("#93A1A1"),
         accent: colorToken("#268BD2"),
-        success: colorToken("#859900"),
-        warning: colorToken("#B58900"),
+        success: colorToken("#7D8F00"),
+        warning: colorToken("#AA8100"),
         error: colorToken("#DC322F"),
-        selectionBackground: colorToken("#6C71C4"),
-        terminalForeground: colorToken("#657B83")
+        selectionBackground: colorToken("#ADB0DE"),
+        terminalForeground: colorToken("#46555B"),
+        mutedForeground: colorToken("#515F63")
     )
 
     static let mallGoth = AppThemePalette(
         windowBackground: colorToken("#120E16"),
         canvasBackground: colorToken("#1A1321"),
         canvasSecondaryBackground: colorToken("#261A2E"),
-        borderColor: colorToken("#7B5C8E"),
+        borderColor: colorToken("#5D466C"),
         accent: colorToken("#FF7BD5"),
         success: colorToken("#85E0B1"),
         warning: colorToken("#F4B96E"),
         error: colorToken("#FF667D"),
         selectionBackground: colorToken("#6B3C83"),
-        terminalForeground: colorToken("#F3E8F6")
+        terminalForeground: colorToken("#F3E8F6"),
+        mutedForeground: colorToken("#99909E")
     )
 
     static let gasStationSlushie = AppThemePalette(
         windowBackground: colorToken("#07141A"),
         canvasBackground: colorToken("#0A232B"),
         canvasSecondaryBackground: colorToken("#113743"),
-        borderColor: colorToken("#46808D"),
+        borderColor: colorToken("#325B65"),
         accent: colorToken("#27F0FF"),
         success: colorToken("#88FFB8"),
         warning: colorToken("#FFE066"),
         error: colorToken("#FF4FA0"),
         selectionBackground: colorToken("#0E728D"),
-        terminalForeground: colorToken("#E7FCFF")
+        terminalForeground: colorToken("#E7FCFF"),
+        mutedForeground: colorToken("#96ADB2")
     )
 
     static let citrusDeadline = AppThemePalette(
         windowBackground: colorToken("#FFF0C2"),
         canvasBackground: colorToken("#FFF8E2"),
         canvasSecondaryBackground: colorToken("#FFE9B6"),
-        borderColor: colorToken("#B98431"),
-        accent: colorToken("#FF6F3C"),
-        success: colorToken("#2F9A5F"),
-        warning: colorToken("#D29A10"),
+        borderColor: colorToken("#D2A155"),
+        accent: colorToken("#F23F00"),
+        success: colorToken("#2D945B"),
+        warning: colorToken("#A87B0D"),
         error: colorToken("#D94A57"),
         selectionBackground: colorToken("#E8A84A"),
-        terminalForeground: colorToken("#3E2B17")
+        terminalForeground: colorToken("#3E2B17"),
+        mutedForeground: colorToken("#6C5C47")
     )
 
     static let mossyFaxMachine = AppThemePalette(
         windowBackground: colorToken("#E6E1D1"),
         canvasBackground: colorToken("#F2EBDD"),
         canvasSecondaryBackground: colorToken("#DDD6C1"),
-        borderColor: colorToken("#7B7A5D"),
+        borderColor: colorToken("#A3A285"),
         accent: colorToken("#556B2F"),
-        success: colorToken("#2D8A57"),
-        warning: colorToken("#A47B28"),
+        success: colorToken("#2B8453"),
+        warning: colorToken("#936E24"),
         error: colorToken("#A9534D"),
         selectionBackground: colorToken("#B7C59A"),
-        terminalForeground: colorToken("#2F3827")
+        terminalForeground: colorToken("#2F3827"),
+        mutedForeground: colorToken("#4E5444")
     )
 
     static let arcadeCarpet = AppThemePalette(
@@ -294,46 +331,50 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#FFB347"),
         error: colorToken("#FF5A7A"),
         selectionBackground: colorToken("#A83878"),
-        terminalForeground: colorToken("#F7E7F3")
+        terminalForeground: colorToken("#F7E7F3"),
+        mutedForeground: colorToken("#A593A3")
     )
 
     static let tomatoBisque = AppThemePalette(
         windowBackground: colorToken("#F7D9CC"),
         canvasBackground: colorToken("#FFF1EA"),
         canvasSecondaryBackground: colorToken("#FBDCCF"),
-        borderColor: colorToken("#AD6F63"),
+        borderColor: colorToken("#C79D94"),
         accent: colorToken("#D44832"),
-        success: colorToken("#2E9161"),
-        warning: colorToken("#B87C14"),
+        success: colorToken("#2D8D5E"),
+        warning: colorToken("#A97212"),
         error: colorToken("#BA2F3B"),
         selectionBackground: colorToken("#F4B4A1"),
-        terminalForeground: colorToken("#3C231F")
+        terminalForeground: colorToken("#3C231F"),
+        mutedForeground: colorToken("#69524D")
     )
 
     static let poolTile = AppThemePalette(
         windowBackground: colorToken("#DDF4F7"),
         canvasBackground: colorToken("#F2FDFF"),
         canvasSecondaryBackground: colorToken("#CBEFF2"),
-        borderColor: colorToken("#5F99A7"),
-        accent: colorToken("#008FB3"),
+        borderColor: colorToken("#88B3BD"),
+        accent: colorToken("#008CAF"),
         success: colorToken("#15896B"),
-        warning: colorToken("#B2861D"),
+        warning: colorToken("#A37A1A"),
         error: colorToken("#C94E63"),
         selectionBackground: colorToken("#8EDAE5"),
-        terminalForeground: colorToken("#17333C")
+        terminalForeground: colorToken("#17333C"),
+        mutedForeground: colorToken("#496168")
     )
 
     static let radioactiveSpreadsheet = AppThemePalette(
         windowBackground: colorToken("#0A130A"),
         canvasBackground: colorToken("#101C10"),
         canvasSecondaryBackground: colorToken("#162816"),
-        borderColor: colorToken("#4E7D35"),
+        borderColor: colorToken("#385926"),
         accent: colorToken("#B8FF3B"),
         success: colorToken("#6CFF9B"),
         warning: colorToken("#FFD84C"),
         error: colorToken("#FF5D64"),
         selectionBackground: colorToken("#355F18"),
-        terminalForeground: colorToken("#E6FFD4")
+        terminalForeground: colorToken("#E6FFD4"),
+        mutedForeground: colorToken("#8A9E80")
     )
 
     static let christmas = AppThemePalette(
@@ -341,51 +382,55 @@ struct AppThemePalette: Codable, Equatable {
         canvasBackground: colorToken("#132319"),
         canvasSecondaryBackground: colorToken("#1B3224"),
         borderColor: colorToken("#7E2D33"),
-        accent: colorToken("#D73A49"),
+        accent: colorToken("#D94452"),
         success: colorToken("#3FBF6F"),
         warning: colorToken("#E0B94A"),
         error: colorToken("#FF6B6B"),
         selectionBackground: colorToken("#9C3040"),
-        terminalForeground: colorToken("#F3F7F1")
+        terminalForeground: colorToken("#F3F7F1"),
+        mutedForeground: colorToken("#9CA59D")
     )
 
     static let stPatrick = AppThemePalette(
         windowBackground: colorToken("#08170E"),
         canvasBackground: colorToken("#0D2114"),
         canvasSecondaryBackground: colorToken("#15301D"),
-        borderColor: colorToken("#6F8E3A"),
+        borderColor: colorToken("#465A25"),
         accent: colorToken("#2FCB5F"),
         success: colorToken("#67E08A"),
         warning: colorToken("#E0C14C"),
         error: colorToken("#D95D5D"),
         selectionBackground: colorToken("#32591E"),
-        terminalForeground: colorToken("#F1F9E8")
+        terminalForeground: colorToken("#F1F9E8"),
+        mutedForeground: colorToken("#96A393")
     )
 
     static let diwali = AppThemePalette(
         windowBackground: colorToken("#2A1206"),
         canvasBackground: colorToken("#351807"),
         canvasSecondaryBackground: colorToken("#47240B"),
-        borderColor: colorToken("#A86418"),
+        borderColor: colorToken("#7C4A12"),
         accent: colorToken("#FFB11B"),
         success: colorToken("#65C27A"),
         warning: colorToken("#FFD35A"),
         error: colorToken("#FF6A3D"),
         selectionBackground: colorToken("#8A3B10"),
-        terminalForeground: colorToken("#FFF1D6")
+        terminalForeground: colorToken("#FFF1D6"),
+        mutedForeground: colorToken("#B39F88")
     )
 
     static let fourthOfJuly = AppThemePalette(
         windowBackground: colorToken("#091321"),
         canvasBackground: colorToken("#0F1C31"),
         canvasSecondaryBackground: colorToken("#182945"),
-        borderColor: colorToken("#AFC2E6"),
+        borderColor: colorToken("#2E5193"),
         accent: colorToken("#E43F5A"),
         success: colorToken("#5ED0A5"),
         warning: colorToken("#F4C95D"),
         error: colorToken("#FF5A6E"),
         selectionBackground: colorToken("#315A9C"),
-        terminalForeground: colorToken("#F7FAFF")
+        terminalForeground: colorToken("#F7FAFF"),
+        mutedForeground: colorToken("#979EAA")
     )
 
     static let ph = AppThemePalette(
@@ -398,7 +443,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#FFBE55"),
         error: colorToken("#FF6B57"),
         selectionBackground: colorToken("#6C3A00"),
-        terminalForeground: colorToken("#F5F5F5")
+        terminalForeground: colorToken("#F5F5F5"),
+        mutedForeground: colorToken("#929292")
     )
 
     static let gruvboxDark = AppThemePalette(
@@ -411,7 +457,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#FABD2F"),
         error: colorToken("#FB4934"),
         selectionBackground: colorToken("#5B4A3A"),
-        terminalForeground: colorToken("#EBDBB2")
+        terminalForeground: colorToken("#EBDBB2"),
+        mutedForeground: colorToken("#B1A589")
     )
 
     static let rosePine = AppThemePalette(
@@ -424,7 +471,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#F6C177"),
         error: colorToken("#EB6F92"),
         selectionBackground: colorToken("#4A3E6B"),
-        terminalForeground: colorToken("#E0DEF4")
+        terminalForeground: colorToken("#E0DEF4"),
+        mutedForeground: colorToken("#9A98AC")
     )
 
     static let tokyoNight = AppThemePalette(
@@ -437,7 +485,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#E0AF68"),
         error: colorToken("#F7768E"),
         selectionBackground: colorToken("#33467C"),
-        terminalForeground: colorToken("#C0CAF5")
+        terminalForeground: colorToken("#C0CAF5"),
+        mutedForeground: colorToken("#959CBF")
     )
 
     static let mochaMood = AppThemePalette(
@@ -450,7 +499,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#F9E2AF"),
         error: colorToken("#F38BA8"),
         selectionBackground: colorToken("#585B70"),
-        terminalForeground: colorToken("#CDD6F4")
+        terminalForeground: colorToken("#CDD6F4"),
+        mutedForeground: colorToken("#A2A9C4")
     )
 
     static let lavenderHaze = AppThemePalette(
@@ -459,11 +509,12 @@ struct AppThemePalette: Codable, Equatable {
         canvasSecondaryBackground: colorToken("#F0EAF6"),
         borderColor: colorToken("#9B8FB8"),
         accent: colorToken("#7C3AED"),
-        success: colorToken("#2D9A6B"),
+        success: colorToken("#2B9467"),
         warning: colorToken("#9A7018"),
         error: colorToken("#C94060"),
         selectionBackground: colorToken("#D4C4F0"),
-        terminalForeground: colorToken("#2D2640")
+        terminalForeground: colorToken("#2D2640"),
+        mutedForeground: colorToken("#5D576C")
     )
 
     static let highContrast = AppThemePalette(
@@ -476,7 +527,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#FFD426"),
         error: colorToken("#FF6B68"),
         selectionBackground: colorToken("#264F78"),
-        terminalForeground: colorToken("#FFFFFF")
+        terminalForeground: colorToken("#FFFFFF"),
+        mutedForeground: colorToken("#919191")
     )
 
     static let valentine = AppThemePalette(
@@ -489,7 +541,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#F0C06A"),
         error: colorToken("#FF5577"),
         selectionBackground: colorToken("#7A2848"),
-        terminalForeground: colorToken("#FDE8EF")
+        terminalForeground: colorToken("#FDE8EF"),
+        mutedForeground: colorToken("#A18C94")
     )
 
     static let oneDark = AppThemePalette(
@@ -502,7 +555,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#E5C07B"),
         error: colorToken("#E06C75"),
         selectionBackground: colorToken("#3E4451"),
-        terminalForeground: colorToken("#ABB2BF")
+        terminalForeground: colorToken("#AEB4C1"),
+        mutedForeground: colorToken("#A1A7B3")
     )
 
     static let synthwave84 = AppThemePalette(
@@ -515,7 +569,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#FEDE5D"),
         error: colorToken("#FE4450"),
         selectionBackground: colorToken("#463465"),
-        terminalForeground: colorToken("#F0E8FF")
+        terminalForeground: colorToken("#F0E8FF"),
+        mutedForeground: colorToken("#A199AE")
     )
 
     static let halloween = AppThemePalette(
@@ -528,7 +583,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#FFD54F"),
         error: colorToken("#E04545"),
         selectionBackground: colorToken("#5C2E00"),
-        terminalForeground: colorToken("#F0E6D3")
+        terminalForeground: colorToken("#F0E6D3"),
+        mutedForeground: colorToken("#968E89")
     )
 
     static let rosePineDawn = AppThemePalette(
@@ -537,11 +593,12 @@ struct AppThemePalette: Codable, Equatable {
         canvasSecondaryBackground: colorToken("#FFFAF3"),
         borderColor: colorToken("#9893A5"),
         accent: colorToken("#907AA9"),
-        success: colorToken("#56949F"),
-        warning: colorToken("#EA9D34"),
+        success: colorToken("#55929D"),
+        warning: colorToken("#C27814"),
         error: colorToken("#B4637A"),
         selectionBackground: colorToken("#DFDAD9"),
-        terminalForeground: colorToken("#575279")
+        terminalForeground: colorToken("#555076"),
+        mutedForeground: colorToken("#5F5A7D")
     )
 
     static let highContrastLight = AppThemePalette(
@@ -554,7 +611,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#7D5600"),
         error: colorToken("#CF222E"),
         selectionBackground: colorToken("#B6D7FF"),
-        terminalForeground: colorToken("#000000")
+        terminalForeground: colorToken("#000000"),
+        mutedForeground: colorToken("#616161")
     )
 
     static let blossomPink = AppThemePalette(
@@ -562,12 +620,13 @@ struct AppThemePalette: Codable, Equatable {
         canvasBackground: colorToken("#FFF5F9"),
         canvasSecondaryBackground: colorToken("#FCEEF4"),
         borderColor: colorToken("#D4A0B8"),
-        accent: colorToken("#E0559A"),
-        success: colorToken("#3BA87A"),
-        warning: colorToken("#C48820"),
+        accent: colorToken("#E05399"),
+        success: colorToken("#35976E"),
+        warning: colorToken("#B37C1D"),
         error: colorToken("#D44060"),
         selectionBackground: colorToken("#F8C8DC"),
-        terminalForeground: colorToken("#3D1F2E")
+        terminalForeground: colorToken("#3D1F2E"),
+        mutedForeground: colorToken("#725965")
     )
 
     static let midnightPink = AppThemePalette(
@@ -580,7 +639,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#FBBF60"),
         error: colorToken("#FF5C8A"),
         selectionBackground: colorToken("#8B2A60"),
-        terminalForeground: colorToken("#FFE0F0")
+        terminalForeground: colorToken("#FFE0F0"),
+        mutedForeground: colorToken("#AD8FA0")
     )
 
     static let kintsugi = AppThemePalette(
@@ -593,20 +653,22 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#E8C55A"),
         error: colorToken("#C75D5D"),
         selectionBackground: colorToken("#4A3D20"),
-        terminalForeground: colorToken("#EDE6DA")
+        terminalForeground: colorToken("#EDE6DA"),
+        mutedForeground: colorToken("#A49F95")
     )
 
     static let ukiyoe = AppThemePalette(
         windowBackground: colorToken("#F0E6D6"),
         canvasBackground: colorToken("#FAF3E6"),
         canvasSecondaryBackground: colorToken("#F5ECDB"),
-        borderColor: colorToken("#8B7355"),
+        borderColor: colorToken("#B7A38A"),
         accent: colorToken("#2B4C7E"),
         success: colorToken("#4A7C59"),
-        warning: colorToken("#B8860B"),
+        warning: colorToken("#AA7C0A"),
         error: colorToken("#C23B22"),
         selectionBackground: colorToken("#D4C4A8"),
-        terminalForeground: colorToken("#1C1410")
+        terminalForeground: colorToken("#1C1410"),
+        mutedForeground: colorToken("#635B54")
     )
 
     static let yushi = AppThemePalette(
@@ -619,7 +681,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#D4A843"),
         error: colorToken("#E06060"),
         selectionBackground: colorToken("#1E4A38"),
-        terminalForeground: colorToken("#E0F0E8")
+        terminalForeground: colorToken("#E0F0E8"),
+        mutedForeground: colorToken("#8C9A93")
     )
 
     static let denglong = AppThemePalette(
@@ -632,7 +695,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#E8B830"),
         error: colorToken("#FF4D4D"),
         selectionBackground: colorToken("#5C2218"),
-        terminalForeground: colorToken("#F5E8D8")
+        terminalForeground: colorToken("#F5E8D8"),
+        mutedForeground: colorToken("#A1968B")
     )
 
     static let shuimo = AppThemePalette(
@@ -645,33 +709,36 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#C4A86A"),
         error: colorToken("#B86060"),
         selectionBackground: colorToken("#3A3835"),
-        terminalForeground: colorToken("#E8E4DF")
+        terminalForeground: colorToken("#E8E4DF"),
+        mutedForeground: colorToken("#9C9996")
     )
 
     static let sichou = AppThemePalette(
         windowBackground: colorToken("#F5E8E0"),
         canvasBackground: colorToken("#FDF6F0"),
         canvasSecondaryBackground: colorToken("#F8EEE5"),
-        borderColor: colorToken("#8C6B4A"),
+        borderColor: colorToken("#C0A488"),
         accent: colorToken("#8B2252"),
         success: colorToken("#4A7A5A"),
-        warning: colorToken("#B8860B"),
+        warning: colorToken("#AC7E0A"),
         error: colorToken("#A03030"),
         selectionBackground: colorToken("#EFD5C8"),
-        terminalForeground: colorToken("#2A1A10")
+        terminalForeground: colorToken("#2A1A10"),
+        mutedForeground: colorToken("#695C53")
     )
 
     static let hanbok = AppThemePalette(
         windowBackground: colorToken("#F0EAE0"),
         canvasBackground: colorToken("#FBF8F2"),
         canvasSecondaryBackground: colorToken("#F5F0E8"),
-        borderColor: colorToken("#9E8A72"),
+        borderColor: colorToken("#B6A896"),
         accent: colorToken("#C7305A"),
         success: colorToken("#2A8C6A"),
-        warning: colorToken("#C49020"),
+        warning: colorToken("#AC7E1C"),
         error: colorToken("#D43050"),
         selectionBackground: colorToken("#D4E8E0"),
-        terminalForeground: colorToken("#1A2A2A")
+        terminalForeground: colorToken("#1A2A2A"),
+        mutedForeground: colorToken("#56615F")
     )
 
     static let cheongja = AppThemePalette(
@@ -680,11 +747,12 @@ struct AppThemePalette: Codable, Equatable {
         canvasSecondaryBackground: colorToken("#E8F2EC"),
         borderColor: colorToken("#7A9E8C"),
         accent: colorToken("#2E7A5A"),
-        success: colorToken("#4AB87A"),
+        success: colorToken("#3B9663"),
         warning: colorToken("#A08030"),
         error: colorToken("#B85050"),
         selectionBackground: colorToken("#C8DED2"),
-        terminalForeground: colorToken("#1A2E24")
+        terminalForeground: colorToken("#1A2E24"),
+        mutedForeground: colorToken("#52625A")
     )
 
     static let dancheong = AppThemePalette(
@@ -692,25 +760,27 @@ struct AppThemePalette: Codable, Equatable {
         canvasBackground: colorToken("#261C16"),
         canvasSecondaryBackground: colorToken("#322620"),
         borderColor: colorToken("#6B4A35"),
-        accent: colorToken("#2E7B8C"),
+        accent: colorToken("#307F91"),
         success: colorToken("#2E8B57"),
         warning: colorToken("#D4A020"),
         error: colorToken("#E04040"),
         selectionBackground: colorToken("#1A4A55"),
-        terminalForeground: colorToken("#F2EBD8")
+        terminalForeground: colorToken("#F2EBD8"),
+        mutedForeground: colorToken("#A49C8E")
     )
 
     static let mehendi = AppThemePalette(
         windowBackground: colorToken("#F0E6D6"),
         canvasBackground: colorToken("#FAF4E8"),
         canvasSecondaryBackground: colorToken("#F2EADC"),
-        borderColor: colorToken("#8C7A5A"),
+        borderColor: colorToken("#B4A58B"),
         accent: colorToken("#B85C3A"),
         success: colorToken("#3A7A4A"),
-        warning: colorToken("#C48A20"),
+        warning: colorToken("#AC791C"),
         error: colorToken("#C04040"),
         selectionBackground: colorToken("#E0D0B8"),
-        terminalForeground: colorToken("#2A1E14")
+        terminalForeground: colorToken("#2A1E14"),
+        mutedForeground: colorToken("#655B50")
     )
 
     static let rangoli = AppThemePalette(
@@ -723,7 +793,8 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#F0C030"),
         error: colorToken("#E04070"),
         selectionBackground: colorToken("#5A3220"),
-        terminalForeground: colorToken("#FAF2E6")
+        terminalForeground: colorToken("#FAF2E6"),
+        mutedForeground: colorToken("#A19A92")
     )
 
     static let mayur = AppThemePalette(
@@ -736,20 +807,22 @@ struct AppThemePalette: Codable, Equatable {
         warning: colorToken("#D4A843"),
         error: colorToken("#E06070"),
         selectionBackground: colorToken("#1A4050"),
-        terminalForeground: colorToken("#E4F4F0")
+        terminalForeground: colorToken("#E4F4F0"),
+        mutedForeground: colorToken("#8B999A")
     )
 
     static let tiranga = AppThemePalette(
         windowBackground: colorToken("#FF9933"),
         canvasBackground: colorToken("#FFFFFF"),
         canvasSecondaryBackground: colorToken("#D5EAC8"),
-        borderColor: colorToken("#138808"),
-        accent: colorToken("#FF9933"),
+        borderColor: colorToken("#1CCA0C"),
+        accent: colorToken("#C56200"),
         success: colorToken("#138808"),
-        warning: colorToken("#B8860B"),
+        warning: colorToken("#A2760A"),
         error: colorToken("#D03030"),
         selectionBackground: colorToken("#FFD494"),
-        terminalForeground: colorToken("#1A1A4D")
+        terminalForeground: colorToken("#1A1A4D"),
+        mutedForeground: colorToken("#353562")
     )
 
     var windowBackgroundColor: Color { windowBackground.color }
@@ -791,11 +864,10 @@ struct AppThemePalette: Codable, Equatable {
     }
     var terminalSelectionBackgroundColor: Color { terminalSelectionBackground.color }
     var primaryTextColor: Color { terminalForegroundColor }
-    var secondaryTextColor: Color {
-        blendedColor(primary: terminalForeground, secondary: borderColor, ratio: 0.46)
-    }
+    var mutedForegroundColor: Color { mutedForeground.color }
+    var secondaryTextColor: Color { mutedForegroundColor }
     var tertiaryTextColor: Color {
-        blendedColor(primary: terminalForeground, secondary: borderColor, ratio: 0.62)
+        blendedColor(primary: mutedForeground, secondary: canvasBackground, ratio: 0.22)
     }
     var directoryIconColor: Color { accentStrongColor }
     var gitAddedStatusColor: Color { successColor }
@@ -866,6 +938,7 @@ struct AppThemePalette: Codable, Equatable {
         case error
         case selectionBackground
         case terminalForeground
+        case mutedForeground
     }
 
     init(from decoder: Decoder) throws {
@@ -884,6 +957,8 @@ struct AppThemePalette: Codable, Equatable {
         error = try container.decode(ProjectColorTag.self, forKey: .error)
         selectionBackground = try container.decode(ProjectColorTag.self, forKey: .selectionBackground)
         terminalForeground = try container.decode(ProjectColorTag.self, forKey: .terminalForeground)
+        mutedForeground = try container.decodeIfPresent(ProjectColorTag.self, forKey: .mutedForeground)
+            ?? Self.legacyMutedForeground(terminalForeground: terminalForeground, borderColor: borderColor)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -898,6 +973,7 @@ struct AppThemePalette: Codable, Equatable {
         try container.encode(error, forKey: .error)
         try container.encode(selectionBackground, forKey: .selectionBackground)
         try container.encode(terminalForeground, forKey: .terminalForeground)
+        try container.encode(mutedForeground, forKey: .mutedForeground)
     }
 
     static func defaultCustomBase(from preset: AppThemePreset) -> AppThemePalette {

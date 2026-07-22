@@ -61,10 +61,10 @@ struct ContentViewerView: View {
     private var tabStrip: some View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: 3) {
                     ForEach(visibleTabs) { tab in tabItem(tab) }
                 }
-                .padding(.horizontal, 10).padding(.vertical, 6)
+                .padding(.horizontal, 8).padding(.vertical, 5)
             }
             if projects.count > 1 { scopeToggle.padding(.trailing, 8) }
         }

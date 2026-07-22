@@ -37,6 +37,7 @@ struct VibeSpaceWorktreeNodeView: View {
 
     @State private var activeTab: ProjectPaneTab = .files
     @State private var isExpanded: Bool
+    @State private var isHeaderHovering = false
 
     enum ProjectPaneTab: Hashable { case files, changes, chats }
 
@@ -234,33 +235,70 @@ struct VibeSpaceWorktreeNodeView: View {
 
             Spacer(minLength: scale.spacing(6))
 
-            createMenu
+            // Hover-reveal actions: collapsed rows stay quiet so long project
+            // names keep their space; the full toggle set appears on pointer
+            // hover, and stays put while the node is expanded (the toggles act
+            // as tabs for the visible body). A compact change badge remains as
+            // passive, glanceable status when the actions are hidden.
+            if showsHeaderActions {
+                createMenu
 
-            // Consistent toggle set on every node — Files / Changes / Chats —
-            // so position is predictable; empty Changes/Chats dim but stay
-            // reachable (this is the only path to a worktree's first chat).
-            HStack(spacing: scale.spacing(1)) {
-                viewToggle(.files, system: "doc.text", count: nil,
-                           tint: palette.secondaryTextColor,
-                           label: AppStrings.Worktree.showFiles, value: nil)
-                viewToggle(.changes, system: "plusminus", count: changeCount > 0 ? changeCount : nil,
-                           tint: changeCount > 0 ? palette.gitModifiedStatusColor : palette.secondaryTextColor.opacity(0.5),
-                           label: AppStrings.Worktree.showChanges(changeCount),
-                           value: AppStrings.Worktree.changedFilesValue(changeCount))
-                viewToggle(.chats, system: "bubble.left", count: threads.isEmpty ? nil : threads.count,
-                           tint: threads.isEmpty ? palette.secondaryTextColor.opacity(0.5) : palette.secondaryTextColor,
-                           label: AppStrings.Worktree.showConversations(threads.count), value: nil)
+                // Consistent toggle set — Files / Changes / Chats — so position
+                // is predictable; empty Changes/Chats dim but stay reachable
+                // (this is the only path to a worktree's first chat).
+                HStack(spacing: scale.spacing(1)) {
+                    viewToggle(.files, system: "doc.text", count: nil,
+                               tint: palette.secondaryTextColor,
+                               label: AppStrings.Worktree.showFiles, value: nil)
+                    viewToggle(.changes, system: "plusminus", count: changeCount > 0 ? changeCount : nil,
+                               tint: changeCount > 0 ? palette.gitModifiedStatusColor : palette.secondaryTextColor.opacity(0.5),
+                               label: AppStrings.Worktree.showChanges(changeCount),
+                               value: AppStrings.Worktree.changedFilesValue(changeCount))
+                    viewToggle(.chats, system: "bubble.left", count: threads.isEmpty ? nil : threads.count,
+                               tint: threads.isEmpty ? palette.secondaryTextColor.opacity(0.5) : palette.secondaryTextColor,
+                               label: AppStrings.Worktree.showConversations(threads.count), value: nil)
+                }
+                .transition(.opacity)
+            } else {
+                passiveChangeBadge
             }
         }
         .padding(.horizontal, scale.spacing(10))
         .padding(.vertical, scale.spacing(8))
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: scale.iconSize(24) + scale.spacing(16))
         .background(
             RoundedRectangle(cornerRadius: theme.radius(10), style: .continuous)
                 .fill(selectionFill)
         )
+        .onHover { isHeaderHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: showsHeaderActions)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(isFocused ? .isSelected : [])
+    }
+
+    private var showsHeaderActions: Bool { isHeaderHovering || isExpanded }
+
+    /// Glanceable pending-changes count for a collapsed, un-hovered node.
+    /// Tapping it jumps straight to the Changes view.
+    @ViewBuilder
+    private var passiveChangeBadge: some View {
+        if changeCount > 0 {
+            Button { selectView(.changes) } label: {
+                HStack(spacing: 2) {
+                    Image(systemName: "plusminus").font(AppTypographyTokens.scaledIcon(9))
+                    Text("\(changeCount)").font(AppTypographyTokens.caption2MonospacedDigit)
+                }
+                .foregroundStyle(palette.gitModifiedStatusColor)
+                .padding(.horizontal, scale.spacing(4))
+                .frame(minHeight: scale.iconSize(24))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(AppStrings.Worktree.showChanges(changeCount))
+            .accessibilityLabel(AppStrings.Worktree.showChanges(changeCount))
+            .accessibilityValue(AppStrings.Worktree.changedFilesValue(changeCount))
+        }
     }
 
     @ViewBuilder

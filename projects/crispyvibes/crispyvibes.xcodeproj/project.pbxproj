@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		01267F46A2AEA5373C9EADB8 /* ACPMarkdownHTMLView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC48D35FCD58D084483C9917 /* ACPMarkdownHTMLView.swift */; };
 		0192232DBD01670BF7C6C6D7 /* BoardCursorRegionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00F72377C9FA23F598D0560F /* BoardCursorRegionsTests.swift */; };
+		AATHEMECON0000000000TEST /* AppThemePaletteContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AATHEMECON0000000000FILE /* AppThemePaletteContrastTests.swift */; };
 		02BFBDFB6F927EDB5D70C7B2 /* TextGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A199FBB4076712252D28F5 /* TextGenerationService.swift */; };
 		0351684DC70D1835A9A411F9 /* VibeSpaceTodoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CACAAC6CF3CDA8AB81F1E5 /* VibeSpaceTodoStore.swift */; };
 		035F65A29AAA298B711DA5BA /* CrossFileCommentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F929E1E343D4388CC4D3B983 /* CrossFileCommentsView.swift */; };
@@ -1234,6 +1235,7 @@
 		BRWSOWNR0001000100010001 /* BrowserHostOwnershipCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserHostOwnershipCoordinator.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserHostOwnershipCoordinator.swift; sourceTree = "<group>"; };
 		C058007C6BE57237190D272A /* MarkdownEditorPlugins.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownEditorPlugins.swift; sourceTree = "<group>"; };
 		C1829B25562B028CDC237B52 /* SplitPaneLayoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitPaneLayoutTests.swift; sourceTree = "<group>"; };
+		AATHEMECON0000000000FILE /* AppThemePaletteContrastTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppThemePaletteContrastTests.swift; sourceTree = "<group>"; };
 		C1B9CCF2E2BA8AB7F99D4190 /* SettingsLayoutPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsLayoutPrimitives.swift; sourceTree = "<group>"; };
 		C2C1E3B2A8770E85559D71C4 /* MeasuredPaneWorker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeasuredPaneWorker.swift; sourceTree = "<group>"; };
 		C2D000000000000000000001 /* VibeSpaceSidebarProjectTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarProjectTree.swift; sourceTree = "<group>"; };
@@ -1871,6 +1873,7 @@
 		57A39FCD9D6A9AD08AB0D9F6 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				AATHEMECON0000000000FILE /* AppThemePaletteContrastTests.swift */,
 				00F72377C9FA23F598D0560F /* BoardCursorRegionsTests.swift */,
 				A420D8C1EB221D5AD7E4D2BE /* BoardHitTestingTests.swift */,
 				9319FACD47F3ED87CD2C2D28 /* BoardInteractionControllerTests.swift */,
@@ -4514,6 +4517,7 @@
 				A8F790ECE80DEB47B6A98615 /* TextServiceCLIPresetCatalogTests.swift in Sources */,
 				64D5024F37E76E20279F2299 /* VibeSpaceManagementServiceTests.swift in Sources */,
 				219F3C59245123C904F726D3 /* SplitPaneLayoutTests.swift in Sources */,
+				AATHEMECON0000000000TEST /* AppThemePaletteContrastTests.swift in Sources */,
 				5977CBD83FD790EAA3CCCEA9 /* AppStringsTests.swift in Sources */,
 				SEC00002000000000000TEST /* ShellEscapingTests.swift in Sources */,
 				SEC00003000000000000TEST /* EditorHTMLSecurityTests.swift in Sources */,
