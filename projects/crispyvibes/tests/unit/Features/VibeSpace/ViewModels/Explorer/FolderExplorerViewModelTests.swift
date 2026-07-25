@@ -1168,6 +1168,82 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
         XCTAssertGreaterThan(expandedHeight, collapsedHeight)
     }
 
+    func testConsolidatedTreeHeightTracksExpansionLoadingAndLoadedChildren() {
+        let firstLeaf = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Sources/Feature.swift"),
+            isDirectory: false
+        )
+        let secondLeaf = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Sources/Support.swift"),
+            isDirectory: false
+        )
+        let directory = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Sources"),
+            isDirectory: true,
+            children: [firstLeaf, secondLeaf]
+        )
+        let rowHeight: CGFloat = 22
+
+        let collapsedHeight = FolderExplorerViewModel.makeVibeSpaceSidebarContentHeight(
+            displayedItems: [directory],
+            expandedDirectoryIDs: [],
+            loadingDirectoryIDs: [],
+            isSearching: false,
+            rowHeight: rowHeight
+        )
+        let loadingHeight = FolderExplorerViewModel.makeVibeSpaceSidebarContentHeight(
+            displayedItems: [directory],
+            expandedDirectoryIDs: [directory.id],
+            loadingDirectoryIDs: [directory.id],
+            isSearching: false,
+            rowHeight: rowHeight
+        )
+        let expandedHeight = FolderExplorerViewModel.makeVibeSpaceSidebarContentHeight(
+            displayedItems: [directory],
+            expandedDirectoryIDs: [directory.id],
+            loadingDirectoryIDs: [],
+            isSearching: false,
+            rowHeight: rowHeight
+        )
+
+        XCTAssertEqual(collapsedHeight, rowHeight)
+        XCTAssertEqual(loadingHeight, rowHeight * 2)
+        XCTAssertEqual(expandedHeight, rowHeight * 3)
+    }
+
+    func testConsolidatedTreeOptsOutOfAppKitIntrinsicHeight() {
+        let leaf = FileItem(url: URL(fileURLWithPath: "/tmp/project/Sources/main.swift"), isDirectory: false)
+        let directory = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Sources"),
+            isDirectory: true,
+            children: [leaf]
+        )
+        var renameText = ""
+        let treeView = AppKitTreeView(
+            rootItems: [directory],
+            expandedIDs: [],
+            loadingIDs: [],
+            selectedID: nil,
+            renamingID: nil,
+            searchQuery: "",
+            allowsScrolling: false,
+            usesIntrinsicContentHeight: false,
+            renameText: Binding(
+                get: { renameText },
+                set: { renameText = $0 }
+            ),
+            onAction: { _ in },
+            onTransferDrop: { _ in false }
+        )
+
+        let (coordinator, scrollView, _, _) = makeMountedOutline(for: treeView)
+        coordinator.expandedIDs.insert(directory.id)
+        coordinator.syncExpansionState()
+        scrollView.invalidateIntrinsicContentSize()
+
+        XCTAssertEqual(scrollView.intrinsicContentSize.height, NSView.noIntrinsicMetric)
+    }
+
     func testIntrinsicSizeInvalidationSkipsRenameUpdatesForNonScrollingTree() {
         XCTAssertFalse(
             AppKitTreeView.shouldInvalidateIntrinsicContentSize(
@@ -1667,7 +1743,10 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
     ) -> (AppKitTreeView.Coordinator, AppKitTreeScrollView, AppKitOutlineView, NSWindow) {
         let coordinator = treeView.makeCoordinator()
         let scrollView = AppKitTreeScrollView()
-        scrollView.configureScrolling(allowsScrolling: treeView.allowsScrolling)
+        scrollView.configureScrolling(
+            allowsScrolling: treeView.allowsScrolling,
+            usesIntrinsicContentHeight: treeView.usesIntrinsicContentHeight
+        )
         let outlineView = AppKitOutlineView(frame: NSRect(x: 0, y: 0, width: 320, height: 320))
         outlineView.headerView = nil
         outlineView.rowHeight = 22

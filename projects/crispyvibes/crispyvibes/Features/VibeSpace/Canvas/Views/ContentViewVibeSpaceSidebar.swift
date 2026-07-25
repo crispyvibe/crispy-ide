@@ -204,7 +204,7 @@ struct VibeSpaceSidebarPanelView: View {
     @ViewBuilder
     private var unifiedContent: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 6) {
                 // Shelf sits above the projects, same as the classic Files pane.
                 // Drag-in support is unchanged: external file drops are handled
                 // globally at ContentView, and the section reuses the same

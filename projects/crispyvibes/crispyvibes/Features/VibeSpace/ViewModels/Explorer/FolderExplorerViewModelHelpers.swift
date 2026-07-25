@@ -358,6 +358,22 @@ extension FolderExplorerViewModel {
         return rows
     }
 
+    nonisolated static func makeVibeSpaceSidebarContentHeight(
+        displayedItems: [FileItem],
+        expandedDirectoryIDs: Set<String>,
+        loadingDirectoryIDs: Set<String>,
+        isSearching: Bool,
+        rowHeight: CGFloat
+    ) -> CGFloat {
+        let rowCount = makeVibeSpaceSidebarVisibleRows(
+            displayedItems: displayedItems,
+            expandedDirectoryIDs: expandedDirectoryIDs,
+            loadingDirectoryIDs: loadingDirectoryIDs,
+            isSearching: isSearching
+        ).count
+        return CGFloat(rowCount) * rowHeight
+    }
+
     func mergeRootItemsPreservingLoadedChildren(with freshRootItems: [FileItem]) -> [FileItem] {
         guard !rootItems.isEmpty else { return freshRootItems }
         let existingByID = Dictionary(uniqueKeysWithValues: rootItems.map { ($0.id, $0) })

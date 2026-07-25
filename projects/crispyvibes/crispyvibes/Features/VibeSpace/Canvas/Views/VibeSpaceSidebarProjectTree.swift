@@ -123,6 +123,7 @@ struct VibeSpaceProjectFilesSectionView: View {
 /// Prevents sibling projects from causing unrelated tree redraws.
 struct ProjectFileTreeView: View {
     @Environment(\.appThemePalette) private var activeThemePalette
+    @Environment(\.crispyvibesUIScale) private var uiScale
     @ObservedObject var viewModel: AnyFolderExplorer
     @FocusState private var isExplorerListFocused: Bool
 
@@ -132,6 +133,16 @@ struct ProjectFileTreeView: View {
 
     private var shouldShowLoadingState: Bool {
         viewModel.rootURL == nil || (viewModel.workerStatus.level == .busy && viewModel.rootItems.isEmpty)
+    }
+
+    private var treeContentHeight: CGFloat {
+        FolderExplorerViewModel.makeVibeSpaceSidebarContentHeight(
+            displayedItems: viewModel.displayedItems,
+            expandedDirectoryIDs: viewModel.expandedDirectoryIDs,
+            loadingDirectoryIDs: viewModel.loadingDirectoryIDs,
+            isSearching: !viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            rowHeight: max(uiScale.textSize(20), uiScale.chromeSize(22))
+        )
     }
 
     private func forwardAction(_ action: FileTreeAction) {
@@ -174,6 +185,7 @@ struct ProjectFileTreeView: View {
                 changedDirectoryIDs: viewModel.changedDirectoryIDs,
                 treeMutationRevision: viewModel.treeMutationRevision,
                 allowsScrolling: false,
+                usesIntrinsicContentHeight: false,
                 rootURL: viewModel.rootURL,
                 projectRootURLs: projectRootURLs,
                 renameText: Binding(
@@ -183,7 +195,7 @@ struct ProjectFileTreeView: View {
                 onAction: forwardAction,
                 onTransferDrop: onTransferDrop
             )
-            .fixedSize(horizontal: false, vertical: true)
+            .frame(height: treeContentHeight)
             .focusable()
             .focused($isExplorerListFocused)
             .onTapGesture {

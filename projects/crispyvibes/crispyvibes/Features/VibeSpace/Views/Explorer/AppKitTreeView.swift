@@ -16,6 +16,7 @@ struct AppKitTreeView: NSViewRepresentable {
     let changedDirectoryIDs: Set<String>
     let treeMutationRevision: Int
     let allowsScrolling: Bool
+    let usesIntrinsicContentHeight: Bool
     var rootURL: URL? = nil
     var projectRootURLs: [URL] = []
     @Binding var renameText: String
@@ -32,6 +33,7 @@ struct AppKitTreeView: NSViewRepresentable {
         changedDirectoryIDs: Set<String> = [],
         treeMutationRevision: Int = 0,
         allowsScrolling: Bool,
+        usesIntrinsicContentHeight: Bool = true,
         rootURL: URL? = nil,
         projectRootURLs: [URL] = [],
         renameText: Binding<String>,
@@ -47,6 +49,7 @@ struct AppKitTreeView: NSViewRepresentable {
         self.changedDirectoryIDs = changedDirectoryIDs
         self.treeMutationRevision = treeMutationRevision
         self.allowsScrolling = allowsScrolling
+        self.usesIntrinsicContentHeight = usesIntrinsicContentHeight
         self.rootURL = rootURL
         self.projectRootURLs = projectRootURLs
         _renameText = renameText
@@ -56,7 +59,10 @@ struct AppKitTreeView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = AppKitTreeScrollView()
-        scrollView.configureScrolling(allowsScrolling: allowsScrolling)
+        scrollView.configureScrolling(
+            allowsScrolling: allowsScrolling,
+            usesIntrinsicContentHeight: usesIntrinsicContentHeight
+        )
 
         let outline = AppKitOutlineView()
         outline.headerView = nil
@@ -113,7 +119,10 @@ struct AppKitTreeView: NSViewRepresentable {
             coordinator.lastAppliedScale = uiScale
         }
         applyScale(to: outline)
-        (scrollView as? AppKitTreeScrollView)?.configureScrolling(allowsScrolling: allowsScrolling)
+        (scrollView as? AppKitTreeScrollView)?.configureScrolling(
+            allowsScrolling: allowsScrolling,
+            usesIntrinsicContentHeight: usesIntrinsicContentHeight
+        )
         let previousRowCount = outline.numberOfRows
 
         let oldRoots = coordinator.rootItems
@@ -184,19 +193,22 @@ struct AppKitTreeView: NSViewRepresentable {
         if scaleChanged {
             outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
             outline.reloadData(forRowIndexes: IndexSet(integersIn: 0..<outline.numberOfRows), columnIndexes: IndexSet(integer: 0))
-            scrollView.invalidateIntrinsicContentSize()
+            if usesIntrinsicContentHeight {
+                scrollView.invalidateIntrinsicContentSize()
+            }
         }
 
         if renamingID != nil {
             coordinator.ensureRenameFieldFocused()
         }
 
-        if Self.shouldInvalidateIntrinsicContentSize(
-            allowsScrolling: allowsScrolling,
-            previousRowCount: previousRowCount,
-            currentRowCount: outline.numberOfRows,
-            renamingID: renamingID
-        ) {
+        if usesIntrinsicContentHeight,
+           Self.shouldInvalidateIntrinsicContentSize(
+               allowsScrolling: allowsScrolling,
+               previousRowCount: previousRowCount,
+               currentRowCount: outline.numberOfRows,
+               renamingID: renamingID
+           ) {
             scrollView.invalidateIntrinsicContentSize()
         }
     }

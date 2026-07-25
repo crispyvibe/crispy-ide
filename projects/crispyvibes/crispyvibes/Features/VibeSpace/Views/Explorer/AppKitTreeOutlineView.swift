@@ -2,10 +2,13 @@ import AppKit
 
 final class AppKitTreeScrollView: NSScrollView {
     private var allowsTreeScrolling = true
+    private var usesIntrinsicTreeHeight = true
 
-    func configureScrolling(allowsScrolling: Bool) {
-        let scrollingChanged = allowsTreeScrolling != allowsScrolling
+    func configureScrolling(allowsScrolling: Bool, usesIntrinsicContentHeight: Bool) {
+        let sizingChanged = allowsTreeScrolling != allowsScrolling
+            || usesIntrinsicTreeHeight != usesIntrinsicContentHeight
         allowsTreeScrolling = allowsScrolling
+        usesIntrinsicTreeHeight = usesIntrinsicContentHeight
         hasVerticalScroller = allowsScrolling
         hasHorizontalScroller = false
         autohidesScrollers = allowsScrolling
@@ -13,13 +16,14 @@ final class AppKitTreeScrollView: NSScrollView {
         drawsBackground = false
         verticalScrollElasticity = allowsScrolling ? .automatic : .none
         horizontalScrollElasticity = .none
-        if scrollingChanged {
+        if sizingChanged {
             invalidateIntrinsicContentSize()
         }
     }
 
     override var intrinsicContentSize: NSSize {
         guard !allowsTreeScrolling,
+              usesIntrinsicTreeHeight,
               let outlineView = documentView as? NSOutlineView else {
             return super.intrinsicContentSize
         }
