@@ -9,12 +9,15 @@ This document explains the behavior. `spec.md` defines requirements, and
 
 Stop managing agents. Manage work.
 
-A **lane** is a reusable process. A **task** is one user input moving through that
-process. Each step is a bounded loop with a bar:
+A **Vibe (Loop)** is a reusable expectation contract. A **Vibe Lane (Spiral)**
+is a recipe that puts Vibes in order and carries verified progress forward. A
+**task** is one user input moving through that recipe. Each Vibe is a bounded
+loop with a bar:
 
 > produce this, prove it this way, carry the result forward.
 
-That unit is an **Expectation Construct**:
+That unit is formally an **Expectation Construct** and is called a **Vibe** in
+the product:
 
 - **Work** — what should exist after the attempt.
 - **Verification** — how the actual outcome is judged.
@@ -24,7 +27,8 @@ That unit is an **Expectation Construct**:
 ## The New Dimension
 
 A normal agent loop retries one prompt until a check improves. Vibe Lanes adds
-direction across loops: an ordered path of independently verified checkpoints.
+direction across loops: an ordered Spiral of independently verified
+checkpoints.
 
 ```
 checkpoint -> checkpoint -> checkpoint -> Outcome
@@ -34,23 +38,36 @@ checkpoint -> checkpoint -> checkpoint -> Outcome
 
 The unit of progress is not "the worker says it is done." It is "this checkpoint
 passed its authored verification; carry its result to the next checkpoint."
+The Spiral moves forward rather than revisiting prior checkpoints: each Vibe
+owns its retry Loop, and the lane accumulates verified outputs and context.
 
 ## The Core Nouns
 
-- **Lane** — reusable, versioned list of checkpoints. Inert until a task uses it.
+- **Vibe (Loop)** — reusable, versioned Work + Verification + Bounds
+  definition.
+- **Vibe Lane (Spiral)** — reusable, versioned ordered path of pinned Vibe
+  references. Inert until a task uses it.
 - **Task** — one run of a user's input through a lane in one project.
-- **Checkpoint** — one Work -> Verify loop, bounded and ordered.
+- **Checkpoint** — one Vibe placed in a lane, with lane-specific handoff data.
 - **Worker** — agent session that performs the Work.
 - **Reviewer** — separate agent session that checks the actual outcome against
   the Verification.
+- **Engine** — the checkpoint's agent, model, mode, and reasoning choices.
+  Execution trust is fixed to Full Trust.
 - **Human** — supplies missing ask-user inputs and steers stuck checkpoints.
-- **Author** — designs lanes: Work, Verification, Bounds, required/produced
-  keys, which inputs are ask-user, bound behavior, and steer limit.
+- **Author** — designs Vibes and composes lanes from them.
 
-## Checkpoint Shape
+## Vibe and Lane-Step Shape
 
 ```text
-Checkpoint
+Vibe
+├─ Engine
+│    agent          — installed ACP/direct agent or app default
+│    model          — agent-scoped model or default
+│    mode           — agent mode or default
+│    reasoning
+│    trust          — Full Trust (fixed execution policy)
+│
 ├─ Work
 │    goal           — what to accomplish
 │    instructions   — constraints and local process
@@ -58,24 +75,46 @@ Checkpoint
 │
 ├─ Verification
 │    definition     — plain-text "done when..." statement checked by reviewer
+│    reviewSkills[] — paths to skills the reviewer reads on demand
+│    humanReview    — user takes the reviewer's seat when true
 │
 ├─ Bounds
 │    maxAttempts
 │    timeoutSeconds
-│    onExhausted    — stop | escalate
-│
-└─ Contract
-     requires[]     — named inputs needed before this checkpoint can run
+└─ onExhausted    — stop | escalate
+
+Lane Step
+├─ key              — stable identity inside the lane
+├─ order
+├─ vibeID
+├─ vibeVersion      — pinned; updates are adopted explicitly
+└─ Handoff
+     requires[]     — named inputs needed before this step can run
      produces[]     — named outputs emitted after PASS
 ```
 
-Work, Verification, and Bounds are the expectation construct. The contract is how
-constructs connect into a lane.
+Work, Verification, and Bounds are the Vibe. The handoff is how Vibes connect
+inside a lane and therefore is not owned by the reusable Vibe.
+
+Engine choices are authored on the Vibe and pinned with its version. Unset
+choices inherit ACP defaults at attempt start. An explicit agent with no model
+uses that agent's own default model. This prevents a model from the app-default
+agent from leaking into a different agent.
+
+Editing a Vibe creates a new version. Existing lanes continue using the version
+they pinned until the author explicitly adopts the update. Tasks and Schedules
+retain resolved snapshots for immutable execution.
+
+The worker and reviewer use the checkpoint's same resolved engine. The live
+session reports what it actually applied, and the task stores that immutable
+snapshot on each attempt.
 
 Verification is authored data, not engine behavior. The reviewer may inspect
-files and run commands it believes the definition implies, but completion is
-always PASS/FAIL against the authored definition. The worker cannot edit that
-definition or the verdict.
+files and run commands the definition implies. Optional Review skills provide
+reusable review procedures without hardcoding verifier types; they are resolved
+like Work skills and sent only to the reviewer. Completion is always PASS/FAIL
+against the authored definition. The worker cannot edit that definition or the
+verdict.
 
 ## One Checkpoint Loop
 
@@ -158,14 +197,36 @@ created -> running
 running -> done          final checkpoint passes
 running -> stopped       bound exhausted with stop, non-user input missing,
                          steer limit reached, error, or user stop
-running -> needsInput    missing ask-user input, or exhausted escalate bound
+running -> needsInput    missing ask-user input, exhausted escalate bound,
+                         or human-review verdict required
 
 needsInput -> running    user answers Supply or Steer
 needsInput -> stopped    user stops
+
+done/stopped -> running  isolated rerun of one attempted checkpoint
+running -> done/stopped  rerun passes and restores the prior terminal state
 ```
 
 The scheduler runs only `running` tasks. `needsInput`, `stopped`, and `done`
 tasks are not scheduled.
+
+## Isolated Step Rerun
+
+After a task is Done or Stopped, any checkpoint with attempt history can run
+again with an attempt-local engine override. This starts a fresh budget epoch and
+fresh sessions without deleting history or changing the lane. A passing rerun
+refreshes that checkpoint's handoff/carry-forward and restores the task's prior
+terminal state; it does not replay downstream checkpoints.
+
+## Presentation
+
+Vibe Lanes uses one title-bar identity (`flowchart`) but respects the current
+surface:
+
+- board mode opens a temporary spotlight that can be pinned into one persistent
+  Vibe Lanes tile;
+- detailed mode opens or activates the Vibe Lanes content tab;
+- a detached board inserts the tile directly into its own surface.
 
 ## Worked Example
 
@@ -201,7 +262,8 @@ once.
 ## Versioning
 
 Each task pins the lane version it started on. The store retains that revision so
-later lane edits do not mutate in-flight or finished tasks.
+later lane edits do not mutate in-flight or finished tasks, including each
+checkpoint's authored engine.
 
 ## Decisions Locked
 
@@ -215,12 +277,19 @@ later lane edits do not mutate in-flight or finished tasks.
   and are injected by path.
 - Verification is authored data checked by an independent reviewer, not worker
   self-assessment and not hardcoded engine behavior.
+- Agent/model/mode/reasoning are authored per checkpoint; sessions must report
+  explicit options as applied or execution stops.
+- Worker and reviewer sessions always run with Full Trust. Standard trust is not
+  an authored lane option.
+- Engine snapshots are immutable attempt history; rerun overrides are
+  attempt-local and preserve the authored lane.
 - Tasks persist every transition and validate before replay.
 
 ## Out of Scope
 
 - Strategy ladders or multiple fallback strategies inside a checkpoint.
 - Human approval gates on every advance (Review is per-checkpoint, authored).
-- Scheduled/event triggers.
+- Trigger authoring. Recurring time triggers belong to F061 Schedules.
 - No-progress detection beyond attempts/time.
 - Per-task workspace isolation.
+- Automatic replay of downstream checkpoints after an isolated rerun.

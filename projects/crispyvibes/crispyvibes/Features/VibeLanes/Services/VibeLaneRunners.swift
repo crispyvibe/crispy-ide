@@ -17,19 +17,22 @@ struct VibeLaneWorkTurn: Sendable {
     var ok: Bool
     var note: String?
     var responseText: String?
+    var engine: VibeLaneEngineSnapshot?
 
     init(
         sessionRef: String? = nil,
         threadRef: String? = nil,
         ok: Bool = true,
         note: String? = nil,
-        responseText: String? = nil
+        responseText: String? = nil,
+        engine: VibeLaneEngineSnapshot? = nil
     ) {
         self.sessionRef = sessionRef
         self.threadRef = threadRef
         self.ok = ok
         self.note = note
         self.responseText = responseText
+        self.engine = engine
     }
 }
 
@@ -38,18 +41,35 @@ struct VibeLaneWorkTurn: Sendable {
 /// the ACP session stack is main-actor isolated.
 @MainActor
 protocol VibeLaneWorkRunning: AnyObject {
-    /// `agentID` selects the ACP agent for this task's sessions; nil = the
-    /// app-wide default agent.
-    func work(prompt: String, projectPath: String, sessionRef: String?, agentID: String?) async -> VibeLaneWorkTurn
+    func work(
+        prompt: String,
+        projectPath: String,
+        sessionRef: String?,
+        engine: VibeLaneEngineConfiguration
+    ) async -> VibeLaneWorkTurn
     /// Release any ACP session bound to this ref (terminates the subprocess).
     func release(sessionRef: String?)
 }
 
 extension VibeLaneWorkRunning {
     func release(sessionRef: String?) {}
-    /// Convenience for callers/tests that don't care about agent selection.
     func work(prompt: String, projectPath: String, sessionRef: String?) async -> VibeLaneWorkTurn {
-        await work(prompt: prompt, projectPath: projectPath, sessionRef: sessionRef, agentID: nil)
+        await work(prompt: prompt, projectPath: projectPath, sessionRef: sessionRef, engine: .default)
+    }
+
+    /// Compatibility helper for API callers that still supply only an agent.
+    func work(
+        prompt: String,
+        projectPath: String,
+        sessionRef: String?,
+        agentID: String?
+    ) async -> VibeLaneWorkTurn {
+        await work(
+            prompt: prompt,
+            projectPath: projectPath,
+            sessionRef: sessionRef,
+            engine: VibeLaneEngineConfiguration(agentID: agentID)
+        )
     }
 }
 
@@ -64,8 +84,10 @@ struct VibeLaneReviewRequest: Sendable {
     /// Repo HEAD when the task started, so the reviewer's diff can be scoped to
     /// this task's changes rather than the whole working tree. nil = no repo/baseline.
     var repoBaselineRef: String? = nil
-    /// ACP agent for the reviewer session; nil = the app-wide default agent.
-    var agentID: String? = nil
+    var engine: VibeLaneEngineConfiguration = .default
+    /// Resolved paths to review-only skills. Contents stay on disk and the
+    /// reviewer reads their SKILL.md files on demand.
+    var reviewSkillsText: String? = nil
 }
 
 /// Outcome of a reviewer evaluation. Ambiguous output MUST be `passed == false`.
@@ -76,6 +98,7 @@ struct VibeLaneReviewOutcome: Sendable {
     var summary: String?
     var feedback: String?
     var evidence: String?
+    var engine: VibeLaneEngineSnapshot?
 
     init(
         passed: Bool,
@@ -83,7 +106,8 @@ struct VibeLaneReviewOutcome: Sendable {
         threadRef: String? = nil,
         summary: String? = nil,
         feedback: String? = nil,
-        evidence: String? = nil
+        evidence: String? = nil,
+        engine: VibeLaneEngineSnapshot? = nil
     ) {
         self.passed = passed
         self.sessionRef = sessionRef
@@ -91,6 +115,7 @@ struct VibeLaneReviewOutcome: Sendable {
         self.summary = summary
         self.feedback = feedback
         self.evidence = evidence
+        self.engine = engine
     }
 }
 
@@ -166,7 +191,12 @@ struct VibeLaneSystemClock: VibeLaneClock {
 /// tool failure so a misconfigured engine stops loudly rather than spinning.
 @MainActor
 final class VibeLaneUnimplementedWorkRunner: VibeLaneWorkRunning {
-    func work(prompt: String, projectPath: String, sessionRef: String?, agentID: String?) async -> VibeLaneWorkTurn {
+    func work(
+        prompt: String,
+        projectPath: String,
+        sessionRef: String?,
+        engine: VibeLaneEngineConfiguration
+    ) async -> VibeLaneWorkTurn {
         VibeLaneWorkTurn(sessionRef: sessionRef, ok: false, note: "worker not configured")
     }
 }

@@ -11,10 +11,20 @@ material; when it conflicts with this feature spec, this feature spec wins.
 ## Overview
 
 Vibe Lanes lets a developer run work through reusable, visible processes instead
-of babysitting agent chats. A **lane** is an ordered list of **checkpoints**. A
-**task** is one run of a user's input through a lane on a specific project.
+of babysitting agent chats. The product model is:
 
-Each checkpoint is an **Expectation Construct** with three authored parts:
+- **Vibe (Loop)** — one reusable expectation that retries within authored
+  bounds until verification passes or the Vibe stops for human direction.
+- **Vibe Lane (Spiral)** — an ordered recipe of pinned Vibes that carries
+  verified evidence, decisions, and outputs forward. It does not jump backward
+  to earlier checkpoints.
+- **Schedule** — a recurring trigger that starts a new task with a frozen Vibe
+  Lane revision.
+
+A **task** is one run of a user's input through a Vibe Lane on a specific
+project.
+
+Each Vibe is formally an **Expectation Construct** with three authored parts:
 
 > **Work** — what the worker should produce.
 > **Verification** — how the outcome is judged, as a plain-text "done when..."
@@ -26,28 +36,37 @@ Within a checkpoint, the worker attempts the Work, the reviewer judges the actua
 outcome against Verification, and failure feedback is fed into the next attempt.
 On pass, the checkpoint records carry-forward and the task advances. On exhausted
 bounds, the checkpoint follows the author's bound behavior: **stop** or
-**escalate** to a person for steering, subject to the lane's steer limit.
+**escalate** to a person for steering, subject to the Vibe Lane's steer limit.
 
 The feature has two components with the schema as their contract:
 
-- **UI component** — authors lanes, starts tasks, renders state, and answers open
-  input requests.
+- **UI component** — authors Vibe Lanes, starts tasks, renders state, and answers
+  open input requests.
 - **Execution component** — runs checkpoints, drives worker/reviewer sessions,
   enforces bounds, persists transitions, and emits task state.
 
 Core terms:
 
-- **Lane** — a reusable, versioned process template. Lanes do not run by
+- **Vibe (Loop)** — a reusable, versioned outcome contract with its own
+  Work -> Verification -> Feedback retry cycle.
+- **Vibe Lane (Spiral)** — a reusable, versioned recipe of Vibes that
+  accumulates verified context as it advances. Vibe Lanes do not run by
   themselves.
-- **Checkpoint** — one bounded Work -> Verify loop with carry-forward contract.
+- **Checkpoint** — one pinned Vibe placed in a Vibe Lane with a carry-forward
+  handoff.
 - **Verification** — authored data; an independent reviewer checks the outcome
   and returns PASS/FAIL with feedback. Ambiguous means FAIL.
 - **Task input** — the user's per-run instruction, such as "Fix the flaky payment
   test." It is combined with each checkpoint's reusable Work.
 - **Carry-forward** — named values produced by passed checkpoints and required by
   later checkpoints.
+- **Engine** — the checkpoint's authored agent, model, mode, and reasoning
+  choices. Unset choices inherit ACP defaults. Vibe Lane execution always uses
+  Full Trust.
 - **Needs input** — a paused state where the user must supply a missing input or
   steer an exhausted checkpoint.
+- **Schedule** — an independently managed recurring trigger that freezes a Vibe
+  Lane revision and creates ordinary tasks when due.
 
 ## Dependencies
 
@@ -56,47 +75,71 @@ Core terms:
 - F047 (External Agent Sessions) — headless ACP sessions driven by the engine.
 - F020 (VibeSpace Lifecycle) — project-scoped task launch.
 - F006 (Content Viewer) — dashboard, task detail, and lane editor surfaces.
+- F002 (Terminal Board) — spotlight and persistent board-tile presentation.
+- F048 (Terminal Board Multi-Monitor) — detached-board title-bar insertion and
+  surface-scoped persistence.
 - F055 (Git Worktrees) — optional future per-task workspace isolation.
 
 ## Requirements
 
-### F059-R01: Lane as a reusable process
+### F059-R01: Vibes and Vibe Lanes as reusable authoring entities
 
-A lane MUST be an ordered list of one or more checkpoints and MUST be reusable
-across many tasks. Lanes MUST be versioned. The user MUST be able to create,
-edit, and delete lanes. Checkpoint keys MUST be stable, normalized, unique, and
-non-empty on save.
+A Vibe MUST centrally own Work, Verification, Bounds, engine, and skills. Vibes
+MUST be independently listable, editable, versioned, and reusable across Vibe
+Lanes. A Vibe Lane MUST be an ordered list of one or more pinned Vibe references
+and MUST be reusable across many tasks. Vibe Lanes MUST be versioned. Step keys
+MUST be stable, normalized, unique, and non-empty on save.
 
-Shipped starter lanes MUST reconcile with the stored set on startup: pristine
+Editing a Vibe MUST create a new version and MUST NOT silently update Vibe Lanes.
+The Vibe Lane designer MUST expose an explicit update when a newer Vibe version
+is available. A Vibe used by a Vibe Lane MUST NOT be deleted.
+
+Shipped starter Vibe Lanes MUST reconcile with the stored set on startup: pristine
 (never user-edited) starters refresh to improved shipped content, newly shipped
 starters are added, and user deletions persist (tombstones). A user-edited copy
 of a starter MUST never be auto-overwritten. The user MUST be able to restore
 deleted starters explicitly.
 
-### F059-R02: Checkpoint definition
+### F059-R02: Vibe definition and Vibe Lane handoff
 
-Each checkpoint MUST declare Work, Verification, Bounds, and a carry-forward
-contract:
+Each Vibe MUST declare Work, Verification, and Bounds:
 
-- Work: goal, instructions, and skills. Skills are file paths to skill folders or
-  `SKILL.md` files that the worker reads on demand; contents are not inlined.
-- Verification: a plain-text "done when..." definition checked by the reviewer.
+- Work: goal, instructions, and Work skills. A skill is a reusable package
+  rooted at `SKILL.md`, with optional `references/`, `scripts/`, `assets/`, and
+  agent metadata. The worker receives the package path and reads its entrypoint
+  and supporting files on demand; contents are not inlined.
+- Verification: a plain-text "done when..." definition, optional Review skills,
+  and verification owner. Review skills use the same path resolution as Work
+  skills, are read on demand only by the reviewer agent, and are not sent to the
+  worker.
 - Bounds: max attempts, time limit, and bound behavior (`stop` or `escalate`).
-- Contract: `requires` named inputs and `produces` named outputs. Required inputs
-  MAY be marked `ask-user`.
 
-### F059-R03: Task = one run through a lane
+Skills MUST be manageable independently from Vibes. The central Skills library
+MUST support bundled, personal, and linked packages; recursively import a
+selected collection; preserve a package when duplicating it; and show package
+resources, role eligibility, interaction mode, required commands, and readiness.
+Crispy-specific metadata MUST live beside `SKILL.md` in `crispy.skill.json`
+without changing the portable skill entrypoint. A package with a missing local
+reference or required command MUST be unavailable for new Vibe assignments.
+Interactive skills MUST NOT be assignable as Review skills.
 
-A task MUST run one user input through a chosen lane against one project path.
-The task MUST pin the exact lane version it started from. Tasks are independent
-in state: one task stopping, needing input, failing, or completing MUST NOT alter
-another task.
+Each Vibe Lane step MUST pin a Vibe ID and version. The Vibe Lane step owns the
+handoff: `requires` named inputs and `produces` named outputs. Required inputs
+MAY be marked `ask-user`.
+
+### F059-R03: Task = one run through a Vibe Lane
+
+A task MUST run one user input through a chosen Vibe Lane against one project
+path. The task MUST pin the exact Vibe Lane version it started from. Tasks are
+independent in state: one task stopping, needing input, failing, or completing
+MUST NOT alter another task.
 
 ### F059-R04: Checkpoint loop and reviewer verdict
 
 Within a checkpoint, the worker MUST attempt the Work and the verification MUST
 judge the outcome against the Verification definition. By default an independent
-reviewer agent judges; a checkpoint authored with `humanReview` MUST instead
+reviewer agent judges, using any authored Review skills only to inspect and
+verify the outcome; a checkpoint authored with `humanReview` MUST instead
 pause as `needsInput` with a Review request after the work turn, and the user's
 verdict (approve / request changes with feedback) becomes the verification
 result — without re-running the worker. On FAIL, feedback MUST be fed back to
@@ -104,6 +147,10 @@ the worker and the checkpoint MUST stay put. On PASS, the task MUST advance to
 the next checkpoint or become Done if it was the last checkpoint. The engine MUST
 NOT decide completion from worker free-form text, and the worker MUST NOT be able
 to edit verification or the verdict.
+
+Before the first attempt, the engine MUST verify that every required Work skill
+and agent-run Review skill still resolves to a readable `SKILL.md`. A missing
+package MUST stop the checkpoint before the worker runs.
 
 ### F059-R05: Carry-forward contract
 
@@ -192,6 +239,70 @@ create lane, update lane, delete lane. A generic Resume command MUST NOT blindly
 retry exhausted bounds; resumption from `needsInput` happens through a Supply or
 Steer answer.
 
+### F059-R11: Per-checkpoint engine
+
+Every checkpoint MUST be able to author an ACP engine consisting of agent,
+model, mode, and reasoning level. The lane editor MUST use the same
+installed-agent discovery and agent-scoped model/mode capabilities as ACP chat,
+including custom agents.
+
+Unset values MUST resolve as follows:
+
+- agent -> app-wide ACP default;
+- model -> app-wide ACP default only when the agent is also inherited; when a
+  checkpoint explicitly selects an agent and leaves model unset, use that
+  agent's own default;
+- mode -> agent default;
+- reasoning -> app-wide ACP default.
+
+Worker, reviewer, handoff, final-outcome, and rerun sessions MUST use Full Trust.
+The lane editor MUST NOT offer Standard or app-default trust choices. A legacy
+persisted checkpoint trust value MUST NOT change this runtime policy.
+
+The worker, reviewer, handoff, and final-outcome turns for a checkpoint MUST use
+that checkpoint's resolved engine. An explicit model or mode MUST be offered and
+successfully applied by the connected session; unavailable or ignored choices
+MUST stop loudly as an execution error rather than silently falling back.
+
+Starter lanes SHOULD remain portable across installed agents while making
+opinionated per-step choices. The shipped catalog uses inherited agents/models
+with checkpoint-specific reasoning levels.
+
+### F059-R12: Engine observability and isolated rerun
+
+Each active checkpoint run MUST expose the engine reported by its connected
+session. Every settled attempt MUST persist an immutable engine snapshot with
+agent/model/mode names and identifiers, trust mode, and supported reasoning
+level.
+
+For a Done or Stopped task, the user MUST be able to rerun a previously attempted
+checkpoint with an attempt-local engine override. The rerun MUST:
+
+- preserve earlier attempts and their engine snapshots;
+- start a fresh budget epoch and fresh worker/reviewer sessions;
+- leave the lane revision and authored checkpoint engine unchanged;
+- return the task to its prior terminal state after the rerun passes;
+- persist enough rerun state for crash-safe validation and resume.
+
+An isolated rerun does not automatically replay downstream checkpoints.
+
+### F059-R13: View-aware opening and board persistence
+
+The app title bar MUST expose Vibe Lanes with the `flowchart` symbol and route the
+action according to the active view:
+
+- primary board view -> open a Vibe Lanes spotlight; the spotlight MUST expose a
+  pin action that inserts one persistent Vibe Lanes tile into the primary board
+  and dismisses the spotlight;
+- detailed view -> activate an existing Vibe Lanes content tab or open one;
+- detached board window -> insert a persistent Vibe Lanes tile directly into
+  that detached surface.
+
+A surface MUST contain at most one Vibe Lanes tile. Detached title-bar insertion
+MUST disable when the surface is full or already contains the tile. Persistent
+tiles MUST survive layout restoration, participate in carousel navigation, and
+support existing board transfer/detach behavior.
+
 ## Scenarios
 
 ### F059-S01: A task runs a lane end to end
@@ -270,6 +381,36 @@ Steer answer.
 - **When** the task attempts to load
 - **Then** the engine refuses to replay it and degrades gracefully.
 
+### F059-S12: Checkpoint inherits ACP defaults
+
+- **Given** a checkpoint leaves its engine unset
+- **When** its first attempt starts
+- **Then** the engine uses the app-wide ACP agent/model/reasoning defaults, uses
+  Full Trust and the selected agent's default mode, and records the actual
+  session values.
+
+### F059-S13: Explicit agent exposes its own models
+
+- **Given** a checkpoint selects an installed protocol agent such as Kiro
+- **When** the lane editor loads that agent's engine options
+- **Then** the model and mode pickers contain the capabilities discovered from a
+  temporary ACP session, matching regular ACP behavior.
+
+### F059-S14: One step reruns with a different engine
+
+- **Given** a Done or Stopped task has an attempted checkpoint
+- **When** the user reruns that checkpoint with a different engine
+- **Then** a fresh attempt and budget epoch use the override, earlier history is
+  preserved, the lane is unchanged, and the task returns to its prior terminal
+  state after PASS.
+
+### F059-S15: Title-bar action respects the active surface
+
+- **Given** Vibe Lanes is opened from the title bar
+- **When** the active view is board, detailed, or a detached board
+- **Then** it respectively opens a pinnable spotlight, activates/opens a detail
+  tab, or directly inserts one tile into the originating detached surface.
+
 ## Acceptance Criteria
 
 - The specs, schema, usage guide, UX brief, and threat model consistently define
@@ -289,6 +430,13 @@ Steer answer.
   request with an answer flow.
 - Focused engine/manager tests cover persistence and restart behavior for
   `needsInput` tasks.
+- Checkpoint engine tests cover default resolution, explicit-agent model
+  semantics, unavailable model/mode failure, active/attempt snapshots, and
+  isolated rerun history.
+- Agent-scoped option discovery populates protocol-agent models and modes without
+  requiring an existing visible chat session.
+- Board/detailed routing matches F059-R13; pinning inserts a Codable Vibe Lanes
+  tile, and duplicate/capacity checks are surface-scoped.
 - No code path reads worker free-form text to decide verification, and none lets
   the worker edit verification or reviewer verdict.
 
@@ -299,7 +447,8 @@ Steer answer.
   advance without approval.
 - Strategy ladders or multiple fallback strategies inside a checkpoint. Bounds
   produce either stop or one bounded steer path.
-- Scheduled/event triggers. Tasks start manually.
+- Trigger authoring. F059 tasks start manually; F061 Schedules create the same
+  ordinary task type on a recurring cadence.
 - No-progress detection beyond max attempts and time.
 - Per-task workspace isolation. Reserved via `workspaceRef`, but not required for
   this feature.
@@ -312,6 +461,14 @@ Steer answer.
 
 ## Change History
 
+- 2026-07-24 — Defined the explanatory model as Vibe (Loop), Vibe Lane
+  (Spiral), and Schedule while preserving concise operational labels.
+- 2026-07-16 — Fixed all Vibe Lane execution to Full Trust and removed the
+  checkpoint Standard/app-default trust control.
+- 2026-07-15 — Added per-checkpoint ACP engines (agent, model, mode,
+  reasoning), session-reported attempt history, terminal-task step reruns, and
+  agent-scoped option discovery. Added the `flowchart` title-bar action with
+  board spotlight/pin, detailed-tab activation, and detached-surface insertion.
 - 2026-07-12 — Agent CLI surface: `lane.*` / `lane.task.*` commands give R10's
   create/stop/answer/delete task and create/update/delete lane controls a
   second caller through the same task manager (see

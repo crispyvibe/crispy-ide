@@ -63,4 +63,8 @@ final class ContentSurfacePolicyTests: XCTestCase {
         XCTAssertEqual(ContentSurfacePolicy.surface(for: .spotlightPin, mode: .terminalOnly), .boardTile)
         XCTAssertEqual(ContentSurfacePolicy.surface(for: .spotlightPin, mode: .detailed), .detailTab)
     }
+
+    func test_vibeLanesSpotlight_supportsPinningToBoard() {
+        XCTAssertTrue(TerminalSpotlightState.Source.vibeLanes.supportsBoardPin)
+    }
 }

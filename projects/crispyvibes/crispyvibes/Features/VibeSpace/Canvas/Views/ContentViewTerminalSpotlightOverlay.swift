@@ -285,7 +285,7 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
                             .font(titleFont)
                             .lineLimit(1)
                     case .vibeLanes:
-                        Image(systemName: "rectangle.stack.badge.play")
+                        Image(systemName: VibeLaneVisualIdentity.symbolName)
                             .font(AppTypographyTokens.scaledSystem(10, weight: .medium))
                         Text(entry.displayTitle)
                             .font(titleFont)

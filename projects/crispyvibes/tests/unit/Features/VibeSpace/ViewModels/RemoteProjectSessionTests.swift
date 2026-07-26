@@ -724,6 +724,45 @@ final class RemoteProjectSessionTests: XCTestCase {
         let shelfStore = ShelfStore(persistenceStore: appPersistenceStore)
         let cliCommandRouter = CLICommandRouter(shelfStore: shelfStore)
         let cliSocketServer = CLISocketServer(router: cliCommandRouter)
+        let vibeLanesDirectory = appPersistenceStore.appFileURL(
+            relativePath: "VibeLanes",
+            isDirectory: true
+        )
+        let loopsDirectory = appPersistenceStore.appFileURL(
+            relativePath: "Loops",
+            isDirectory: true
+        )
+        let skillsDirectory = appPersistenceStore.appFileURL(
+            relativePath: "VibeLanes/skills",
+            isDirectory: true
+        )
+        let automationDatabaseStore = AutomationDatabaseStore(
+            conversationStore: agentConversationStore,
+            catalog: VibeLaneCatalog.starterLanes,
+            vibeLanesDirectory: vibeLanesDirectory,
+            loopsDirectory: loopsDirectory,
+            skillsDirectory: skillsDirectory
+        )
+        let vibeLaneTaskManager = VibeLaneTaskManager(
+            store: InMemoryVibeLaneStore(lanes: VibeLaneCatalog.starterLanes),
+            worker: VibeLaneUnimplementedWorkRunner()
+        )
+        let vibeLaneSkillStore = VibeLaneSkillStore(
+            rootURL: skillsDirectory
+        )
+        let vibeLoopManager = VibeLoopManager(
+            store: InMemoryVibeLoopStore(),
+            laneManager: vibeLaneTaskManager
+        )
+        let vibeLoopScheduler = VibeLoopScheduler(manager: vibeLoopManager)
+        let automationBootstrapCoordinator = AutomationBootstrapCoordinator(
+            store: automationDatabaseStore,
+            laneManager: vibeLaneTaskManager,
+            loopManager: vibeLoopManager,
+            skillStore: vibeLaneSkillStore,
+            scheduler: vibeLoopScheduler,
+            resumeTasks: false
+        )
         return AppContainer(
             appPersistenceStore: appPersistenceStore,
             vibespacePersistenceStore: vibespacePersistenceStore,
@@ -747,7 +786,11 @@ final class RemoteProjectSessionTests: XCTestCase {
             agentConversationStore: agentConversationStore,
             vibespaceCommentStore: VibeSpaceCommentStore(conversationStore: agentConversationStore),
             vibespaceTodoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
-            vibeLaneTaskManager: VibeLaneTaskManager(store: InMemoryVibeLaneStore(lanes: VibeLaneCatalog.starterLanes), worker: VibeLaneUnimplementedWorkRunner()),
+            vibeLaneTaskManager: vibeLaneTaskManager,
+            vibeLaneSkillStore: vibeLaneSkillStore,
+            vibeLoopManager: vibeLoopManager,
+            vibeLoopScheduler: vibeLoopScheduler,
+            automationBootstrapCoordinator: automationBootstrapCoordinator,
             todoLanePipelineBridge: TodoLanePipelineBridge(
                 todoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
                 laneManager: VibeLaneTaskManager(store: InMemoryVibeLaneStore(lanes: []), worker: VibeLaneUnimplementedWorkRunner())

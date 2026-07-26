@@ -15,16 +15,28 @@ private final class FakeWorker: VibeLaneWorkRunning {
     var response: String? = nil
     var responses: [String] = []
     var beforeReturn: (() -> Void)?
+    var reportedEngine: VibeLaneEngineSnapshot?
     private(set) var calls = 0
     private(set) var prompts: [String] = []
-    private(set) var agentIDs: [String?] = []
-    func work(prompt: String, projectPath: String, sessionRef: String?, agentID: String?) async -> VibeLaneWorkTurn {
+    private(set) var engines: [VibeLaneEngineConfiguration] = []
+    func work(
+        prompt: String,
+        projectPath: String,
+        sessionRef: String?,
+        engine: VibeLaneEngineConfiguration
+    ) async -> VibeLaneWorkTurn {
         calls += 1
         prompts.append(prompt)
-        agentIDs.append(agentID)
+        engines.append(engine)
         beforeReturn?()
         let text = responses.isEmpty ? response : responses.removeFirst()
-        return VibeLaneWorkTurn(sessionRef: sessionRef ?? "session-1", ok: ok, note: note, responseText: text)
+        return VibeLaneWorkTurn(
+            sessionRef: sessionRef ?? "session-1",
+            ok: ok,
+            note: note,
+            responseText: text,
+            engine: reportedEngine
+        )
     }
 }
 
@@ -33,12 +45,14 @@ private final class FakeReviewer: VibeLaneReviewing {
     var outcomes: [VibeLaneReviewOutcome]
     var beforeReturn: (() -> Void)?
     private(set) var calls = 0
-    private(set) var agentIDs: [String?] = []
+    private(set) var engines: [VibeLaneEngineConfiguration] = []
+    private(set) var requests: [VibeLaneReviewRequest] = []
     init(_ outcomes: [VibeLaneReviewOutcome]) { self.outcomes = outcomes }
     func review(_ request: VibeLaneReviewRequest, sessionRef: String?) async -> VibeLaneReviewOutcome {
         let outcome = calls < outcomes.count ? outcomes[calls] : (outcomes.last ?? .init(passed: true))
         calls += 1
-        agentIDs.append(request.agentID)
+        engines.append(request.engine)
+        requests.append(request)
         beforeReturn?()
         return outcome
     }
@@ -92,10 +106,14 @@ private func cp(
 }
 
 @MainActor
-private func makeTask(lane: VibeLaneDefinition, title: String = "t") -> VibeLaneTask {
+private func makeTask(
+    lane: VibeLaneDefinition,
+    title: String = "t",
+    projectPath: String = "/tmp/p"
+) -> VibeLaneTask {
     let first = lane.firstCheckpoint!
     return VibeLaneTask(
-        projectPath: "/tmp/p", title: title,
+        projectPath: projectPath, title: title,
         laneID: lane.id, laneVersion: lane.version,
         currentCheckpointKey: first.key
     )
@@ -216,7 +234,7 @@ final class VibeLaneEngineTests: XCTestCase {
 
     /// Skill paths are referenced (by path) in the worker's goal prompt so the
     /// worker reads them on demand — they are NOT inlined.
-    func test_skillPathsReferencedInPrompt() async {
+    func test_skillPathsReferencedInPrompt() async throws {
         let checkpoint = VibeLaneCheckpoint(
             key: "a", order: 0,
             work: VibeLaneWorkDefinition(goal: "do a", instructions: "", skills: [".agent/skills/tdd"]),
@@ -226,10 +244,164 @@ final class VibeLaneEngineTests: XCTestCase {
         let lane = makeLane(checkpoints: [checkpoint])
         let worker = FakeWorker()
         let engine = VibeLaneEngine(lane: lane, worker: worker, reviewer: FakeReviewer([pass()]), clock: FakeClock())
-        let result = await engine.run(makeTask(lane: lane))
+        let projectRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("skill-path-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: projectRoot) }
+        try createSkillPackage(
+            at: projectRoot.appendingPathComponent(".agent/skills/tdd", isDirectory: true)
+        )
+
+        let result = await engine.run(
+            makeTask(lane: lane, projectPath: projectRoot.path)
+        )
         XCTAssertEqual(result.state, .done)
         XCTAssertTrue(worker.prompts.first?.contains(".agent/skills/tdd") == true)
         XCTAssertTrue(worker.prompts.first?.contains("SKILL.md") == true)
+    }
+
+    func test_reviewSkillsReachOnlyReviewerWithResolvedPaths() async throws {
+        let checkpoint = VibeLaneCheckpoint(
+            key: "a",
+            order: 0,
+            work: VibeLaneWorkDefinition(
+                goal: "do a",
+                skills: ["tdd"]
+            ),
+            verify: VibeLaneVerificationDefinition(
+                "done",
+                reviewSkills: ["code-review"]
+            )
+        )
+        let lane = makeLane(checkpoints: [checkpoint])
+        let worker = FakeWorker()
+        let reviewer = FakeReviewer([pass()])
+        let skillsRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("review-skill-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: skillsRoot) }
+        try createSkillPackage(at: skillsRoot.appendingPathComponent("tdd", isDirectory: true))
+        try createSkillPackage(
+            at: skillsRoot.appendingPathComponent("code-review", isDirectory: true)
+        )
+        let engine = VibeLaneEngine(
+            lane: lane,
+            worker: worker,
+            reviewer: reviewer,
+            skillsRoot: skillsRoot,
+            clock: FakeClock()
+        )
+
+        let result = await engine.run(makeTask(lane: lane))
+
+        XCTAssertEqual(result.state, .done)
+        XCTAssertTrue(worker.prompts.first?.contains("\(skillsRoot.path)/tdd") == true)
+        XCTAssertTrue(
+            worker.prompts.allSatisfy {
+                !$0.contains("\(skillsRoot.path)/code-review")
+            }
+        )
+
+        let request = try XCTUnwrap(reviewer.requests.first)
+        XCTAssertEqual(request.reviewSkillsText, "- \(skillsRoot.path)/code-review")
+        let prompt = VibeLaneACPAgentRunner.buildReviewPrompt(
+            request: request,
+            definition: checkpoint.verify.definition,
+            evidence: "clean snapshot"
+        )
+        XCTAssertTrue(prompt.contains("\(skillsRoot.path)/code-review"))
+        XCTAssertTrue(prompt.contains("SKILL.md"))
+        XCTAssertTrue(prompt.contains("only to inspect, test, and verify"))
+    }
+
+    func test_missingManagedSkillStopsBeforeWorkerRuns() async {
+        let checkpoint = VibeLaneCheckpoint(
+            key: "a",
+            order: 0,
+            work: VibeLaneWorkDefinition(goal: "do a", skills: ["missing-skill"]),
+            verify: VibeLaneVerificationDefinition("done")
+        )
+        let lane = makeLane(checkpoints: [checkpoint])
+        let worker = FakeWorker()
+        let skillsRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("missing-skills-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: skillsRoot,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: skillsRoot) }
+        let engine = VibeLaneEngine(
+            lane: lane,
+            worker: worker,
+            reviewer: FakeReviewer([pass()]),
+            skillsRoot: skillsRoot,
+            clock: FakeClock()
+        )
+
+        let result = await engine.run(makeTask(lane: lane))
+
+        XCTAssertEqual(result.state, .stopped)
+        XCTAssertEqual(result.stopReason, .error)
+        XCTAssertTrue(worker.prompts.isEmpty)
+        XCTAssertTrue(
+            (result.activityLog ?? []).contains {
+                $0.detail?.contains("missing-skill") == true
+            }
+        )
+    }
+
+    func test_skillLibraryInstallsReadableSkillFiles() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("crispy-vibe-lane-skills-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        VibeLaneSkillLibrary.install(into: root)
+
+        XCTAssertFalse(VibeLaneSkillLibrary.starterNames.isEmpty)
+        for skill in VibeLaneSkillLibrary.starters {
+            let file = root
+                .appendingPathComponent(skill.name, isDirectory: true)
+                .appendingPathComponent("SKILL.md")
+            let content = try String(contentsOf: file, encoding: .utf8)
+            XCTAssertTrue(content.contains("name: \(skill.name)"))
+            XCTAssertTrue(content.contains("description: \(skill.description)"))
+            XCTAssertTrue(content.contains(skill.body))
+            XCTAssertTrue(
+                FileManager.default.fileExists(
+                    atPath: root
+                        .appendingPathComponent(skill.name)
+                        .appendingPathComponent(VibeLaneSkillStore.metadataFileName)
+                        .path
+                )
+            )
+            for resource in skill.resources.keys {
+                XCTAssertTrue(
+                    FileManager.default.fileExists(
+                        atPath: root
+                            .appendingPathComponent(skill.name)
+                            .appendingPathComponent(resource)
+                            .path
+                    )
+                )
+            }
+        }
+    }
+
+    private func createSkillPackage(at directory: URL) throws {
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        try """
+        ---
+        name: test-skill
+        description: Test fixture.
+        ---
+
+        # Test Skill
+        """.write(
+            to: directory.appendingPathComponent("SKILL.md"),
+            atomically: true,
+            encoding: .utf8
+        )
     }
 
     /// On hand-off the worker writes a handoff that becomes the next checkpoint's
@@ -478,9 +650,9 @@ final class VibeLaneEngineTests: XCTestCase {
         let engine = VibeLaneEngine(lane: lane, worker: worker, reviewer: reviewer, clock: FakeClock())
         let result = await engine.run(task)
         XCTAssertEqual(result.state, .done)
-        XCTAssertTrue(worker.agentIDs.allSatisfy { $0 == "claudeCode" },
+        XCTAssertTrue(worker.engines.allSatisfy { $0.agentID == "claudeCode" },
                       "every worker turn (work, handoff, outcome) must carry the task's agent")
-        XCTAssertEqual(reviewer.agentIDs, ["claudeCode"])
+        XCTAssertEqual(reviewer.engines.map(\.agentID), ["claudeCode"])
     }
 
     /// Without an override, agent selection stays nil (app default at send time).
@@ -489,7 +661,166 @@ final class VibeLaneEngineTests: XCTestCase {
         let worker = FakeWorker()
         let engine = VibeLaneEngine(lane: lane, worker: worker, reviewer: FakeReviewer([pass()]), clock: FakeClock())
         _ = await engine.run(makeTask(lane: lane))
-        XCTAssertTrue(worker.agentIDs.allSatisfy { $0 == nil })
+        XCTAssertTrue(worker.engines.allSatisfy { $0.agentID == nil })
+    }
+
+    func test_checkpointEngineReachesEveryTurnAndRecordsActualEngine() async {
+        let authored = VibeLaneEngineConfiguration(
+            agentID: "codex",
+            modelID: "gpt-5.4",
+            modeID: "default",
+            reasoningLevel: .high
+        )
+        let actual = VibeLaneEngineSnapshot(
+            agentID: "codex",
+            agentName: "Codex",
+            modelID: "gpt-5.4",
+            modelName: "GPT-5.4",
+            modeID: "default",
+            modeName: "Default",
+            trustMode: .fullTrust,
+            reasoningLevel: .high
+        )
+        var checkpoint = cp("a", order: 0)
+        checkpoint.engine = authored
+        let lane = makeLane(checkpoints: [checkpoint])
+        let worker = FakeWorker()
+        worker.reportedEngine = actual
+        let reviewer = FakeReviewer([VibeLaneReviewOutcome(passed: true, engine: actual)])
+        let engine = VibeLaneEngine(lane: lane, worker: worker, reviewer: reviewer, clock: FakeClock())
+
+        let result = await engine.run(makeTask(lane: lane))
+
+        XCTAssertTrue(worker.engines.allSatisfy { $0 == authored })
+        XCTAssertEqual(reviewer.engines, [authored])
+        XCTAssertEqual(result.run(forKey: "a")?.attempts.first?.engine, actual)
+        XCTAssertEqual(result.run(forKey: "a")?.activeEngine, actual)
+    }
+
+    func test_engineDefaultsUseAppModelOnlyWithAppDefaultAgent_andAlwaysEnforceFullTrust() {
+        let suite = "VibeLaneEngineTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("codex", forKey: AppPreferences.acpDefaultAgentIDKey)
+        defaults.set("gpt-5.5", forKey: AppPreferences.acpDefaultModelKey)
+        defaults.set(CLITrustMode.standard.rawValue, forKey: AppPreferences.acpDefaultTrustModeKey)
+        defaults.set(AgentReasoningLevel.high.rawValue, forKey: AppPreferences.acpDefaultReasoningLevelKey)
+
+        let inherited = VibeLaneEngineConfiguration.default.resolvingDefaults(userDefaults: defaults)
+        XCTAssertEqual(inherited.agentID, "codex")
+        XCTAssertEqual(inherited.modelID, "gpt-5.5")
+        XCTAssertEqual(VibeLaneEngineConfiguration.enforcedTrustMode, .fullTrust)
+        XCTAssertEqual(inherited.reasoningLevel, .high)
+
+        let customAgent = VibeLaneEngineConfiguration(agentID: "custom-agent")
+            .resolvingDefaults(userDefaults: defaults)
+        XCTAssertEqual(customAgent.agentID, "custom-agent")
+        XCTAssertNil(customAgent.modelID, "an authored agent with no model must use that agent's default")
+    }
+
+    func test_legacyStandardTrustConfigurationDecodesWithoutRestoringTrustChoice() throws {
+        let data = Data(#"{"trustMode":"standard"}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(VibeLaneEngineConfiguration.self, from: data)
+
+        XCTAssertTrue(decoded.isDefault)
+        XCTAssertEqual(VibeLaneEngineConfiguration.enforcedTrustMode, .fullTrust)
+    }
+
+    func test_engineOptionCatalogProvidesDirectAndDiscoveredACPOptions() {
+        let catalog = ACPAgentEngineOptionCatalog()
+
+        let direct = catalog.options(for: "codex")
+        XCTAssertTrue(direct.supportsReasoning)
+        XCTAssertTrue(direct.models.contains(where: { $0.modelId == "gpt-5.5" }))
+        XCTAssertTrue(direct.modes.contains(where: { $0.modeId == "plan" }))
+
+        let models = [ACPModelInfo(modelId: "custom-model", name: "Custom Model", description: nil)]
+        let modes = [ACPModeInfo(modeId: "review", name: "Review", description: nil)]
+        catalog.record(
+            agentID: "custom-agent",
+            models: models,
+            modes: modes,
+            supportsReasoning: false
+        )
+
+        XCTAssertEqual(
+            catalog.options(for: "custom-agent"),
+            ACPAgentEngineOptions(models: models, modes: modes, supportsReasoning: false)
+        )
+    }
+
+    func test_engineOptionCatalogLoadsACPOptionsOnDemandOnlyOnce() async {
+        let expected = ACPAgentEngineOptions(
+            models: [ACPModelInfo(modelId: "kiro-model", name: "Kiro Model", description: nil)],
+            modes: [ACPModeInfo(modeId: "default", name: "Default", description: nil)],
+            supportsReasoning: false
+        )
+        var discoveryCount = 0
+        let catalog = ACPAgentEngineOptionCatalog { agentID in
+            XCTAssertEqual(agentID, "kiro")
+            discoveryCount += 1
+            return expected
+        }
+
+        await catalog.loadOptionsIfNeeded(for: "kiro")
+        await catalog.loadOptionsIfNeeded(for: "kiro")
+
+        XCTAssertEqual(catalog.options(for: "kiro"), expected)
+        XCTAssertEqual(discoveryCount, 1)
+        XCTAssertFalse(catalog.isLoading(agentID: "kiro"))
+        XCTAssertNil(catalog.discoveryError(for: "kiro"))
+    }
+
+    func test_rerunAddsAttemptInFreshBudgetEpochAndRestoresDoneState() async {
+        let actual = VibeLaneEngineSnapshot(
+            agentID: "codex",
+            agentName: "Codex",
+            trustMode: .fullTrust,
+            reasoningLevel: .high
+        )
+        let override = VibeLaneEngineConfiguration(agentID: "codex", reasoningLevel: .high)
+        let lane = makeLane(checkpoints: [cp("a", order: 0)])
+        var task = makeTask(lane: lane)
+        task.state = .running
+        task.rerunRequest = VibeLaneRerunRequest(
+            checkpointKey: "a",
+            engine: override,
+            previousState: .done,
+            previousStopReason: .done,
+            previousCheckpointKey: "a",
+            requestedAt: Date(timeIntervalSince1970: 1)
+        )
+        task.checkpointRuns = [
+            VibeLaneCheckpointRun(
+                checkpointKey: "a",
+                status: .running,
+                attempts: [
+                    VibeLaneAttempt(
+                        index: 0,
+                        promptKind: .goal,
+                        result: VibeLaneVerificationResult(passed: true),
+                        budgetEpoch: 0
+                    )
+                ],
+                startedAt: Date(timeIntervalSince1970: 0),
+                activeWindowStartedAt: Date(timeIntervalSince1970: 1),
+                budgetEpoch: 1
+            )
+        ]
+        let worker = FakeWorker()
+        worker.reportedEngine = actual
+        let reviewer = FakeReviewer([VibeLaneReviewOutcome(passed: true, engine: actual)])
+        let engine = VibeLaneEngine(lane: lane, worker: worker, reviewer: reviewer, clock: FakeClock())
+
+        let result = await engine.run(task)
+
+        XCTAssertEqual(result.state, .done)
+        XCTAssertNil(result.rerunRequest)
+        XCTAssertEqual(result.lastRerunCheckpointKey, "a")
+        XCTAssertEqual(result.run(forKey: "a")?.attempts.map(\.budgetEpoch), [0, 1])
+        XCTAssertEqual(result.run(forKey: "a")?.attempts.last?.engine, actual)
+        XCTAssertTrue(worker.engines.allSatisfy { $0 == override })
     }
 
     // MARK: - Human verification (the user takes the reviewer's seat)
@@ -596,5 +927,78 @@ final class VibeLaneEngineTests: XCTestCase {
         XCTAssertFalse(VibeLaneACPAgentRunner.parseVerdict("VERDICT: PASS or FAIL").passed)
         XCTAssertFalse(VibeLaneACPAgentRunner.parseVerdict("Looks good to me!").passed)
         XCTAssertFalse(VibeLaneACPAgentRunner.parseVerdict("").passed)
+    }
+
+    // MARK: - Durability is a precondition for acting
+
+    /// Regression: a transition that cannot be persisted must halt the run BEFORE
+    /// the worker touches the project. Otherwise a full-trust agent keeps editing
+    /// while the recorded state falls behind, and a restart replays that work.
+    func test_transitionPersistenceFailure_haltsBeforeWorkerRuns() async {
+        let lane = makeLane(checkpoints: [cp("a", order: 0)])
+        let worker = FakeWorker()
+        let engine = VibeLaneEngine(
+            lane: lane,
+            worker: worker,
+            reviewer: FakeReviewer([pass()]),
+            clock: FakeClock(),
+            onTransition: { _ in
+                throw VibeLanePersistenceError.unavailable("store offline")
+            }
+        )
+
+        let result = await engine.run(makeTask(lane: lane))
+
+        XCTAssertEqual(worker.calls, 0, "no work may run once a transition is not durable")
+        XCTAssertEqual(result.state, .stopped)
+        XCTAssertEqual(result.stopReason, .error)
+    }
+
+    /// The halt also applies mid-run: once a write fails, the engine must not
+    /// start another worker turn.
+    func test_transitionPersistenceFailure_midRun_stopsFurtherWork() async {
+        let lane = makeLane(checkpoints: [cp("a", order: 0), cp("b", order: 1)])
+        let worker = FakeWorker()
+        var transitions = 0
+        let engine = VibeLaneEngine(
+            lane: lane,
+            worker: worker,
+            reviewer: FakeReviewer([pass()]),
+            clock: FakeClock(),
+            onTransition: { _ in
+                transitions += 1
+                // Survive the opening transitions, then lose durability while the
+                // first checkpoint is in flight.
+                if transitions > 4 {
+                    throw VibeLanePersistenceError.unavailable("store offline")
+                }
+            }
+        )
+
+        let result = await engine.run(makeTask(lane: lane))
+
+        XCTAssertEqual(result.state, .stopped)
+        XCTAssertEqual(result.stopReason, .error)
+        XCTAssertNotEqual(result.state, .done, "the lane must not report done after a lost write")
+        XCTAssertLessThanOrEqual(worker.calls, 1, "no second checkpoint may start after a lost write")
+    }
+
+    /// A durable run is unaffected: the same engine with a working transition
+    /// callback still completes, so the guard is not simply blocking everything.
+    func test_durableTransitions_stillRunToDone() async {
+        let lane = makeLane(checkpoints: [cp("a", order: 0)])
+        var published: [VibeLaneTask] = []
+        let engine = VibeLaneEngine(
+            lane: lane,
+            worker: FakeWorker(),
+            reviewer: FakeReviewer([pass()]),
+            clock: FakeClock(),
+            onTransition: { published.append($0) }
+        )
+
+        let result = await engine.run(makeTask(lane: lane))
+
+        XCTAssertEqual(result.state, .done)
+        XCTAssertFalse(published.isEmpty)
     }
 }

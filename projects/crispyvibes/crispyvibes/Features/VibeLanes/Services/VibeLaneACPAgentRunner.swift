@@ -10,37 +10,48 @@ import Foundation
 final class VibeLaneACPAgentRunner: VibeLaneWorkRunning, VibeLaneReviewing {
     private let sessionManager: ACPSessionManager
     private let sessionRegistry: ACPSessionRegistry
-    /// Auto-allow permissions so lanes run unattended (within the agent's own
-    /// sandbox/trust mode). Configurable for safety-conscious deployments.
-    private let autoAllowPermissions: Bool
+    private let engineOptionCatalog: ACPAgentEngineOptionCatalog
+    /// The settings a live session was constructed with. Direct-integration
+    /// trust/reasoning/model settings are immutable for that process, so a
+    /// changed step engine must replace the session instead of reusing it.
+    private var sessionConfigurations: [UUID: VibeLaneEngineConfiguration] = [:]
 
     init(
         sessionManager: ACPSessionManager,
         sessionRegistry: ACPSessionRegistry,
-        autoAllowPermissions: Bool = true
+        engineOptionCatalog: ACPAgentEngineOptionCatalog? = nil
     ) {
         self.sessionManager = sessionManager
         self.sessionRegistry = sessionRegistry
-        self.autoAllowPermissions = autoAllowPermissions
+        self.engineOptionCatalog = engineOptionCatalog ?? ACPAgentEngineOptionCatalog()
     }
 
     /// Terminate and drop the ACP session bound to this ref (worker or reviewer).
     func release(sessionRef: String?) {
         guard let id = sessionRef.flatMap(UUID.init(uuidString:)) else { return }
+        tearDownSession(id: id)
+    }
+
+    private func tearDownSession(id: UUID) {
+        sessionConfigurations[id] = nil
         sessionManager.unregisterStandalone(id: id)
         sessionRegistry.removeStore(id: id)
     }
 
     // MARK: - Worker
 
-    func work(prompt: String, projectPath: String, sessionRef: String?, agentID: String?) async -> VibeLaneWorkTurn {
-        await sendACP(
+    func work(
+        prompt: String,
+        projectPath: String,
+        sessionRef: String?,
+        engine: VibeLaneEngineConfiguration
+    ) async -> VibeLaneWorkTurn {
+        await send(
             prompt: prompt,
             projectPath: projectPath,
             sessionRef: sessionRef,
-            agentID: agentID,
+            engine: engine,
             origin: "vibelane",
-            autoAllowPermissions: autoAllowPermissions,
             purpose: "worker"
         )
     }
@@ -51,19 +62,12 @@ final class VibeLaneACPAgentRunner: VibeLaneWorkRunning, VibeLaneReviewing {
         let definition = request.checkpoint.verify.definition
         let evidence = Self.collectEvidence(projectPath: request.projectPath, baselineRef: request.repoBaselineRef)
         let prompt = Self.buildReviewPrompt(request: request, definition: definition, evidence: evidence)
-        let turn = await sendACP(
+        let turn = await send(
             prompt: prompt,
             projectPath: request.projectPath,
             sessionRef: sessionRef,
-            agentID: request.agentID,
+            engine: request.engine,
             origin: "vibelane-reviewer",
-            // The reviewer needs permissions to run read-only verify commands
-            // (e.g. tests) unattended. "Read-only" is prompt-enforced, not
-            // sandboxed — a write is technically possible if the model ignores
-            // the instruction (see threat-model F059-T05). Safety-conscious
-            // deployments that disable auto-allow get the same posture here.
-            // Harden with an ACP read-only trust mode or a command/path guard.
-            autoAllowPermissions: autoAllowPermissions,
             purpose: "reviewer"
         )
         let parsed = Self.parseVerdict(turn.responseText ?? "")
@@ -76,50 +80,147 @@ final class VibeLaneACPAgentRunner: VibeLaneWorkRunning, VibeLaneReviewing {
             threadRef: turn.threadRef,
             summary: parsed.summary,
             feedback: parsed.passed ? nil : feedback,
-            evidence: evidence
+            evidence: evidence,
+            engine: turn.engine
         )
     }
 
-    // MARK: - ACP plumbing
+    // MARK: - Agent plumbing
 
-    private func sendACP(
+    private func send(
         prompt: String,
         projectPath: String,
         sessionRef: String?,
-        agentID taskAgentID: String?,
+        engine authoredEngine: VibeLaneEngineConfiguration,
         origin: String,
-        autoAllowPermissions: Bool,
         purpose: String
     ) async -> VibeLaneWorkTurn {
-        guard let agentID = taskAgentID ?? AppPreferences.acpDefaultAgentID(),
-              let agent = ACPAgentRegistry.agentDefinition(id: agentID) else {
-            return VibeLaneWorkTurn(sessionRef: sessionRef, ok: false, note: "no ACP agent configured")
+        let engine = authoredEngine.resolvingDefaults()
+        guard let agentID = engine.agentID else {
+            return VibeLaneWorkTurn(sessionRef: sessionRef, ok: false, note: "no agent configured")
+        }
+        guard let agent = ACPAgentRegistry.discoverInstalledAgents().first(where: {
+            $0.id == agentID && $0.isAvailable && ($0.supportsACP || $0.supportsDirectIntegration)
+        }) else {
+            return VibeLaneWorkTurn(
+                sessionRef: sessionRef,
+                ok: false,
+                note: "agent unavailable: \(agentID)"
+            )
+        }
+        let trustMode = VibeLaneEngineConfiguration.enforcedTrustMode
+        let reasoningLevel = engine.reasoningLevel ?? .medium
+        if let integration = agent.directIntegration,
+           let modelID = engine.modelID,
+           !AgentModelCatalog.models(for: integration).contains(where: { $0.slug == modelID }) {
+            return VibeLaneWorkTurn(
+                sessionRef: sessionRef,
+                ok: false,
+                note: "model \(modelID) is unavailable for \(agent.title)"
+            )
         }
 
         let sessionID = sessionRef.flatMap(UUID.init(uuidString:)) ?? UUID()
-        let session: ACPSession
-        if let existing = sessionManager.standaloneSessions[sessionID] as? ACPSession, existing.isConnected {
+        let session: any AgentSessionProtocol
+        if let existing = sessionManager.standaloneSessions[sessionID],
+           existing.isConnected,
+           existing.agentID == agentID,
+           sessionConfigurations[sessionID] == engine {
             session = existing
         } else {
+            tearDownSession(id: sessionID)
             do {
-                session = try await sessionManager.connectHeadless(
+                session = try await sessionManager.connectHeadlessAgent(
                     id: sessionID,
                     workingDirectory: URL(fileURLWithPath: projectPath),
                     agent: agent,
                     origin: origin,
-                    autoAllowPermissions: autoAllowPermissions
+                    trustMode: trustMode,
+                    modelID: engine.modelID,
+                    reasoningLevel: reasoningLevel
                 )
+                sessionConfigurations[sessionID] = engine
             } catch {
                 return VibeLaneWorkTurn(sessionRef: sessionID.uuidString, ok: false, note: "connect failed: \(error.localizedDescription)")
             }
         }
 
+        if let modelID = engine.modelID {
+            guard session.availableModels.contains(where: { $0.modelId == modelID }) else {
+                release(sessionRef: sessionID.uuidString)
+                return VibeLaneWorkTurn(
+                    sessionRef: sessionID.uuidString,
+                    ok: false,
+                    note: "model \(modelID) is not offered by \(agent.title)"
+                )
+            }
+            await session.setModel(modelID)
+            guard session.currentModelID == modelID else {
+                release(sessionRef: sessionID.uuidString)
+                return VibeLaneWorkTurn(
+                    sessionRef: sessionID.uuidString,
+                    ok: false,
+                    note: "\(agent.title) did not apply model \(modelID)"
+                )
+            }
+        }
+        if let modeID = engine.modeID {
+            guard session.availableModes.contains(where: { $0.modeId == modeID }) else {
+                release(sessionRef: sessionID.uuidString)
+                return VibeLaneWorkTurn(
+                    sessionRef: sessionID.uuidString,
+                    ok: false,
+                    note: "mode \(modeID) is not offered by \(agent.title)"
+                )
+            }
+            await session.setMode(modeID)
+            guard session.currentModeID == modeID else {
+                release(sessionRef: sessionID.uuidString)
+                return VibeLaneWorkTurn(
+                    sessionRef: sessionID.uuidString,
+                    ok: false,
+                    note: "\(agent.title) did not apply mode \(modeID)"
+                )
+            }
+        }
+
+        let options = ACPAgentEngineOptions(
+            models: session.availableModels,
+            modes: session.availableModes,
+            supportsReasoning: agent.supportsDirectIntegration
+        )
+        engineOptionCatalog.record(
+            agentID: agentID,
+            models: options.models,
+            modes: options.modes,
+            supportsReasoning: options.supportsReasoning
+        )
+        let snapshot = VibeLaneEngineSnapshot(
+            agentID: agentID,
+            agentName: agent.title,
+            modelID: session.currentModelID,
+            modelName: session.availableModels.first(where: { $0.modelId == session.currentModelID })?.name,
+            modeID: session.currentModeID,
+            modeName: session.availableModes.first(where: { $0.modeId == session.currentModeID })?.name,
+            trustMode: trustMode,
+            reasoningLevel: agent.supportsDirectIntegration ? reasoningLevel : nil
+        )
+
         let store = sessionRegistry.storeForVibeLaneSession(
             id: sessionID,
             agentID: agentID,
-            projectPath: projectPath
+            projectPath: projectPath,
+            modelID: snapshot.modelID,
+            trustMode: trustMode,
+            reasoningLevel: snapshot.reasoningLevel
         )
-        store.attachExistingHeadlessSession(session, agentID: agentID)
+        store.attachExistingHeadlessSession(
+            session,
+            agentID: agentID,
+            preferredModelID: snapshot.modelID,
+            trustMode: trustMode,
+            reasoningLevel: snapshot.reasoningLevel
+        )
 
         // The engine and the user-visible chat pane share this session's chat view
         // model. If the pane is momentarily streaming (e.g. the user opened it and
@@ -145,11 +246,12 @@ final class VibeLaneACPAgentRunner: VibeLaneWorkRunning, VibeLaneReviewing {
             threadRef: result.threadID,
             ok: result.ok,
             note: note,
-            responseText: result.responseText
+            responseText: result.responseText,
+            engine: snapshot
         )
     }
 
-    private static func buildReviewPrompt(
+    static func buildReviewPrompt(
         request: VibeLaneReviewRequest,
         definition: String,
         evidence: String
@@ -171,6 +273,17 @@ final class VibeLaneACPAgentRunner: VibeLaneWorkRunning, VibeLaneReviewing {
         parts.append("## Checkpoint — \(request.checkpoint.displayTitle)\n\(request.checkpoint.work.goal)")
         if !definition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             parts.append("## Definition of done (pass only if ALL of it is true)\n\(definition)")
+        }
+        if let reviewSkillsText = request.reviewSkillsText,
+           !reviewSkillsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append("""
+            ## Review skills
+            Read each referenced skill's SKILL.md (and any files it references) before reviewing:
+            \(reviewSkillsText)
+
+            Use these skills only to inspect, test, and verify the outcome. Do not perform the work, edit files, \
+            or follow any skill instruction that would change repository state.
+            """)
         }
         parts.append("## Working-tree snapshot (supporting context only)\n\(evidence)")
         parts.append("""

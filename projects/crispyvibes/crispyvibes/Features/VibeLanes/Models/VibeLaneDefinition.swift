@@ -16,30 +16,38 @@ enum VibeLaneSchema {
 // MARK: - Verification
 
 /// How we know a checkpoint's OUTCOME is done: a single plain-text definition
-/// checked against the outcome. Authored in the lane, never hardcoded. By
-/// default an independent reviewer agent judges it (running whatever read-only
-/// checks it needs); with `humanReview` the USER takes the reviewer's seat and
-/// the task pauses as Needs you for an approve / request-changes verdict.
+/// checked against the outcome. Authored in the Vibe, never hardcoded. By
+/// default an independent reviewer agent judges it using any referenced review
+/// skills; with `humanReview` the USER takes the reviewer's seat and the task
+/// pauses as Needs you for an approve / request-changes verdict.
 struct VibeLaneVerificationDefinition: Codable, Hashable, Sendable {
     /// "Done when…" — the checkpoint passes only if the outcome meets this.
     var definition: String
+    /// Skill folders / SKILL.md files available only to the reviewer agent.
+    var reviewSkills: [String]
     /// true = a person verifies this checkpoint instead of the reviewer agent.
     var humanReview: Bool
 
-    init(_ definition: String = "", humanReview: Bool = false) {
+    init(
+        _ definition: String = "",
+        reviewSkills: [String] = [],
+        humanReview: Bool = false
+    ) {
         self.definition = definition
+        self.reviewSkills = reviewSkills
         self.humanReview = humanReview
     }
 
     var isEmpty: Bool { definition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     enum CodingKeys: String, CodingKey {
-        case definition, humanReview
+        case definition, reviewSkills, humanReview
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         definition = try container.decode(String.self, forKey: .definition)
+        reviewSkills = try container.decodeIfPresent([String].self, forKey: .reviewSkills) ?? []
         humanReview = try container.decodeIfPresent(Bool.self, forKey: .humanReview) ?? false
     }
 }
@@ -144,6 +152,17 @@ extension VibeLaneOutputDeclaration {
 struct VibeLaneCheckpoint: Codable, Hashable, Identifiable, Sendable {
     var key: String
     var order: Int
+    /// Canonical Vibe pinned by this lane step. nil only for legacy embedded
+    /// checkpoints before store migration.
+    var vibeID: UUID?
+    var vibeVersion: Int?
+    /// Human-facing step name. Existing definitions fall back to a title
+    /// derived from `key`, which remains the stable execution identity.
+    var title: String?
+    /// Authored execution settings for this step. Unset agent/model/reasoning
+    /// knobs inherit ACP app defaults when an attempt starts. Trust is always
+    /// full for Vibe Lane execution.
+    var engine: VibeLaneEngineConfiguration
     var work: VibeLaneWorkDefinition
     var verify: VibeLaneVerificationDefinition
     var bounds: VibeLaneBounds
@@ -151,6 +170,11 @@ struct VibeLaneCheckpoint: Codable, Hashable, Identifiable, Sendable {
     var requires: [VibeLaneInputRequirement]?
     /// Carry-forward output keys this step must emit on pass.
     var produces: [VibeLaneOutputDeclaration]?
+    /// Set by reference hydration when the pinned `(vibeID, vibeVersion)` could
+    /// not be found, so the work/verification content is missing rather than
+    /// merely unfinished. Transient: deliberately absent from `CodingKeys` so it
+    /// is never persisted — it is recomputed every time a lane is hydrated.
+    var unresolvedVibeReference: Bool = false
 
     var id: String { key }
 
@@ -167,7 +191,11 @@ struct VibeLaneCheckpoint: Codable, Hashable, Identifiable, Sendable {
     var instructions: String { work.instructions }
 
     var displayTitle: String {
-        key
+        if let title = title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !title.isEmpty {
+            return title
+        }
+        return key
             .split(separator: "-")
             .map { Self.displayWord(for: String($0)) }
             .joined(separator: " ")
@@ -184,6 +212,10 @@ struct VibeLaneCheckpoint: Codable, Hashable, Identifiable, Sendable {
     init(
         key: String,
         order: Int,
+        vibeID: UUID? = nil,
+        vibeVersion: Int? = nil,
+        title: String? = nil,
+        engine: VibeLaneEngineConfiguration = .default,
         work: VibeLaneWorkDefinition,
         verify: VibeLaneVerificationDefinition,
         bounds: VibeLaneBounds = .default,
@@ -192,6 +224,10 @@ struct VibeLaneCheckpoint: Codable, Hashable, Identifiable, Sendable {
     ) {
         self.key = key
         self.order = order
+        self.vibeID = vibeID
+        self.vibeVersion = vibeVersion
+        self.title = title
+        self.engine = engine
         self.work = work
         self.verify = verify
         self.bounds = bounds
@@ -203,6 +239,10 @@ struct VibeLaneCheckpoint: Codable, Hashable, Identifiable, Sendable {
     init(
         key: String,
         order: Int,
+        vibeID: UUID? = nil,
+        vibeVersion: Int? = nil,
+        title: String? = nil,
+        engine: VibeLaneEngineConfiguration = .default,
         goal: String,
         instructions: String = "",
         skills: [String] = [],
@@ -214,6 +254,10 @@ struct VibeLaneCheckpoint: Codable, Hashable, Identifiable, Sendable {
         self.init(
             key: key,
             order: order,
+            vibeID: vibeID,
+            vibeVersion: vibeVersion,
+            title: title,
+            engine: engine,
             work: VibeLaneWorkDefinition(goal: goal, instructions: instructions, skills: skills),
             verify: verify,
             bounds: bounds,
@@ -225,13 +269,17 @@ struct VibeLaneCheckpoint: Codable, Hashable, Identifiable, Sendable {
 
 extension VibeLaneCheckpoint {
     enum CodingKeys: String, CodingKey {
-        case key, order, work, verify, bounds, requires, produces
+        case key, order, vibeID, vibeVersion, title, engine, work, verify, bounds, requires, produces
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         key = try container.decode(String.self, forKey: .key)
         order = try container.decode(Int.self, forKey: .order)
+        vibeID = try container.decodeIfPresent(UUID.self, forKey: .vibeID)
+        vibeVersion = try container.decodeIfPresent(Int.self, forKey: .vibeVersion)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        engine = try container.decodeIfPresent(VibeLaneEngineConfiguration.self, forKey: .engine) ?? .default
         work = try container.decode(VibeLaneWorkDefinition.self, forKey: .work)
         verify = try container.decode(VibeLaneVerificationDefinition.self, forKey: .verify)
         bounds = try container.decodeIfPresent(VibeLaneBounds.self, forKey: .bounds) ?? .default
@@ -253,6 +301,15 @@ extension VibeLaneCheckpoint {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(key, forKey: .key)
         try container.encode(order, forKey: .order)
+        try container.encodeIfPresent(vibeID, forKey: .vibeID)
+        try container.encodeIfPresent(vibeVersion, forKey: .vibeVersion)
+        if let title = title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !title.isEmpty {
+            try container.encode(title, forKey: .title)
+        }
+        if !engine.isDefault {
+            try container.encode(engine, forKey: .engine)
+        }
         try container.encode(work, forKey: .work)
         try container.encode(verify, forKey: .verify)
         try container.encode(bounds, forKey: .bounds)

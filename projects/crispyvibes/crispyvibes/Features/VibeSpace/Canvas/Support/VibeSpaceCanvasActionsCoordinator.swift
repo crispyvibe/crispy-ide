@@ -54,7 +54,7 @@ final class VibeSpaceCanvasActionsCoordinator {
 
     func toggleTodos() { present(.todos) }
 
-    func openVibeLanes() { present(.vibeLanes) }
+    func toggleVibeLanes() { present(.vibeLanes) }
 
     /// Single entry point for surfacing content in a vibespace. Consults
     /// `ContentSurfacePolicy` for the active canvas mode, then routes to the
@@ -667,4 +667,3 @@ final class VibeSpaceCanvasActionsCoordinator {
         }
     }
 }
-

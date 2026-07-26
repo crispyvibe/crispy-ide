@@ -51,7 +51,12 @@ private final class FakePipelineTodoStore: TodoPipelineTodoStoring {
 
 @MainActor
 private final class BridgeHangingWorker: VibeLaneWorkRunning {
-    func work(prompt: String, projectPath: String, sessionRef: String?, agentID: String?) async -> VibeLaneWorkTurn {
+    func work(
+        prompt: String,
+        projectPath: String,
+        sessionRef: String?,
+        engine: VibeLaneEngineConfiguration
+    ) async -> VibeLaneWorkTurn {
         while !_Concurrency.Task.isCancelled {
             try? await _Concurrency.Task.sleep(nanoseconds: 2_000_000)
         }
@@ -89,7 +94,7 @@ final class TodoLanePipelineBridgeTests: XCTestCase {
             clock: VibeLaneSystemClock(),
             maxConcurrent: 3
         )
-        laneManager.bootstrap()
+        await laneManager.bootstrap()
         bridge = TodoLanePipelineBridge(todoStore: store, laneManager: laneManager)
     }
 
@@ -172,7 +177,7 @@ final class TodoLanePipelineBridgeTests: XCTestCase {
         let again = await bridge.dispatch(todoID: "t1", laneReference: "Fix a bug")
         XCTAssertEqual(again, .activeTaskExists(taskID: first.uuidString), "S16")
 
-        laneManager.stop(id: first)
+        await laneManager.stop(id: first)
         guard case .dispatched(let second) = await bridge.dispatch(todoID: "t1", laneReference: "Fix a bug") else {
             return XCTFail("re-dispatch after terminal task must succeed (S12)")
         }
@@ -197,7 +202,7 @@ final class TodoLanePipelineBridgeTests: XCTestCase {
         }
         let dispatchMessages = store.postedMessages.count
 
-        laneManager.stop(id: taskID)
+        await laneManager.stop(id: taskID)
         // Fan-in posts async; drain the main queue.
         await _Concurrency.Task.yield()
         try? await _Concurrency.Task.sleep(nanoseconds: 50_000_000)

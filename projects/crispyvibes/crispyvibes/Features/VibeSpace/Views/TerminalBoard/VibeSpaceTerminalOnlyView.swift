@@ -32,6 +32,7 @@ struct VibeSpaceTerminalOnlyView: View {
     let onManageShortcutsRequested: () -> Void
     let shortcutDefinitionsForProjectPath: (String?) -> [TerminalShortcutDefinition]
     let onVibeCastSpotlightRequested: () -> Void
+    let onVibeLanesSpotlightRequested: () -> Void
     var onTileDetachRequested: ((UUID, CGPoint) -> Void)? = nil
     var boardWindowTransferTargets: ((VibeSpaceTerminalBoardStore, UUID) -> [VibeSpaceTerminalBoardSurfaceTransferTarget])? = nil
     var onTileSendToNewBoardWindowRequested: ((UUID, VibeSpaceTerminalBoardStore, UUID) -> Void)? = nil
@@ -47,6 +48,7 @@ struct VibeSpaceTerminalOnlyView: View {
     var createACPPaneStore: (() -> ACPStandaloneSessionStore)? = nil
     var restoreACPPaneStore: ((ACPStandalonePaneSnapshot) -> ACPStandaloneSessionStore)? = nil
     var removeACPPaneStore: ((UUID) -> Void)? = nil
+    var onOpenVibeLaneACPPane: ((VibeLaneACPChatTarget) -> Void)? = nil
     var showACPControls: Bool = false
     var dockedFileViewerCoordinator: DockedFileViewerCoordinator?
     var dockedBrowserCoordinator: DockedBrowserCoordinator?
@@ -81,6 +83,7 @@ struct VibeSpaceTerminalOnlyView: View {
         onManageShortcutsRequested: @escaping () -> Void,
         shortcutDefinitionsForProjectPath: @escaping (String?) -> [TerminalShortcutDefinition],
         onVibeCastSpotlightRequested: @escaping () -> Void = {},
+        onVibeLanesSpotlightRequested: @escaping () -> Void = {},
         onTileDetachRequested: ((UUID, CGPoint) -> Void)? = nil,
         boardWindowTransferTargets: ((VibeSpaceTerminalBoardStore, UUID) -> [VibeSpaceTerminalBoardSurfaceTransferTarget])? = nil,
         onTileSendToNewBoardWindowRequested: ((UUID, VibeSpaceTerminalBoardStore, UUID) -> Void)? = nil,
@@ -92,6 +95,7 @@ struct VibeSpaceTerminalOnlyView: View {
         createACPPaneStore: (() -> ACPStandaloneSessionStore)? = nil,
         restoreACPPaneStore: ((ACPStandalonePaneSnapshot) -> ACPStandaloneSessionStore)? = nil,
         removeACPPaneStore: ((UUID) -> Void)? = nil,
+        onOpenVibeLaneACPPane: ((VibeLaneACPChatTarget) -> Void)? = nil,
         showACPControls: Bool = false,
         dockedFileViewerCoordinator: DockedFileViewerCoordinator? = nil,
         dockedBrowserCoordinator: DockedBrowserCoordinator? = nil,
@@ -121,6 +125,7 @@ struct VibeSpaceTerminalOnlyView: View {
         self.onManageShortcutsRequested = onManageShortcutsRequested
         self.shortcutDefinitionsForProjectPath = shortcutDefinitionsForProjectPath
         self.onVibeCastSpotlightRequested = onVibeCastSpotlightRequested
+        self.onVibeLanesSpotlightRequested = onVibeLanesSpotlightRequested
         self.onTileDetachRequested = onTileDetachRequested
         self.boardWindowTransferTargets = boardWindowTransferTargets
         self.onTileSendToNewBoardWindowRequested = onTileSendToNewBoardWindowRequested
@@ -132,6 +137,7 @@ struct VibeSpaceTerminalOnlyView: View {
         self.createACPPaneStore = createACPPaneStore
         self.restoreACPPaneStore = restoreACPPaneStore
         self.removeACPPaneStore = removeACPPaneStore
+        self.onOpenVibeLaneACPPane = onOpenVibeLaneACPPane
         self.showACPControls = showACPControls
         self.dockedFileViewerCoordinator = dockedFileViewerCoordinator
         self.dockedBrowserCoordinator = dockedBrowserCoordinator

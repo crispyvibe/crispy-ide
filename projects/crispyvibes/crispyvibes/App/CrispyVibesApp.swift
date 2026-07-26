@@ -40,7 +40,9 @@ extension Notification.Name {
     static let openExternalPaths = Notification.Name("openExternalPaths")
     static let toggleVibeCast = Notification.Name("toggleVibeCast")
     static let toggleTodos = Notification.Name("toggleTodos")
+    static let toggleVibeLanes = Notification.Name("toggleVibeLanes")
     static let openVibeLanes = Notification.Name("openVibeLanes")
+    static let openAutomation = Notification.Name("openAutomation")
     static let quickCaptureTodo = Notification.Name("quickCaptureTodo")
     /// F052: posted by the title-bar "New Whiteboard" control. Listeners create
     /// an empty `.excalidraw` in the focused project and open it.
@@ -166,8 +168,8 @@ private struct OptionsMenuCommands: Commands {
                 NotificationCenter.default.post(name: .openAppSettings, object: nil)
             }
 
-            Button("Vibe Lanes") {
-                NotificationCenter.default.post(name: .openVibeLanes, object: nil)
+            Button(AppStrings.Automation.title) {
+                NotificationCenter.default.post(name: .openAutomation, object: nil)
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
 
@@ -248,6 +250,7 @@ struct CrispyVibesApp: App {
         }
         if !Self.isRunningUnitTests {
             appContainer.agentConversationStore.start()
+            appContainer.automationBootstrapCoordinator.start()
         }
     }
 

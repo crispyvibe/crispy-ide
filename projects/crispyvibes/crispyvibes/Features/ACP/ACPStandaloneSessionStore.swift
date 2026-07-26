@@ -37,6 +37,7 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
 
     private let sessionManager: ACPSessionManager
     private let conversationStore: AgentConversationStore
+    private let engineOptionCatalog: ACPAgentEngineOptionCatalog?
     private let logger = Logger(subsystem: "com.crispyvibe.app", category: "acpStandaloneSession")
     private let persistenceQueue = SerialTaskQueue()
     private var session: (any AgentSessionProtocol)?
@@ -52,12 +53,14 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
         sessionManager: ACPSessionManager,
         conversationStore: AgentConversationStore,
         chatViewModel: ACPChatViewModel,
+        engineOptionCatalog: ACPAgentEngineOptionCatalog? = nil,
         vibespaceID: UUID? = nil
     ) {
         self.id = id
         self.sessionManager = sessionManager
         self.conversationStore = conversationStore
         self.chatViewModel = chatViewModel
+        self.engineOptionCatalog = engineOptionCatalog
         self.chatViewModel.updateVibeSpaceID(vibespaceID?.uuidString)
         self.chatViewModel.onTurnCompleted = { [weak self] in
             self?.persistSessionMetadata(status: "ready")
@@ -355,10 +358,19 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
         disconnect()
     }
 
-    func prepareExternalVibeLaneSession(agentID: String, projectPath: String) {
+    func prepareExternalVibeLaneSession(
+        agentID: String,
+        projectPath: String,
+        modelID: String? = nil,
+        trustMode: CLITrustMode? = nil,
+        reasoningLevel: AgentReasoningLevel? = nil
+    ) {
         isExternallyManaged = true
         selectedAgentID = agentID
+        selectedModelID = modelID
         selectedProjectIdentifier = projectPath
+        if let trustMode { self.trustMode = trustMode }
+        if let reasoningLevel { self.reasoningLevel = reasoningLevel }
         shouldAutoConnect = false
         connectionError = nil
         syncAvailableModelsForSelection()
@@ -371,16 +383,28 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
     }
 
     func attachExistingHeadlessSession(
-        _ connectedSession: ACPSession,
+        _ connectedSession: any AgentSessionProtocol,
         agentID: String,
-        preferredModelID: String? = nil
+        preferredModelID: String? = nil,
+        trustMode: CLITrustMode? = nil,
+        reasoningLevel: AgentReasoningLevel? = nil
     ) {
-        prepareExternalVibeLaneSession(agentID: agentID, projectPath: connectedSession.projectPath.path)
-        bindACPSession(
-            connectedSession,
+        prepareExternalVibeLaneSession(
             agentID: agentID,
-            preferredModelID: preferredModelID
+            projectPath: connectedSession.projectPath.path,
+            modelID: preferredModelID,
+            trustMode: trustMode,
+            reasoningLevel: reasoningLevel
         )
+        if let acpSession = connectedSession as? ACPSession {
+            bindACPSession(
+                acpSession,
+                agentID: agentID,
+                preferredModelID: preferredModelID
+            )
+        } else {
+            bindDirectSession(connectedSession)
+        }
     }
 
     private func persistSessionMetadata(status: String) {
@@ -491,7 +515,11 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
         session = connectedSession
         storedProviderSessionId = connectedSession.sessionID
         storedTransportKind = "acp"
-        applyACPModelState(connectedSession.modelState, for: agentID)
+        applyACPModelState(
+            connectedSession.modelState,
+            modes: connectedSession.modeState?.availableModes ?? [],
+            for: agentID
+        )
 
         if let preferredModelID,
            connectedSession.modelState?.currentModelId != preferredModelID {
@@ -500,9 +528,14 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
         }
 
         connectedSession.$modelState
-            .sink { [weak self] state in
+            .combineLatest(connectedSession.$modeState)
+            .sink { [weak self] modelState, modeState in
                 Task { @MainActor in
-                    self?.applyACPModelState(state, for: agentID)
+                    self?.applyACPModelState(
+                        modelState,
+                        modes: modeState?.availableModes ?? [],
+                        for: agentID
+                    )
                 }
             }
             .store(in: &modelObservations)
@@ -536,9 +569,19 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
             .store(in: &modelObservations)
     }
 
-    private func applyACPModelState(_ state: ACPSessionModelState?, for agentID: String?) {
+    private func applyACPModelState(
+        _ state: ACPSessionModelState?,
+        modes: [ACPModeInfo],
+        for agentID: String?
+    ) {
         if let agentID, let state {
             cachedModelsByAgentID[agentID] = state.availableModels
+            engineOptionCatalog?.record(
+                agentID: agentID,
+                models: state.availableModels,
+                modes: modes,
+                supportsReasoning: false
+            )
         }
 
         if let state {

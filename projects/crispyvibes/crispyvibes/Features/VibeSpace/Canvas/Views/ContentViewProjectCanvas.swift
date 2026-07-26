@@ -49,6 +49,7 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
     let onManageShortcutsRequested: () -> Void
     let shortcutDefinitionsForProjectPath: (String?) -> [TerminalShortcutDefinition]
     let onVibeCastSpotlightRequested: () -> Void
+    let onVibeLanesSpotlightRequested: () -> Void
     let onTileDetachRequested: (UUID, CGPoint) -> Void
     let boardWindowTransferTargets: (VibeSpaceTerminalBoardStore, UUID) -> [VibeSpaceTerminalBoardSurfaceTransferTarget]
     let onTileSendToNewBoardWindowRequested: (UUID, VibeSpaceTerminalBoardStore, UUID) -> Void
@@ -333,6 +334,9 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
             onVibeCastSpotlightRequested: {
                 onVibeCastSpotlightRequested()
             },
+            onVibeLanesSpotlightRequested: {
+                onVibeLanesSpotlightRequested()
+            },
             onTileDetachRequested: onTileDetachRequested,
             boardWindowTransferTargets: boardWindowTransferTargets,
             onTileSendToNewBoardWindowRequested: onTileSendToNewBoardWindowRequested,
@@ -364,6 +368,13 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
             },
             removeACPPaneStore: { id in
                 contentViewerStore.removeACPStore(id: id)
+            },
+            onOpenVibeLaneACPPane: { target in
+                contentViewerStore.openVibeLaneACPPane(
+                    target: target,
+                    projects: vibespaceView.activeVibeSpaceProjects,
+                    vibespaceID: vibespaceID
+                )
             },
             showACPControls: true,
             dockedFileViewerCoordinator: dockedFileViewerCoordinator,
@@ -544,6 +555,7 @@ extension ContentView {
                 return vibespaceShortcuts + projectShortcuts
             },
             onVibeCastSpotlightRequested: { presentVibeCastSpotlight() },
+            onVibeLanesSpotlightRequested: { presentVibeLanesSpotlight() },
             onTileDetachRequested: { tileID, screenPoint in
                 detachTerminalBoardTile(tileID, atScreenPoint: screenPoint)
             },
@@ -933,7 +945,12 @@ extension ContentView {
                 boardStore?.setSurfaceTitle(title, for: surfaceID)
             }
         ) {
-            DetachedTerminalBoardWindowRoot(themeManager: themeManager, commentStore: appContainer.vibespaceCommentStore) {
+            DetachedTerminalBoardWindowRoot(
+                themeManager: themeManager,
+                commentStore: appContainer.vibespaceCommentStore,
+                vibeLaneTaskManager: appContainer.vibeLaneTaskManager,
+                vibeLaneNavigation: appContainer.vibeLaneSurfaceNavigationViewModel
+            ) {
                 DetachedTerminalBoardWindowContent(
                     vibespaceID: vibespaceID,
                     surfaceID: surfaceID,
@@ -1056,6 +1073,9 @@ extension ContentView {
             addVibeCast: {
                 boardStore.addVibeCastTile(surfaceID: surfaceID)
             },
+            addVibeLanes: {
+                boardStore.addVibeLanesTile(surfaceID: surfaceID)
+            },
             addAgent: {
                 let store = contentViewerStore.makeACPStore(
                     focusedProject: appContainer.acpVibeSpaceSessionService.focusedProject,
@@ -1076,6 +1096,11 @@ extension ContentView {
                 let layout = boardStore.layout(for: surfaceID)
                 return layout.tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount &&
                     !layout.tiles.contains(where: { $0.isVibeCast })
+            },
+            canAddVibeLanes: {
+                let layout = boardStore.layout(for: surfaceID)
+                return layout.tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount &&
+                    !layout.tiles.contains(where: { $0.isVibeLanes })
             },
             canAddAgent: {
                 boardStore.layout(for: surfaceID).tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount
@@ -1440,6 +1465,7 @@ private struct DetachedTerminalBoardWindowContent: View {
             onManageShortcutsRequested: onManageShortcutsRequested,
             shortcutDefinitionsForProjectPath: shortcutDefinitionsForProjectPath,
             onVibeCastSpotlightRequested: { presentVibeCastSpotlight() },
+            onVibeLanesSpotlightRequested: { presentVibeLanesSpotlight() },
             onTileDetachRequested: onTileDetachRequested,
             boardWindowTransferTargets: { _, _ in boardWindowTransferTargets() },
             onTileSendToNewBoardWindowRequested: { tileID, _, _ in
@@ -1457,6 +1483,7 @@ private struct DetachedTerminalBoardWindowContent: View {
             createACPPaneStore: createACPPaneStore,
             restoreACPPaneStore: restoreACPPaneStore,
             removeACPPaneStore: removeACPPaneStore,
+            onOpenVibeLaneACPPane: onOpenVibeLaneACPPane,
             showACPControls: false,
             dockedFileViewerCoordinator: dockedFileViewerCoordinator,
             dockedBrowserCoordinator: dockedBrowserCoordinator,
@@ -1539,6 +1566,8 @@ private struct DetachedTerminalBoardWindowContent: View {
                 }
             } else if tile.isVibeCast {
                 items.append(.vibeCast)
+            } else if tile.isVibeLanes {
+                items.append(.vibeLanes)
             } else if let snapshot = tile.acpSnapshot,
                       let store = acpStoreLookup(snapshot.id) {
                 let accentColor = store.selectedProject(from: projects)
@@ -2067,14 +2096,20 @@ private struct DetachedTerminalBoardWindowRoot<Content: View>: View {
 
     let content: Content
     var commentStore: VibeSpaceCommentStore?
+    let vibeLaneTaskManager: VibeLaneTaskManager
+    let vibeLaneNavigation: VibeLaneSurfaceNavigationViewModel
 
     init(
         themeManager: CrispyVibesThemeManager,
         commentStore: VibeSpaceCommentStore? = nil,
+        vibeLaneTaskManager: VibeLaneTaskManager,
+        vibeLaneNavigation: VibeLaneSurfaceNavigationViewModel,
         @ViewBuilder content: () -> Content
     ) {
         self.themeManager = themeManager
         self.commentStore = commentStore
+        self.vibeLaneTaskManager = vibeLaneTaskManager
+        self.vibeLaneNavigation = vibeLaneNavigation
         self.content = content()
     }
 
@@ -2104,6 +2139,8 @@ private struct DetachedTerminalBoardWindowRoot<Content: View>: View {
             .buttonBorderShape(themeManager.theme.borderShape.buttonBorderShape)
             .environment(\.crispyvibesTheme, themeManager.theme)
             .environment(\.vibespaceCommentStoreEnvironment, commentStore)
+            .environment(\.vibeLaneTaskManagerEnvironment, vibeLaneTaskManager)
+            .environment(\.vibeLaneSurfaceNavigationEnvironment, vibeLaneNavigation)
             .environmentObject(themeManager)
             .environment(\.terminalHostOwnershipPriorityBoost, 40)
             .environment(\.browserHostOwnershipPriorityBoost, 40)

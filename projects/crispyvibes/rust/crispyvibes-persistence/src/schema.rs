@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use libsql::Connection;
 
-const CURRENT_VERSION: i64 = 5;
+pub(crate) const CURRENT_VERSION: i64 = 7;
 
 pub async fn run_migrations(conn: &Connection) -> Result<i64> {
     conn.execute(
@@ -27,6 +27,12 @@ pub async fn run_migrations(conn: &Connection) -> Result<i64> {
     }
     if version < 5 {
         migrate_v5(conn).await.context("V5 migration")?;
+    }
+    if version < 6 {
+        migrate_v6(conn).await.context("V6 migration")?;
+    }
+    if version < 7 {
+        migrate_v7(conn).await.context("V7 migration")?;
     }
 
     Ok(CURRENT_VERSION)
@@ -366,6 +372,181 @@ async fn migrate_v5(conn: &Connection) -> Result<()> {
         )",
         "CREATE INDEX IF NOT EXISTS idx_todo_files_todo ON todo_files(todo_id, created_at)",
         "INSERT INTO schema_version (version) VALUES (5)",
+    ];
+
+    for stmt in stmts {
+        conn.execute(stmt, ()).await.with_context(|| {
+            let preview: String = stmt.chars().take(60).collect();
+            format!("execute: {preview}...")
+        })?;
+    }
+
+    Ok(())
+}
+
+/// F059/F061 — Automation persistence. Vibes and Vibe Lanes retain every
+/// immutable revision. Tasks, Loops, scheduler runtime, and run history are
+/// first-class rows in the encrypted database. JSON payload columns contain
+/// each Codable aggregate; identity, revision, lifecycle, and relationships
+/// remain queryable and constrained by SQL.
+async fn migrate_v6(conn: &Connection) -> Result<()> {
+    let stmts = [
+        "CREATE TABLE IF NOT EXISTS automation_vibes (
+            id           TEXT NOT NULL,
+            version      INTEGER NOT NULL CHECK (version > 0),
+            is_current   INTEGER NOT NULL CHECK (is_current IN (0, 1)),
+            name         TEXT NOT NULL,
+            category     TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at   TEXT NOT NULL,
+            updated_at   TEXT NOT NULL,
+            PRIMARY KEY (id, version)
+        )",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_vibes_current
+            ON automation_vibes(id) WHERE is_current = 1",
+        "CREATE INDEX IF NOT EXISTS idx_automation_vibes_category
+            ON automation_vibes(category, name) WHERE is_current = 1",
+
+        "CREATE TABLE IF NOT EXISTS automation_lanes (
+            id                  TEXT NOT NULL,
+            version             INTEGER NOT NULL CHECK (version > 0),
+            is_current          INTEGER NOT NULL CHECK (is_current IN (0, 1)),
+            name                TEXT NOT NULL,
+            seeded_fingerprint  TEXT,
+            payload_json        TEXT NOT NULL,
+            created_at          TEXT NOT NULL,
+            updated_at          TEXT NOT NULL,
+            PRIMARY KEY (id, version)
+        )",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_lanes_current
+            ON automation_lanes(id) WHERE is_current = 1",
+        "CREATE INDEX IF NOT EXISTS idx_automation_lanes_name
+            ON automation_lanes(name) WHERE is_current = 1",
+        "CREATE TABLE IF NOT EXISTS automation_lane_tombstones (
+            lane_id     TEXT PRIMARY KEY,
+            deleted_at  TEXT NOT NULL
+        )",
+
+        "CREATE TABLE IF NOT EXISTS automation_tasks (
+            id             TEXT PRIMARY KEY,
+            lane_id        TEXT NOT NULL,
+            lane_version   INTEGER NOT NULL,
+            state          TEXT NOT NULL CHECK (state IN ('running','needsInput','stopped','done')),
+            occurrence_id  TEXT UNIQUE,
+            project_path   TEXT NOT NULL,
+            payload_json   TEXT NOT NULL,
+            created_at     TEXT NOT NULL,
+            updated_at     TEXT NOT NULL,
+            FOREIGN KEY (lane_id, lane_version)
+                REFERENCES automation_lanes(id, version)
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_automation_tasks_state
+            ON automation_tasks(state, updated_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_automation_tasks_lane
+            ON automation_tasks(lane_id, lane_version)",
+        "CREATE INDEX IF NOT EXISTS idx_automation_tasks_project
+            ON automation_tasks(project_path, state)",
+
+        "CREATE TABLE IF NOT EXISTS automation_loops (
+            id             TEXT PRIMARY KEY,
+            is_enabled     INTEGER NOT NULL CHECK (is_enabled IN (0, 1)),
+            lane_id        TEXT NOT NULL,
+            lane_version   INTEGER NOT NULL,
+            project_path   TEXT NOT NULL,
+            payload_json   TEXT NOT NULL,
+            created_at     TEXT NOT NULL,
+            updated_at     TEXT NOT NULL,
+            FOREIGN KEY (lane_id, lane_version)
+                REFERENCES automation_lanes(id, version)
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_automation_loops_enabled
+            ON automation_loops(is_enabled, updated_at DESC)",
+        "CREATE TABLE IF NOT EXISTS automation_loop_runtime (
+            loop_id       TEXT PRIMARY KEY REFERENCES automation_loops(id) ON DELETE CASCADE,
+            payload_json  TEXT NOT NULL,
+            updated_at    TEXT NOT NULL
+        )",
+        "CREATE TABLE IF NOT EXISTS automation_loop_runs (
+            id             TEXT PRIMARY KEY,
+            loop_id        TEXT NOT NULL REFERENCES automation_loops(id) ON DELETE CASCADE,
+            scheduled_at   TEXT NOT NULL,
+            disposition    TEXT NOT NULL,
+            task_id        TEXT REFERENCES automation_tasks(id) ON DELETE SET NULL,
+            payload_json   TEXT NOT NULL,
+            updated_at     TEXT NOT NULL
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_automation_loop_runs_history
+            ON automation_loop_runs(loop_id, scheduled_at DESC)",
+
+        "CREATE TABLE IF NOT EXISTS automation_skill_references (
+            reference      TEXT PRIMARY KEY,
+            source_kind    TEXT NOT NULL,
+            digest         TEXT,
+            payload_json   TEXT NOT NULL,
+            updated_at     TEXT NOT NULL
+        )",
+        "CREATE TABLE IF NOT EXISTS automation_handoffs (
+            task_id         TEXT NOT NULL REFERENCES automation_tasks(id) ON DELETE CASCADE,
+            checkpoint_key  TEXT NOT NULL,
+            file_path       TEXT NOT NULL,
+            content_digest  TEXT,
+            updated_at      TEXT NOT NULL,
+            PRIMARY KEY (task_id, checkpoint_key)
+        )",
+        "CREATE TABLE IF NOT EXISTS automation_migrations (
+            name                 TEXT PRIMARY KEY,
+            completed_at         TEXT NOT NULL,
+            source_digests_json  TEXT NOT NULL
+        )",
+        "INSERT INTO schema_version (version) VALUES (6)",
+    ];
+
+    for stmt in stmts {
+        conn.execute(stmt, ()).await.with_context(|| {
+            let preview: String = stmt.chars().take(60).collect();
+            format!("execute: {preview}...")
+        })?;
+    }
+
+    Ok(())
+}
+
+/// F059 — materialize each immutable Lane revision's ordered Vibe pins. The
+/// aggregate payload remains the Codable source for lane-owned fields, while
+/// SQL owns and constrains the cross-entity relationship.
+async fn migrate_v7(conn: &Connection) -> Result<()> {
+    let stmts = [
+        "CREATE TABLE IF NOT EXISTS automation_lane_steps (
+            lane_id       TEXT NOT NULL,
+            lane_version  INTEGER NOT NULL,
+            step_key      TEXT NOT NULL,
+            position      INTEGER NOT NULL CHECK (position >= 0),
+            vibe_id       TEXT NOT NULL,
+            vibe_version  INTEGER NOT NULL,
+            PRIMARY KEY (lane_id, lane_version, step_key),
+            UNIQUE (lane_id, lane_version, position),
+            FOREIGN KEY (lane_id, lane_version)
+                REFERENCES automation_lanes(id, version) ON DELETE CASCADE,
+            FOREIGN KEY (vibe_id, vibe_version)
+                REFERENCES automation_vibes(id, version)
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_automation_lane_steps_vibe
+            ON automation_lane_steps(vibe_id, vibe_version)",
+        "INSERT OR IGNORE INTO automation_lane_steps
+            (lane_id, lane_version, step_key, position, vibe_id, vibe_version)
+         SELECT
+            lane.id,
+            lane.version,
+            json_extract(step.value, '$.key'),
+            json_extract(step.value, '$.order'),
+            json_extract(step.value, '$.vibeID'),
+            json_extract(step.value, '$.vibeVersion')
+         FROM automation_lanes AS lane, json_each(lane.payload_json, '$.steps') AS step
+         WHERE json_type(step.value, '$.key') = 'text'
+           AND json_type(step.value, '$.order') = 'integer'
+           AND json_type(step.value, '$.vibeID') = 'text'
+           AND json_type(step.value, '$.vibeVersion') = 'integer'",
+        "INSERT INTO schema_version (version) VALUES (7)",
     ];
 
     for stmt in stmts {

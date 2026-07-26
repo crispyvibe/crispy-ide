@@ -17,6 +17,7 @@ struct VibeLaneSurfaceView: View {
     @Environment(\.vibeLaneTaskManagerEnvironment) private var manager
     @Environment(\.vibeLaneSurfaceNavigationEnvironment) private var injectedNavigation
     @Environment(\.appThemePalette) private var palette
+    let rootScreen: VibeLaneSurfaceNavigationViewModel.Screen
     let focusedProjectPath: String?
     let onOpenACPSession: (VibeLaneACPChatTarget) -> Void
     /// F060: opens detected file-path links (outcome, handoffs, activity log)
@@ -30,10 +31,12 @@ struct VibeLaneSurfaceView: View {
     }
 
     init(
+        rootScreen: VibeLaneSurfaceNavigationViewModel.Screen = .dashboard,
         focusedProjectPath: String? = nil,
         onOpenACPSession: @escaping (VibeLaneACPChatTarget) -> Void = { _ in },
         onOpenFileTarget: ((TerminalFileSystemTarget) -> Void)? = nil
     ) {
+        self.rootScreen = rootScreen
         self.focusedProjectPath = focusedProjectPath
         self.onOpenACPSession = onOpenACPSession
         self.onOpenFileTarget = onOpenFileTarget
@@ -45,11 +48,15 @@ struct VibeLaneSurfaceView: View {
                 VibeLaneSurfaceContentView(
                     manager: manager,
                     navigation: navigation,
+                    rootScreen: rootScreen,
                     focusedProjectPath: focusedProjectPath,
                     onOpenACPSession: onOpenACPSession
                 )
             } else {
-                ContentUnavailableView(AppStrings.VibeLanes.unavailable, systemImage: "rectangle.stack.badge.play")
+                ContentUnavailableView(
+                    AppStrings.VibeLanes.unavailable,
+                    systemImage: VibeLaneVisualIdentity.symbolName
+                )
                     .background(palette.canvasBackgroundColor)
             }
         }
@@ -72,6 +79,7 @@ private struct VibeLaneSurfaceContentView: View {
     @Environment(\.crispyvibesUIScale) private var uiScale
     @ObservedObject var manager: VibeLaneTaskManager
     @ObservedObject var navigation: VibeLaneSurfaceNavigationViewModel
+    let rootScreen: VibeLaneSurfaceNavigationViewModel.Screen
     let focusedProjectPath: String?
     let onOpenACPSession: (VibeLaneACPChatTarget) -> Void
 
@@ -81,6 +89,7 @@ private struct VibeLaneSurfaceContentView: View {
             .onAppear(perform: validateNavigationSelection)
             .onChange(of: manager.tasks.map(\.id)) { _, _ in validateNavigationSelection() }
             .onChange(of: manager.lanes.map(\.id)) { _, _ in validateNavigationSelection() }
+            .onChange(of: manager.vibes.map(\.id)) { _, _ in validateNavigationSelection() }
     }
 
     @ViewBuilder
@@ -91,7 +100,8 @@ private struct VibeLaneSurfaceContentView: View {
                 manager: manager,
                 onNewTask: { navigation.showNewTask() },
                 onOpenTask: { navigation.showTask($0) },
-                onShowLanes: { navigation.showLanes() }
+                onShowLanes: { navigation.showLanes() },
+                onShowVibes: { navigation.showVibes() }
             )
         case .newTask:
             screenScaffold(title: AppStrings.VibeLanes.newTask, back: .dashboard) {
@@ -112,38 +122,116 @@ private struct VibeLaneSurfaceContentView: View {
                 .id(id)
             }
         case .lanes:
-            screenScaffold(title: AppStrings.VibeLanes.lanes, back: .dashboard) {
-                VibeLaneLanesView(
-                    manager: manager,
-                    onEdit: { navigation.showLaneEditor(id: $0) },
-                    onNew: {
-                        let lane = manager.createLane()
-                        navigation.showLaneEditor(id: lane.id)
-                    }
-                )
+            if rootScreen == .lanes {
+                lanesView
+            } else {
+                screenScaffold(title: AppStrings.VibeLanes.lanes, back: .dashboard) {
+                    lanesView
+                }
             }
         case .laneEditor(let id):
             screenScaffold(title: AppStrings.VibeLanes.editLane, back: .lanes) {
                 if let lane = manager.lane(withID: id) {
                     VibeLaneEditorView(
                         lane: lane,
-                        onSave: { manager.updateLane($0) },
+                        vibes: manager.vibes,
+                        onSave: { lane in
+                            await manager.updateLane(lane)
+                        },
                         onDelete: {
-                            manager.deleteLane(id: id)
-                            navigation.showLanes()
+                            Task {
+                                await manager.deleteLane(id: id)
+                                navigation.showLanes()
+                            }
+                        },
+                        onEditVibe: {
+                            navigation.showVibeEditor(id: $0, fromLaneID: id)
+                        },
+                        onNewVibe: {
+                            Task {
+                                guard let vibe = await manager.createVibe() else { return }
+                                navigation.showVibeEditor(id: vibe.id, fromLaneID: id)
+                            }
                         }
                     )
                 } else {
                     ContentUnavailableView(AppStrings.VibeLanes.laneNotFound, systemImage: "questionmark.circle")
                 }
             }
+        case .vibes:
+            if rootScreen == .vibes {
+                vibesView
+            } else {
+                screenScaffold(title: AppStrings.VibeLanes.vibes, back: .dashboard) {
+                    vibesView
+                }
+            }
+        case .vibeEditor(let id, let laneID):
+            screenScaffold(
+                title: AppStrings.VibeLanes.editVibe,
+                back: laneID.map(VibeLaneSurfaceNavigationViewModel.Screen.laneEditor) ?? .vibes
+            ) {
+                if let vibe = manager.vibe(withID: id) {
+                    VibeEditorView(
+                        vibe: vibe,
+                        usageCount: manager.vibeUsageCount(id: id),
+                        categories: VibeCategory.available(
+                            in: manager.vibes,
+                            including: vibe.category
+                        ),
+                        engineOptionCatalog: manager.engineOptionCatalog,
+                        onSave: { vibe in
+                            await manager.updateVibe(vibe)
+                        },
+                        onDelete: {
+                            Task {
+                                guard await manager.deleteVibe(id: id) else { return }
+                                if let laneID {
+                                    navigation.showLaneEditor(id: laneID)
+                                } else {
+                                    navigation.showVibes()
+                                }
+                            }
+                        }
+                    )
+                } else {
+                    ContentUnavailableView(AppStrings.VibeLanes.vibeNotFound, systemImage: "questionmark.circle")
+                }
+            }
         }
+    }
+
+    private var lanesView: some View {
+        VibeLaneLanesView(
+            manager: manager,
+            onEdit: { navigation.showLaneEditor(id: $0) },
+            onNew: {
+                Task {
+                    guard let lane = await manager.createLane() else { return }
+                    navigation.showLaneEditor(id: lane.id)
+                }
+            }
+        )
+    }
+
+    private var vibesView: some View {
+        VibeLibraryView(
+            manager: manager,
+            onEdit: { navigation.showVibeEditor(id: $0) },
+            onNew: {
+                Task {
+                    guard let vibe = await manager.createVibe() else { return }
+                    navigation.showVibeEditor(id: vibe.id)
+                }
+            }
+        )
     }
 
     private func validateNavigationSelection() {
         navigation.validateSelection(
             taskExists: { manager.task(withID: $0) != nil },
-            laneExists: { manager.lane(withID: $0) != nil }
+            laneExists: { manager.lane(withID: $0) != nil },
+            vibeExists: { manager.vibe(withID: $0) != nil }
         )
     }
 
@@ -167,8 +255,8 @@ private struct VibeLaneSurfaceContentView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
-                .vibeLaneHoverable(cornerRadius: 6)
+                .foregroundStyle(palette.accentColor)
+                .vibeLaneHoverable(cornerRadius: uiScale.chromeSize(6))
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: uiScale.iconSize(8), weight: .semibold))
@@ -181,9 +269,11 @@ private struct VibeLaneSurfaceContentView: View {
             }
             .padding(.horizontal, uiScale.spacing(16))
             .padding(.vertical, uiScale.spacing(9))
-            .background(.bar)
+            .background(palette.canvasBackgroundColor)
             .overlay(alignment: .bottom) {
-                Rectangle().fill(palette.tertiaryTextColor.opacity(0.14)).frame(height: 1)
+                Rectangle()
+                    .fill(palette.borderColorValue.opacity(0.42))
+                    .frame(height: uiScale.chromeSize(1))
             }
 
             content()
@@ -203,6 +293,10 @@ private struct VibeLaneSurfaceContentView: View {
             AppStrings.VibeLanes.task
         case .laneEditor:
             AppStrings.VibeLanes.editLane
+        case .vibes:
+            AppStrings.VibeLanes.vibes
+        case .vibeEditor:
+            AppStrings.VibeLanes.editVibe
         }
     }
 }

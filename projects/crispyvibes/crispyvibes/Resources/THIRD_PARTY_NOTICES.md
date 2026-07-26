@@ -47,6 +47,22 @@ This project uses third-party software. License details are listed below.
 - **Source:** https://github.com/sindresorhus/github-markdown-css
 - **License:** MIT
 
+## Skill design references
+
+The bundled Crispy skill packages were informed by the package structures and
+workflow patterns in these MIT-licensed projects. They are design references,
+not runtime dependencies.
+
+### gstack
+- **Copyright:** Copyright (c) 2026 Garry Tan
+- **Source:** https://github.com/garrytan/gstack
+- **License:** MIT
+
+### skills
+- **Copyright:** Copyright (c) 2026 Matt Pocock
+- **Source:** https://github.com/mattpocock/skills
+- **License:** MIT
+
 ---
 
 For full license text, see each dependency's upstream repository.

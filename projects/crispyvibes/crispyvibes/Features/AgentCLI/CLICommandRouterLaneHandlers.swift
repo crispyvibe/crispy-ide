@@ -42,18 +42,26 @@ extension CLICommandRouter {
             }
             checkpoints = decoded
         }
-        var lane = manager.createLane(name: name)
+        // Validate EVERY field before the first write. Creating the lane and then
+        // rejecting a later parameter would leave a persisted lane behind after
+        // an error response.
         let detail = request.params?["description"]?.stringValue?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let steerLimit = request.params?["steerLimit"]?.intValue
+        if let steerLimit, steerLimit < 0 {
+            return laneInvalidParams(request, "`steerLimit` must be >= 0")
+        }
+        guard var lane = await manager.createLane(name: name) else {
+            return lanePersistenceFailed(request, manager: manager)
+        }
         if checkpoints != nil || (detail?.isEmpty == false) || steerLimit != nil {
             if let checkpoints { lane.checkpoints = checkpoints }
             if let detail, !detail.isEmpty { lane.detail = detail }
-            if let steerLimit {
-                guard steerLimit >= 0 else { return laneInvalidParams(request, "`steerLimit` must be >= 0") }
-                lane.steerLimit = steerLimit
+            if let steerLimit { lane.steerLimit = steerLimit }
+            guard let updated = await manager.updateLane(lane) else {
+                return lanePersistenceFailed(request, manager: manager)
             }
-            lane = manager.updateLane(lane)
+            lane = updated
         }
         return .ok(id: request.id, result: ["lane": Self.laneDetailJSON(lane)])
     }
@@ -92,7 +100,9 @@ extension CLICommandRouter {
         guard changed else {
             return laneInvalidParams(request, "nothing to update: provide `name`, `description`, `steerLimit`, or `checkpoints`")
         }
-        let updated = manager.updateLane(lane)
+        guard let updated = await manager.updateLane(lane) else {
+            return lanePersistenceFailed(request, manager: manager)
+        }
         return .ok(id: request.id, result: ["lane": Self.laneDetailJSON(updated)])
     }
 
@@ -100,7 +110,10 @@ extension CLICommandRouter {
         guard let manager = vibeLaneTaskManager else { return laneNotConnected(request) }
         switch resolvedLane(from: request, manager: manager) {
         case .success(let lane):
-            manager.deleteLane(id: lane.id)
+            await manager.deleteLane(id: lane.id)
+            if manager.lane(withID: lane.id) != nil {
+                return lanePersistenceFailed(request, manager: manager)
+            }
             return .ok(id: request.id, result: ["deleted": .bool(true), "id": .string(lane.id.uuidString)])
         case .failure(let response):
             return response
@@ -109,7 +122,7 @@ extension CLICommandRouter {
 
     func handleLaneRestoreStarters(_ request: CLIRequest) async -> CLIResponse {
         guard let manager = vibeLaneTaskManager else { return laneNotConnected(request) }
-        manager.restoreStarterLanes()
+        await manager.restoreStarterLanes()
         let lanes = manager.lanes
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             .map { Self.laneSummaryJSON($0) }
@@ -133,7 +146,9 @@ extension CLICommandRouter {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let envProject = request._env?.project_path?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let rawProject = (explicitProject?.isEmpty == false) ? explicitProject! : (envProject ?? "")
+        let rawProject = (explicitProject?.isEmpty == false ? explicitProject : nil)
+            ?? envProject
+            ?? ""
         guard !rawProject.isEmpty else {
             return laneInvalidParams(request, "`project` is required (no CRISPY_PROJECT_PATH in the caller's environment)")
         }
@@ -151,15 +166,21 @@ extension CLICommandRouter {
         }
         let agentID = request.params?["agent"]?.stringValue?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let task = manager.createTask(
+        guard let task = await manager.createTask(
             laneID: lane.id,
             title: input,
             projectPath: projectPath,
             agentID: (agentID?.isEmpty == false) ? agentID : nil,
             initialCarryForward: initialCarryForward.isEmpty ? nil : initialCarryForward
         ) else {
+            guard lane.isRunnable else {
+                return laneInvalidParams(
+                    request,
+                    "lane needs setup before it can run: \(Self.laneIssueSummary(lane))"
+                )
+            }
             return .error(id: request.id, code: CLIErrorCode.internalError,
-                          message: "task creation failed (is the lane empty?)")
+                          message: "task creation failed")
         }
         return .ok(id: request.id, result: ["task": Self.taskSummaryJSON(task, manager: manager)])
     }
@@ -232,7 +253,11 @@ extension CLICommandRouter {
             for (key, value) in raw {
                 if let string = value.stringValue { values[key] = string }
             }
-            answered = manager.answerInput(id: task.id, requestID: open.id, values: values)
+            answered = await manager.answerInput(
+                id: task.id,
+                requestID: open.id,
+                values: values
+            )
             if answered == nil {
                 return laneInvalidParams(request, "supply refused: every missing key needs a non-empty value (\(open.missingKeys.joined(separator: ", ")))")
             }
@@ -241,7 +266,11 @@ extension CLICommandRouter {
                 .trimmingCharacters(in: .whitespacesAndNewlines), !guidance.isEmpty else {
                 return laneInvalidParams(request, "open request is Steer: pass non-empty `guidance`")
             }
-            answered = manager.answerInput(id: task.id, requestID: open.id, guidance: guidance)
+            answered = await manager.answerInput(
+                id: task.id,
+                requestID: open.id,
+                guidance: guidance
+            )
             if answered == nil {
                 return laneInvalidParams(request, "steer refused (request may have changed; re-run lane.task.show)")
             }
@@ -254,7 +283,12 @@ extension CLICommandRouter {
             if !approve, feedback?.isEmpty != false {
                 return laneInvalidParams(request, "rejection requires non-empty `feedback` (F059-R07)")
             }
-            answered = manager.answerInput(id: task.id, requestID: open.id, approved: approve, feedback: feedback)
+            answered = await manager.answerInput(
+                id: task.id,
+                requestID: open.id,
+                approved: approve,
+                feedback: feedback
+            )
             if answered == nil {
                 return laneInvalidParams(request, "review verdict refused (request may have changed; re-run lane.task.show)")
             }
@@ -274,7 +308,13 @@ extension CLICommandRouter {
             guard !task.isTerminal else {
                 return laneInvalidParams(request, "task is already \(task.state.rawValue)")
             }
-            manager.stop(id: task.id)
+            guard await manager.stop(id: task.id) else {
+                return .error(
+                    id: request.id,
+                    code: CLIErrorCode.internalError,
+                    message: "task stop could not be persisted"
+                )
+            }
             guard let stopped = manager.task(withID: task.id) else {
                 return .error(id: request.id, code: CLIErrorCode.internalError, message: "task disappeared while stopping")
             }
@@ -288,7 +328,9 @@ extension CLICommandRouter {
         guard let manager = vibeLaneTaskManager else { return laneNotConnected(request) }
         switch resolvedTask(from: request, manager: manager) {
         case .success(let task):
-            manager.delete(id: task.id)
+            guard await manager.delete(id: task.id) else {
+                return lanePersistenceFailed(request, manager: manager)
+            }
             return .ok(id: request.id, result: ["deleted": .bool(true), "id": .string(task.id.uuidString)])
         case .failure(let response):
             return response
@@ -362,6 +404,30 @@ extension CLICommandRouter {
         .string(laneDateFormatter.string(from: date))
     }
 
+    /// Machine-readable reason a lane is not runnable, for CLI error messages.
+    static func laneIssueSummary(_ lane: VibeLaneDefinition) -> String {
+        let issues = lane.validationIssues.map { issue -> String in
+            switch issue {
+            case .missingLaneName: "missing name"
+            case .missingCheckpoints: "no steps"
+            case .invalidSteerLimit: "invalid steerLimit"
+            case .emptyCheckpointKey(let index): "step \(index + 1) has an empty key"
+            case .duplicateCheckpointKey(let index): "step \(index + 1) has a duplicate key"
+            case .missingGoal(let index): "step \(index + 1) has no goal"
+            case .missingVerification(let index): "step \(index + 1) has no verification"
+            case .invalidBounds(let index): "step \(index + 1) has invalid bounds"
+            case .emptyInputKey(let index): "step \(index + 1) has an empty input key"
+            case .duplicateInputKey(let index, let key): "step \(index + 1) repeats input `\(key)`"
+            case .emptyOutputKey(let index): "step \(index + 1) has an empty output key"
+            case .duplicateOutputKey(let index, let key): "step \(index + 1) repeats output `\(key)`"
+            case .unsatisfiedInput(let index, let key): "step \(index + 1) needs unavailable input `\(key)`"
+            case .unresolvedVibeReference(let index, let vibeID, let version):
+                "step \(index + 1) points at missing Vibe \(vibeID.uuidString) v\(version)"
+            }
+        }
+        return issues.isEmpty ? "unknown" : issues.joined(separator: "; ")
+    }
+
     static func laneSummaryJSON(_ lane: VibeLaneDefinition) -> CLIJSONValue {
         var obj: [String: CLIJSONValue] = [
             "id": .string(lane.id.uuidString),
@@ -383,20 +449,27 @@ extension CLICommandRouter {
     }
 
     private static func checkpointJSON(_ checkpoint: VibeLaneCheckpoint) -> CLIJSONValue {
+        var verification: [String: CLIJSONValue] = [
+            "definition": .string(checkpoint.verify.definition),
+            "humanReview": .bool(checkpoint.verify.humanReview),
+        ]
+        if !checkpoint.verify.reviewSkills.isEmpty {
+            verification["reviewSkills"] = .array(
+                checkpoint.verify.reviewSkills.map { .string($0) }
+            )
+        }
         var obj: [String: CLIJSONValue] = [
             "key": .string(checkpoint.key),
             "order": .int(checkpoint.order),
             "goal": .string(checkpoint.goal),
-            "verify": .object([
-                "definition": .string(checkpoint.verify.definition),
-                "humanReview": .bool(checkpoint.verify.humanReview),
-            ]),
+            "verify": .object(verification),
             "bounds": .object([
                 "maxAttempts": .int(checkpoint.bounds.maxAttempts),
                 "timeoutSeconds": .int(checkpoint.bounds.timeoutSeconds),
                 "onExhausted": .string(checkpoint.bounds.onExhausted.rawValue),
             ]),
         ]
+        if let title = checkpoint.title { obj["title"] = .string(title) }
         if !checkpoint.instructions.isEmpty { obj["instructions"] = .string(checkpoint.instructions) }
         if !checkpoint.skills.isEmpty { obj["skills"] = .array(checkpoint.skills.map { .string($0) }) }
         if !checkpoint.inputRequirements.isEmpty {
@@ -481,5 +554,16 @@ extension CLICommandRouter {
 
     private func laneNotConnected(_ request: CLIRequest) -> CLIResponse {
         .error(id: request.id, code: CLIErrorCode.notConnected, message: "vibe lanes unavailable")
+    }
+
+    private func lanePersistenceFailed(
+        _ request: CLIRequest,
+        manager: VibeLaneTaskManager
+    ) -> CLIResponse {
+        .error(
+            id: request.id,
+            code: CLIErrorCode.internalError,
+            message: manager.persistenceError ?? "Vibe Lane persistence failed"
+        )
     }
 }

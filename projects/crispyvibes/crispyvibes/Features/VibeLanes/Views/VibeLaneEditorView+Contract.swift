@@ -6,16 +6,20 @@ struct VibeLaneContractEditor: View {
     @Environment(\.crispyvibesUIScale) private var uiScale
 
     @Binding var checkpoint: VibeLaneCheckpoint
+    let showsTitle: Bool
 
-    init(checkpoint: Binding<VibeLaneCheckpoint>) {
+    init(checkpoint: Binding<VibeLaneCheckpoint>, showsTitle: Bool = true) {
         _checkpoint = checkpoint
+        self.showsTitle = showsTitle
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: uiScale.spacing(12)) {
-            Text(AppStrings.VibeLanes.editorContract)
-                .font(.system(size: uiScale.textSize(12), weight: .semibold))
-                .foregroundStyle(palette.secondaryTextColor)
+            if showsTitle {
+                Text(AppStrings.VibeLanes.editorContract)
+                    .font(.system(size: uiScale.textSize(12), weight: .semibold))
+                    .foregroundStyle(palette.secondaryTextColor)
+            }
 
             requirementsSection
             outputsSection

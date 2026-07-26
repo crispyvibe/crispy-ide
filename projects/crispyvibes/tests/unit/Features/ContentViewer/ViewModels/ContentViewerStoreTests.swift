@@ -193,6 +193,25 @@ final class ContentViewerStoreTests: XCTestCase {
         XCTAssertFalse(acpStore.shouldAutoConnect)
     }
 
+    func testResolveVibeLaneACPStoreDoesNotRequireVibeSpaceOrOpenHiddenTab() {
+        let (store, splitStore) = makeSUT()
+        let sessionID = UUID()
+
+        let resolved = store.resolveVibeLaneACPStore(
+            target: VibeLaneACPChatTarget(
+                sessionID: sessionID,
+                threadID: nil,
+                projectPath: "/tmp/project"
+            )
+        )
+
+        XCTAssertEqual(resolved?.id, sessionID)
+        XCTAssertTrue(resolved?.isExternallyManaged == true)
+        XCTAssertFalse(splitStore.activeGroup.tabs.contains {
+            $0.id == ContentViewerTab.acpPane(id: sessionID).id
+        })
+    }
+
     func testClosePaneInvokesBrowserCleanupForContainedWebTabs() {
         let (_, splitStore) = makeSUT()
         let browserID = UUID()

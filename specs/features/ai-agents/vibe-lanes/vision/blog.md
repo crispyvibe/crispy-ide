@@ -1,25 +1,41 @@
-# Loops Are One Dimension Short: Introducing Vibe Lanes through Expectation Constructs
+# Archived Vision Draft: Loops Are One Dimension Short
 
-You already know what prompts and loops are. I will skip the recap. This piece is about what comes beyond them.
+> This is historical background, not current product terminology. The current
+> model is **Vibe (Loop) -> Vibe Lane (Spiral) -> Schedule**: a Vibe retries one
+> expectation, a Vibe Lane carries verified progress forward, and a Schedule
+> repeats the lane over time. See the repository-root `blog.md` and the
+> canonical F059/F061 specs for current language.
+
+You already know what prompts and retry loops are. This piece is about giving
+those loops a bar, a direction, and a reusable place in a larger process.
 
 Remember only this:
 
 -   Prompts express intent.
--   Loops create recurrence.
+-   Vibes create bounded feedback loops.
+-   Vibe Lanes create forward progression.
+-   Schedules create recurrence.
 
 Direction comes first. As leaders, builders, and operators, we usually begin directionally correct. We know the outcome we want. We know the kind of progress that should count. Then we create processes around that direction. Over time, those processes become flywheels.
 
-> A loop is behavior. A lane is system design.
+> A Vibe loops. A Vibe Lane spirals. A Schedule repeats.
 
-Systems thinking starts with the structure that produces behavior. Vibe Lanes apply that idea to agent work: define the expectations, connect the feedback loops, and let the work compound.
+Systems thinking starts with the structure that produces behavior. Vibe Lanes
+apply that idea to agent work: define the expectations, connect the Vibe loops,
+and let verified work compound through the Spiral.
 
-Loops are powerful because they make work repeatable over time. A loop can retry until a result improves. It can run the same task every day. It can check the same signal every hour. It can revisit the same workflow whenever new input arrives. A coding agent can patch a file, run a test, read the failure, and patch again. A writing agent can draft, critique, and revise. A monitoring agent can check a queue every morning.
+Vibe loops are powerful because they let one expectation retry until its
+verification passes or its bounds are exhausted. A coding Vibe can patch a
+file, run a test, read the failure, and patch again. A writing Vibe can draft,
+critique, and revise. Schedules handle a different concern: starting a new Vibe
+Lane task every day, every hour, or whenever its supported recurrence is due.
 
 Recurrence creates motion; process turns direction into compounding progress.
 
 Before asking an agent to run, define the process around the direction. Define what should exist, how it will be judged, where it goes after it passes, and when the attempt should stop. That is the role of an Expectation Construct.
 
-> A prompt says, “do this.” A loop says, “run this again.” An Expectation Construct says, “produce this, prove it this way, then carry it forward.”
+> A prompt says, “do this.” A Vibe says, “produce this and prove it.” A Vibe
+> Lane carries the proof forward. A Schedule starts the recipe again over time.
 
 ## Real Work Moves Through Expectations
 
@@ -67,7 +83,10 @@ Publish
   Carry-forward: live, traceable artifact ready for monitoring
 ```
 
-Each point carries its own expectation, and the carry-forward from one becomes the ground the next stands on. A loop can help inside any point — it can keep working until the expectation clears the bar — but the loop still needs the bar, and it still needs the next place to go. That is the dimension loops are short of.
+Each point carries its own expectation, and the carry-forward from one becomes
+the ground the next stands on. Each Vibe loops until its expectation clears the
+bar or reaches its bounds. The Vibe Lane supplies the next place to go and
+accumulates what was learned.
 
 ## Start With Expectation Constructs
 
@@ -97,7 +116,11 @@ Expectation Construct → Expectation Construct → Expectation Construct → Ou
           ↺                         ↺                         ↺
 ```
 
-The lane gives direction across loops. It says where the work starts, what it must satisfy along the way, what context moves forward, and what complete looks like. The task can be new every time; the lane stays reusable. The healthcare discharge-content lane above is one shape of this, and the form generalizes. A bug-fix lane might move from reproduce to patch, then verify and summarize.
+The lane forms a Spiral across Vibes. It says where the work starts, what it
+must satisfy along the way, what context moves forward, and what complete looks
+like. The task can be new every time; the lane stays reusable. The healthcare
+discharge-content lane above is one shape of this, and the form generalizes. A
+bug-fix lane might move from reproduce to patch, then verify and summarize.
 
 ```text
 Reproduce → Patch → Verify → Summarize
@@ -135,7 +158,9 @@ Passing means the expectation has been met. Failing means the next attempt gets 
 
 When a checkpoint passes, the worker writes a handoff summary. In a regulated workflow, that handoff may be better understood as carry-forward context: the approved constraints, evidence, decisions, and boundaries that the next checkpoint must inherit.
 
-The handoff says what changed, what matters, and what the next checkpoint should carry forward. It gives the next loop context without letting the previous loop rewrite the next expectation.
+The handoff says what changed, what matters, and what the next checkpoint
+should carry forward. It gives the next Vibe context without letting the
+previous Vibe rewrite the next expectation.
 
 That keeps the lane stable while the task learns. The process remembers the journey. The next checkpoint starts smarter than the first one did.
 
@@ -170,6 +195,9 @@ The implementation stays intentionally small: Work, Verification, Bounds. Expect
 
 ## The Bigger Idea
 
-The future of agentic work looks like visible tasks moving through reusable expectations. Prompts express intent. Loops create recurrence. Expectation Constructs define the outcome, the proof, and the handoff. Vibe Lanes turn those constructs into a path.
+The future of agentic work looks like visible tasks moving through reusable
+expectations. Prompts express intent. Vibes define the outcome and proof, then
+loop within bounds. Vibe Lanes turn those Vibes into a forward-moving Spiral.
+Schedules repeat the approved lane over time.
 
 Give the work a path, give each point a bar, and let discovery make the outcome better than the starting prompt.

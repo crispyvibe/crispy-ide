@@ -463,12 +463,7 @@ extension ContentView {
     }
 
     private func spotlightSupportsBoardPin(_ spotlight: TerminalSpotlightState) -> Bool {
-        switch spotlight.source {
-        case .filePreview, .browserPreview:
-            return true
-        case .persistent, .transient, .vibeCast, .vibeLanes, .todos, .acp, .file, .browser:
-            return false
-        }
+        spotlight.source.supportsBoardPin
     }
 
     private func pinSpotlightToDetailedViewer(_ spotlight: TerminalSpotlightState) {
@@ -539,7 +534,11 @@ extension ContentView {
                 projectPath: spotlight.owningProjectRootURL?.path
             ) else { return }
             dockedBrowserCoordinator.promotePreview(to: tileID)
-        case .persistent, .transient, .vibeCast, .vibeLanes, .todos, .acp, .file, .browser:
+        case .vibeLanes:
+            guard boardStore.addVibeLanesTile(
+                surfaceID: spotlight.surfaceID ?? boardStore.primarySurfaceID
+            ) else { return }
+        case .persistent, .transient, .vibeCast, .todos, .acp, .file, .browser:
             return
         }
         dismissTerminalSpotlight()

@@ -17,8 +17,8 @@ import Foundation
 //     a 60-minute window on 14 attempts would make the cap decorative).
 //   • Stack-agnostic — steps discover the project's own tooling; no npm-isms.
 //
-// Skills are referenced by bare name from the shipped starter library
-// (VibeLaneSkillLibrary); users add their own skills by path in the editor.
+// Work and review skills are referenced by bare name from the shipped starter
+// library (VibeLaneSkillLibrary); users add their own skills by path in the editor.
 
 enum VibeLaneCatalog {
     static let fixABugLaneID = UUID(uuidString: "F0590001-0000-0000-0000-000000000001")!
@@ -28,6 +28,23 @@ enum VibeLaneCatalog {
     static let libraryReleaseLaneID = UUID(uuidString: "F0590005-0000-0000-0000-000000000005")!
     static let productLaunchLaneID = UUID(uuidString: "F0590006-0000-0000-0000-000000000006")!
     static let researchMemoLaneID = UUID(uuidString: "F0590007-0000-0000-0000-000000000007")!
+
+    static func vibeCategory(forLaneID id: UUID) -> VibeCategory {
+        switch id {
+        case fixABugLaneID, smallFeatureLaneID, fullFeatureLaneID:
+            .engineering
+        case incidentResponseLaneID:
+            .incidentResponse
+        case libraryReleaseLaneID:
+            .release
+        case productLaunchLaneID:
+            .productLaunch
+        case researchMemoLaneID:
+            .researchAndDecisions
+        default:
+            .general
+        }
+    }
 
     static var starterLanes: [VibeLaneDefinition] {
         [fixABug, smallFeature, fullFeatureDelivery, incidentResponse, libraryRelease, productLaunch, researchMemo]
@@ -54,7 +71,9 @@ enum VibeLaneCatalog {
     private static func cp(
         _ key: String, _ order: Int,
         goal: String, instructions: String,
+        engine: VibeLaneEngineConfiguration? = nil,
         skills: [String] = [],
+        reviewSkills: [String] = [],
         verify: String,
         humanVerify: Bool = false,
         attempts: Int, minutes: Int,
@@ -64,12 +83,38 @@ enum VibeLaneCatalog {
     ) -> VibeLaneCheckpoint {
         VibeLaneCheckpoint(
             key: key, order: order,
+            engine: engine ?? recommendedEngine(for: key),
             work: VibeLaneWorkDefinition(goal: goal, instructions: instructions, skills: skills),
-            verify: VibeLaneVerificationDefinition(verify, humanReview: humanVerify),
+            verify: VibeLaneVerificationDefinition(
+                verify,
+                reviewSkills: reviewSkills,
+                humanReview: humanVerify
+            ),
             bounds: VibeLaneBounds(maxAttempts: attempts, timeoutSeconds: minutes * 60, onExhausted: onExhausted),
             requires: requires.isEmpty ? nil : requires,
             produces: produces.isEmpty ? nil : produces
         )
+    }
+
+    /// Starter lanes remain portable across installed agents while still making
+    /// an opinionated per-step choice. Agents that expose reasoning receive the
+    /// authored level; other agents keep their own default and report that fact
+    /// in the attempt snapshot.
+    private static func recommendedEngine(for checkpointKey: String) -> VibeLaneEngineConfiguration {
+        let key = checkpointKey.lowercased()
+        let conciseSteps = ["summary", "summarize", "report", "publish", "handoff", "release-notes"]
+        if conciseSteps.contains(where: key.contains) {
+            return VibeLaneEngineConfiguration(reasoningLevel: .low)
+        }
+        let deepSteps = [
+            "implement", "patch", "investigate", "diagnose", "security",
+            "architecture", "review", "verify", "test", "remediate", "reproduce",
+            "contract", "acceptance",
+        ]
+        if deepSteps.contains(where: key.contains) {
+            return VibeLaneEngineConfiguration(reasoningLevel: .high)
+        }
+        return VibeLaneEngineConfiguration(reasoningLevel: .medium)
     }
 
     // MARK: - Fix a bug
@@ -93,6 +138,7 @@ enum VibeLaneCatalog {
                    Deliverable: a runnable reproduction in the working tree, plus the exact command that runs it.
                    """,
                    skills: ["diagnosing-bugs", "tdd"],
+                   reviewSkills: ["code-review"],
                    verify: """
                    Done when ALL of:
                    - A reproduction exists in the working tree as a runnable test or minimal script.
@@ -116,6 +162,7 @@ enum VibeLaneCatalog {
                    Deliverable: the fix in the working tree, matching the project's existing style.
                    """,
                    skills: ["diagnosing-bugs", "tdd"],
+                   reviewSkills: ["code-review"],
                    verify: """
                    Done when ALL of:
                    - The reproduction from `repro` now passes, and passes repeatedly (not flakily).
@@ -139,6 +186,7 @@ enum VibeLaneCatalog {
                    Deliverable: a green verification run and a clean, reviewed diff.
                    """,
                    skills: ["code-review"],
+                   reviewSkills: ["code-review"],
                    verify: """
                    Done when ALL of:
                    - The reproduction and the project's relevant test suite pass, using the project's own commands.
@@ -193,6 +241,7 @@ enum VibeLaneCatalog {
                    Deliverable: the working feature with tests, in the working tree.
                    """,
                    skills: ["tdd"],
+                   reviewSkills: ["code-review"],
                    verify: """
                    Done when ALL of:
                    - The feature behaves as the task describes, including the edge cases the implementation notes name.
@@ -214,6 +263,7 @@ enum VibeLaneCatalog {
                    Deliverable: a verified feature and a diff you would approve as a reviewer.
                    """,
                    skills: ["code-review"],
+                   reviewSkills: ["code-review"],
                    verify: """
                    Done when ALL of:
                    - The feature was exercised end to end, including at least two non-happy-path cases, with results noted.
@@ -232,8 +282,8 @@ enum VibeLaneCatalog {
         VibeLaneDefinition(
             id: fullFeatureLaneID,
             name: "Full feature delivery",
-            detail: "Align, plan, implement test-first, review design, gate on security + quality, open a PR.",
-            steerLimit: 2,
+            detail: "Align, plan, design the interfaces and their fakes, build test-first, review design, gate on security + quality, then prove acceptance.",
+            steerLimit: 3,
             checkpoints: [
                 cp("align", 0,
                    goal: "Pin down scope, non-goals, and testable acceptance criteria before any code.",
@@ -264,35 +314,99 @@ enum VibeLaneCatalog {
                    """,
                    skills: ["scoping-and-planning"],
                    verify: """
-                   Done when ALL of:
+                   You are the scope gate. This is the last cheap moment to change direction — everything after this
+                   builds on the plan unattended. Approve only if ALL of:
                    - A PRD exists with problem, users, acceptance criteria, and risks.
                    - The work is sliced; each slice is independently testable and delivers value on its own.
                    - Every acceptance criterion maps to at least one slice, and the slice order is explicit.
+                   - You agree this is the right thing to build, at the right size.
                    """,
+                   humanVerify: true,
                    attempts: 3, minutes: 15,
                    requires: [req("acceptance_criteria")],
                    produces: [out("prd", "path to the PRD"), out("slices", "the ordered slice list, one line each")]),
-                cp("implement", 2,
+                cp("contract", 2,
+                   goal: "Design the interfaces this work will be built against, as a checkable artifact.",
+                   instructions: """
+                   1. From `prd` and `slices`, identify every seam this work introduces or changes: HTTP endpoints, \
+                   message payloads, stored schemas, and the internal module interfaces the slices talk across.
+                   2. Write them down precisely, in whatever form this project can actually validate: an OpenAPI/JSON \
+                   Schema/protobuf/migration file when a real external interface exists, otherwise exact type and \
+                   function signatures. Follow the project's existing conventions for where such files live.
+                   3. For each seam, state its error cases and its boundary values — not just the happy shape.
+                   4. Do not implement behavior. The artifact is the deliverable.
+
+                   If this work genuinely crosses no seam, you must still produce the interface inventory: the exact \
+                   signatures the slices will call. "There is no contract" is not an acceptable answer.
+                   """,
+                   skills: ["scoping-and-planning", "writing-clearly"],
+                   reviewSkills: ["code-review"],
+                   verify: """
+                   Done when ALL of:
+                   - A contract artifact exists in the working tree naming every seam the slices cross.
+                   - It is machine-checkable where the project allows it (schema/spec file validates with the project's \
+                   own tooling), or states exact signatures where it does not.
+                   - Every seam documents its error cases and boundary values, not only the success shape.
+                   - It covers the slices in `slices` with no seam left implicit, and no behavior was implemented.
+                   """,
+                   attempts: 5, minutes: 30,
+                   onExhausted: .escalate,
+                   requires: [req("prd"), req("slices")],
+                   produces: [out("contract", "path to the contract artifact and the seams it covers")]),
+                cp("mocks", 3,
+                   goal: "Stand up fakes for the contract's boundaries so the build has something to test against.",
+                   instructions: """
+                   1. Read `contract`. Build a fake for each seam that crosses OUT of this system — remote APIs, \
+                   third-party services, clocks, randomness. Use the project's existing fixture/test-double conventions.
+                   2. Do NOT fake code this project owns when a real interface is practical; for internal seams, \
+                   generate fixtures and sample payloads from the contract instead.
+                   3. Write consumer tests that exercise each faked seam through the contract, including the error cases \
+                   and boundary values the contract declares.
+                   4. Prove the fakes are honest: a test must FAIL if the contract is violated (wrong field, wrong \
+                   status, missing error case). A fake that passes everything is worthless.
+
+                   Deliverable: fakes plus consumer tests in the working tree, and the command that runs them.
+                   """,
+                   skills: ["tdd"],
+                   reviewSkills: ["code-review"],
+                   verify: """
+                   Done when ALL of:
+                   - Every outward seam in `contract` has a fake, and internal seams have fixtures derived from it.
+                   - Consumer tests run green against the fakes with the project's own tooling, and the exact command is stated.
+                   - Contract violations are demonstrably caught — a deliberate violation was shown to fail a test.
+                   - Nothing this project owns was faked where a real interface was practical.
+                   - No product behavior was implemented yet.
+                   """,
+                   attempts: 6, minutes: 35,
+                   onExhausted: .escalate,
+                   requires: [req("contract")],
+                   produces: [out("mocks", "fake + consumer-test paths and the command that runs them")]),
+                cp("implement", 4,
                    goal: "Build every slice test-first, keeping the suite green between slices.",
                    instructions: """
                    1. Take the slices from `slices` one at a time, in order.
                    2. For each: failing test that captures the slice, smallest change to green, refactor, full suite green, \
                    then move on. Use the project's own tooling throughout.
-                   3. Tie each slice back to its acceptance criterion as you finish it.
-                   4. Touch nothing outside the planned scope; note deliberate deferrals as TODOs.
+                   3. Build to `contract` exactly. If a seam turns out to be wrong, fix the contract artifact and its \
+                   fakes first, then the code — never let the code and the contract disagree silently.
+                   4. Keep the consumer tests from `mocks` green as you go; they are the contract's guard rail.
+                   5. Tie each slice back to its acceptance criterion as you finish it.
+                   6. Touch nothing outside the planned scope; note deliberate deferrals as TODOs.
                    """,
                    skills: ["tdd"],
+                   reviewSkills: ["code-review"],
                    verify: """
                    Done when ALL of:
                    - Every acceptance criterion in the PRD is implemented and covered by at least one test.
-                   - The project's full test suite passes with its own tooling.
+                   - The project's full test suite passes with its own tooling, including the consumer tests from `mocks`.
+                   - The implementation matches `contract`; any contract change is reflected in the artifact and its fakes.
                    - The diff contains no unrelated changes, and every slice from the plan is accounted for (done or TODO-with-reason).
                    """,
                    attempts: 14, minutes: 120,
                    onExhausted: .escalate,
-                   requires: [req("prd"), req("slices")],
+                   requires: [req("prd"), req("slices"), req("contract"), req("mocks")],
                    produces: [out("implementation", "files changed and how to exercise the feature")]),
-                cp("architecture-review", 3,
+                cp("architecture-review", 5,
                    goal: "Leave the design better than the diff found it: deep modules, small interfaces.",
                    instructions: """
                    1. Read the whole diff from `implementation` as a reviewer, not as its author.
@@ -302,6 +416,7 @@ enum VibeLaneCatalog {
                    4. Record the review: what you checked, what you changed, what you deliberately left.
                    """,
                    skills: ["code-review"],
+                   reviewSkills: ["code-review"],
                    verify: """
                    Done when ALL of:
                    - A written design review exists covering module depth, interfaces, duplication, and complexity.
@@ -311,7 +426,7 @@ enum VibeLaneCatalog {
                    attempts: 5, minutes: 25,
                    requires: [req("implementation")],
                    produces: [out("design_review", "what was checked, changed, and deliberately left")]),
-                cp("security-gate", 4,
+                cp("security-gate", 6,
                    goal: "Clear the change of security findings, with evidence.",
                    instructions: """
                    1. If the project has security scanning or dependency audit tooling configured, run it.
@@ -321,6 +436,7 @@ enum VibeLaneCatalog {
                    4. Never suppress or silence a finding just to pass.
                    """,
                    skills: ["security-review"],
+                   reviewSkills: ["security-review"],
                    verify: """
                    Done when ALL of:
                    - The project's security tooling (if any) was run, with results recorded; if none exists, that is stated.
@@ -330,7 +446,7 @@ enum VibeLaneCatalog {
                    attempts: 6, minutes: 30,
                    requires: [req("implementation")],
                    produces: [out("security_report", "findings, fixes, and justified false positives")]),
-                cp("quality-budgets", 5,
+                cp("quality-budgets", 7,
                    goal: "Meet the project's quality budgets — or establish the baseline honestly.",
                    instructions: """
                    1. Find the project's quality budgets: accessibility standards, performance targets, bundle/binary size \
@@ -349,38 +465,52 @@ enum VibeLaneCatalog {
                    attempts: 5, minutes: 25,
                    requires: [req("implementation")],
                    produces: [out("quality_report", "budgets checked and before/after numbers")]),
-                cp("open-pr", 6,
-                   goal: "Open a pull request a reviewer can approve without archaeology.",
+                cp("acceptance", 8,
+                   goal: "Prove every acceptance criterion actually holds, by running it — not by asserting it.",
                    instructions: """
-                   1. Push the branch and open a PR using the project's normal flow.
-                   2. The description must link the PRD and include the test, security (`security_report`), and quality \
-                   (`quality_report`) results.
-                   3. Summarize what changed and why, and call out exactly what reviewers should scrutinize.
+                   1. Open `acceptance_criteria` (CONTEXT.md) and take each criterion in turn. Each one was written to \
+                   name what to run or inspect — so run or inspect exactly that.
+                   2. Record the evidence per criterion: the command, its output, or the observation. "Implemented" is \
+                   not evidence; a result is.
+                   3. Exercise the feature the way its user would, end to end, including the boundary and error cases \
+                   that `contract` declares. Swap the fakes from `mocks` out for the real path wherever the project \
+                   allows it, and say which seams remained faked.
+                   4. Any criterion that fails, or that you cannot evidence, is listed as unmet. Do not quietly reword \
+                   a criterion so it passes.
                    """,
-                   skills: ["writing-clearly"],
+                   skills: ["code-review", "writing-clearly"],
+                   reviewSkills: ["code-review"],
                    verify: """
                    Done when ALL of:
-                   - A PR (or equivalent reviewable branch) exists.
-                   - Its description links the PRD and includes the test, security, and quality gate results.
-                   - It names the specific areas reviewers should focus on.
+                   - Every criterion in `acceptance_criteria` has a verdict with concrete evidence attached — a command \
+                   and its result, or a stated observation.
+                   - The feature was exercised end to end against the real path, and any seam still served by a fake \
+                   from `mocks` is named.
+                   - Boundary and error cases from `contract` were exercised, not just the happy path.
+                   - No criterion was reworded, dropped, or weakened to reach a pass; unmet criteria are listed as unmet.
                    """,
-                   attempts: 3, minutes: 10,
-                   requires: [req("prd"), req("security_report"), req("quality_report")],
-                   produces: [out("pr", "PR URL, or branch name if no forge is configured")]),
-                cp("release-handoff", 7,
+                   attempts: 5, minutes: 30,
+                   onExhausted: .escalate,
+                   requires: [
+                    req("acceptance_criteria"), req("contract"), req("mocks"),
+                    req("implementation"), req("security_report"), req("quality_report"),
+                   ],
+                   produces: [out("acceptance", "per-criterion verdicts with the evidence for each")]),
+                cp("release-handoff", 9,
                    goal: "Write the reviewer + release wrap-up.",
                    instructions: """
-                   Summarize in under ~15 lines: what changed, what is verified (with evidence), residual risks, and \
-                   exactly what a reviewer must check before merging `pr`.
+                   Summarize in under ~15 lines: what changed, which acceptance criteria are met with their evidence \
+                   from `acceptance`, which are unmet, residual risks, and exactly what a reviewer must check.
                    """,
                    skills: ["writing-clearly"],
                    verify: """
                    Done when ALL of:
-                   - The wrap-up states what changed, what is verified with evidence, residual risks, and reviewer must-checks.
+                   - The wrap-up states what changed, the acceptance verdicts with evidence, unmet criteria, residual \
+                   risks, and reviewer must-checks.
                    - It is under ~20 lines and every claim is backed by an earlier step's output.
                    """,
                    attempts: 2, minutes: 5,
-                   requires: [req("pr")]),
+                   requires: [req("acceptance")]),
             ]
         )
     }
@@ -440,6 +570,7 @@ enum VibeLaneCatalog {
                    3. Re-run `repro` and the surrounding test suite until green, repeatedly.
                    """,
                    skills: ["tdd"],
+                   reviewSkills: ["code-review"],
                    verify: """
                    Done when ALL of:
                    - The reproduction now passes, repeatedly.
@@ -542,6 +673,7 @@ enum VibeLaneCatalog {
                    3. Save the report as a file in the repository so later steps can read it.
                    """,
                    skills: ["semantic-versioning"],
+                   reviewSkills: ["semantic-versioning"],
                    verify: """
                    Done when ALL of:
                    - A saved API diff file exists listing additions, removals, and signature changes.
@@ -559,6 +691,7 @@ enum VibeLaneCatalog {
                    3. When in doubt between two bumps, choose the larger one and say why.
                    """,
                    skills: ["semantic-versioning"],
+                   reviewSkills: ["semantic-versioning"],
                    verify: """
                    Done when ALL of:
                    - The chosen bump (major/minor/patch) matches the breaking-vs-additive reality of the API diff.
@@ -576,6 +709,7 @@ enum VibeLaneCatalog {
                    3. Write for a consumer who has never read this codebase.
                    """,
                    skills: ["semantic-versioning", "writing-clearly"],
+                   reviewSkills: ["semantic-versioning"],
                    verify: """
                    Done when ALL of:
                    - The changelog matches the API diff one-to-one.
@@ -895,6 +1029,22 @@ enum VibeLaneSkillLibrary {
         let name: String
         let description: String
         let body: String
+        let metadata: VibeLaneSkillMetadata
+        let resources: [String: String]
+
+        init(
+            name: String,
+            description: String,
+            body: String,
+            metadata: VibeLaneSkillMetadata,
+            resources: [String: String] = [:]
+        ) {
+            self.name = name
+            self.description = description
+            self.body = body
+            self.metadata = metadata
+            self.resources = resources
+        }
     }
 
     static let starters: [Skill] = [
@@ -904,21 +1054,59 @@ enum VibeLaneSkillLibrary {
             body: """
             # Test-Driven Development
 
-            ## When to use
-            Any code change whose behavior can be captured by an automated test.
+            Use one observable behavior per cycle. Work through the project's public
+            interfaces and use its existing test runner and conventions.
+
+            Before writing a test, read [test quality](references/test-quality.md).
+            Read [mocking](references/mocking.md) when the behavior crosses a system boundary.
 
             ## Loop
-            1. RED — write the smallest failing test that captures the desired behavior; run it and confirm it fails for the right reason.
-            2. GREEN — write the least code that makes it pass; add no untested behavior.
-            3. REFACTOR — remove duplication and improve names while the suite stays green.
-            4. Repeat one behavior at a time.
+            1. Name the user-visible behavior and the public seam that exposes it.
+            2. RED: write the smallest test that expresses that behavior.
+            3. Run only that test. Confirm it fails because the behavior is absent.
+            4. GREEN: make the smallest production change that passes it.
+            5. Run the focused test, then the relevant surrounding suite.
+            6. REFACTOR: improve names or structure without changing behavior.
+            7. Repeat for the next independently observable behavior.
 
-            ## Rules
-            - One behavior per test, with a name that describes the behavior.
+            ## Guardrails
             - Never weaken or delete a test to go green.
-            - Keep the whole suite green between steps.
-            - Test through the public interface, not internals.
-            """
+            - Do not mock code owned by the project when a real interface is practical.
+            - Expected values must come from the specification or a worked example.
+            - Do not write a batch of speculative tests before implementing the first slice.
+
+            ## Completion evidence
+            Report the seam tested, the red failure observed, the implementation change,
+            and the exact focused and regression commands with their results.
+            """,
+            metadata: .init(category: "Engineering", roles: [.work]),
+            resources: [
+                "references/test-quality.md": """
+                # Test Quality
+
+                A durable test observes behavior through a public interface and survives
+                internal refactoring. Name the capability, not the implementation.
+
+                Reject tests that:
+                - call private methods or assert internal call order;
+                - reproduce the implementation to calculate the expected value;
+                - pass when the requested behavior is removed;
+                - depend on unrelated network, clock, or filesystem state.
+
+                Prefer a known literal, specification example, fixture, or previously
+                verified output as the independent source of truth.
+                """,
+                "references/mocking.md": """
+                # Mocking Boundaries
+
+                Mock only at boundaries outside the system you control: remote APIs,
+                payment providers, email, time, randomness, or destructive infrastructure.
+
+                Prefer a test database or filesystem sandbox over mocks when it remains
+                fast and deterministic. Inject boundary clients explicitly so the test
+                controls one external result without replacing internal collaborators.
+                """
+            ]
         ),
         Skill(
             name: "diagnosing-bugs",
@@ -926,18 +1114,73 @@ enum VibeLaneSkillLibrary {
             body: """
             # Diagnosing Bugs
 
-            ## Loop
-            1. Reproduce — get a reliable, minimal reproduction (ideally a failing test).
-            2. Observe — gather evidence: logs, stack traces, diffs, metrics.
-            3. Hypothesize — state one falsifiable hypothesis for the cause.
-            4. Test it — run the smallest experiment that confirms or kills the hypothesis.
-            5. Fix the confirmed root cause (not the symptom) and add a regression test.
+            Build a tight, repeatable signal before proposing a cause. Read
+            [feedback loops](references/feedback-loops.md) when the defect does not fit a unit test.
+
+            ## Phase 1: Reproduce
+            1. Capture the exact reported symptom.
+            2. Build one command that exercises that symptom and returns pass or fail.
+            3. Run it repeatedly and remove unrelated setup until every remaining input matters.
+            4. For intermittent failures, increase the reproduction rate with repetition,
+               controlled timing, a fixed seed, or captured input.
+
+            ## Phase 2: Investigate
+            1. Rank three to five falsifiable hypotheses.
+            2. For each hypothesis, state the observation that would disprove it.
+            3. Change one variable or add one targeted probe.
+            4. Record the evidence and eliminate hypotheses that fail.
+
+            ## Phase 3: Fix and lock
+            1. Convert the minimal reproduction into a regression test at the correct seam.
+            2. Apply the smallest change that addresses the proven cause.
+            3. Run the original reproduction, regression test, and adjacent suite.
+            4. Remove temporary logs and harnesses.
 
             ## Rules
-            - Change one variable at a time.
-            - Distinguish cause from symptom; don't fix what you can't explain.
-            - If several hypotheses fail, widen the evidence rather than keep guessing.
-            """
+            - Do not edit production behavior until a reliable signal exists.
+            - A plausible story is not evidence.
+            - If no signal can be built, stop and request a trace, fixture, or environment access.
+
+            ## Completion evidence
+            Provide the reproduction command, observed failure, proven root cause, changed
+            files, regression test, verification results, and removed instrumentation.
+            """,
+            metadata: .init(category: "Engineering", roles: [.work]),
+            resources: [
+                "references/feedback-loops.md": """
+                # Feedback Loop Options
+
+                Try these in order:
+                1. Focused automated test.
+                2. CLI or HTTP invocation with a fixture.
+                3. Headless browser script asserting DOM, console, or network behavior.
+                4. Replay of a captured request, event, or trace.
+                5. Differential run against a known-good revision or configuration.
+                6. Automated bisection.
+                7. Human-assisted harness using `scripts/hitl-loop.sh`.
+
+                Tighten the chosen loop until it is deterministic, specific, and fast.
+                """,
+                "scripts/hitl-loop.sh": """
+                #!/usr/bin/env bash
+                set -euo pipefail
+
+                step() {
+                  printf '\\n>>> %s\\n' "$1"
+                  read -r -p "    Press Enter when complete: " _
+                }
+
+                capture() {
+                  local name="$1" prompt="$2" value
+                  printf '\\n>>> %s\\n' "$prompt"
+                  read -r -p "    > " value
+                  printf '%s=%s\\n' "$name" "$value"
+                }
+
+                step "Perform the smallest action that triggers the defect."
+                capture OBSERVED "What exact result did you observe?"
+                """
+            ]
         ),
         Skill(
             name: "code-review",
@@ -945,16 +1188,53 @@ enum VibeLaneSkillLibrary {
             body: """
             # Code Review
 
-            ## Check
-            - Correctness — does the change do what the task asked? Are edge cases handled?
-            - Minimality — only necessary changes; no unrelated edits, dead code, or debug leftovers.
-            - Design — deep modules with small interfaces; no needless complexity or duplication.
-            - Tests — meaningful tests that would fail without the change; none weakened.
-            - Conventions — matches the project's style and patterns.
+            Review as an independent inspector. Do not modify files. Read
+            [the checklist](references/review-checklist.md) before judging the change.
 
-            ## Output
-            State PASS or FAIL with specific, actionable feedback tied to files or lines.
-            """
+            ## Process
+            1. Identify the task or specification and the diff's merge base.
+            2. Read repository instructions and standards relevant to changed files.
+            3. Read the complete diff before recording a finding.
+            4. Trace changed behavior into callers, state transitions, persistence,
+               and error paths outside the diff when necessary.
+            5. Run the smallest checks that can confirm or reject each important claim.
+            6. Separate correctness defects from optional improvements.
+
+            ## Finding standard
+            Report only issues that are reproducible, logically demonstrated, or tied
+            to a violated requirement. Every finding must include severity, file and line,
+            impact, evidence, and the smallest reasonable correction.
+
+            ## Verdict
+            PASS only when no blocking finding remains and the requested behavior is
+            supported by evidence. Otherwise return FAIL with actionable findings.
+            """,
+            metadata: .init(category: "Review", roles: [.work, .review]),
+            resources: [
+                "references/review-checklist.md": """
+                # Review Checklist
+
+                ## Correctness
+                - Requirements and edge cases are implemented.
+                - Failure, cancellation, retry, and empty states are coherent.
+                - New enum cases and states are handled everywhere they matter.
+
+                ## Safety
+                - Inputs are validated at trust boundaries.
+                - Authorization and destructive operations are explicit.
+                - Concurrent operations cannot overwrite newer state.
+
+                ## Design
+                - Interfaces hide implementation complexity.
+                - No speculative abstraction or unrelated refactor entered the diff.
+                - Names match the project's domain language.
+
+                ## Verification
+                - Tests would fail without the behavior.
+                - No assertion was weakened or skipped.
+                - Relevant build and regression checks pass.
+                """
+            ]
         ),
         Skill(
             name: "writing-clearly",
@@ -962,18 +1242,32 @@ enum VibeLaneSkillLibrary {
             body: """
             # Writing Clearly
 
-            ## Principles
-            - Lead with the point; put the conclusion first.
-            - One idea per paragraph; cut anything that doesn't earn its place.
-            - Concrete over abstract; show, don't just claim.
-            - Match the audience's vocabulary; define jargon or drop it.
-            - Every claim must be supportable.
-
             ## Process
-            1. Outline the arc before drafting.
-            2. Draft fast, then cut ~20%.
-            3. Read it aloud and fix anything that stumbles.
-            """
+            1. Name the audience, decision, and one sentence they should remember.
+            2. Build an outline in the order the reader needs, not the order discovered.
+            3. Draft with the conclusion first and one idea per paragraph.
+            4. Replace abstractions with concrete examples, evidence, and named actors.
+            5. Run the [editing pass](references/editing-pass.md).
+            6. Verify links, numbers, quotes, and technical claims against sources.
+
+            ## Completion evidence
+            The final text has a clear point, a visible structure, supportable claims,
+            and no paragraph that can be removed without losing meaning.
+            """,
+            metadata: .init(category: "Communication", roles: [.work, .review]),
+            resources: [
+                "references/editing-pass.md": """
+                # Editing Pass
+
+                - Lead with the conclusion.
+                - Keep one claim per paragraph.
+                - Prefer active voice and named subjects.
+                - Define necessary jargon once; remove unnecessary jargon.
+                - Cut throat-clearing, repetition, and claims without evidence.
+                - Make headings describe content rather than process.
+                - Read difficult sentences aloud and split them where the thought changes.
+                """
+            ]
         ),
         Skill(
             name: "scoping-and-planning",
@@ -982,17 +1276,36 @@ enum VibeLaneSkillLibrary {
             # Scoping & Planning
 
             ## Process
-            1. Interrogate the request: what problem, for whom, and what changes for them when it ships?
-            2. Write acceptance criteria as observable checks — each names what to run or inspect and the expected result.
-            3. Name the non-goals out loud; scope creep starts where non-goals stay implicit.
-            4. Slice vertically: each slice crosses the stack and delivers observable value on its own.
-            5. Order slices so each builds on the last, and map every criterion to a slice.
+            1. State the user, current problem, desired outcome, and evidence of success.
+            2. Resolve ambiguous terms against the codebase and existing documentation.
+            3. Write explicit scope and non-goals.
+            4. Convert the outcome into observable acceptance criteria.
+            5. Identify constraints, risks, dependencies, and irreversible decisions.
+            6. Slice vertically so each piece creates independently verifiable behavior.
+            7. Map every criterion to at least one slice and order dependency edges.
+            8. Fill [the plan template](assets/plan-template.md).
 
             ## Rules
-            - A criterion you cannot check by running or inspecting something is an opinion, not a criterion.
-            - Slices that only make sense together are one slice.
-            - If a slice cannot be verified independently, split or restructure it.
-            """
+            - A criterion must name what to run or inspect and the expected result.
+            - A slice that cannot be demonstrated independently is not yet a slice.
+            - Do not hide uncertainty; convert it into a decision or investigation.
+            """,
+            metadata: .init(category: "Product", roles: [.work]),
+            resources: [
+                "assets/plan-template.md": """
+                # Plan
+
+                ## Problem and user
+                ## Outcome
+                ## Scope
+                ## Non-goals
+                ## Acceptance criteria
+                ## Constraints and risks
+                ## Vertical slices
+                ## Verification map
+                ## Open decisions
+                """
+            ]
         ),
         Skill(
             name: "security-review",
@@ -1000,18 +1313,34 @@ enum VibeLaneSkillLibrary {
             body: """
             # Security Review
 
-            ## Check the changed code for
-            - Input validation — every external input parsed, bounded, and rejected loudly.
-            - Authorization — every new path checks WHO may do this, not just whether someone is logged in.
-            - Secrets — nothing sensitive in code, logs, error messages, or test fixtures.
-            - Injection — SQL/shell/HTML/path traversal wherever strings meet interpreters or filesystems.
-            - Deserialization and file handling — no untrusted data driving types, paths, or execution.
-
             ## Process
-            1. Run the project's scanners and dependency audits if configured; record the results either way.
-            2. Walk the diff with the checklist above; follow tainted data from source to sink.
-            3. Fix real findings. Document false positives in writing — never suppress a finding to pass.
-            """
+            1. Establish the changed trust boundaries and protected assets.
+            2. Read [the review checklist](references/security-checklist.md).
+            3. Trace each external input from source through validation to sensitive sinks.
+            4. Check authorization at the operation, not only at routing or UI layers.
+            5. Run configured static analysis, dependency, and secret scanners.
+            6. Confirm error messages and logs do not disclose sensitive data.
+            7. Record each finding with an attack path and concrete impact.
+
+            ## Verdict
+            PASS only when no unresolved high-impact path remains, scanner results are
+            recorded, and false positives have evidence rather than suppression.
+            """,
+            metadata: .init(category: "Review", roles: [.work, .review]),
+            resources: [
+                "references/security-checklist.md": """
+                # Security Checklist
+
+                - Authentication and authorization on every sensitive operation.
+                - Input parsing, type validation, size bounds, and canonicalization.
+                - SQL, shell, template, HTML, and path injection.
+                - Secret storage, logging, errors, fixtures, and generated artifacts.
+                - Unsafe deserialization and file handling.
+                - SSRF, redirect, and outbound-network allowlists.
+                - Dependency provenance and newly introduced executable code.
+                - Race conditions around permissions, balances, quotas, and state changes.
+                """
+            ]
         ),
         Skill(
             name: "semantic-versioning",
@@ -1019,18 +1348,30 @@ enum VibeLaneSkillLibrary {
             body: """
             # Semantic Versioning & API Evolution
 
-            ## Rules
-            - Removal or breaking signature change on the public surface → MAJOR.
-            - Additive-only public change → MINOR. Internal-only change → PATCH.
-            - Behavior changes consumers can observe count as API changes, even with identical signatures.
-            - When torn between two bumps, take the larger and say why.
-
             ## Process
-            1. Diff the public surface (exports/declarations/headers) between the last release and now.
-            2. Classify every entry: added / removed / changed-signature / internal.
-            3. For each breaking entry, write the consumer migration with a before/after code example.
-            4. The changelog matches the diff one-to-one — nothing missing, nothing invented.
-            """
+            1. Identify the last released reference and the package's declared public surface.
+            2. Diff exports, declarations, schemas, commands, configuration, and observable behavior.
+            3. Classify each change as breaking, additive, fix, or internal.
+            4. Choose the largest required bump and explain the deciding change.
+            5. For every breaking change, provide before-and-after consumer examples.
+            6. Complete [the release checklist](references/release-checklist.md).
+
+            Treat changed defaults, removed fields, stricter validation, and incompatible
+            output changes as public behavior even when signatures are unchanged.
+            """,
+            metadata: .init(category: "Release", roles: [.work, .review]),
+            resources: [
+                "references/release-checklist.md": """
+                # Release Checklist
+
+                - Public API diff is recorded.
+                - Breaking changes have migrations.
+                - Changelog entries map to actual changes.
+                - Package metadata and lockfiles are coherent.
+                - Tests run against the packaged artifact where practical.
+                - Documentation examples match the released API.
+                """
+            ]
         ),
         Skill(
             name: "sourcing-research",
@@ -1039,16 +1380,35 @@ enum VibeLaneSkillLibrary {
             # Sourced Research
 
             ## Process
-            1. Start from the deciding questions: gather only what some question needs.
-            2. Structure records (table/JSON/CSV) and cite the source on every record.
-            3. Track coverage per question; list gaps honestly instead of papering over them.
-            4. In analysis, separate cited fact from inference visibly, in every finding.
+            1. Write the decision and the questions whose answers could change it.
+            2. Define evidence quality and freshness requirements before searching.
+            3. Prefer primary sources and record publication or retrieval dates.
+            4. Capture every factual record with its source using
+               [the evidence template](assets/evidence-record.md).
+            5. Track coverage and contradictions per question.
+            6. Separate observed fact, inference, and recommendation in the synthesis.
+            7. State gaps that materially limit confidence.
 
             ## Rules
-            - A record without a source is a rumor: source it or drop it.
-            - If the data cannot answer a question, say so — do not reach.
-            - Prefer primary sources; note explicitly when only secondary ones exist.
-            """
+            - Do not cite a search-result snippet as evidence.
+            - Verify consequential claims against the underlying source.
+            - Do not turn absence of evidence into evidence of absence.
+            """,
+            metadata: .init(category: "Research", roles: [.work, .review]),
+            resources: [
+                "assets/evidence-record.md": """
+                # Evidence Record
+
+                - Question:
+                - Claim:
+                - Source URL or file:
+                - Source type:
+                - Published/retrieved:
+                - Exact supporting evidence:
+                - Limitations:
+                - Fact or inference:
+                """
+            ]
         ),
         Skill(
             name: "red-teaming",
@@ -1057,17 +1417,33 @@ enum VibeLaneSkillLibrary {
             # Red-Teaming Conclusions
 
             ## Process
-            1. State the conclusion under attack in one line.
-            2. Hunt for: selection bias, cherry-picking, survivorship effects, data gaps, and alternative
-               readings of the same evidence.
-            3. Steelman the strongest OPPOSING conclusion from the same evidence.
-            4. Try to falsify: what observation would prove this wrong, and did anyone look for it?
-            5. Revise whatever fails; document every challenge run and its outcome.
+            1. State the claim, decision, or artifact under challenge.
+            2. List the assumptions that must hold for it to succeed.
+            3. Construct the strongest credible opposing explanation.
+            4. Search for disconfirming evidence, omitted populations, boundary conditions,
+               and incentives that distort the available evidence.
+            5. Define observations that would falsify the claim and check whether they exist.
+            6. Run failure scenarios across normal, edge, adversarial, and recovery paths.
+            7. Record challenges in [the challenge log](assets/challenge-log.md).
+            8. Revise the original work or explicitly accept the residual risk.
 
             ## Rules
-            - Attack the strongest form of your own case, never the weakest.
-            - A conclusion that survived no real challenge has not been red-teamed.
-            """
+            - Attack the strongest version of the work.
+            - A concern without an impact path is not yet a finding.
+            - A passed challenge requires evidence, not confidence.
+            """,
+            metadata: .init(category: "Review", roles: [.work, .review]),
+            resources: [
+                "assets/challenge-log.md": """
+                # Challenge Log
+
+                | Assumption or claim | Challenge | Evidence | Outcome | Required change |
+                |---|---|---|---|---|
+
+                ## Residual risks
+                ## Falsifying signals to monitor
+                """
+            ]
         ),
         Skill(
             name: "positioning-messaging",
@@ -1076,18 +1452,35 @@ enum VibeLaneSkillLibrary {
             # Positioning & Messaging
 
             ## Process
-            1. Audience first — specific enough that someone is excluded.
-            2. State the problem in the audience's words, not the builder's.
-            3. One promise, concrete and falsifiable; if a competitor could say it verbatim, sharpen it.
-            4. Ladder 3–5 messages up to the promise: each stands alone, none overlap, each is defensible
-               with evidence you can show.
-            5. Write content to the messages: hook, problem, solution, one clear call to action.
+            1. Name the narrow audience and the situation that makes them seek a solution.
+            2. Describe the current alternative and why it is insufficient.
+            3. State one concrete promise the product can prove.
+            4. Build three to five non-overlapping messages using
+               [the message map](assets/message-map.md).
+            5. Attach evidence to every product or outcome claim.
+            6. Draft the hook, problem, solution, proof, and one call to action.
+            7. Remove any sentence a direct competitor could use unchanged.
 
             ## Rules
-            - Features are not messages; what the audience can now DO is the message.
-            - Every claim traces to evidence. Cut anything that does not earn its place.
-            - Plainer beats cleverer.
-            """
+            - A feature becomes a message only when connected to a user outcome.
+            - Plain, specific language beats clever ambiguity.
+            - Do not promise an outcome the available evidence cannot support.
+            """,
+            metadata: .init(category: "Communication", roles: [.work, .review]),
+            resources: [
+                "assets/message-map.md": """
+                # Message Map
+
+                ## Audience and triggering situation
+                ## Current alternative
+                ## Primary promise
+
+                | Message | User outcome | Evidence | Objection answered |
+                |---|---|---|---|
+
+                ## Call to action
+                """
+            ]
         ),
     ]
 
@@ -1099,12 +1492,35 @@ enum VibeLaneSkillLibrary {
     @discardableResult
     static func install(into root: URL) -> URL {
         let fm = FileManager.default
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         for skill in starters {
             let dir = root.appendingPathComponent(skill.name, isDirectory: true)
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
             let file = dir.appendingPathComponent("SKILL.md")
             let content = "---\nname: \(skill.name)\ndescription: \(skill.description)\n---\n\n\(skill.body)\n"
             try? content.write(to: file, atomically: true, encoding: .utf8)
+            if let metadata = try? encoder.encode(skill.metadata) {
+                try? metadata.write(
+                    to: dir.appendingPathComponent(VibeLaneSkillStore.metadataFileName),
+                    options: [.atomic]
+                )
+            }
+            for (path, resourceContent) in skill.resources {
+                let resourceURL = dir.appendingPathComponent(path)
+                try? fm.createDirectory(
+                    at: resourceURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try? (resourceContent + "\n").write(
+                    to: resourceURL,
+                    atomically: true,
+                    encoding: .utf8
+                )
+                if path.hasPrefix("scripts/") {
+                    try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: resourceURL.path)
+                }
+            }
         }
         return root
     }

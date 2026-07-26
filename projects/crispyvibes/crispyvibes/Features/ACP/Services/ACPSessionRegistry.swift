@@ -72,14 +72,29 @@ final class ACPSessionRegistry: ObservableObject {
         id: UUID,
         agentID: String,
         projectPath: String,
+        modelID: String? = nil,
+        trustMode: CLITrustMode? = nil,
+        reasoningLevel: AgentReasoningLevel? = nil,
         vibespaceID: UUID? = nil
     ) -> ACPStandaloneSessionStore {
         if let existing = store(forID: id) {
-            existing.prepareExternalVibeLaneSession(agentID: agentID, projectPath: projectPath)
+            existing.prepareExternalVibeLaneSession(
+                agentID: agentID,
+                projectPath: projectPath,
+                modelID: modelID,
+                trustMode: trustMode,
+                reasoningLevel: reasoningLevel
+            )
             return existing
         }
         let store = storeFactory(id, vibespaceID)
-        store.prepareExternalVibeLaneSession(agentID: agentID, projectPath: projectPath)
+        store.prepareExternalVibeLaneSession(
+            agentID: agentID,
+            projectPath: projectPath,
+            modelID: modelID,
+            trustMode: trustMode,
+            reasoningLevel: reasoningLevel
+        )
         pendingStores[store.id] = store
         observeForThreadCreation(store)
         return store

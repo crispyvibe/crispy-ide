@@ -261,13 +261,15 @@ final class CLICommandRouter {
         CommandRegistration(
             method: "help",
             descriptor: CommandDescriptor(
-                summary: "List all supported methods, or describe a single method when `method` is provided.",
+                summary: "Browse commands by category. No argument lists every category; a category name (e.g. `lane`) lists just that category's commands; a method name returns that method's full schema.",
                 params: [
-                    .init(name: "method", type: "string", required: false, description: "When provided, returns the full descriptor for just that method."),
+                    .init(name: "topic", type: "string", required: false, description: "A category name (`lane`, `todo`, `terminal`, `browser`, `comments`, `shelf`, `shortcut`, `vibespace`, `file`, `core`) or an exact method name."),
+                    .init(name: "method", type: "string", required: false, description: "Deprecated alias for `topic`, kept for existing callers."),
                 ],
                 result: [
                     .init(name: "protocol_version", type: "integer", description: "Agent CLI protocol version."),
-                    .init(name: "commands", type: "array", description: "Array of command descriptors."),
+                    .init(name: "commands", type: "array", description: "Full command descriptors. Present when the topic is a method."),
+                    .init(name: "domains", type: "array", description: "Categories with their commands. All categories when no topic is given; one when the topic is a category."),
                 ],
                 errors: ["unknown_method"]
             ),
@@ -878,7 +880,7 @@ final class CLICommandRouter {
                     .init(name: "name", type: "string", required: true, description: "Lane name."),
                     .init(name: "description", type: "string", required: false, description: "What the lane is for."),
                     .init(name: "steerLimit", type: "integer", required: false, description: "How many Steer escalations the lane allows.", defaultValue: .int(1)),
-                    .init(name: "checkpoints", type: "array", required: false, description: "Checkpoint definitions in the lane schema: [{key, order, work:{goal, instructions?, skills?}, verify:{definition, humanReview?}, bounds?:{maxAttempts, timeoutSeconds, onExhausted}, requires?, produces?}]."),
+                    .init(name: "checkpoints", type: "array", required: false, description: "Checkpoint definitions in the lane schema: [{key, order, work:{goal, instructions?, skills?}, verify:{definition, reviewSkills?, humanReview?}, bounds?:{maxAttempts, timeoutSeconds, onExhausted}, requires?, produces?}]."),
                 ],
                 result: [.init(name: "lane", type: "object", description: "The created lane definition.")],
                 errors: ["invalid_params", "not_connected"]

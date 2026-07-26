@@ -94,4 +94,27 @@ final class VibeSpaceTerminalBoardStoreAddTileTests: XCTestCase {
             [originalTabIDs[1], thirdID, firstID]
         )
     }
+
+    func testAddVibeLanesTileTargetsSurfaceAndPreventsDuplicate() throws {
+        let seedTile = VibeSpaceTerminalBoardTile(workingDirectoryPath: tempRoot.path)
+        let detachedSurfaceID = boardStore.createDetachedSurface(with: seedTile, title: "Lanes")
+
+        XCTAssertTrue(boardStore.addVibeLanesTile(surfaceID: detachedSurfaceID))
+        XCTAssertFalse(boardStore.addVibeLanesTile(surfaceID: detachedSurfaceID))
+        XCTAssertTrue(boardStore.layout.tiles.isEmpty)
+
+        let detachedLayout = boardStore.layout(for: detachedSurfaceID)
+        XCTAssertEqual(detachedLayout.tiles.count, 2)
+        XCTAssertEqual(detachedLayout.tiles.filter(\.isVibeLanes).count, 1)
+    }
+
+    func testVibeLanesTileSurvivesCodableRoundTrip() throws {
+        let tile = VibeSpaceTerminalBoardTile(workingDirectoryPath: "", contentKind: .vibeLanes)
+
+        let data = try JSONEncoder().encode(tile)
+        let decoded = try JSONDecoder().decode(VibeSpaceTerminalBoardTile.self, from: data)
+
+        XCTAssertEqual(decoded, tile)
+        XCTAssertTrue(decoded.isVibeLanes)
+    }
 }

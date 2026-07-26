@@ -1,4 +1,5 @@
 mod handlers_board;
+mod handlers_automation;
 mod handlers_comments;
 mod handlers_message;
 mod handlers_session;
@@ -175,6 +176,21 @@ async fn dispatch(conn: &libsql::Connection, req: Request) -> Response {
         "todo.file.remove" => handlers_todos::todo_file_remove(conn, id, params).await,
         "todo.file.list" => handlers_todos::todo_file_list(conn, id, params).await,
         "todo.pipeline.set" => handlers_todos::todo_pipeline_set(conn, id, params).await,
+
+        // F059/F061 — Vibes, Vibe Lanes, tasks, and Loops
+        "automation.snapshot.load" => handlers_automation::snapshot_load(conn, id).await,
+        "automation.migration.status" => handlers_automation::migration_status(conn, id).await,
+        "automation.migration.import" => handlers_automation::migration_import(conn, id, params).await,
+        "automation.vibe.save" => handlers_automation::vibe_save(conn, id, params).await,
+        "automation.vibe.delete" => handlers_automation::vibe_delete(conn, id, params).await,
+        "automation.lane.save" => handlers_automation::lane_save(conn, id, params).await,
+        "automation.lane.delete" => handlers_automation::lane_delete(conn, id, params).await,
+        "automation.lane.tombstones.clear" => handlers_automation::lane_tombstones_clear(conn, id).await,
+        "automation.starters.apply" => handlers_automation::starters_apply(conn, id, params).await,
+        "automation.task.save" => handlers_automation::task_save(conn, id, params).await,
+        "automation.task.delete" => handlers_automation::task_delete(conn, id, params).await,
+        "automation.loops.replace" => handlers_automation::loops_replace(conn, id, params).await,
+        "automation.skillReferences.replace" => handlers_automation::skill_references_replace(conn, id, params).await,
 
         // Board stubs
         m if m.starts_with("board.") => handlers_board::stub(id, m),

@@ -202,30 +202,13 @@ final class ContentViewerStore: ObservableObject {
         projects: [AnyProjectSession],
         vibespaceID: UUID? = nil
     ) {
+        if let store = resolveVibeLaneACPStore(target: target, vibespaceID: vibespaceID) {
+            ensureACPPaneTab(id: store.id)
+            return
+        }
+
         let threadID = target.threadID?.trimmingCharacters(in: .whitespacesAndNewlines)
         let validThreadID = threadID?.isEmpty == false ? threadID : nil
-
-        if let sessionID = target.sessionID,
-           let store = sessionRegistry.store(forID: sessionID) {
-            if let validThreadID {
-                store.restoreThreadIfNeeded(validThreadID)
-            }
-            ensureACPPaneTab(id: sessionID)
-            return
-        }
-
-        if let sessionID = target.sessionID, validThreadID == nil {
-            let agentID = AppPreferences.acpDefaultAgentID() ?? "codex"
-            _ = sessionRegistry.storeForVibeLaneSession(
-                id: sessionID,
-                agentID: agentID,
-                projectPath: target.projectPath,
-                vibespaceID: vibespaceID
-            )
-            ensureACPPaneTab(id: sessionID)
-            return
-        }
-
         guard let validThreadID else { return }
 
         Task { @MainActor [weak self] in
@@ -244,6 +227,25 @@ final class ContentViewerStore: ObservableObject {
                 vibespaceID: vibespaceID
             )
         }
+    }
+
+    func resolveVibeLaneACPStore(
+        target: VibeLaneACPChatTarget,
+        vibespaceID: UUID? = nil
+    ) -> ACPStandaloneSessionStore? {
+        guard let sessionID = target.sessionID else { return nil }
+        let store = sessionRegistry.store(forID: sessionID)
+            ?? sessionRegistry.storeForVibeLaneSession(
+                id: sessionID,
+                agentID: AppPreferences.acpDefaultAgentID() ?? "codex",
+                projectPath: target.projectPath,
+                vibespaceID: vibespaceID
+            )
+        let threadID = target.threadID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let threadID, !threadID.isEmpty {
+            store.restoreThreadIfNeeded(threadID)
+        }
+        return store
     }
 
     func removeACPStore(id: UUID) {

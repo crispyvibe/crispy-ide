@@ -63,7 +63,13 @@ extension VibeLaneTaskDetailView {
                 .lineLimit(2...6)
             HStack(spacing: uiScale.spacing(10)) {
                 Button {
-                    manager.answerInput(id: task.id, requestID: request.id, approved: true)
+                    Task {
+                        await manager.answerInput(
+                            id: task.id,
+                            requestID: request.id,
+                            approved: true
+                        )
+                    }
                     reviewFeedback = ""
                 } label: {
                     Label(AppStrings.VibeLanes.approve, systemImage: "checkmark")
@@ -72,7 +78,14 @@ extension VibeLaneTaskDetailView {
                 .tint(.green)
 
                 Button {
-                    manager.answerInput(id: task.id, requestID: request.id, approved: false, feedback: reviewFeedback)
+                    Task {
+                        await manager.answerInput(
+                            id: task.id,
+                            requestID: request.id,
+                            approved: false,
+                            feedback: reviewFeedback
+                        )
+                    }
                     reviewFeedback = ""
                 } label: {
                     Label(AppStrings.VibeLanes.requestChanges, systemImage: "arrow.uturn.backward")
@@ -96,7 +109,13 @@ extension VibeLaneTaskDetailView {
                 }
             }
             Button {
-                manager.answerInput(id: task.id, requestID: request.id, values: supplyValues)
+                Task {
+                    await manager.answerInput(
+                        id: task.id,
+                        requestID: request.id,
+                        values: supplyValues
+                    )
+                }
                 supplyValues = [:]
             } label: {
                 Label(AppStrings.VibeLanes.continueTask, systemImage: "arrow.right")
@@ -124,7 +143,13 @@ extension VibeLaneTaskDetailView {
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(3...8)
             Button {
-                manager.answerInput(id: task.id, requestID: request.id, guidance: steeringGuidance)
+                Task {
+                    await manager.answerInput(
+                        id: task.id,
+                        requestID: request.id,
+                        guidance: steeringGuidance
+                    )
+                }
                 steeringGuidance = ""
             } label: {
                 Label(AppStrings.VibeLanes.continueTask, systemImage: "arrow.right")

@@ -11,17 +11,21 @@ import OSLog
 //   • VibeLaneTaskManager+Scheduling.swift    — which tasks run and when
 //   • VibeLaneTaskManager+LaneAuthoring.swift  — lane create/update/delete
 // The shared stored dependencies below are `internal` (not `private`) so those
-// same-module extensions can reach them. The observable collections stay
-// `@Published private(set)` and are mutated only through methods in THIS file.
+// same-module extensions can reach them. Observable state remains
+// `@Published private(set)` and extensions publish through the helpers below.
 
 @MainActor
 final class VibeLaneTaskManager: ObservableObject {
     @Published private(set) var tasks: [VibeLaneTask] = []
     @Published private(set) var lanes: [VibeLaneDefinition] = []
+    @Published private(set) var vibes: [VibeDefinition] = []
+    @Published private(set) var persistenceError: String?
+    @Published private(set) var hasBootstrapped = false
 
-    let store: VibeLaneStoring
+    let store: VibeLanePersisting
     let worker: VibeLaneWorkRunning
     let reviewer: VibeLaneReviewing
+    let engineOptionCatalog: ACPAgentEngineOptionCatalog
     let skillsRoot: URL?
     /// Root directory for per-task handoff files (durable carry-forward substrate).
     let handoffRoot: URL?
@@ -38,7 +42,9 @@ final class VibeLaneTaskManager: ObservableObject {
     /// project path), this bounds unattended agent activity so multiple tasks
     /// can't edit the same project at once (finding #7 / threat-model residual risk).
     nonisolated static let defaultMaxConcurrent = 4
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.crispyvibe.app", category: "vibelanes")
+    /// Internal (not private) so the split extensions in
+    /// `VibeLaneTaskManager+*.swift` can log against the same category.
+    let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.crispyvibe.app", category: "vibelanes")
 
     /// In-flight engine jobs by task id (accessed by the +Scheduling extension).
     var running: [UUID: _Concurrency.Task<Void, Never>] = [:]
@@ -46,11 +52,23 @@ final class VibeLaneTaskManager: ObservableObject {
     /// transition from a superseded run can't resurrect or clobber the task
     /// (accessed by the +Scheduling extension).
     var generation: [UUID: Int] = [:]
+    /// Prevents cancelled completion handlers from scheduling new work while
+    /// application teardown is in progress.
+    var isShuttingDown = false
+    /// Enforces checkpoint deadlines independently of ACP prompt completion.
+    /// Some agents can leave a session/prompt request open indefinitely.
+    var timeoutMonitor: _Concurrency.Task<Void, Never>?
+    var laneRevisions: [VibeLaneRevisionKey: VibeLaneDefinition] = [:]
+    var vibeRevisions: [VibeRevisionKey: VibeDefinition] = [:]
+    /// Task commands that have invalidated an engine generation but have not
+    /// yet committed their authoritative durable state.
+    var taskCommandPersistence: Set<UUID> = []
 
     init(
-        store: VibeLaneStoring,
+        store: VibeLanePersisting,
         worker: VibeLaneWorkRunning,
         reviewer: VibeLaneReviewing? = nil,
+        engineOptionCatalog: ACPAgentEngineOptionCatalog? = nil,
         skillsRoot: URL? = nil,
         handoffRoot: URL? = nil,
         notifier: VibeLaneNotifying? = nil,
@@ -60,6 +78,7 @@ final class VibeLaneTaskManager: ObservableObject {
         self.store = store
         self.worker = worker
         self.reviewer = reviewer ?? VibeLaneUnavailableReviewer()
+        self.engineOptionCatalog = engineOptionCatalog ?? ACPAgentEngineOptionCatalog()
         self.skillsRoot = skillsRoot
         self.handoffRoot = handoffRoot
         self.notifier = notifier
@@ -73,12 +92,19 @@ final class VibeLaneTaskManager: ObservableObject {
     /// validating each against its lane before replaying (R07 / S07). Shipped
     /// starter lanes are reconciled first (seed / refresh pristine / honor
     /// deletions) so catalog improvements reach users who never edited them.
-    func bootstrap(resumeRunning: Bool = true) {
-        store.reconcileStarterLanes()
-        lanes = store.loadLanes()
-        let loaded = store.loadTasks()
+    func bootstrap(resumeRunning: Bool = true) async {
+        let snapshot: VibeLanePersistenceSnapshot
+        do {
+            snapshot = try await store.reconcileStarterLanesPersisted()
+            persistenceError = nil
+        } catch {
+            persistenceError = error.localizedDescription
+            hasBootstrapped = true
+            return
+        }
+        apply(snapshot)
         var resumable: [VibeLaneTask] = []
-        for task in loaded {
+        for task in snapshot.tasks {
             guard let lane = resolvedLane(for: task),
                   task.isConsistent(with: lane) else {
                 logger.warning("vibelane task \(task.id.uuidString, privacy: .public) refused: inconsistent persisted state")
@@ -87,7 +113,9 @@ final class VibeLaneTaskManager: ObservableObject {
             resumable.append(task)
         }
         tasks = resumable.sorted { $0.updatedAt > $1.updatedAt }
+        hasBootstrapped = true
         if resumeRunning {
+            await enforceCheckpointTimeouts()
             for task in tasks where task.state == .running {
                 startIfCapacity(task)
             }
@@ -105,13 +133,40 @@ final class VibeLaneTaskManager: ObservableObject {
         return lanes.first { $0.id == id && $0.version == version }
     }
 
+    func vibe(withID id: UUID, version: Int? = nil) -> VibeDefinition? {
+        guard let version else { return vibes.first { $0.id == id } }
+        if let current = vibes.first(where: { $0.id == id && $0.version == version }) {
+            return current
+        }
+        return vibeRevisions[VibeRevisionKey(vibeID: id, version: version)]
+    }
+
+    func latestVibe(for checkpoint: VibeLaneCheckpoint) -> VibeDefinition? {
+        guard let vibeID = checkpoint.vibeID else { return nil }
+        return vibe(withID: vibeID)
+    }
+
+    func vibeUsageCount(id: UUID) -> Int {
+        lanes.reduce(into: 0) { count, lane in
+            count += lane.checkpoints.filter { $0.vibeID == id }.count
+        }
+    }
+
     func task(withID id: UUID) -> VibeLaneTask? { tasks.first { $0.id == id } }
+
+    func isExecuting(taskID: UUID) -> Bool {
+        running[taskID] != nil
+    }
+
+    func task(withOccurrenceID occurrenceID: UUID) -> VibeLaneTask? {
+        tasks.first { $0.origin.occurrenceID == occurrenceID }
+    }
 
     /// The lane a task actually runs and renders against. Prefer the retained
     /// revision so catalog/template edits cannot silently change an existing task
     /// that pinned the same id/version.
     func resolvedLane(for task: VibeLaneTask) -> VibeLaneDefinition? {
-        store.laneRevision(id: task.laneID, version: task.laneVersion)
+        laneRevisions[VibeLaneRevisionKey(laneID: task.laneID, version: task.laneVersion)]
             ?? lane(withID: task.laneID, version: task.laneVersion)
     }
 
@@ -129,12 +184,45 @@ final class VibeLaneTaskManager: ObservableObject {
         projectPath: String,
         agentID: String? = nil,
         initialCarryForward: [String: String]? = nil
-    ) -> VibeLaneTask? {
-        guard let lane = lane(withID: laneID), let first = lane.firstCheckpoint else {
+    ) async -> VibeLaneTask? {
+        guard let lane = lane(withID: laneID) else {
             logger.warning("createTask: lane \(laneID.uuidString, privacy: .public) not found or empty")
             return nil
         }
-        store.archiveLaneRevision(lane)
+        return await createTask(
+            laneSnapshot: lane,
+            title: title,
+            projectPath: projectPath,
+            agentID: agentID,
+            origin: .manual,
+            initialCarryForward: initialCarryForward
+        )
+    }
+
+    /// Creates a task from an exact immutable lane snapshot. Loops use this
+    /// overload so future edits to the source lane cannot change unattended
+    /// work, and occurrence IDs make retries idempotent.
+    @discardableResult
+    func createTask(
+        laneSnapshot lane: VibeLaneDefinition,
+        title: String,
+        projectPath: String,
+        agentID: String? = nil,
+        origin: VibeLaneTaskOrigin,
+        initialCarryForward: [String: String]? = nil
+    ) async -> VibeLaneTask? {
+        if let occurrenceID = origin.occurrenceID,
+           let existing = task(withOccurrenceID: occurrenceID) {
+            return existing
+        }
+        guard lane.isRunnable else {
+            logger.warning("createTask: lane \(lane.id.uuidString, privacy: .public) needs setup")
+            return nil
+        }
+        guard let first = lane.firstCheckpoint else {
+            logger.warning("createTask: lane \(lane.id.uuidString, privacy: .public) is empty")
+            return nil
+        }
         // F060 — seeded carry-forward lets a dispatched todo satisfy the first
         // checkpoint's `requires` contract without an immediate Supply pause.
         // Same trust class as Supply answers; empty values are dropped.
@@ -147,22 +235,32 @@ final class VibeLaneTaskManager: ObservableObject {
             laneID: lane.id,
             laneVersion: lane.version,
             agentID: agentID,
+            origin: origin,
             state: .running,
             currentCheckpointKey: first.key,
             carryForward: (seeded?.isEmpty == false) ? seeded : nil,
             repoBaselineRef: VibeLaneGit.head(projectPath)
         )
+        do {
+            try await store.persistTask(task)
+        } catch {
+            logger.error("createTask: could not durably save task \(task.id.uuidString, privacy: .public)")
+            persistenceError = error.localizedDescription
+            return nil
+        }
+        laneRevisions[VibeLaneRevisionKey(laneID: lane.id, version: lane.version)] = lane
+        persistenceError = nil
         upsert(task)
-        store.saveTask(task)
         startIfCapacity(task)
         return task
     }
 
-    func stop(id: UUID) {
-        generation[id] = (generation[id] ?? 0) + 1
-        running[id]?.cancel()
-        running[id] = nil
-        guard var task = task(withID: id), !task.isTerminal else { return }
+    @discardableResult
+    func stop(id: UUID) async -> Bool {
+        guard let original = task(withID: id), !original.isTerminal else {
+            return false
+        }
+        var task = original
         if var run = task.run(forKey: task.currentCheckpointKey) {
             run.status = .stopped
             run.stopReason = .stoppedByUser
@@ -172,20 +270,43 @@ final class VibeLaneTaskManager: ObservableObject {
         task.state = .stopped
         task.stopReason = .stoppedByUser
         task.openInputRequest = nil
+        task.pendingHumanEngine = nil
+        task.rerunRequest = nil
         let activity = AppStrings.VibeLanes.activityStopped(AppStrings.VibeLanes.reasonStoppedByYou)
         task.currentActivity = activity
         var log = task.activityLog ?? []
         log.append(VibeLaneActivityLogEntry(at: clock.now, kind: .system, message: activity))
         task.activityLog = log
         task.updatedAt = clock.now
+        generation[id] = (generation[id] ?? 0) + 1
+        running[id]?.cancel()
+        running[id] = nil
+        taskCommandPersistence.insert(id)
+        do {
+            try await store.persistTask(task)
+        } catch {
+            taskCommandPersistence.remove(id)
+            logger.error("stop: could not durably save task \(task.id.uuidString, privacy: .public)")
+            persistenceError = error.localizedDescription
+            if original.state == .running {
+                startIfCapacity(original)
+            }
+            return false
+        }
+        persistenceError = nil
         upsert(task)
-        store.saveTask(task)
+        taskCommandPersistence.remove(id)
         releaseSessions(for: task)
         scheduleQueued()
+        return true
     }
 
     @discardableResult
-    func answerInput(id: UUID, requestID: UUID, values: [String: String]) -> VibeLaneTask? {
+    func answerInput(
+        id: UUID,
+        requestID: UUID,
+        values: [String: String]
+    ) async -> VibeLaneTask? {
         guard var task = validInputTask(id: id, requestID: requestID, kind: .supply),
               let request = task.openInputRequest else { return nil }
         var cleaned: [String: String] = [:]
@@ -197,11 +318,15 @@ final class VibeLaneTaskManager: ObservableObject {
         var carried = task.carryForward ?? [:]
         for (key, value) in cleaned { carried[key] = value }
         task.carryForward = carried
-        return resumeFromInput(&task)
+        return await resumeFromInput(&task)
     }
 
     @discardableResult
-    func answerInput(id: UUID, requestID: UUID, guidance: String) -> VibeLaneTask? {
+    func answerInput(
+        id: UUID,
+        requestID: UUID,
+        guidance: String
+    ) async -> VibeLaneTask? {
         let cleaned = guidance.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return nil }
         guard var task = validInputTask(id: id, requestID: requestID, kind: .steer),
@@ -219,14 +344,19 @@ final class VibeLaneTaskManager: ObservableObject {
         run.endedAt = nil
         run.activeWindowStartedAt = now
         replace(run: run, in: &task)
-        return resumeFromInput(&task, now: now)
+        return await resumeFromInput(&task, now: now)
     }
 
     /// Answer a human-review request: the user verifies the checkpoint's outcome
     /// themselves. Approve records a PASS; rejection requires feedback, which
     /// loops back to the worker exactly like a reviewer FAIL.
     @discardableResult
-    func answerInput(id: UUID, requestID: UUID, approved: Bool, feedback: String? = nil) -> VibeLaneTask? {
+    func answerInput(
+        id: UUID,
+        requestID: UUID,
+        approved: Bool,
+        feedback: String? = nil
+    ) async -> VibeLaneTask? {
         let cleaned = feedback?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard approved || !cleaned.isEmpty else { return nil }
         guard var task = validInputTask(id: id, requestID: requestID, kind: .review) else { return nil }
@@ -235,24 +365,51 @@ final class VibeLaneTaskManager: ObservableObject {
             detail: approved ? AppStrings.VibeLanes.approvedByYou : nil,
             feedback: approved ? nil : cleaned
         )
-        return resumeFromInput(&task)
+        return await resumeFromInput(&task)
     }
 
-    func delete(id: UUID) {
+    /// Delete a task and its durable row. Returns false when the durable delete
+    /// failed — the task is then still present, so callers (notably the CLI) must
+    /// not report success.
+    @discardableResult
+    func delete(id: UUID) async -> Bool {
+        let existing = task(withID: id)
         generation[id] = (generation[id] ?? 0) + 1
         running[id]?.cancel()
         running[id] = nil
-        if let task = task(withID: id) { releaseSessions(for: task) }
+        taskCommandPersistence.insert(id)
+        do {
+            try await store.removeTask(id: id)
+        } catch {
+            taskCommandPersistence.remove(id)
+            persistenceError = error.localizedDescription
+            if existing?.state == .running, let existing {
+                startIfCapacity(existing)
+            }
+            return false
+        }
+        if let existing { releaseSessions(for: existing) }
         tasks.removeAll { $0.id == id }
-        store.deleteTask(id: id)
+        taskCommandPersistence.remove(id)
+        persistenceError = nil
         removeHandoffFiles(taskID: id)
-        pruneLaneRevisions()
+        scheduleQueued()
+        return true
     }
 
     /// Cancel all in-flight engine tasks and release their sessions (call on shutdown).
     func shutdown() {
-        for task in running.values { task.cancel() }
+        guard !isShuttingDown else { return }
+        isShuttingDown = true
+        for id in running.keys {
+            generation[id] = (generation[id] ?? 0) + 1
+        }
+        for task in running.values {
+            task.cancel()
+        }
         running.removeAll()
+        timeoutMonitor?.cancel()
+        timeoutMonitor = nil
         for task in tasks { releaseSessions(for: task) }
     }
 
@@ -273,7 +430,10 @@ final class VibeLaneTaskManager: ObservableObject {
         return task
     }
 
-    private func resumeFromInput(_ task: inout VibeLaneTask, now: Date? = nil) -> VibeLaneTask {
+    private func resumeFromInput(
+        _ task: inout VibeLaneTask,
+        now: Date? = nil
+    ) async -> VibeLaneTask? {
         generation[task.id] = (generation[task.id] ?? 0) + 1
         let timestamp = now ?? clock.now
         if var run = task.run(forKey: task.currentCheckpointKey) {
@@ -287,8 +447,14 @@ final class VibeLaneTaskManager: ObservableObject {
         task.stopReason = nil
         task.openInputRequest = nil
         task.updatedAt = timestamp
+        do {
+            try await store.persistTask(task)
+        } catch {
+            persistenceError = error.localizedDescription
+            return nil
+        }
+        persistenceError = nil
         upsert(task)
-        store.saveTask(task)
         startIfCapacity(task)
         return task
     }
@@ -305,7 +471,7 @@ final class VibeLaneTaskManager: ObservableObject {
         """
     }
 
-    private func replace(run: VibeLaneCheckpointRun, in task: inout VibeLaneTask) {
+    func replace(run: VibeLaneCheckpointRun, in task: inout VibeLaneTask) {
         if let idx = task.checkpointRuns.firstIndex(where: { $0.checkpointKey == run.checkpointKey }) {
             task.checkpointRuns[idx] = run
         } else {
@@ -337,17 +503,49 @@ final class VibeLaneTaskManager: ObservableObject {
         }
     }
 
-    /// Reload the published lane list from the store. Kept in this file so the
-    /// `@Published private(set) lanes` setter stays private here; the authoring
-    /// extension calls this after mutating lanes in the store.
-    func reloadLanes() {
-        lanes = store.loadLanes().sorted { $0.name < $1.name }
+    func apply(_ snapshot: VibeLanePersistenceSnapshot) {
+        lanes = snapshot.lanes.sorted { $0.name < $1.name }
+        vibes = snapshot.vibes.sorted { $0.name < $1.name }
+        laneRevisions = Dictionary(
+            uniqueKeysWithValues: snapshot.laneRevisions.map {
+                (VibeLaneRevisionKey(laneID: $0.id, version: $0.version), $0)
+            }
+        )
+        vibeRevisions = Dictionary(
+            uniqueKeysWithValues: snapshot.vibeRevisions.map {
+                (VibeRevisionKey(vibeID: $0.id, version: $0.version), $0)
+            }
+        )
     }
 
-    /// Drop retained lane revisions no living task pins.
-    private func pruneLaneRevisions() {
-        let keep = Set(tasks.map { VibeLaneRevisionKey(laneID: $0.laneID, version: $0.laneVersion) })
-        store.pruneLaneRevisions(keep: keep)
+    func publishCurrentLane(_ lane: VibeLaneDefinition) {
+        lanes.removeAll { $0.id == lane.id }
+        lanes.append(lane)
+        lanes.sort { $0.name < $1.name }
+    }
+
+    func removePublishedLane(id: UUID) {
+        lanes.removeAll { $0.id == id }
+    }
+
+    func publishCurrentVibe(_ vibe: VibeDefinition) {
+        vibes.removeAll { $0.id == vibe.id }
+        vibes.append(vibe)
+        vibes.sort { $0.name < $1.name }
+    }
+
+    func removePublishedVibe(id: UUID) {
+        vibes.removeAll { $0.id == id }
+    }
+
+    func recordPersistenceResult(_ error: Error?) {
+        persistenceError = error?.localizedDescription
+    }
+
+    /// Surface a domain-level write refusal (e.g. a stale-revision conflict) that
+    /// is not an underlying store error.
+    func recordPersistenceMessage(_ message: String?) {
+        persistenceError = message
     }
 
     /// Remove a deleted task's persisted handoff files.

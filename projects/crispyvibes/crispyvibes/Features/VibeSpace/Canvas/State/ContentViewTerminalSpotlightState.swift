@@ -121,7 +121,7 @@ extension TerminalSpotlightState.Source {
         case .vibeCast:
             return "antenna.radiowaves.left.and.right"
         case .vibeLanes:
-            return "rectangle.stack.badge.play"
+            return VibeLaneVisualIdentity.symbolName
         case .todos:
             return "checklist"
         case .acp:
@@ -138,6 +138,15 @@ extension TerminalSpotlightState.Source {
         case .persistent, .transient:
             return true
         case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
+            return false
+        }
+    }
+
+    var supportsBoardPin: Bool {
+        switch self {
+        case .vibeLanes, .filePreview, .browserPreview:
+            return true
+        case .persistent, .transient, .vibeCast, .todos, .acp, .file, .browser:
             return false
         }
     }

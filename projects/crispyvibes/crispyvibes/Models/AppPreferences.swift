@@ -503,6 +503,29 @@ enum AppPreferences {
         }
     }
 
+    static func acpDefaultModelID(userDefaults: UserDefaults = .standard) -> String? {
+        let trimmed = userDefaults.string(forKey: acpDefaultModelKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let trimmed, !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    static func acpDefaultTrustMode(userDefaults: UserDefaults = .standard) -> CLITrustMode {
+        guard let rawValue = userDefaults.string(forKey: acpDefaultTrustModeKey),
+              let mode = CLITrustMode(rawValue: rawValue) else {
+            return .standard
+        }
+        return mode
+    }
+
+    static func acpDefaultReasoningLevel(userDefaults: UserDefaults = .standard) -> AgentReasoningLevel {
+        guard let rawValue = userDefaults.string(forKey: acpDefaultReasoningLevelKey),
+              let level = AgentReasoningLevel(rawValue: rawValue) else {
+            return .medium
+        }
+        return level
+    }
+
     // MARK: - Todo Lane Pipeline (F060)
 
     static func todoTriageMode(userDefaults: UserDefaults = .standard) -> TodoTriageMode {

@@ -467,6 +467,9 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         if tile.isVibeCast {
             return (AppStrings.VibeCast.title, "")
         }
+        if tile.isVibeLanes {
+            return (AppStrings.VibeLanes.title, "")
+        }
         if let snapshot = tile.acpSnapshot {
             let title = snapshot.selectedAgentID?.trimmingCharacters(in: .whitespacesAndNewlines)
             let subtitle = snapshot.selectedProjectIdentifier ?? ""
@@ -633,6 +636,23 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
             guard state.surfaces[index].layout.tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount else { return }
             guard !state.surfaces[index].layout.tiles.contains(where: { $0.isVibeCast }) else { return }
             let tile = VibeSpaceTerminalBoardTile(workingDirectoryPath: "", contentKind: .vibeCast)
+            didInsert = state.surfaces[index].layout.insertNewTile(
+                tile,
+                activeHintTileID: state.surfaces[index].layout.activeTileID,
+                activateInsertedTile: true
+            )
+        }
+        return didInsert
+    }
+
+    @discardableResult
+    func addVibeLanesTile(surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID) -> Bool {
+        var didInsert = false
+        mutate { state in
+            guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
+            guard state.surfaces[index].layout.tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount else { return }
+            guard !state.surfaces[index].layout.tiles.contains(where: { $0.isVibeLanes }) else { return }
+            let tile = VibeSpaceTerminalBoardTile(workingDirectoryPath: "", contentKind: .vibeLanes)
             didInsert = state.surfaces[index].layout.insertNewTile(
                 tile,
                 activeHintTileID: state.surfaces[index].layout.activeTileID,

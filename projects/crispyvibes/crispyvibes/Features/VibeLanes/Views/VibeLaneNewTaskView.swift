@@ -21,23 +21,22 @@ struct VibeLaneNewTaskView: View {
     @State private var startFailed = false
     /// User override of the focused project (via the directory picker).
     @State private var customProjectPath: String?
-    /// ACP agent override for this task; nil = the app-wide default agent.
-    @State private var selectedAgentID: String?
 
     private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var selectedLane: VibeLaneDefinition? { selectedLaneID.flatMap { manager.lane(withID: $0) } }
 
     private var suggestedLaneID: UUID? {
-        guard !manager.lanes.isEmpty else { return nil }
+        let runnableLanes = manager.lanes.filter(\.isRunnable)
+        guard !runnableLanes.isEmpty else { return nil }
         let lowercased = title.lowercased()
         if lowercased.contains("bug") || lowercased.contains("fix") || lowercased.contains("fail") || lowercased.contains("test") {
-            return manager.lanes.first { $0.name.localizedCaseInsensitiveContains("bug") }?.id ?? manager.lanes.first?.id
+            return runnableLanes.first { $0.name.localizedCaseInsensitiveContains("bug") }?.id ?? runnableLanes.first?.id
         }
         if lowercased.contains("feature") || lowercased.contains("add") || lowercased.contains("build") {
-            return manager.lanes.first { $0.name.localizedCaseInsensitiveContains("feature") }?.id ?? manager.lanes.first?.id
+            return runnableLanes.first { $0.name.localizedCaseInsensitiveContains("feature") }?.id ?? runnableLanes.first?.id
         }
-        return manager.lanes.first?.id
+        return runnableLanes.first?.id
     }
 
     var body: some View {
@@ -156,6 +155,11 @@ struct VibeLaneNewTaskView: View {
                                 .font(.system(size: uiScale.textSize(10), weight: .semibold))
                                 .foregroundStyle(Color.accentColor)
                         }
+                        if !lane.isRunnable {
+                            Label(AppStrings.VibeLanes.laneNeedsSetup, systemImage: "exclamationmark.circle.fill")
+                                .font(.system(size: uiScale.textSize(10), weight: .semibold))
+                                .foregroundStyle(Color.orange)
+                        }
                         Spacer(minLength: 0)
                     }
                     Text(lane.detail ?? AppStrings.VibeLanes.noLaneDetail)
@@ -182,6 +186,7 @@ struct VibeLaneNewTaskView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!lane.isRunnable)
         .vibeLaneHoverable()
     }
 
@@ -191,7 +196,6 @@ struct VibeLaneNewTaskView: View {
                 .font(.system(size: uiScale.textSize(13), weight: .semibold))
                 .foregroundStyle(palette.secondaryTextColor)
             projectRow
-            agentRow
             labeledValue(AppStrings.VibeLanes.lane, value: lane.name)
             VibeLaneRoutePreview(lane: lane)
         }
@@ -226,35 +230,6 @@ struct VibeLaneNewTaskView: View {
         }
     }
 
-    /// ACP agent used for this task's worker + reviewer sessions.
-    private var agentRow: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(AppStrings.VibeLanes.agent)
-                .font(.system(size: uiScale.textSize(11), weight: .semibold))
-                .foregroundStyle(palette.tertiaryTextColor)
-            Picker("", selection: $selectedAgentID) {
-                Text(AppStrings.VibeLanes.defaultAgent(defaultAgentTitle)).tag(String?.none)
-                ForEach(availableAgents, id: \.id) { agent in
-                    Text(agent.title).tag(String?.some(agent.id))
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(maxWidth: 260, alignment: .leading)
-        }
-    }
-
-    private var availableAgents: [(id: String, title: String)] {
-        ACPAgentRegistry.discoverInstalledAgents()
-            .filter { $0.supportsACP && $0.executablePath != nil }
-            .map { (id: $0.id, title: $0.title) }
-    }
-
-    private var defaultAgentTitle: String {
-        let defaultID = AppPreferences.acpDefaultAgentID()
-        return availableAgents.first { $0.id == defaultID }?.title ?? defaultID ?? "—"
-    }
-
     private func pickProjectDirectory() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -287,7 +262,11 @@ struct VibeLaneNewTaskView: View {
             Button(action: start) { Label(AppStrings.VibeLanes.startTask, systemImage: "play.fill") }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(trimmedTitle.isEmpty || selectedLaneID == nil || resolvedProjectPath == nil)
+            .disabled(
+                trimmedTitle.isEmpty
+                    || selectedLane?.isRunnable != true
+                    || resolvedProjectPath == nil
+            )
 
             Button(AppStrings.VibeLanes.cancel, action: onCancel)
                 .buttonStyle(.plain)
@@ -330,12 +309,15 @@ struct VibeLaneNewTaskView: View {
     }
 
     private func start() {
+        Task { await startTask() }
+    }
+
+    private func startTask() async {
         guard let laneID = selectedLaneID, let projectPath = resolvedProjectPath else { return }
-        guard let task = manager.createTask(
+        guard let task = await manager.createTask(
             laneID: laneID,
             title: trimmedTitle,
-            projectPath: projectPath,
-            agentID: selectedAgentID
+            projectPath: projectPath
         ) else {
             startFailed = true
             return
@@ -357,22 +339,20 @@ private struct VibeLaneRoutePreview: View {
             Text(AppStrings.VibeLanes.route)
                 .font(.system(size: uiScale.textSize(11), weight: .semibold))
                 .foregroundStyle(palette.tertiaryTextColor)
-            FlowLayout(spacing: uiScale.spacing(6)) {
+            VStack(alignment: .leading, spacing: uiScale.spacing(8)) {
                 ForEach(Array(lane.orderedCheckpoints.enumerated()), id: \.element.key) { index, checkpoint in
-                    if index > 0 {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: uiScale.iconSize(9), weight: .semibold))
+                    HStack(alignment: .top, spacing: uiScale.spacing(8)) {
+                        Text("\(index + 1)")
+                            .font(.system(size: uiScale.textSize(10), weight: .semibold, design: .monospaced))
                             .foregroundStyle(palette.tertiaryTextColor)
+                            .frame(width: uiScale.chromeSize(18), alignment: .trailing)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(checkpoint.displayTitle)
+                                .font(.system(size: uiScale.textSize(11), weight: .medium))
+                                .foregroundStyle(palette.secondaryTextColor)
+                            VibeLaneEngineSummaryView(configuration: checkpoint.engine)
+                        }
                     }
-                    Text(checkpoint.displayTitle)
-                        .font(.system(size: uiScale.textSize(11), weight: .medium))
-                        .foregroundStyle(palette.secondaryTextColor)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(palette.canvasSecondaryBackgroundColor.opacity(0.8)))
-                        .help(checkpoint.displayTitle)
                 }
             }
         }

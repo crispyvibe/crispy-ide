@@ -3,6 +3,7 @@ import SwiftUI
 
 enum AppSideMenuItem: String, Identifiable {
     case home
+    case automation
     case workspace
     case files
     case git
@@ -19,6 +20,8 @@ enum AppSideMenuItem: String, Identifiable {
         switch self {
         case .home:
             return "Home"
+        case .automation:
+            return AppStrings.Automation.title
         case .workspace:
             return "Workspace"
         case .files:
@@ -44,6 +47,8 @@ enum AppSideMenuItem: String, Identifiable {
         switch self {
         case .home:
             return "house.fill"
+        case .automation:
+            return "gearshape.2"
         case .workspace:
             return "square.grid.2x2"
         case .files:
@@ -152,6 +157,7 @@ struct HomeAppSideMenuRailView: View {
     let canOpenProjectFiles: Bool
     let canOpenVibeSpaceSettings: Bool
     let onHome: () -> Void
+    let onAutomation: () -> Void
     let onWorkspace: () -> Void
     let onFiles: () -> Void
     let onGit: () -> Void
@@ -164,6 +170,11 @@ struct HomeAppSideMenuRailView: View {
         VStack(spacing: 0) {
             VStack(spacing: 10) {
                 menuButton(item: .home, isActive: activeItem == .home, action: onHome)
+                menuButton(
+                    item: .automation,
+                    isActive: activeItem == .automation,
+                    action: onAutomation
+                )
             }
 
             Spacer(minLength: 18)
@@ -359,6 +370,15 @@ extension ContentView {
                         .accessibilityIdentifier("toolbar.vibecast")
 
                     vibespaceToolbarControl(Button {
+                        NotificationCenter.default.post(name: .toggleVibeLanes, object: nil)
+                    } label: {
+                        HomeToolbarIconLabel(systemName: VibeLaneVisualIdentity.symbolName)
+                    })
+                        .help(AppStrings.VibeLanes.title)
+                        .accessibilityLabel(AppStrings.VibeLanes.title)
+                        .accessibilityIdentifier("toolbar.vibe-lanes")
+
+                    vibespaceToolbarControl(Button {
                         NotificationCenter.default.post(name: .toggleTodos, object: nil)
                     } label: {
                         HomeToolbarIconLabel(systemName: "checklist")
@@ -523,6 +543,7 @@ extension ContentView {
             canOpenProjectFiles: canOpenProjectFilesFromAppMenu,
             canOpenVibeSpaceSettings: canOpenVibeSpaceSettingsFromAppMenu,
             onHome: showHomeCanvas,
+            onAutomation: showAutomationFromAppMenu,
             onWorkspace: showWorkspaceSidebar,
             onFiles: { showProjectSidebar(.files) },
             onGit: { showProjectSidebar(.git) },

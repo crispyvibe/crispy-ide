@@ -9,6 +9,8 @@ final class VibeLaneSurfaceNavigationViewModel: ObservableObject {
         case detail(UUID)
         case lanes
         case laneEditor(UUID)
+        case vibes
+        case vibeEditor(UUID, laneID: UUID?)
     }
 
     @Published private(set) var screen: Screen = .dashboard
@@ -41,13 +43,27 @@ final class VibeLaneSurfaceNavigationViewModel: ObservableObject {
         screen = .laneEditor(id)
     }
 
-    func validateSelection(taskExists: (UUID) -> Bool, laneExists: (UUID) -> Bool) {
+    func showVibes() {
+        screen = .vibes
+    }
+
+    func showVibeEditor(id: UUID, fromLaneID laneID: UUID? = nil) {
+        screen = .vibeEditor(id, laneID: laneID)
+    }
+
+    func validateSelection(
+        taskExists: (UUID) -> Bool,
+        laneExists: (UUID) -> Bool,
+        vibeExists: (UUID) -> Bool = { _ in true }
+    ) {
         switch screen {
         case let .detail(id) where !taskExists(id):
             screen = .dashboard
         case let .laneEditor(id) where !laneExists(id):
             screen = .lanes
-        case .dashboard, .newTask, .detail, .lanes, .laneEditor:
+        case let .vibeEditor(id, _) where !vibeExists(id):
+            screen = .vibes
+        case .dashboard, .newTask, .detail, .lanes, .laneEditor, .vibes, .vibeEditor:
             break
         }
     }

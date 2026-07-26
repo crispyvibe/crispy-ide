@@ -1,53 +1,90 @@
 import SwiftUI
 
-// F059 — lane authoring. Edits a draft copy of the lane and commits via `onSave`.
-// A checkpoint is exactly: Work Definition (goal/instructions/skills),
-// Verification Definition (an independent reviewer of the outcome), and Bounds (max attempts + time).
-
 @MainActor
 struct VibeLaneEditorView: View {
     @Environment(\.appThemePalette) private var palette
     @Environment(\.crispyvibesUIScale) private var uiScale
 
     let lane: VibeLaneDefinition
-    var onSave: (VibeLaneDefinition) -> VibeLaneDefinition = { $0 }
-    var onDelete: (() -> Void)? = nil
+    let vibes: [VibeDefinition]
+    var onSave: (VibeLaneDefinition) async -> VibeLaneDefinition? = { $0 }
+    var onDelete: (() -> Void)?
+    var onEditVibe: (UUID) -> Void = { _ in }
+    var onNewVibe: () -> Void = {}
 
-    @State private var draft: VibeLaneDefinition
-    @State private var selectedIndex: Int = 0
-    @State private var newSkill: String = ""
+    @State var draft: VibeLaneDefinition
+    @State var selectedIndex = 0
+    @State private var searchText = ""
+    @State private var selectedCategory: VibeCategory?
     @State private var savedFlash = false
+    @State private var isSaving = false
 
-    init(lane: VibeLaneDefinition,
-         onSave: @escaping (VibeLaneDefinition) -> VibeLaneDefinition = { $0 },
-         onDelete: (() -> Void)? = nil) {
+    init(
+        lane: VibeLaneDefinition,
+        vibes: [VibeDefinition],
+        onSave: @escaping (VibeLaneDefinition) async -> VibeLaneDefinition? = { $0 },
+        onDelete: (() -> Void)? = nil,
+        onEditVibe: @escaping (UUID) -> Void = { _ in },
+        onNewVibe: @escaping () -> Void = {}
+    ) {
         self.lane = lane
+        self.vibes = vibes
         self.onSave = onSave
         self.onDelete = onDelete
+        self.onEditVibe = onEditVibe
+        self.onNewVibe = onNewVibe
         _draft = State(initialValue: lane)
     }
 
+    private var categories: [VibeCategory] {
+        VibeCategory.available(in: vibes)
+    }
+
+    private var filteredVibes: [VibeDefinition] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return vibes.filter {
+            selectedCategory == nil || $0.category == selectedCategory
+        }
+        .filter {
+            query.isEmpty
+                || $0.name.localizedCaseInsensitiveContains(query)
+                || ($0.detail?.localizedCaseInsensitiveContains(query) == true)
+                || $0.work.goal.localizedCaseInsensitiveContains(query)
+                || AppStrings.VibeLanes.vibeCategoryName($0.category)
+                    .localizedCaseInsensitiveContains(query)
+        }
+        .sorted {
+            if $0.category != $1.category {
+                return VibeCategory.sort($0.category, $1.category)
+            }
+            return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: uiScale.spacing(18)) {
-                header
-                if !laneWarnings.isEmpty {
-                    warningPanel(laneWarnings)
+        VStack(spacing: 0) {
+            header
+            Divider()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 0) {
+                    catalogPanel
+                        .frame(minWidth: 250, idealWidth: 290, maxWidth: 320)
+                    Divider()
+                    recipePanel
+                        .frame(minWidth: 520, maxWidth: .infinity)
                 }
-                stepper
-                if let cp = selectedCheckpointBinding {
-                    checkpointPanel(cp)
+                VStack(spacing: 0) {
+                    catalogPanel.frame(height: uiScale.chromeSize(310))
+                    Divider()
+                    recipePanel
                 }
             }
-            .padding(uiScale.spacing(26))
         }
         .background(palette.canvasBackgroundColor)
     }
 
-    // MARK: - Header
-
     private var header: some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: uiScale.spacing(16)) {
             VStack(alignment: .leading, spacing: uiScale.spacing(6)) {
                 TextField(AppStrings.VibeLanes.laneNamePlaceholder, text: $draft.name)
                     .textFieldStyle(.plain)
@@ -58,427 +95,302 @@ struct VibeLaneEditorView: View {
                     .font(.system(size: uiScale.textSize(13)))
                     .foregroundStyle(palette.secondaryTextColor)
                     .frame(maxWidth: 520)
-                Stepper(value: $draft.steerLimit, in: 0...10) {
-                    Text(AppStrings.VibeLanes.steerLimit(draft.steerLimit))
-                        .font(.system(size: uiScale.textSize(12)))
+                DisclosureGroup {
+                    Stepper(value: $draft.steerLimit, in: 0...10) {
+                        Text(AppStrings.VibeLanes.steerLimit(draft.steerLimit))
+                            .font(.system(size: uiScale.textSize(12)))
+                            .foregroundStyle(palette.secondaryTextColor)
+                    }
+                    .padding(.top, uiScale.spacing(6))
+                } label: {
+                    Label(AppStrings.VibeLanes.editorLaneSettings, systemImage: "slider.horizontal.3")
+                        .font(.system(size: uiScale.textSize(12), weight: .medium))
                         .foregroundStyle(palette.secondaryTextColor)
                 }
-                .frame(width: 180, alignment: .leading)
+                .frame(width: 240, alignment: .leading)
             }
             Spacer()
-            HStack(spacing: uiScale.spacing(10)) {
-                if let onDelete {
-                    Button(role: .destructive, action: onDelete) { Text(AppStrings.VibeLanes.deleteLane) }
+            if let onDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Label(AppStrings.VibeLanes.deleteLane, systemImage: "trash")
                 }
-                Button {
-                    draft = onSave(draft)
-                    savedFlash = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { savedFlash = false }
-                } label: {
-                    Label(savedFlash ? AppStrings.VibeLanes.saved : AppStrings.VibeLanes.saveLane, systemImage: savedFlash ? "checkmark" : "square.and.arrow.down")
-                        .font(.system(size: uiScale.textSize(13), weight: .semibold))
-                }
-                .buttonStyle(.borderedProminent)
             }
+            Button(action: save) {
+                Label(
+                    savedFlash ? AppStrings.VibeLanes.saved : AppStrings.VibeLanes.saveLane,
+                    systemImage: savedFlash ? "checkmark" : "square.and.arrow.down"
+                )
+                .font(.system(size: uiScale.textSize(13), weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!blockingErrors.isEmpty || isSaving)
+            .help(blockingErrors.isEmpty ? AppStrings.VibeLanes.saveLane : AppStrings.VibeLanes.fixLaneErrors)
         }
+        .padding(.horizontal, uiScale.spacing(24))
+        .padding(.vertical, uiScale.spacing(16))
     }
 
-    // MARK: - Stepper
+    private var catalogPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Label(AppStrings.VibeLanes.vibeLibrary, systemImage: "sparkles.rectangle.stack")
+                    .font(.system(size: uiScale.textSize(13), weight: .semibold))
+                Spacer()
+                Button(action: onNewVibe) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderless)
+                .help(AppStrings.VibeLanes.newVibe)
+            }
+            .padding(.horizontal, uiScale.spacing(14))
+            .padding(.top, uiScale.spacing(14))
 
-    private var stepper: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: uiScale.spacing(6)) {
-                ForEach(Array(draft.checkpoints.enumerated()), id: \.offset) { index, checkpoint in
-                    checkpointStep(index: index, checkpoint: checkpoint)
-                    if index < draft.checkpoints.count - 1 {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: uiScale.iconSize(10), weight: .semibold))
-                            .foregroundStyle(palette.tertiaryTextColor)
+            HStack(spacing: uiScale.spacing(8)) {
+                Picker(AppStrings.VibeLanes.vibeCategories, selection: $selectedCategory) {
+                    Text(AppStrings.VibeLanes.vibeCategoryAll).tag(nil as VibeCategory?)
+                    ForEach(categories) { category in
+                        Label(
+                            AppStrings.VibeLanes.vibeCategoryName(category),
+                            systemImage: category.systemImage
+                        )
+                        .tag(category as VibeCategory?)
                     }
                 }
-                Button(action: addCheckpoint) {
-                    Image(systemName: "plus")
-                        .font(.system(size: uiScale.iconSize(13), weight: .semibold))
-                        .frame(width: uiScale.chromeSize(34), height: uiScale.chromeSize(34))
-                        .background(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor.opacity(0.45), style: StrokeStyle(dash: [4])))
-                        .foregroundStyle(Color.accentColor)
-                }
-                .buttonStyle(.plain)
-                .help(AppStrings.VibeLanes.editorCheckpoint)
-            }
-            .padding(.vertical, 1)
-        }
-    }
-
-    private func checkpointStep(index: Int, checkpoint: VibeLaneCheckpoint) -> some View {
-        let isSelected = index == selectedIndex
-        return Button { selectedIndex = index } label: {
-            HStack(spacing: uiScale.spacing(8)) {
-                Text("\(index + 1)")
-                    .font(.system(size: uiScale.textSize(12), weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.accentColor : palette.secondaryTextColor)
+                .pickerStyle(.menu)
+                .controlSize(uiScale.controlSize)
+                Spacer()
+                Text("\(filteredVibes.count)")
+                    .font(.system(size: uiScale.textSize(10), weight: .medium))
+                    .foregroundStyle(palette.tertiaryTextColor)
                     .monospacedDigit()
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(checkpoint.displayTitle)
-                        .font(.system(size: uiScale.textSize(12), weight: .semibold))
-                        .foregroundStyle(palette.primaryTextColor)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Text(checkpoint.key)
-                        .font(.system(size: uiScale.textSize(10), design: .monospaced))
-                        .foregroundStyle(palette.tertiaryTextColor)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, uiScale.spacing(10))
-            .padding(.vertical, uiScale.spacing(8))
-            .frame(width: uiScale.chromeSize(170), alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.10) : Color(nsColor: .controlBackgroundColor))
-                    .shadow(color: .black.opacity(isSelected ? 0.0 : 0.05), radius: 3, y: 1)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(isSelected ? Color.accentColor : palette.tertiaryTextColor.opacity(0.14),
-                                  lineWidth: isSelected ? 1.4 : 1)
-            )
+            .padding(.horizontal, uiScale.spacing(14))
+            .padding(.top, uiScale.spacing(10))
+
+            TextField(AppStrings.VibeLanes.searchVibes, text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, uiScale.spacing(14))
+                .padding(.vertical, uiScale.spacing(10))
+
+            ScrollView {
+                LazyVStack(spacing: uiScale.spacing(4)) {
+                    ForEach(filteredVibes) { vibe in
+                        catalogRow(vibe)
+                    }
+                }
+                .padding(.horizontal, uiScale.spacing(8))
+                .padding(.bottom, uiScale.spacing(12))
+            }
         }
-        .buttonStyle(.plain)
-        .help(checkpoint.displayTitle)
+        .background(palette.canvasSecondaryBackgroundColor.opacity(0.45))
     }
 
-    // MARK: - Checkpoint panel
+    private func catalogRow(_ vibe: VibeDefinition) -> some View {
+        HStack(spacing: uiScale.spacing(9)) {
+            Image(systemName: vibe.isReady ? "checkmark.seal" : "exclamationmark.circle")
+                .foregroundStyle(vibe.isReady ? palette.successColor : palette.warningColor)
+                .frame(width: uiScale.chromeSize(20))
+            VStack(alignment: .leading, spacing: uiScale.spacing(3)) {
+                Text(vibe.name)
+                    .font(.system(size: uiScale.textSize(12), weight: .semibold))
+                    .foregroundStyle(palette.primaryTextColor)
+                    .lineLimit(1)
+                VibeCategoryLabel(category: vibe.category)
+                Text(vibe.isReady ? vibe.work.goal : AppStrings.VibeLanes.laneNeedsSetup)
+                    .font(.system(size: uiScale.textSize(10)))
+                    .foregroundStyle(palette.tertiaryTextColor)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Button { addVibe(vibe) } label: {
+                Image(systemName: "plus")
+                    .frame(width: uiScale.chromeSize(24), height: uiScale.chromeSize(24))
+            }
+            .buttonStyle(.bordered)
+            .disabled(!vibe.isReady)
+            .help(AppStrings.VibeLanes.addVibeToLane)
+        }
+        .padding(.horizontal, uiScale.spacing(8))
+        .padding(.vertical, uiScale.spacing(7))
+        .contentShape(Rectangle())
+        .vibeLaneHoverable(cornerRadius: 6)
+    }
 
-    private func checkpointPanel(_ cp: Binding<VibeLaneCheckpoint>) -> some View {
+    private var recipePanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            recipeHeader
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: uiScale.spacing(14)) {
+                    let errors = VibeLaneEditorValidation.errors(for: draft)
+                    let warnings = VibeLaneEditorValidation.warnings(for: draft)
+                    if !errors.isEmpty {
+                        VibeLaneErrorPanel(errors: errors)
+                    }
+                    if !warnings.isEmpty {
+                        VibeLaneWarningPanel(warnings: warnings)
+                    }
+                    if let checkpoint = selectedCheckpointBinding {
+                        inspector(checkpoint)
+                    } else {
+                        ContentUnavailableView(
+                            AppStrings.VibeLanes.noLaneSteps,
+                            systemImage: "square.stack.3d.up.slash"
+                        )
+                        .frame(maxWidth: .infinity, minHeight: uiScale.chromeSize(280))
+                    }
+                }
+                .padding(uiScale.spacing(18))
+            }
+        }
+    }
+
+    private var recipeHeader: some View {
+        VStack(alignment: .leading, spacing: uiScale.spacing(10)) {
+            Label(AppStrings.VibeLanes.laneRecipe, systemImage: "point.3.connected.trianglepath.dotted")
+                .font(.system(size: uiScale.textSize(13), weight: .semibold))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: uiScale.spacing(6)) {
+                    ForEach(Array(draft.checkpoints.enumerated()), id: \.element.key) { index, checkpoint in
+                        VibeLaneCheckpointStepButton(
+                            index: index,
+                            checkpoint: checkpoint,
+                            isSelected: index == selectedIndex,
+                            hasErrors: checkpointHasErrors(at: index),
+                            onSelect: { selectedIndex = index }
+                        )
+                        if index < draft.checkpoints.count - 1 {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: uiScale.iconSize(9), weight: .semibold))
+                                .foregroundStyle(palette.tertiaryTextColor)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, uiScale.spacing(18))
+        .padding(.vertical, uiScale.spacing(12))
+    }
+
+    private func inspector(_ checkpoint: Binding<VibeLaneCheckpoint>) -> some View {
         VStack(alignment: .leading, spacing: uiScale.spacing(16)) {
             ViewThatFits(in: .horizontal) {
-                HStack {
-                    checkpointPanelTitle
+                HStack(alignment: .top, spacing: uiScale.spacing(12)) {
+                    vibeIdentity(checkpoint)
                     Spacer()
-                    checkpointActions
+                    stepActions(checkpoint)
                 }
                 VStack(alignment: .leading, spacing: uiScale.spacing(10)) {
-                    checkpointPanelTitle
-                    checkpointActions
+                    vibeIdentity(checkpoint)
+                    stepActions(checkpoint)
                 }
             }
 
-            // Work Definition
-            sectionLabel(AppStrings.VibeLanes.editorWork)
-            labeled(AppStrings.VibeLanes.editorStepKey) {
-                TextField(AppStrings.VibeLanes.stepKeyPlaceholder, text: cp.key).textFieldStyle(.roundedBorder).frame(maxWidth: 240)
-            }
-            labeled(AppStrings.VibeLanes.editorGoal) {
-                TextField(AppStrings.VibeLanes.goalPlaceholder, text: cp.work.goal, axis: .vertical)
-                    .textFieldStyle(.roundedBorder).lineLimit(1...3)
-            }
-            labeled(AppStrings.VibeLanes.editorSkillPaths) {
-                editableSkills(cp.work.skills)
-            }
-            labeled(AppStrings.VibeLanes.editorInstructions) {
-                TextField(AppStrings.VibeLanes.instructionsPlaceholder, text: cp.work.instructions, axis: .vertical)
-                    .textFieldStyle(.roundedBorder).lineLimit(2...5)
-            }
+            VibeLaneCheckpointBehaviorSummary(checkpoint: checkpoint.wrappedValue)
 
-            Divider()
-
-            // Verification Definition — judged by the reviewer agent, or by the
-            // user when the author picks human verification.
-            labeled(AppStrings.VibeLanes.editorVerification) {
-                TextField("", text: verifyBinding(cp), axis: .vertical)
-                    .textFieldStyle(.roundedBorder).lineLimit(3...8)
-            }
-            labeled(AppStrings.VibeLanes.editorVerifiedBy) {
-                Picker("", selection: humanReviewBinding(cp)) {
-                    Text(AppStrings.VibeLanes.editorReviewerAgent).tag(false)
-                    Text(AppStrings.VibeLanes.editorVerifiedByYou).tag(true)
+            if let latest = latestVibe(for: checkpoint.wrappedValue),
+               latest.version != checkpoint.wrappedValue.vibeVersion {
+                HStack(spacing: uiScale.spacing(10)) {
+                    Label(AppStrings.VibeLanes.updateAvailable, systemImage: "arrow.triangle.2.circlepath")
+                        .font(.system(size: uiScale.textSize(12), weight: .semibold))
+                        .foregroundStyle(palette.warningColor)
+                    Text(AppStrings.VibeLanes.vibeVersion(latest.version))
+                        .font(.system(size: uiScale.textSize(11)))
+                        .foregroundStyle(palette.secondaryTextColor)
+                    Spacer()
+                    Button(AppStrings.VibeLanes.useLatestVersion) {
+                        useLatestVibe(latest)
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 260)
+                .padding(uiScale.spacing(10))
+                .background(
+                    palette.warningColor.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: uiScale.chromeSize(6))
+                )
             }
 
             Divider()
-
-            // Contract — declared inputs/outputs the engine validates + carries forward.
-            VibeLaneContractEditor(checkpoint: cp)
-
+            VibeLaneContractEditor(checkpoint: checkpoint, showsTitle: true)
             Divider()
-
-            // Bounds
-            sectionLabel(AppStrings.VibeLanes.editorBounds)
-            ViewThatFits(in: .horizontal) {
-                boundsRow(cp)
-                VStack(alignment: .leading, spacing: uiScale.spacing(12)) {
-                    boundsAttemptControl(cp)
-                    boundsTimeControl(cp)
-                    boundsExhaustedControl(cp)
-                }
+            DisclosureGroup {
+                TextField(AppStrings.VibeLanes.stepKeyPlaceholder, text: checkpoint.key)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 260)
+                    .padding(.top, uiScale.spacing(10))
+            } label: {
+                Label(AppStrings.VibeLanes.editorStableID, systemImage: "number")
+                    .font(.system(size: uiScale.textSize(12), weight: .semibold))
             }
         }
         .padding(uiScale.spacing(18))
         .vibeLaneCard()
     }
 
-    private var checkpointPanelTitle: some View {
-        Text(AppStrings.VibeLanes.editorCheckpoint)
-            .font(.system(size: uiScale.textSize(16), weight: .semibold))
+    private func vibeIdentity(_ checkpoint: Binding<VibeLaneCheckpoint>) -> some View {
+        VStack(alignment: .leading, spacing: uiScale.spacing(4)) {
+            Text(AppStrings.VibeLanes.stepOf(current: selectedIndex + 1, total: draft.checkpoints.count))
+                .font(.system(size: uiScale.textSize(11), weight: .semibold))
+                .foregroundStyle(palette.tertiaryTextColor)
+            HStack(spacing: uiScale.spacing(8)) {
+                Text(checkpoint.wrappedValue.displayTitle)
+                    .font(.system(size: uiScale.textSize(18), weight: .semibold))
+                if let version = checkpoint.wrappedValue.vibeVersion {
+                    Text(AppStrings.VibeLanes.vibeVersion(version))
+                        .font(.system(size: uiScale.textSize(10), weight: .semibold))
+                        .foregroundStyle(palette.tertiaryTextColor)
+                }
+            }
+            if let vibeID = checkpoint.wrappedValue.vibeID,
+               let category = vibes.first(where: { $0.id == vibeID })?.category {
+                VibeCategoryLabel(category: category, isEmphasized: true)
+            }
+        }
     }
 
-    private var checkpointActions: some View {
+    private func stepActions(_ checkpoint: Binding<VibeLaneCheckpoint>) -> some View {
         HStack(spacing: uiScale.spacing(8)) {
-            if draft.checkpoints.count > 1 {
-                Button { moveCheckpoint(offset: -1) } label: {
-                    Label(AppStrings.VibeLanes.moveCheckpointLeft, systemImage: "chevron.left")
+            if let vibeID = checkpoint.wrappedValue.vibeID {
+                Button { onEditVibe(vibeID) } label: {
+                    Label(AppStrings.VibeLanes.editVibe, systemImage: "pencil")
                 }
-                .disabled(selectedIndex == 0)
                 .buttonStyle(.bordered)
-
-                Button { moveCheckpoint(offset: 1) } label: {
-                    Label(AppStrings.VibeLanes.moveCheckpointRight, systemImage: "chevron.right")
-                }
-                .disabled(selectedIndex >= draft.checkpoints.count - 1)
-                .buttonStyle(.bordered)
-
-                Button(role: .destructive) { removeCheckpoint() } label: {
-                    Image(systemName: "trash")
-                        .frame(width: uiScale.chromeSize(28), height: uiScale.chromeSize(24))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.red)
-                .help(AppStrings.VibeLanes.discard)
-                .accessibilityLabel(AppStrings.VibeLanes.discard)
             }
-        }
-    }
-
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: uiScale.textSize(12), weight: .semibold))
-            .foregroundStyle(palette.secondaryTextColor)
-    }
-
-    private func boundsRow(_ cp: Binding<VibeLaneCheckpoint>) -> some View {
-        HStack(spacing: uiScale.spacing(24)) {
-            boundsAttemptControl(cp)
-            boundsTimeControl(cp)
-            boundsExhaustedControl(cp)
-        }
-    }
-
-    private func boundsAttemptControl(_ cp: Binding<VibeLaneCheckpoint>) -> some View {
-        labeled(AppStrings.VibeLanes.maxAttempts) {
-            Stepper(value: cp.bounds.maxAttempts, in: 1...100) {
-                Text("\(cp.wrappedValue.bounds.maxAttempts)")
-                    .font(.system(size: uiScale.textSize(14), weight: .semibold))
-                    .monospacedDigit()
+            Button { moveCheckpoint(offset: -1) } label: {
+                Image(systemName: "chevron.left")
             }
-            .frame(width: 160)
-        }
-    }
-
-    private func boundsTimeControl(_ cp: Binding<VibeLaneCheckpoint>) -> some View {
-        labeled(AppStrings.VibeLanes.timeLimitMinutes) {
-            Stepper(value: timeoutMinutesBinding(cp), in: 1...240) {
-                Text(AppStrings.VibeLanes.minutesShort(cp.wrappedValue.bounds.timeoutSeconds / 60))
-                    .font(.system(size: uiScale.textSize(14), weight: .semibold))
+            .disabled(selectedIndex == 0)
+            .buttonStyle(.bordered)
+            .help(AppStrings.VibeLanes.moveCheckpointLeft)
+            Button { moveCheckpoint(offset: 1) } label: {
+                Image(systemName: "chevron.right")
             }
-            .frame(width: 160)
-        }
-    }
-
-    private func boundsExhaustedControl(_ cp: Binding<VibeLaneCheckpoint>) -> some View {
-        labeled(AppStrings.VibeLanes.whenExhausted) {
-            Picker("", selection: exhaustedBehaviorBinding(cp)) {
-                Text(AppStrings.VibeLanes.stopOnExhausted).tag(VibeLaneBoundBehavior.stop)
-                Text(AppStrings.VibeLanes.escalateOnExhausted).tag(VibeLaneBoundBehavior.escalate)
+            .disabled(selectedIndex >= draft.checkpoints.count - 1)
+            .buttonStyle(.bordered)
+            .help(AppStrings.VibeLanes.moveCheckpointRight)
+            Button(role: .destructive, action: removeCheckpoint) {
+                Image(systemName: "trash")
             }
-            .pickerStyle(.segmented)
-            .frame(width: 220)
+            .buttonStyle(.bordered)
+            .help(AppStrings.VibeLanes.removeVibeFromLane)
         }
     }
 
-    private func editableSkills(_ skills: Binding<[String]>) -> some View {
-        VStack(alignment: .leading, spacing: uiScale.spacing(8)) {
-            FlowLayout(spacing: uiScale.spacing(8)) {
-                ForEach(Array(skills.wrappedValue.enumerated()), id: \.offset) { idx, skill in
-                    HStack(spacing: 5) {
-                        Text(skill).font(.system(size: uiScale.textSize(12)))
-                        Button { skills.wrappedValue.remove(at: idx) } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 9))
-                                .frame(width: uiScale.chromeSize(16), height: uiScale.chromeSize(16))
-                        }
-                            .buttonStyle(.plain)
-                            .help(AppStrings.VibeLanes.deleteTask)
-                            .accessibilityLabel(AppStrings.VibeLanes.deleteTask)
-                    }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 4)
-                    .padding(.vertical, 5)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.10)))
-                    .foregroundStyle(Color.accentColor)
-                }
-            }
-            HStack {
-                TextField(AppStrings.VibeLanes.addSkillPlaceholder, text: $newSkill)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 360)
-                    .onSubmit { addSkill(skills) }
-                Button(AppStrings.VibeLanes.add) { addSkill(skills) }.disabled(newSkill.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
+    private var blockingErrors: [String] {
+        VibeLaneEditorValidation.errors(for: draft)
     }
 
-    // MARK: - Bindings & mutations
-
-    private var selectedCheckpointBinding: Binding<VibeLaneCheckpoint>? {
-        guard draft.checkpoints.indices.contains(selectedIndex) else { return nil }
-        return Binding(
-            get: { draft.checkpoints[selectedIndex] },
-            set: { draft.checkpoints[selectedIndex] = $0 }
-        )
-    }
-
-    private var detailBinding: Binding<String> {
-        Binding(get: { draft.detail ?? "" }, set: { draft.detail = $0.isEmpty ? nil : $0 })
-    }
-
-    private func verifyBinding(_ cp: Binding<VibeLaneCheckpoint>) -> Binding<String> {
-        Binding(
-            get: { cp.wrappedValue.verify.definition },
-            set: { cp.wrappedValue.verify.definition = $0 }
-        )
-    }
-
-    private func humanReviewBinding(_ cp: Binding<VibeLaneCheckpoint>) -> Binding<Bool> {
-        Binding(
-            get: { cp.wrappedValue.verify.humanReview },
-            set: { cp.wrappedValue.verify.humanReview = $0 }
-        )
-    }
-
-    private func timeoutMinutesBinding(_ cp: Binding<VibeLaneCheckpoint>) -> Binding<Int> {
-        Binding(
-            get: { max(1, cp.wrappedValue.bounds.timeoutSeconds / 60) },
-            set: { cp.wrappedValue.bounds.timeoutSeconds = $0 * 60 }
-        )
-    }
-
-    private func exhaustedBehaviorBinding(_ cp: Binding<VibeLaneCheckpoint>) -> Binding<VibeLaneBoundBehavior> {
-        Binding(
-            get: { cp.wrappedValue.bounds.onExhausted },
-            set: { cp.wrappedValue.bounds.onExhausted = $0 }
-        )
-    }
-
-    private func addCheckpoint() {
-        let existing = Set(draft.checkpoints.map { $0.key })
-        var key = VibeLaneTaskManager.normalizedKey("step-\(draft.checkpoints.count + 1)")
-        while key.isEmpty || existing.contains(key) {
-            key = "step-\(draft.checkpoints.count + 1)-\(UUID().uuidString.prefix(4))"
-        }
-        draft.checkpoints.append(
-            VibeLaneCheckpoint(key: key, order: draft.checkpoints.count,
-                               goal: "", verify: VibeLaneVerificationDefinition(""))
-        )
-        selectedIndex = draft.checkpoints.count - 1
-    }
-
-    private func removeCheckpoint() {
-        guard draft.checkpoints.indices.contains(selectedIndex), draft.checkpoints.count > 1 else { return }
-        draft.checkpoints.remove(at: selectedIndex)
-        refreshCheckpointOrder()
-        selectedIndex = min(selectedIndex, draft.checkpoints.count - 1)
-    }
-
-    private func moveCheckpoint(offset: Int) {
-        let newIndex = selectedIndex + offset
-        guard draft.checkpoints.indices.contains(selectedIndex),
-              draft.checkpoints.indices.contains(newIndex) else { return }
-        draft.checkpoints.swapAt(selectedIndex, newIndex)
-        selectedIndex = newIndex
-        refreshCheckpointOrder()
-    }
-
-    private func refreshCheckpointOrder() {
-        for i in draft.checkpoints.indices { draft.checkpoints[i].order = i }
-    }
-
-    private func addSkill(_ skills: Binding<[String]>) {
-        let trimmed = newSkill.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        skills.wrappedValue.append(trimmed)
-        newSkill = ""
-    }
-
-    @ViewBuilder
-    private func labeled<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: uiScale.spacing(7)) {
-            Text(label).font(.system(size: uiScale.textSize(13), weight: .semibold))
-            content()
-        }
-    }
-
-    private var laneWarnings: [String] {
-        var warnings: [String] = []
-        let rawKeys = draft.checkpoints.map(\.key)
-        let normalized = rawKeys.map(VibeLaneTaskManager.normalizedKey)
-        if normalized.contains("") || Set(normalized).count != normalized.count || rawKeys != normalized {
-            warnings.append(AppStrings.VibeLanes.keyNormalizationWarning)
-        }
-        let producedByPrior = draft.checkpoints.sorted { $0.order < $1.order }.reduce(into: (seen: Set<String>(), warnings: [String]())) { partial, checkpoint in
-            let missing = checkpoint.inputRequirements
-                .filter { !$0.askUser && !partial.seen.contains($0.key) }
-                .map(\.key)
-            if !missing.isEmpty {
-                partial.warnings.append(AppStrings.VibeLanes.misAuthoredContractWarning(checkpoint: checkpoint.displayTitle, keys: missing.joined(separator: ", ")))
-            }
-            partial.seen.formUnion(checkpoint.producedOutputs)
-        }.warnings
-        warnings.append(contentsOf: producedByPrior)
-        return warnings
-    }
-
-    private func warningPanel(_ warnings: [String]) -> some View {
-        VStack(alignment: .leading, spacing: uiScale.spacing(5)) {
-            ForEach(warnings, id: \.self) { warning in
-                Label(warning, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: uiScale.textSize(11)))
-                    .foregroundStyle(.orange)
-            }
-        }
-        .padding(uiScale.spacing(10))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .vibeLaneCard(cornerRadius: 10, tint: .orange)
-    }
-}
-
-/// Minimal flow layout for chips (wraps to available width).
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth, x > 0 { x = 0; y += rowHeight + spacing; rowHeight = 0 }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        return CGSize(width: maxWidth == .infinity ? x : maxWidth, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > bounds.maxX, x > bounds.minX { x = bounds.minX; y += rowHeight + spacing; rowHeight = 0 }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
+    private func save() {
+        guard !isSaving else { return }
+        isSaving = true
+        Task {
+            defer { isSaving = false }
+            guard let saved = await onSave(draft) else { return }
+            draft = saved
+            selectedIndex = min(selectedIndex, max(0, draft.checkpoints.count - 1))
+            savedFlash = true
+            try? await Task.sleep(for: .seconds(1.2))
+            savedFlash = false
         }
     }
 }

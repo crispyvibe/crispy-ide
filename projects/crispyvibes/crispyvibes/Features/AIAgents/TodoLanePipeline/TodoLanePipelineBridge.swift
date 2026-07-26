@@ -113,7 +113,7 @@ final class TodoLanePipelineBridge: ObservableObject {
             // the CLI falls back to _env.project_path. Reaching here is caller error.
             return .creationFailed
         }
-        guard let task = laneManager.createTask(
+        guard let task = await laneManager.createTask(
             laneID: laneID,
             title: todo.title,
             projectPath: projectPath,

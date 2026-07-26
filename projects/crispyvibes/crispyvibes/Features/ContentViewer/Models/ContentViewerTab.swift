@@ -127,7 +127,7 @@ struct ContentViewerTab: Identifiable, Equatable {
         case .todos:
             return "checklist"
         case .vibeLanes:
-            return "rectangle.stack.badge.play"
+            return VibeLaneVisualIdentity.symbolName
         case .webPage:
             return "globe"
         case .terminal:

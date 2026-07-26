@@ -127,8 +127,22 @@ extension VibeLaneTaskDetailView {
                         .font(.system(size: uiScale.textSize(17), weight: .semibold))
                         .foregroundStyle(palette.primaryTextColor)
                     Spacer(minLength: 0)
+                    if task.isTerminal, run?.attempts.isEmpty == false {
+                        Button {
+                            rerunCheckpoint = checkpoint
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .frame(width: uiScale.chromeSize(26), height: uiScale.chromeSize(24))
+                        }
+                        .buttonStyle(.bordered)
+                        .help(AppStrings.VibeLanes.rerunStep)
+                        .accessibilityLabel(AppStrings.VibeLanes.rerunStep)
+                    }
                 }
                 stepStatusLine(checkpoint, task: task, state: state)
+                if state == .active, let activeEngine = run?.activeEngine {
+                    VibeLaneEngineSummaryView(snapshot: activeEngine)
+                }
 
                 // What happened here (the payoff) comes first…
                 if let run, !run.attempts.isEmpty {
@@ -136,7 +150,7 @@ extension VibeLaneTaskDetailView {
                         Text(AppStrings.VibeLanes.attempts(run.attempts.count))
                             .font(.system(size: uiScale.textSize(11), weight: .semibold))
                             .foregroundStyle(palette.tertiaryTextColor)
-                        ForEach(run.attempts) { attemptRow($0) }
+                        ForEach(run.attempts) { VibeLaneAttemptRow(attempt: $0) }
                     }
                 }
                 if let summary = nonEmpty(run?.summary), !summary.lowercased().hasPrefix("passed at attempt") {
@@ -169,12 +183,29 @@ extension VibeLaneTaskDetailView {
                 if let instructions = nonEmpty(checkpoint.instructions) {
                     detailBlock(title: AppStrings.VibeLanes.checkpointInstructions, text: instructions)
                 }
-                skillsBlock(checkpoint.skills)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(AppStrings.VibeLanes.engine)
+                        .font(.system(size: uiScale.textSize(11), weight: .semibold))
+                        .foregroundStyle(palette.tertiaryTextColor)
+                    VibeLaneEngineSummaryView(configuration: checkpoint.engine)
+                }
+                skillsBlock(
+                    checkpoint.work.skills,
+                    title: AppStrings.VibeLanes.editorWorkSkills,
+                    emptyText: AppStrings.VibeLanes.checkpointNoSkills
+                )
                 if !checkpoint.inputRequirements.isEmpty || !checkpoint.outputDeclarations.isEmpty {
                     contractBlock(checkpoint, task: task)
                 }
                 if let doneWhen = nonEmpty(checkpoint.verify.definition) {
                     detailBlock(title: AppStrings.VibeLanes.checkpointDoneWhen, text: doneWhen)
+                }
+                if !checkpoint.verify.reviewSkills.isEmpty {
+                    skillsBlock(
+                        checkpoint.verify.reviewSkills,
+                        title: AppStrings.VibeLanes.editorReviewSkills,
+                        emptyText: AppStrings.VibeLanes.noReviewSkills
+                    )
                 }
                 boundsBlock(checkpoint)
             }
@@ -240,35 +271,6 @@ extension VibeLaneTaskDetailView {
             .background(Capsule().fill((passed ? Color.green : Color.orange).opacity(0.14)))
     }
 
-    private func attemptRow(_ attempt: VibeLaneAttempt) -> some View {
-        let passed = attempt.result?.passed ?? false
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: uiScale.spacing(6)) {
-                Text(AppStrings.VibeLanes.attemptLabel(attempt.index + 1))
-                    .font(.system(size: uiScale.textSize(11), weight: .semibold))
-                    .foregroundStyle(palette.secondaryTextColor)
-                if attempt.result != nil {
-                    passChip(passed)
-                }
-            }
-            if let feedback = nonEmpty(attempt.result?.feedback) {
-                detailText(feedback)
-            }
-            if let detail = nonEmpty(attempt.result?.detail) {
-                detailText(detail)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func detailText(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: uiScale.textSize(11), design: .monospaced))
-            .foregroundStyle(palette.secondaryTextColor)
-            .textSelection(.enabled)
-            .lineLimit(8)
-    }
-
     private func detailBlock(title: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
@@ -294,14 +296,14 @@ extension VibeLaneTaskDetailView {
         return detailBlock(title: AppStrings.VibeLanes.editorBounds, text: text)
     }
 
-    private func skillsBlock(_ skills: [String]) -> some View {
+    private func skillsBlock(_ skills: [String], title: String, emptyText: String) -> some View {
         let cleaned = skills
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         let text = cleaned.isEmpty
-            ? AppStrings.VibeLanes.checkpointNoSkills
+            ? emptyText
             : cleaned.map { "- \($0)" }.joined(separator: "\n")
-        return detailBlock(title: AppStrings.VibeLanes.checkpointSkills, text: text)
+        return detailBlock(title: title, text: text)
     }
 
     /// The step's declared inputs (with resolved carry-forward values) and outputs.

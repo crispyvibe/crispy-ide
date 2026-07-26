@@ -12,6 +12,7 @@ struct VibeLaneDashboardView: View {
     var onNewTask: () -> Void = {}
     var onOpenTask: (VibeLaneTask) -> Void = { _ in }
     var onShowLanes: () -> Void = {}
+    var onShowVibes: () -> Void = {}
 
     private var sortedTasks: [VibeLaneTask] {
         manager.tasks.sorted {
@@ -36,7 +37,7 @@ struct VibeLaneDashboardView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: uiScale.spacing(14)) {
-            VibeLaneIconBadge(systemImage: "rectangle.stack.badge.play", side: 42, iconSize: 18)
+            VibeLaneIconBadge(systemImage: VibeLaneVisualIdentity.symbolName, side: 42, iconSize: 18)
             VStack(alignment: .leading, spacing: uiScale.spacing(2)) {
                 Text(AppStrings.VibeLanes.title)
                     .font(.system(size: uiScale.textSize(23), weight: .bold))
@@ -45,6 +46,11 @@ struct VibeLaneDashboardView: View {
                     .foregroundStyle(palette.secondaryTextColor)
             }
             Spacer()
+            Button(action: onShowVibes) {
+                Label(AppStrings.VibeLanes.vibes, systemImage: "sparkles.rectangle.stack")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
             Button(action: onShowLanes) {
                 Label(AppStrings.VibeLanes.manageLanes, systemImage: "rectangle.stack")
             }
@@ -142,7 +148,7 @@ struct VibeLaneDashboardView: View {
 
     private var emptyState: some View {
         VStack(spacing: uiScale.spacing(14)) {
-            VibeLaneIconBadge(systemImage: "rectangle.stack.badge.play", side: 56, iconSize: 24)
+            VibeLaneIconBadge(systemImage: VibeLaneVisualIdentity.symbolName, side: 56, iconSize: 24)
             VStack(spacing: 4) {
                 Text(AppStrings.VibeLanes.noTasksTitle)
                     .font(.system(size: uiScale.textSize(15), weight: .semibold))
@@ -249,7 +255,7 @@ struct VibeLaneDashboardView: View {
             switch task.state {
             case .running:
                 Button(AppStrings.VibeLanes.stop, role: .destructive) {
-                    manager.stop(id: task.id)
+                    Task { await manager.stop(id: task.id) }
                 }
             case .needsInput:
                 Button(AppStrings.VibeLanes.answer) {
@@ -258,12 +264,16 @@ struct VibeLaneDashboardView: View {
             case .stopped:
                 HStack(spacing: uiScale.spacing(8)) {
                     Button(AppStrings.VibeLanes.open) { onOpenTask(task) }
-                    Button(AppStrings.VibeLanes.deleteTask, role: .destructive) { manager.delete(id: task.id) }
+                    Button(AppStrings.VibeLanes.deleteTask, role: .destructive) {
+                        Task { await manager.delete(id: task.id) }
+                    }
                 }
             case .done:
                 HStack(spacing: uiScale.spacing(8)) {
                     Button(AppStrings.VibeLanes.open) { onOpenTask(task) }
-                    Button(AppStrings.VibeLanes.deleteTask, role: .destructive) { manager.delete(id: task.id) }
+                    Button(AppStrings.VibeLanes.deleteTask, role: .destructive) {
+                        Task { await manager.delete(id: task.id) }
+                    }
                 }
             }
         }

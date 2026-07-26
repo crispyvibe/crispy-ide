@@ -4,27 +4,30 @@ import Foundation
 // reusable lanes, and retain the exact revision a running task pinned so lane
 // edits never mutate an in-flight or finished task (R07/S07). Split from the core
 // type per coding-guidelines ("types over 200 LOC: split impl into extensions").
-// Lane mutation is published via the core `reloadLanes()` so the
-// `@Published private(set) lanes` setter stays local to the core file.
+// Lane mutation is published through core helpers so the
+// `@Published private(set) lanes` setter stays local to the core type.
 
 extension VibeLaneTaskManager {
 
-    /// Create a new lane with one starter checkpoint, persist it, and return it.
+    /// Create an empty recipe. Vibes are added from the central library in the
+    /// lane designer.
     @discardableResult
-    func createLane(name: String = AppStrings.VibeLanes.newLane) -> VibeLaneDefinition {
+    func createLane(
+        name: String = AppStrings.VibeLanes.newLane
+    ) async -> VibeLaneDefinition? {
         let lane = VibeLaneDefinition(
             name: name,
             detail: nil,
-            checkpoints: [
-                VibeLaneCheckpoint(
-                    key: "step-1", order: 0,
-                    goal: "",
-                    verify: VibeLaneVerificationDefinition("")
-                )
-            ]
+            checkpoints: []
         )
-        store.saveLane(lane)
-        reloadLanes()
+        do {
+            try await store.persistCurrentLane(lane)
+        } catch {
+            recordPersistenceResult(error)
+            return nil
+        }
+        publishCurrentLane(lane)
+        recordPersistenceResult(nil)
         return lane
     }
 
@@ -32,51 +35,81 @@ extension VibeLaneTaskManager {
     /// the version they pinned). Normalizes checkpoint keys so the engine and
     /// the UI never see empty or duplicate keys. Saving marks the lane
     /// user-owned: starter auto-refresh will never touch it again.
+    ///
+    /// Compare-and-swap on the content version: the incoming draft must be based
+    /// on the revision that is currently published. The new version is derived
+    /// from the store's value, never from the caller's — otherwise two saves
+    /// from the same base both write v2 and the second silently overwrites the
+    /// first, breaking the immutable `(laneID, version)` contract that tasks and
+    /// loop snapshots pin against.
     @discardableResult
-    func updateLane(_ lane: VibeLaneDefinition) -> VibeLaneDefinition {
-        // Retain the outgoing revision if any task still pins it, so its run keeps
-        // resolving the exact lane it started against (R07/S07).
-        archiveIfPinned(laneID: lane.id)
+    func updateLane(_ lane: VibeLaneDefinition) async -> VibeLaneDefinition? {
+        let current = lanes.first { $0.id == lane.id }
+        if let current, lane.version != current.version {
+            logger.warning(
+                "updateLane: stale draft for \(lane.id.uuidString, privacy: .public) (draft v\(lane.version) vs current v\(current.version))"
+            )
+            recordPersistenceMessage(AppStrings.VibeLanes.laneRevisionConflict)
+            return nil
+        }
         var updated = lane
         updated.checkpoints = Self.normalizedCheckpoints(updated.checkpoints)
-        updated.version += 1
+        updated.version = (current?.version ?? lane.version) + 1
         updated.seededFingerprint = nil
-        store.saveLane(updated)
-        reloadLanes()
+        do {
+            try await store.persistCurrentLane(updated)
+        } catch {
+            recordPersistenceResult(error)
+            return nil
+        }
+        if let current {
+            laneRevisions[VibeLaneRevisionKey(
+                laneID: current.id,
+                version: current.version
+            )] = current
+        }
+        publishCurrentLane(updated)
+        recordPersistenceResult(nil)
         return updated
     }
 
     /// Bring back deleted starter lanes and refresh pristine ones to the latest
     /// shipped content. User-edited copies are never overwritten.
-    func restoreStarterLanes() {
-        store.restoreStarterLanes()
-        reloadLanes()
+    func restoreStarterLanes() async {
+        do {
+            apply(try await store.restoreStarterLanesPersisted())
+            recordPersistenceResult(nil)
+        } catch {
+            recordPersistenceResult(error)
+        }
     }
 
-    func deleteLane(id: UUID) {
-        // Retain the current revision if a task still pins it, so a deleted lane's
-        // in-flight/finished tasks keep resolving their process.
-        archiveIfPinned(laneID: id)
-        store.deleteLane(id: id)
-        reloadLanes()
+    func deleteLane(id: UUID) async {
+        guard let current = lanes.first(where: { $0.id == id }) else { return }
+        let isStarter = VibeLaneCatalog.starterLanes.contains { $0.id == id }
+        do {
+            try await store.removeCurrentLane(id: id, tombstone: isStarter)
+        } catch {
+            recordPersistenceResult(error)
+            return
+        }
+        laneRevisions[VibeLaneRevisionKey(
+            laneID: current.id,
+            version: current.version
+        )] = current
+        removePublishedLane(id: id)
+        recordPersistenceResult(nil)
     }
 
     /// Guarantee unique, non-empty checkpoint keys and contiguous order.
     static func normalizedCheckpoints(_ checkpoints: [VibeLaneCheckpoint]) -> [VibeLaneCheckpoint] {
-        guard !checkpoints.isEmpty else {
-            return [
-                VibeLaneCheckpoint(
-                    key: "step-1",
-                    order: 0,
-                    goal: "",
-                    verify: VibeLaneVerificationDefinition("")
-                )
-            ]
-        }
+        guard !checkpoints.isEmpty else { return [] }
         var seen = Set<String>()
         return checkpoints.enumerated().map { index, checkpoint in
             var c = checkpoint
             c.order = index
+            let title = c.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            c.title = title?.isEmpty == false ? title : nil
             var key = normalizedKey(c.key)
             if key.isEmpty || seen.contains(key) {
                 key = "step-\(index + 1)-\(UUID().uuidString.prefix(4))"
@@ -101,14 +134,5 @@ extension VibeLaneTaskManager {
             }
         }
         return String(scalars).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-    }
-
-    /// Archive the currently-registered revision of `laneID` if any task pins it.
-    private func archiveIfPinned(laneID: UUID) {
-        guard let current = lanes.first(where: { $0.id == laneID }),
-              tasks.contains(where: { $0.laneID == laneID && $0.laneVersion == current.version }) else {
-            return
-        }
-        store.archiveLaneRevision(current)
     }
 }

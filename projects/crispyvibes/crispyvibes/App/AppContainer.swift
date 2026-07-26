@@ -28,6 +28,15 @@ struct AppContainer {
     let vibespaceTodoStore: VibeSpaceTodoStore
     /// F059: Vibe Lanes execution component — owns tasks and runs lanes.
     let vibeLaneTaskManager: VibeLaneTaskManager
+    /// Central catalog for bundled, personal, and externally linked Agent Skills.
+    let vibeLaneSkillStore: VibeLaneSkillStore
+    /// F061: application-level recurring Vibe Lane definitions and history.
+    let vibeLoopManager: VibeLoopManager
+    /// F061: reconciles due Loops while the application is running.
+    let vibeLoopScheduler: VibeLoopScheduler
+    /// Starts encrypted Automation persistence, legacy migration, managers,
+    /// and finally the Loop scheduler in durability order.
+    let automationBootstrapCoordinator: AutomationBootstrapCoordinator
     /// F060: todo↔lane bridge — dispatch, carry-forward mapping, lifecycle
     /// fan-in. Retained here; the CLI router only holds it weakly.
     let todoLanePipelineBridge: TodoLanePipelineBridge
@@ -394,6 +403,29 @@ struct AppContainer {
         let appPersistenceStore = AppPersistenceDataStore()
         let commentLifecycleCoordinator = CommentLifecycleCoordinator(store: vibespaceCommentStore)
         let externalAgentSessionService = ExternalAgentSessionService()
+        let acpAgentEngineOptionCatalog = ACPAgentEngineOptionCatalog { agentID in
+            guard let discovered = ACPAgentRegistry.discoverInstalledAgents().first(where: {
+                $0.id == agentID && $0.isAvailable && $0.supportsACP
+            }),
+            let definition = discovered.agentDefinition else {
+                throw ACPTransportError.agentError("Agent unavailable: \(agentID)")
+            }
+
+            let probeID = UUID()
+            defer { acpSessionManager.unregisterStandalone(id: probeID) }
+            let session = try await acpSessionManager.connectHeadless(
+                id: probeID,
+                workingDirectory: FileManager.default.homeDirectoryForCurrentUser,
+                agent: definition,
+                origin: "vibelane-engine-options",
+                autoAllowPermissions: false
+            )
+            return ACPAgentEngineOptions(
+                models: session.availableModels,
+                modes: session.availableModes,
+                supportsReasoning: false
+            )
+        }
         let makeACPStandaloneStore: @MainActor (UUID, UUID?) -> ACPStandaloneSessionStore = { id, vibespaceID in
             let chatVM = ACPChatViewModel(
                 sessionManager: acpSessionManager,
@@ -404,30 +436,61 @@ struct AppContainer {
                 sessionManager: acpSessionManager,
                 conversationStore: agentConversationStore,
                 chatViewModel: chatVM,
+                engineOptionCatalog: acpAgentEngineOptionCatalog,
                 vibespaceID: vibespaceID
             )
         }
         let acpSessionRegistry = ACPSessionRegistry(storeFactory: makeACPStandaloneStore)
         let vibeLaneAgentRunner = VibeLaneACPAgentRunner(
             sessionManager: acpSessionManager,
-            sessionRegistry: acpSessionRegistry
+            sessionRegistry: acpSessionRegistry,
+            engineOptionCatalog: acpAgentEngineOptionCatalog
         )
-        let vibeLaneStore = FileVibeLaneStore(
-            directory: appPersistenceStore.appFileURL(relativePath: "VibeLanes", isDirectory: true),
-            catalog: VibeLaneCatalog.starterLanes
+        let vibeLanesDirectory = appPersistenceStore.appFileURL(
+            relativePath: "VibeLanes",
+            isDirectory: true
+        )
+        let loopsDirectory = appPersistenceStore.appFileURL(
+            relativePath: "Loops",
+            isDirectory: true
         )
         let vibeLaneSkillsRoot = appPersistenceStore.appFileURL(relativePath: "VibeLanes/skills", isDirectory: true)
         VibeLaneSkillLibrary.install(into: vibeLaneSkillsRoot)
+        let automationDatabaseStore = AutomationDatabaseStore(
+            conversationStore: agentConversationStore,
+            catalog: VibeLaneCatalog.starterLanes,
+            vibeLanesDirectory: vibeLanesDirectory,
+            loopsDirectory: loopsDirectory,
+            skillsDirectory: vibeLaneSkillsRoot
+        )
+        let vibeLaneSkillStore = VibeLaneSkillStore(
+            rootURL: vibeLaneSkillsRoot,
+            referencePersistence: automationDatabaseStore
+        )
         let vibeLaneHandoffRoot = appPersistenceStore.appFileURL(relativePath: "VibeLanes/handoffs", isDirectory: true)
         let vibeLaneTaskManager = VibeLaneTaskManager(
-            store: vibeLaneStore,
+            store: automationDatabaseStore,
             worker: vibeLaneAgentRunner,
             reviewer: vibeLaneAgentRunner,
+            engineOptionCatalog: acpAgentEngineOptionCatalog,
             skillsRoot: vibeLaneSkillsRoot,
             handoffRoot: vibeLaneHandoffRoot,
             notifier: VibeLaneUserNotifier()
         )
-        vibeLaneTaskManager.bootstrap(resumeRunning: resumeVibeLaneTasks)
+        let vibeLoopManager = VibeLoopManager(
+            store: automationDatabaseStore,
+            laneManager: vibeLaneTaskManager
+        )
+        let vibeLoopScheduler = VibeLoopScheduler(manager: vibeLoopManager)
+        let automationBootstrapCoordinator = AutomationBootstrapCoordinator(
+            store: automationDatabaseStore,
+            laneManager: vibeLaneTaskManager,
+            loopManager: vibeLoopManager,
+            skillStore: vibeLaneSkillStore,
+            scheduler: vibeLoopScheduler,
+            resumeTasks: resumeVibeLaneTasks
+                && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        )
         let vibeLaneSurfaceNavigationViewModel = VibeLaneSurfaceNavigationViewModel()
         let dockedAgentPreviewCoordinator = DockedAgentPreviewCoordinator(
             sessionRegistry: acpSessionRegistry
@@ -596,6 +659,10 @@ struct AppContainer {
             vibespaceCommentStore: vibespaceCommentStore,
             vibespaceTodoStore: vibespaceTodoStore,
             vibeLaneTaskManager: vibeLaneTaskManager,
+            vibeLaneSkillStore: vibeLaneSkillStore,
+            vibeLoopManager: vibeLoopManager,
+            vibeLoopScheduler: vibeLoopScheduler,
+            automationBootstrapCoordinator: automationBootstrapCoordinator,
             todoLanePipelineBridge: todoLanePipelineBridge,
             todoTriageCoordinator: todoTriageCoordinator,
             vibeLaneSurfaceNavigationViewModel: vibeLaneSurfaceNavigationViewModel,

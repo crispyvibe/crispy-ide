@@ -37,10 +37,10 @@ enum Command {
     Ping,
     /// Returns the channel client's resolved context (surface, vibespace, project).
     Whoami,
-    /// List all supported methods, or describe one when METHOD is given.
+    /// List every command category, one category's commands, or one method's schema.
     Help {
-        /// When provided, returns the full schema for just that method.
-        method: Option<String>,
+        /// A category name (e.g. `lane`) or an exact method name. Omit to list all categories.
+        topic: Option<String>,
     },
     /// Shelf operations.
     #[command(subcommand)]
@@ -568,8 +568,8 @@ fn run(cli: Cli) -> Result<(), String> {
     let (method, params): (&str, Value) = match cli.command {
         Command::Ping => ("ping", json!({})),
         Command::Whoami => ("whoami", json!({})),
-        Command::Help { method } => match method {
-            Some(m) => ("help", json!({ "method": m })),
+        Command::Help { topic } => match topic {
+            Some(t) => ("help", json!({ "topic": t })),
             None => ("help", json!({})),
         },
         Command::Shelf(ShelfCommand::Add { path, select }) => (
@@ -1013,12 +1013,16 @@ fn print_human(method: &str, result: &Value) {
                     }
                 }
             }
-            // List mode: app overview, concepts, then domain-grouped commands.
-            let app = result.get("app").and_then(Value::as_str).unwrap_or("Crispy");
-            let summary = result.get("summary").and_then(Value::as_str).unwrap_or("");
-            println!("{app}");
-            if !summary.is_empty() {
-                println!("  {summary}");
+            // List mode: app overview, concepts, then category-grouped commands.
+            // A single-category response omits `app`, so print only the category.
+            let is_single_category = result.get("app").is_none();
+            if !is_single_category {
+                let app = result.get("app").and_then(Value::as_str).unwrap_or("Crispy");
+                let summary = result.get("summary").and_then(Value::as_str).unwrap_or("");
+                println!("{app}");
+                if !summary.is_empty() {
+                    println!("  {summary}");
+                }
             }
             if let Some(concepts) = result.get("concepts").and_then(Value::as_array) {
                 if !concepts.is_empty() {
@@ -1032,6 +1036,7 @@ fn print_human(method: &str, result: &Value) {
                 }
             }
             if let Some(domains) = result.get("domains").and_then(Value::as_array) {
+                let multiple = domains.len() > 1;
                 for domain in domains {
                     println!();
                     let name = domain.get("name").and_then(Value::as_str).unwrap_or("?");
@@ -1045,6 +1050,10 @@ fn print_human(method: &str, result: &Value) {
                             println!("    {method:<22}  {summary}");
                         }
                     }
+                }
+                if multiple {
+                    println!();
+                    println!("Run `crispy help <category>` for one category, or `crispy help <method>` for a method's full schema.");
                 }
             }
         }

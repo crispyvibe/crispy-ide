@@ -657,14 +657,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn v5_migration_is_idempotent() {
+    async fn migrations_are_idempotent() {
         let conn = test_conn().await;
-        // test_conn already migrated to v5; a second run must be a no-op
-        // (the guarded ALTER TABLEs would fail if re-executed).
+        // test_conn already ran every migration; subsequent runs must be no-ops.
         let version = crate::schema::run_migrations(&conn).await.unwrap();
-        assert_eq!(version, 5);
+        assert_eq!(version, crate::schema::CURRENT_VERSION);
         let version_again = crate::schema::run_migrations(&conn).await.unwrap();
-        assert_eq!(version_again, 5);
+        assert_eq!(version_again, crate::schema::CURRENT_VERSION);
     }
 
     #[tokio::test]

@@ -24,6 +24,7 @@ struct VibeLaneTaskDetailView: View {
     @ObservedObject var manager: VibeLaneTaskManager
     let taskID: UUID
     let onOpenACPSession: (VibeLaneACPChatTarget) -> Void
+    let onStop: ((UUID) -> Void)?
 
     /// The checkpoint selected in the left rail (used by the +Checkpoints extension).
     /// nil follows the task's active/current checkpoint.
@@ -39,6 +40,20 @@ struct VibeLaneTaskDetailView: View {
     /// User override for the step-definition disclosure; nil = auto (open until
     /// the step has attempt history). Reset when the selection changes.
     @State var definitionExpanded: Bool?
+    /// Non-nil while the per-step rerun engine sheet is presented.
+    @State var rerunCheckpoint: VibeLaneCheckpoint?
+
+    init(
+        manager: VibeLaneTaskManager,
+        taskID: UUID,
+        onOpenACPSession: @escaping (VibeLaneACPChatTarget) -> Void,
+        onStop: ((UUID) -> Void)? = nil
+    ) {
+        self.manager = manager
+        self.taskID = taskID
+        self.onOpenACPSession = onOpenACPSession
+        self.onStop = onStop
+    }
 
     // Internal (not private): the +RunLog extension reads it (F060 link base).
     var task: VibeLaneTask? { manager.task(withID: taskID) }
@@ -48,32 +63,50 @@ struct VibeLaneTaskDetailView: View {
     var isWideLayout: Bool { contentWidth >= 700 }
 
     var body: some View {
-        if let task {
-            ScrollView {
-                VStack(alignment: .leading, spacing: uiScale.spacing(16)) {
-                    header(task)
-                    if task.state == .running {
-                        nowStrip(task)
+        Group {
+            if let task {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: uiScale.spacing(16)) {
+                        header(task)
+                        if task.state == .running {
+                            nowStrip(task)
+                        }
+                        inputRequestPanel(task)
+                        if task.state == .stopped {
+                            stoppedBanner(task)
+                        }
+                        outcome(task)
+                        checkpointSplit(task)
+                        activitySection(task)
                     }
-                    inputRequestPanel(task)
-                    if task.state == .stopped {
-                        stoppedBanner(task)
-                    }
-                    outcome(task)
-                    checkpointSplit(task)
-                    activitySection(task)
+                    .padding(uiScale.spacing(24))
+                    .frame(maxWidth: 1120, alignment: .topLeading)
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(key: VibeLaneWidthKey.self, value: geo.size.width)
+                    })
+                    .frame(maxWidth: .infinity, alignment: .top)
+                    .onPreferenceChange(VibeLaneWidthKey.self) { contentWidth = $0 }
                 }
-                .padding(uiScale.spacing(24))
-                .frame(maxWidth: 1120, alignment: .topLeading)
-                .background(GeometryReader { geo in
-                    Color.clear.preference(key: VibeLaneWidthKey.self, value: geo.size.width)
-                })
-                .frame(maxWidth: .infinity, alignment: .top)
-                .onPreferenceChange(VibeLaneWidthKey.self) { contentWidth = $0 }
+                .background(palette.canvasBackgroundColor)
+            } else {
+                ContentUnavailableView(AppStrings.VibeLanes.taskNotFound, systemImage: "questionmark.circle")
             }
-            .background(palette.canvasBackgroundColor)
-        } else {
-            ContentUnavailableView(AppStrings.VibeLanes.taskNotFound, systemImage: "questionmark.circle")
+        }
+        .sheet(item: $rerunCheckpoint) { checkpoint in
+            VibeLaneRerunSheet(
+                checkpointTitle: checkpoint.displayTitle,
+                engine: checkpoint.engine,
+                optionCatalog: manager.engineOptionCatalog,
+                onRun: { engine in
+                    Task {
+                        await manager.rerunStep(
+                            id: taskID,
+                            checkpointKey: checkpoint.key,
+                            engine: engine
+                        )
+                    }
+                }
+            )
         }
     }
 
@@ -142,18 +175,30 @@ struct VibeLaneTaskDetailView: View {
             threadButtons(task)
             switch task.state {
             case .running:
-                Button(AppStrings.VibeLanes.stop, role: .destructive) { manager.stop(id: task.id) }
+                Button(AppStrings.VibeLanes.stop, role: .destructive) { stop(task.id) }
                     .buttonStyle(.bordered)
             case .needsInput:
-                Button(AppStrings.VibeLanes.stop, role: .destructive) { manager.stop(id: task.id) }
+                Button(AppStrings.VibeLanes.stop, role: .destructive) { stop(task.id) }
                     .buttonStyle(.bordered)
             case .stopped:
-                Button(AppStrings.VibeLanes.discard, role: .destructive) { manager.delete(id: task.id) }
+                Button(AppStrings.VibeLanes.discard, role: .destructive) {
+                    Task { await manager.delete(id: task.id) }
+                }
                     .buttonStyle(.bordered)
             case .done:
-                Button(AppStrings.VibeLanes.discard, role: .destructive) { manager.delete(id: task.id) }
+                Button(AppStrings.VibeLanes.discard, role: .destructive) {
+                    Task { await manager.delete(id: task.id) }
+                }
                     .buttonStyle(.bordered)
             }
+        }
+    }
+
+    private func stop(_ id: UUID) {
+        if let onStop {
+            onStop(id)
+        } else {
+            Task { await manager.stop(id: id) }
         }
     }
 
@@ -230,6 +275,17 @@ struct VibeLaneTaskDetailView: View {
                     }
                 }
                 Spacer(minLength: uiScale.spacing(12))
+                if let workerTarget = chatTarget(
+                    sessionRef: task.workerSessionRef,
+                    threadRef: task.workerThreadRef,
+                    task: task
+                ) {
+                    Button { onOpenACPSession(workerTarget) } label: {
+                        Label(AppStrings.VibeLanes.workerThread, systemImage: "message")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
                 elapsedBadge(task)
             }
             VibeLaneProgressBar(fraction: fraction)

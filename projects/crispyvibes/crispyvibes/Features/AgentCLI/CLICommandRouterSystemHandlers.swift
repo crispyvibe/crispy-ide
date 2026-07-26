@@ -39,38 +39,45 @@ extension CLICommandRouter {
     }
 
     func handleHelp(_ request: CLIRequest) -> CLIResponse {
-        if let method = request.params?["method"]?.stringValue, !method.isEmpty {
-            guard let registration = commandRegistry.first(where: { $0.method == method }) else {
-                return .error(
-                    id: request.id,
-                    code: CLIErrorCode.unknownMethod,
-                    message: "Unknown method: \(method)"
-                )
-            }
-            return .ok(id: request.id, result: [
-                "protocol_version": .int(1),
-                "commands": .array([registration.descriptor.toJSON(method: registration.method)]),
-            ])
-        }
-
         var byDomain: [String: [CommandRegistration]] = [:]
         for reg in commandRegistry {
             let domain = Self.domain(of: reg.method)
             byDomain[domain, default: []].append(reg)
         }
-        let domainsArray: [CLIJSONValue] = Self.domains.compactMap { info in
-            guard let regs = byDomain[info.name], !regs.isEmpty else { return nil }
-            let commands: [CLIJSONValue] = regs.map { reg in
-                .object([
-                    "method": .string(reg.method),
-                    "summary": .string(reg.descriptor.summary),
+
+        // A single topic is either an exact method (full schema) or a category
+        // name (that category's commands only). Categories are how the 100+
+        // commands stay navigable: all categories -> one category -> one method.
+        let topic = (request.params?["topic"]?.stringValue ?? request.params?["method"]?.stringValue)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let topic, !topic.isEmpty {
+            if let registration = commandRegistry.first(where: { $0.method == topic }) {
+                return .ok(id: request.id, result: [
+                    "protocol_version": .int(1),
+                    "commands": .array([registration.descriptor.toJSON(method: registration.method)]),
                 ])
             }
-            return .object([
-                "name": .string(info.name),
-                "description": .string(info.description),
-                "commands": .array(commands),
-            ])
+            if let info = Self.domains.first(where: { $0.name == topic }),
+               let regs = byDomain[info.name], !regs.isEmpty {
+                return .ok(id: request.id, result: [
+                    "protocol_version": .int(1),
+                    "domains": .array([Self.domainJSON(info, regs)]),
+                ])
+            }
+            let categories = Self.domains
+                .filter { byDomain[$0.name]?.isEmpty == false }
+                .map(\.name)
+                .joined(separator: ", ")
+            return .error(
+                id: request.id,
+                code: CLIErrorCode.unknownMethod,
+                message: "Unknown help topic: \(topic). Categories: \(categories)"
+            )
+        }
+
+        let domainsArray: [CLIJSONValue] = Self.domains.compactMap { info in
+            guard let regs = byDomain[info.name], !regs.isEmpty else { return nil }
+            return Self.domainJSON(info, regs)
         }
         let conceptsArray: [CLIJSONValue] = Self.concepts.map { c in
             .object([
@@ -84,6 +91,23 @@ extension CLICommandRouter {
             "summary": .string(Self.appSummary),
             "concepts": .array(conceptsArray),
             "domains": .array(domainsArray),
+        ])
+    }
+
+    /// One category and its commands, in the shape the CLI renderer expects.
+    private static func domainJSON(
+        _ info: DomainInfo,
+        _ regs: [CommandRegistration]
+    ) -> CLIJSONValue {
+        .object([
+            "name": .string(info.name),
+            "description": .string(info.description),
+            "commands": .array(regs.map { reg in
+                .object([
+                    "method": .string(reg.method),
+                    "summary": .string(reg.descriptor.summary),
+                ])
+            }),
         ])
     }
 
@@ -148,9 +172,9 @@ extension CLICommandRouter {
         DomainInfo(name: "shelf", description: "The shelf is a persistent collection of files and folders pinned by the user, surviving app restarts and visible in the vibespace sidebar. Agents can add or remove entries; Crispy never deletes the underlying files when an entry is removed."),
         DomainInfo(name: "terminal", description: "Terminal sessions inside vibespaces. Each terminal has a UUID and runs a shell process; agents can read screen contents, send text, send key sequences, spawn new terminals, and wait for completion."),
         DomainInfo(name: "browser", description: "Embedded WebKit browser panels scoped to a vibespace. Agents drive navigation, capture DOM snapshots, click and type into elements, evaluate JavaScript, and handle page dialogs."),
+        DomainInfo(name: "comments", description: "File comment threads anchored to a line range, shared across the vibespace. Agents can add, reply, update, resolve, delete, and full-text search comments — the same threads the user sees in the editor gutter."),
         DomainInfo(name: "shortcut", description: "User-defined terminal shortcut catalog (saved command snippets). Agents can list existing shortcuts to discover the project's standard build/test commands, and add new shortcuts that appear alongside user-created ones."),
         DomainInfo(name: "vibespace", description: "A vibespace is Crispy's name for a workspace — a collection of projects with their own settings, terminals, panes, and shelf. Each vibespace can have multiple projects."),
-        DomainInfo(name: "pane", description: "Panes are split containers inside a vibespace, holding terminal and browser tabs. Agents inspect the pane tree to discover terminals and browser panels beyond their own."),
         DomainInfo(name: "file", description: "Editor integration. The CLI exposes only what is unique to Crispy (opening a file in the editor with optional cursor position); ordinary file I/O should go through the agent's own filesystem tools or shell."),
     ]
 }

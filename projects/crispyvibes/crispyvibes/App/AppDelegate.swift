@@ -178,6 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // left the socket orphaned), this rebinds it. No-op when already
         // serving, since start() guards on the running flag.
         startAgentCLISocketServerIfEnabled()
+        appContainer?.vibeLoopScheduler.reconcileNow()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -185,6 +186,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             appContainer?.terminalBoardDetachedWindowManager.closeAll()
             appContainer?.terminalBoardStandaloneRegistry.shutdownAll()
+            appContainer?.vibeLoopScheduler.shutdown()
+            appContainer?.vibeLoopManager.shutdown()
+            appContainer?.automationBootstrapCoordinator.shutdown()
+            appContainer?.vibeLaneTaskManager.shutdown()
             appContainer?.cliSocketServer.shutdown()
             cliExecRelayServer?.shutdown()
             appContainer?.jupyterServerService.shutdownAll()

@@ -40,7 +40,7 @@ private struct VibeLaneCardModifier: ViewModifier {
         content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(tint.map { $0.opacity(0.08) } ?? Color(nsColor: .controlBackgroundColor))
+                    .fill(tint.map { $0.opacity(0.08) } ?? palette.canvasSecondaryBackgroundColor)
                     .shadow(color: .black.opacity(tint == nil ? 0.07 : 0.0), radius: 5, y: 2)
             )
             .overlay(

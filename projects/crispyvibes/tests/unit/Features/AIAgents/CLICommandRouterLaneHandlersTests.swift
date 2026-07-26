@@ -10,7 +10,12 @@ import XCTest
 
 @MainActor
 private final class LaneCLIHangingWorker: VibeLaneWorkRunning {
-    func work(prompt: String, projectPath: String, sessionRef: String?, agentID: String?) async -> VibeLaneWorkTurn {
+    func work(
+        prompt: String,
+        projectPath: String,
+        sessionRef: String?,
+        engine: VibeLaneEngineConfiguration
+    ) async -> VibeLaneWorkTurn {
         while !_Concurrency.Task.isCancelled {
             try? await _Concurrency.Task.sleep(nanoseconds: 2_000_000)
         }
@@ -27,7 +32,7 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
     private var tempProject: URL!
     private var lane: VibeLaneDefinition!
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         container = AppContainer.makeDefault()
         tempProject = try makeTempDirectory(prefix: "crispyvibes-cli-lanes")
         lane = VibeLaneDefinition(
@@ -54,7 +59,7 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
             clock: VibeLaneSystemClock(),
             maxConcurrent: 3
         )
-        manager.bootstrap()
+        await manager.bootstrap()
         router = CLICommandRouter(shelfStore: container.shelfStore)
         router.attachVibeLaneTaskManager(manager)
     }
@@ -147,8 +152,12 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
             .object([
                 "key": .string("Ship It!"),
                 "order": .int(0),
+                "title": .string("Open the pull request"),
                 "work": .object(["goal": .string("open a PR"), "instructions": .string(""), "skills": .array([])]),
-                "verify": .object(["definition": .string("PR exists and CI is green")]),
+                "verify": .object([
+                    "definition": .string("PR exists and CI is green"),
+                    "reviewSkills": .array([.string("code-review")]),
+                ]),
             ])
         ])
         let result = try ok(await router.dispatch(request("lane.create", params: [
@@ -164,6 +173,21 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
             created["checkpoints"]?.arrayValue?.first?.objectValue?["key"]?.stringValue,
             "ship-it"
         )
+        XCTAssertEqual(
+            created["checkpoints"]?.arrayValue?.first?.objectValue?["title"]?.stringValue,
+            "Open the pull request"
+        )
+        XCTAssertEqual(
+            created["checkpoints"]?.arrayValue?.first?
+                .objectValue?["verify"]?.objectValue?["reviewSkills"]?
+                .arrayValue?.first?.stringValue,
+            "code-review"
+        )
+        XCTAssertEqual(
+            manager.lanes.first { $0.name == "Ship" }?
+                .checkpoints.first?.verify.reviewSkills,
+            ["code-review"]
+        )
         XCTAssertEqual(manager.lanes.count, 2)
     }
 
@@ -174,6 +198,76 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
         ]))
         XCTAssertEqual(errorCode(response), CLIErrorCode.invalidParams)
         XCTAssertEqual(manager.lanes.count, 1, "no lane is left behind on invalid checkpoints")
+    }
+
+    /// Regression: `steerLimit` was validated only AFTER the lane had already been
+    /// created and persisted, so an invalid request returned invalid_params and
+    /// still left a lane in the store.
+    func test_laneCreateWithInvalidSteerLimit_leavesNoLaneBehind() async {
+        let response = await router.dispatch(request("lane.create", params: [
+            "name": .string("Bad steer limit"),
+            "steerLimit": .int(-1),
+        ]))
+        XCTAssertEqual(errorCode(response), CLIErrorCode.invalidParams)
+        XCTAssertEqual(manager.lanes.count, 1, "the rejected create must not persist a lane")
+        XCTAssertFalse(manager.lanes.contains { $0.name == "Bad steer limit" })
+    }
+
+    /// Regression: `lane.task.delete` always reported `deleted: true`, even when the
+    /// durable delete failed, so automation clients acted on a false assertion.
+    func test_taskDeleteReportsFailureWhenDurableDeleteFails() async throws {
+        let created = try ok(await router.dispatch(request("lane.task.create", params: [
+            "lane": .string("Fix a bug"),
+            "input": .string("Fix the flaky test"),
+            "project": .string(tempProject.path),
+        ])))
+        let taskID = try XCTUnwrap(created["task"]?.objectValue?["id"]?.stringValue)
+        let store = try XCTUnwrap(manager.store as? InMemoryVibeLaneStore)
+        store.shouldFailTaskDeletes = true
+
+        let response = await router.dispatch(request("lane.task.delete", params: [
+            "id": .string(taskID),
+        ]))
+
+        XCTAssertNotNil(errorCode(response), "a failed durable delete must not report success")
+        XCTAssertEqual(manager.tasks.count, 1, "the task is still present")
+
+        store.shouldFailTaskDeletes = false
+        let retried = try ok(await router.dispatch(request("lane.task.delete", params: [
+            "id": .string(taskID),
+        ])))
+        XCTAssertEqual(retried["deleted"]?.boolValue, true)
+        XCTAssertTrue(manager.tasks.isEmpty)
+    }
+
+    /// A lane that is not runnable must be refused with an actionable reason
+    /// rather than a generic "task creation failed".
+    func test_taskCreateOnNonRunnableLane_reportsWhyItNeedsSetup() async throws {
+        let incomplete = VibeLaneDefinition(
+            name: "Needs setup",
+            checkpoints: [
+                VibeLaneCheckpoint(
+                    key: "step",
+                    order: 0,
+                    work: VibeLaneWorkDefinition(goal: ""),
+                    verify: VibeLaneVerificationDefinition("")
+                )
+            ]
+        )
+        _ = await manager.createLane(name: incomplete.name)
+        let created = try XCTUnwrap(manager.lanes.first { $0.name == incomplete.name })
+        var draft = created
+        draft.checkpoints = incomplete.checkpoints
+        _ = await manager.updateLane(draft)
+
+        let response = await router.dispatch(request("lane.task.create", params: [
+            "lane": .string(incomplete.name),
+            "input": .string("go"),
+            "project": .string(tempProject.path),
+        ]))
+
+        XCTAssertEqual(errorCode(response), CLIErrorCode.invalidParams)
+        XCTAssertTrue(manager.tasks.isEmpty)
     }
 
     func test_laneUpdateBumpsVersion() async throws {
@@ -242,7 +336,11 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
     // MARK: - lane.task.list / show / stop / delete
 
     func test_taskListCountsAndStateFilter() async throws {
-        _ = manager.createTask(laneID: lane.id, title: "one", projectPath: tempProject.path)
+        _ = await manager.createTask(
+            laneID: lane.id,
+            title: "one",
+            projectPath: tempProject.path
+        )
         let all = try ok(await router.dispatch(request("lane.task.list")))
         XCTAssertEqual(all["tasks"]?.arrayValue?.count, 1)
         XCTAssertEqual(all["counts"]?.objectValue?["running"]?.intValue, 1)
@@ -255,7 +353,12 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
     }
 
     func test_taskStopThenStopAgainIsInvalidParams() async throws {
-        let task = try XCTUnwrap(manager.createTask(laneID: lane.id, title: "stop me", projectPath: tempProject.path))
+        let created = await manager.createTask(
+            laneID: lane.id,
+            title: "stop me",
+            projectPath: tempProject.path
+        )
+        let task = try XCTUnwrap(created)
         let result = try ok(await router.dispatch(request("lane.task.stop", params: ["id": .string(task.id.uuidString)])))
         XCTAssertEqual(result["task"]?.objectValue?["state"]?.stringValue, "stopped")
         XCTAssertEqual(result["task"]?.objectValue?["stopReason"]?.stringValue, "stoppedByUser")
@@ -265,7 +368,12 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
     }
 
     func test_taskShowAndDelete() async throws {
-        let task = try XCTUnwrap(manager.createTask(laneID: lane.id, title: "inspect", projectPath: tempProject.path))
+        let created = await manager.createTask(
+            laneID: lane.id,
+            title: "inspect",
+            projectPath: tempProject.path
+        )
+        let task = try XCTUnwrap(created)
         let shown = try ok(await router.dispatch(request("lane.task.show", params: ["id": .string(task.id.uuidString)])))
         let detail = try XCTUnwrap(shown["task"]?.objectValue)
         XCTAssertEqual(detail["lane"]?.stringValue, "Fix a bug")
@@ -295,8 +403,12 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
                 )
             ]
         )
-        _ = manager.updateLane(askLane) // saves + publishes the new lane
-        _ = manager.createTask(laneID: askLane.id, title: "ship", projectPath: tempProject.path)
+        _ = await manager.updateLane(askLane) // saves + publishes the new lane
+        _ = await manager.createTask(
+            laneID: askLane.id,
+            title: "ship",
+            projectPath: tempProject.path
+        )
         let paused = await waitForTaskState(.needsInput)
         let task = try XCTUnwrap(paused, "task should pause for Supply")
         XCTAssertEqual(task.openInputRequest?.kind, .supply)
@@ -317,7 +429,12 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
     }
 
     func test_answerWithoutOpenRequestIsInvalidParams() async throws {
-        let task = try XCTUnwrap(manager.createTask(laneID: lane.id, title: "busy", projectPath: tempProject.path))
+        let created = await manager.createTask(
+            laneID: lane.id,
+            title: "busy",
+            projectPath: tempProject.path
+        )
+        let task = try XCTUnwrap(created)
         let response = await router.dispatch(request("lane.task.answer", params: [
             "id": .string(task.id.uuidString),
             "guidance": .string("hurry up"),
@@ -332,5 +449,72 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
         let commands = try XCTUnwrap(result["commands"]?.arrayValue)
         XCTAssertEqual(commands.count, 1)
         XCTAssertEqual(commands.first?.objectValue?["method"]?.stringValue, "lane.task.create")
+    }
+
+    // MARK: - help categories
+
+    /// `help` with a category name returns only that category, so the 100+
+    /// command surface stays navigable: all categories -> one -> one method.
+    func test_helpWithCategoryReturnsOnlyThatCategory() async throws {
+        let result = try ok(await router.dispatch(request("help", params: ["topic": .string("lane")])))
+        let domains = try XCTUnwrap(result["domains"]?.arrayValue)
+        XCTAssertEqual(domains.count, 1)
+        let lane = try XCTUnwrap(domains.first?.objectValue)
+        XCTAssertEqual(lane["name"]?.stringValue, "lane")
+        XCTAssertFalse(lane["description"]?.stringValue?.isEmpty ?? true)
+        let methods = try XCTUnwrap(lane["commands"]?.arrayValue)
+            .compactMap { $0.objectValue?["method"]?.stringValue }
+        XCTAssertEqual(methods.count, 12)
+        XCTAssertTrue(methods.allSatisfy { $0.hasPrefix("lane.") })
+        // A single-category response carries no app header, so the CLI renders
+        // just the category.
+        XCTAssertNil(result["app"])
+    }
+
+    /// An exact method still wins over a category, and `topic` accepts both.
+    func test_helpTopicResolvesMethodBeforeCategory() async throws {
+        let result = try ok(await router.dispatch(request("help", params: ["topic": .string("lane.show")])))
+        let commands = try XCTUnwrap(result["commands"]?.arrayValue)
+        XCTAssertEqual(commands.first?.objectValue?["method"]?.stringValue, "lane.show")
+        XCTAssertNotNil(commands.first?.objectValue?["params"])
+    }
+
+    /// An unknown topic names the valid categories instead of failing blankly.
+    func test_helpUnknownTopicListsCategories() async {
+        let response = await router.dispatch(request("help", params: ["topic": .string("nope")]))
+        guard case let .error(_, code, message) = response else {
+            return XCTFail("expected an error, got \(response)")
+        }
+        XCTAssertEqual(code, CLIErrorCode.unknownMethod)
+        XCTAssertTrue(message.contains("lane"), "the message must list valid categories: \(message)")
+    }
+
+    /// Regression: `help` builds its output by walking the declared category
+    /// catalog, so a namespace with no `DomainInfo` is silently dropped from
+    /// help entirely (this is how all 7 `comments.*` commands went missing).
+    func test_everyRegisteredNamespaceHasAHelpCategory() async throws {
+        let result = try ok(await router.dispatch(request("help")))
+        let listed = try XCTUnwrap(result["domains"]?.arrayValue)
+            .compactMap { $0.objectValue?["name"]?.stringValue }
+        let registered = Set(router.commandRegistry.map {
+            CLICommandRouter.domain(of: $0.method)
+        })
+        XCTAssertEqual(
+            registered.subtracting(listed).sorted(),
+            [],
+            "these namespaces are registered but invisible in help"
+        )
+    }
+
+    /// Every command reachable by dispatch is reachable in help output.
+    func test_helpCoversEveryRegisteredCommand() async throws {
+        let result = try ok(await router.dispatch(request("help")))
+        let listed = Set(
+            try XCTUnwrap(result["domains"]?.arrayValue)
+                .flatMap { $0.objectValue?["commands"]?.arrayValue ?? [] }
+                .compactMap { $0.objectValue?["method"]?.stringValue }
+        )
+        let registered = Set(router.commandRegistry.map(\.method))
+        XCTAssertEqual(registered.subtracting(listed).sorted(), [])
     }
 }
