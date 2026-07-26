@@ -444,7 +444,6 @@ final class VibeLaneEngine {
                 projectPath: task.projectPath,
                 checkpoint: checkpoint,
                 attemptIndex: attemptIndex,
-                repoBaselineRef: task.repoBaselineRef,
                 engine: engineConfiguration,
                 reviewSkillsText: skillsReference(checkpoint.verify.reviewSkills)
             ),

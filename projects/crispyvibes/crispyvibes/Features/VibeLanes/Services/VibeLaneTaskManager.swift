@@ -238,8 +238,7 @@ final class VibeLaneTaskManager: ObservableObject {
             origin: origin,
             state: .running,
             currentCheckpointKey: first.key,
-            carryForward: (seeded?.isEmpty == false) ? seeded : nil,
-            repoBaselineRef: VibeLaneGit.head(projectPath)
+            carryForward: (seeded?.isEmpty == false) ? seeded : nil
         )
         do {
             try await store.persistTask(task)

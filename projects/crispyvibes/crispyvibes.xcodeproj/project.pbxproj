@@ -34,6 +34,7 @@
 		E07400000000000000000001 /* SkillLibraryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07400000000000000000011 /* SkillLibraryDetailView.swift */; };
 		E07600000000000000000001 /* SkillLibraryDetailSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07600000000000000000011 /* SkillLibraryDetailSupport.swift */; };
 		E07500000000000000000001 /* VibeLaneSkillStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07500000000000000000011 /* VibeLaneSkillStoreTests.swift */; };
+		E07500000000000000000002 /* VibeLaneEngineNoRepositoryActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07500000000000000000012 /* VibeLaneEngineNoRepositoryActionsTests.swift */; };
 		E05900000000000000000008 /* VibeLaneDefinition+Validation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05900000000000000000007 /* VibeLaneDefinition+Validation.swift */; };
 		E0590000000000000000000A /* VibeLaneEditorView+Editing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05900000000000000000009 /* VibeLaneEditorView+Editing.swift */; };
 		E06300000000000000000001 /* VibeDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06300000000000000000011 /* VibeDefinition.swift */; };
@@ -793,6 +794,7 @@
 		E07400000000000000000011 /* SkillLibraryDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SkillLibraryDetailView.swift; path = crispyvibes/Features/VibeLanes/Views/SkillLibraryDetailView.swift; sourceTree = "<group>"; };
 		E07600000000000000000011 /* SkillLibraryDetailSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SkillLibraryDetailSupport.swift; path = crispyvibes/Features/VibeLanes/Views/SkillLibraryDetailSupport.swift; sourceTree = "<group>"; };
 		E07500000000000000000011 /* VibeLaneSkillStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneSkillStoreTests.swift; path = tests/unit/Features/AIAgents/VibeLaneSkillStoreTests.swift; sourceTree = "<group>"; };
+		E07500000000000000000012 /* VibeLaneEngineNoRepositoryActionsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneEngineNoRepositoryActionsTests.swift; path = tests/unit/Features/AIAgents/VibeLaneEngineNoRepositoryActionsTests.swift; sourceTree = "<group>"; };
 		E05900000000000000000007 /* VibeLaneDefinition+Validation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "VibeLaneDefinition+Validation.swift"; path = "crispyvibes/Features/VibeLanes/Models/VibeLaneDefinition+Validation.swift"; sourceTree = "<group>"; };
 		E05900000000000000000009 /* VibeLaneEditorView+Editing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "VibeLaneEditorView+Editing.swift"; path = "crispyvibes/Features/VibeLanes/Views/VibeLaneEditorView+Editing.swift"; sourceTree = "<group>"; };
 		E06300000000000000000011 /* VibeDefinition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeDefinition.swift; path = crispyvibes/Features/VibeLanes/Models/VibeDefinition.swift; sourceTree = "<group>"; };
@@ -2277,6 +2279,7 @@
 			children = (
 				1A29318A4682F8193126C04B /* VibeLaneEngineTests.swift */,
 				E07500000000000000000011 /* VibeLaneSkillStoreTests.swift */,
+				E07500000000000000000012 /* VibeLaneEngineNoRepositoryActionsTests.swift */,
 				2E560CB6F98E328DF6C45AB2 /* VibeLaneTaskManagerTests.swift */,
 				E0610000000000000000000C /* VibeLoopTests.swift */,
 				799BBF92EE2EE91A96604C7D /* TodoTriageCoordinatorTests.swift */,
@@ -4712,6 +4715,7 @@
 				93A43C758C5A20A048F43BA2 /* CommentAnchorRelocatorTests.swift in Sources */,
 				B33EF8AC8E62493A555EACAE /* VibeLaneEngineTests.swift in Sources */,
 				E07500000000000000000001 /* VibeLaneSkillStoreTests.swift in Sources */,
+				E07500000000000000000002 /* VibeLaneEngineNoRepositoryActionsTests.swift in Sources */,
 				B0F37E28180E620893A26864 /* VibeLaneTaskManagerTests.swift in Sources */,
 				E539E26F06B29CCE8B717771 /* TodoTriageCoordinatorTests.swift in Sources */,
 				E9D23F024AFC976406CB9418 /* TodoLanePipelineBridgeTests.swift in Sources */,

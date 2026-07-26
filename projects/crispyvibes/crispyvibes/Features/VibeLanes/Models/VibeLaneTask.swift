@@ -304,8 +304,9 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
     /// The final wrap-up written by the worker on the last checkpoint (shown as
     /// the task Outcome). Distinct from the per-step handoff summaries.
     var outcomeSummary: String?
-    /// Repo HEAD captured when the task was created, so reviewer evidence can be
-    /// scoped to this task's changes. nil = not a git repo (or no commits).
+    /// Legacy: previously captured by the engine shelling out to git. The engine
+    /// performs no repository actions — a lane that needs a baseline authors it as
+    /// a step output. Decoded for existing tasks; never populated.
     var repoBaselineRef: String?
     var openInputRequest: VibeLaneInputRequest?
     var steerCount: Int

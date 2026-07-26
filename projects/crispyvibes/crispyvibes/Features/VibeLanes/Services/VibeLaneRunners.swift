@@ -83,7 +83,6 @@ struct VibeLaneReviewRequest: Sendable {
     var attemptIndex: Int
     /// Repo HEAD when the task started, so the reviewer's diff can be scoped to
     /// this task's changes rather than the whole working tree. nil = no repo/baseline.
-    var repoBaselineRef: String? = nil
     var engine: VibeLaneEngineConfiguration = .default
     /// Resolved paths to review-only skills. Contents stay on disk and the
     /// reviewer reads their SKILL.md files on demand.
@@ -97,6 +96,7 @@ struct VibeLaneReviewOutcome: Sendable {
     var threadRef: String?
     var summary: String?
     var feedback: String?
+    /// Evidence the REVIEWER reports for its verdict. The engine gathers none.
     var evidence: String?
     var engine: VibeLaneEngineSnapshot?
 
@@ -206,45 +206,5 @@ final class VibeLaneUnimplementedWorkRunner: VibeLaneWorkRunning {
 final class VibeLaneUnavailableReviewer: VibeLaneReviewing {
     func review(_ request: VibeLaneReviewRequest, sessionRef: String?) async -> VibeLaneReviewOutcome {
         VibeLaneReviewOutcome(passed: false, sessionRef: sessionRef, summary: "no reviewer configured", feedback: "No reviewer is configured to verify this checkpoint.")
-    }
-}
-
-
-// MARK: - Git helper
-
-/// Thin git wrapper for reviewer evidence and per-task baseline capture.
-enum VibeLaneGit {
-    static func run(_ arguments: [String], in projectPath: String) -> (ok: Bool, output: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git", "-C", projectPath] + arguments
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return (false, "")
-        }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        return (process.terminationStatus == 0, output)
-    }
-
-    static func isRepo(_ projectPath: String) -> Bool {
-        run(["rev-parse", "--is-inside-work-tree"], in: projectPath)
-            .output.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
-    }
-
-    /// Current HEAD sha, or nil (no repo / no commits yet).
-    static func head(_ projectPath: String) -> String? {
-        let result = run(["rev-parse", "HEAD"], in: projectPath)
-        let sha = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (result.ok && !sha.isEmpty) ? sha : nil
-    }
-
-    static func commitExists(_ ref: String, in projectPath: String) -> Bool {
-        run(["cat-file", "-e", ref], in: projectPath).ok
     }
 }

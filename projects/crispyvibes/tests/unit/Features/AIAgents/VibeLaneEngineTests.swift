@@ -304,8 +304,7 @@ final class VibeLaneEngineTests: XCTestCase {
         XCTAssertEqual(request.reviewSkillsText, "- \(skillsRoot.path)/code-review")
         let prompt = VibeLaneACPAgentRunner.buildReviewPrompt(
             request: request,
-            definition: checkpoint.verify.definition,
-            evidence: "clean snapshot"
+            definition: checkpoint.verify.definition
         )
         XCTAssertTrue(prompt.contains("\(skillsRoot.path)/code-review"))
         XCTAssertTrue(prompt.contains("SKILL.md"))
