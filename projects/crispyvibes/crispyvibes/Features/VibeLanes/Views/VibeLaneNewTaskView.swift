@@ -12,6 +12,8 @@ struct VibeLaneNewTaskView: View {
     @Environment(\.appThemePalette) private var palette
     @ObservedObject var manager: VibeLaneTaskManager
     let focusedProjectPath: String?
+    /// Preselects the lane when the user pressed Start on a specific lane.
+    var preselectedLaneID: UUID?
     let onStarted: (VibeLaneTask) -> Void
     let onCancel: () -> Void
 
@@ -83,7 +85,16 @@ struct VibeLaneNewTaskView: View {
             .frame(maxWidth: 980, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(palette.canvasBackgroundColor)
-        .onAppear { selectedLaneID = selectedLaneID ?? suggestedLaneID }
+        .onAppear {
+            // An explicit Start on a lane card wins over title-based suggestion,
+            // and pins it so typing the task input cannot swap the lane.
+            if let preselectedLaneID {
+                selectedLaneID = preselectedLaneID
+                laneChosenByUser = true
+            } else {
+                selectedLaneID = selectedLaneID ?? suggestedLaneID
+            }
+        }
         .onChange(of: title) { _, _ in
             if !laneChosenByUser {
                 selectedLaneID = suggestedLaneID

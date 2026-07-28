@@ -154,6 +154,19 @@ extension AutomationOverviewView {
 
                 Spacer(minLength: uiScale.spacing(8))
 
+                if let iterations = selectedExample.loopIterations {
+                    Label(
+                        AppStrings.Automation.exampleLoopBadge(iterations),
+                        systemImage: "repeat"
+                    )
+                    .font(.system(size: uiScale.textSize(9), weight: .bold))
+                    .foregroundStyle(palette.accentColor)
+                    .padding(.horizontal, uiScale.spacing(6))
+                    .padding(.vertical, uiScale.spacing(2))
+                    .background(palette.accentColor.opacity(0.14), in: Capsule())
+                    .lineLimit(1)
+                }
+
                 Label(AppStrings.Automation.exampleVibeCount, systemImage: "scope")
                     .font(.system(size: uiScale.textSize(9), weight: .semibold))
                     .foregroundStyle(palette.accentColor)
@@ -183,19 +196,30 @@ extension AutomationOverviewView {
             vibeCheckpoint(
                 title: selectedExample.firstVibe,
                 skill: selectedExample.workSkill,
-                skillImage: selectedExample.workSkillImage
+                skillImage: selectedExample.workSkillImage,
+                isLooped: selectedExample.loopIterations != nil
             )
-            checkpointLink(.right)
+            if selectedExample.loopIterations != nil {
+                loopCheckpointLink(.right)
+            } else {
+                checkpointLink(.right)
+            }
             vibeCheckpoint(
                 title: selectedExample.secondVibe,
-                skill: selectedExample.workSkill,
-                skillImage: selectedExample.workSkillImage
+                skill: selectedExample.secondVibeUsesReviewSkill
+                    ? selectedExample.reviewSkill
+                    : selectedExample.workSkill,
+                skillImage: selectedExample.secondVibeUsesReviewSkill
+                    ? selectedExample.reviewSkillImage
+                    : selectedExample.workSkillImage,
+                isLooped: selectedExample.loopIterations != nil
             )
             checkpointLink(.right)
             vibeCheckpoint(
                 title: selectedExample.thirdVibe,
                 skill: selectedExample.reviewSkill,
-                skillImage: selectedExample.reviewSkillImage
+                skillImage: selectedExample.reviewSkillImage,
+                isLooped: false
             )
         }
         .frame(minWidth: uiScale.chromeSize(390), maxWidth: .infinity)
@@ -206,19 +230,30 @@ extension AutomationOverviewView {
             vibeCheckpoint(
                 title: selectedExample.firstVibe,
                 skill: selectedExample.workSkill,
-                skillImage: selectedExample.workSkillImage
+                skillImage: selectedExample.workSkillImage,
+                isLooped: selectedExample.loopIterations != nil
             )
-            checkpointLink(.down)
+            if selectedExample.loopIterations != nil {
+                loopCheckpointLink(.down)
+            } else {
+                checkpointLink(.down)
+            }
             vibeCheckpoint(
                 title: selectedExample.secondVibe,
-                skill: selectedExample.workSkill,
-                skillImage: selectedExample.workSkillImage
+                skill: selectedExample.secondVibeUsesReviewSkill
+                    ? selectedExample.reviewSkill
+                    : selectedExample.workSkill,
+                skillImage: selectedExample.secondVibeUsesReviewSkill
+                    ? selectedExample.reviewSkillImage
+                    : selectedExample.workSkillImage,
+                isLooped: selectedExample.loopIterations != nil
             )
             checkpointLink(.down)
             vibeCheckpoint(
                 title: selectedExample.thirdVibe,
                 skill: selectedExample.reviewSkill,
-                skillImage: selectedExample.reviewSkillImage
+                skillImage: selectedExample.reviewSkillImage,
+                isLooped: false
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -285,15 +320,16 @@ extension AutomationOverviewView {
     private func vibeCheckpoint(
         title: String,
         skill: String,
-        skillImage: String
+        skillImage: String,
+        isLooped: Bool
     ) -> some View {
         VStack(spacing: uiScale.spacing(6)) {
-            Image(systemName: "scope")
+            Image(systemName: isLooped ? "repeat" : "scope")
                 .font(.system(size: uiScale.iconSize(13), weight: .semibold))
                 .foregroundStyle(palette.accentColor)
                 .frame(width: uiScale.chromeSize(28), height: uiScale.chromeSize(28))
-                .background(Circle().fill(palette.accentColor.opacity(0.12)))
-                .overlay(Circle().strokeBorder(palette.accentColor.opacity(0.32)))
+                .background(Circle().fill(palette.accentColor.opacity(isLooped ? 0.2 : 0.12)))
+                .overlay(Circle().strokeBorder(palette.accentColor.opacity(isLooped ? 0.7 : 0.32)))
 
             Text(title)
                 .font(.system(size: uiScale.textSize(11), weight: .semibold))
@@ -332,6 +368,28 @@ extension AutomationOverviewView {
 
     private func checkpointLink(_ direction: AutomationFlowDirection) -> some View {
         flowLink(direction, length: 32, thickness: 1, iconSize: 7)
+    }
+
+    /// Marks the boundary between two members of a loop group.
+    private func loopCheckpointLink(_ direction: AutomationFlowDirection) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(palette.accentColor.opacity(0.5))
+                .frame(
+                    width: direction == .right ? uiScale.chromeSize(32) : uiScale.chromeSize(1),
+                    height: direction == .down ? uiScale.chromeSize(32) : uiScale.chromeSize(1)
+                )
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: uiScale.iconSize(10), weight: .bold))
+                .foregroundStyle(palette.accentColor)
+                .padding(uiScale.spacing(2))
+                .background(Circle().fill(palette.canvasSecondaryBackgroundColor))
+        }
+        .frame(
+            width: direction == .right ? uiScale.chromeSize(32) : uiScale.chromeSize(38),
+            height: direction == .down ? uiScale.chromeSize(32) : uiScale.chromeSize(38)
+        )
+        .accessibilityHidden(true)
     }
 
     private func flowLink(

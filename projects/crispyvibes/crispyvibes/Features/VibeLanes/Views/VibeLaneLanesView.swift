@@ -31,6 +31,8 @@ struct VibeLaneLanesView: View {
     @ObservedObject var manager: VibeLaneTaskManager
     let onEdit: (UUID) -> Void
     let onNew: () -> Void
+    /// Starts a task on a lane straight from the catalog.
+    var onStartTask: ((UUID) -> Void)?
 
     @State private var searchText = ""
     @State private var filter: VibeLaneCatalogFilter = .all
@@ -72,7 +74,10 @@ struct VibeLaneLanesView: View {
                                 VibeLaneCatalogCard(
                                     lane: lane,
                                     categories: categories(for: lane),
-                                    onOpen: { onEdit(lane.id) }
+                                    onOpen: { onEdit(lane.id) },
+                                    onStart: onStartTask.map { start in
+                                        { start(lane.id) }
+                                    }
                                 )
                             }
                         }

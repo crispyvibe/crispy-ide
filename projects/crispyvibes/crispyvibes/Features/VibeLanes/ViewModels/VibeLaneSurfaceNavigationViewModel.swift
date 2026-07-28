@@ -5,12 +5,16 @@ import Foundation
 final class VibeLaneSurfaceNavigationViewModel: ObservableObject {
     enum Screen: Equatable {
         case dashboard
-        case newTask
+        /// `laneID` preselects the lane when the user started from a lane card.
+        case newTask(laneID: UUID?)
         case detail(UUID)
         case lanes
         case laneEditor(UUID)
         case vibes
         case vibeEditor(UUID, laneID: UUID?)
+        /// A task's worker or reviewer chat, opened in place. The store is resolved
+        /// by the host at render time, so the screen stays Equatable.
+        case acp(target: VibeLaneACPChatTarget, taskID: UUID)
     }
 
     @Published private(set) var screen: Screen = .dashboard
@@ -23,8 +27,8 @@ final class VibeLaneSurfaceNavigationViewModel: ObservableObject {
         screen = .dashboard
     }
 
-    func showNewTask() {
-        screen = .newTask
+    func showNewTask(laneID: UUID? = nil) {
+        screen = .newTask(laneID: laneID)
     }
 
     func showTask(_ task: VibeLaneTask) {
@@ -51,6 +55,10 @@ final class VibeLaneSurfaceNavigationViewModel: ObservableObject {
         screen = .vibeEditor(id, laneID: laneID)
     }
 
+    func showACPSession(target: VibeLaneACPChatTarget, taskID: UUID) {
+        screen = .acp(target: target, taskID: taskID)
+    }
+
     func validateSelection(
         taskExists: (UUID) -> Bool,
         laneExists: (UUID) -> Bool,
@@ -61,9 +69,13 @@ final class VibeLaneSurfaceNavigationViewModel: ObservableObject {
             screen = .dashboard
         case let .laneEditor(id) where !laneExists(id):
             screen = .lanes
+        case let .newTask(laneID) where laneID.map { !laneExists($0) } == true:
+            screen = .newTask(laneID: nil)
         case let .vibeEditor(id, _) where !vibeExists(id):
             screen = .vibes
-        case .dashboard, .newTask, .detail, .lanes, .laneEditor, .vibes, .vibeEditor:
+        case let .acp(_, taskID) where !taskExists(taskID):
+            screen = .dashboard
+        case .dashboard, .newTask, .detail, .lanes, .laneEditor, .vibes, .vibeEditor, .acp:
             break
         }
     }

@@ -4,6 +4,7 @@ import SwiftUI
 struct AutomationSurfaceView: View {
     private enum Section: String, CaseIterable, Identifiable {
         case overview
+        case tasks
         case loops
         case lanes
         case vibes
@@ -14,6 +15,7 @@ struct AutomationSurfaceView: View {
         var title: String {
             switch self {
             case .overview: AppStrings.Automation.overview
+            case .tasks: AppStrings.VibeLanes.tasks
             case .loops: AppStrings.Loops.title
             case .lanes: AppStrings.VibeLanes.lanes
             case .vibes: AppStrings.VibeLanes.vibes
@@ -24,6 +26,7 @@ struct AutomationSurfaceView: View {
         var symbolName: String {
             switch self {
             case .overview: "square.grid.2x2"
+            case .tasks: "play.rectangle"
             case .loops: "clock.arrow.circlepath"
             case .lanes: "point.3.connected.trianglepath.dotted"
             case .vibes: "sparkles.rectangle.stack"
@@ -68,11 +71,14 @@ struct AutomationSurfaceView: View {
                 .automationLayer(isActive: selectedSection == .loops)
 
                 VibeLaneSurfaceView(
-                    rootScreen: selectedSection == .vibes ? .vibes : .lanes,
+                    rootScreen: laneRootScreen,
+                    focusedProjectPath: projectOptions.first?.path,
                     onOpenACPSession: { _ in },
+                    resolveACPSession: resolveACPSession,
+                    acpProjects: acpProjects,
                     onOpenFileTarget: onOpenFileTarget
                 )
-                .automationLayer(isActive: selectedSection == .lanes || selectedSection == .vibes)
+                .automationLayer(isActive: isLaneSectionActive)
 
                 SkillLibraryView(
                     store: skillStore,
@@ -86,7 +92,7 @@ struct AutomationSurfaceView: View {
 
     private var sectionBar: some View {
         HStack(spacing: uiScale.spacing(18)) {
-            Label(AppStrings.Automation.title, systemImage: "gearshape.2")
+            Label(AppStrings.Automation.headingTitle, systemImage: "gearshape.2")
                 .font(.system(size: uiScale.textSize(15), weight: .semibold))
 
             Picker(
@@ -103,7 +109,7 @@ struct AutomationSurfaceView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: uiScale.chromeSize(650))
+            .frame(width: uiScale.chromeSize(760))
 
             Spacer()
         }
@@ -117,11 +123,27 @@ struct AutomationSurfaceView: View {
         }
     }
 
+    /// The Vibe Lanes surface hosts three Automation sections; its root screen
+    /// follows the selected one so Back never leaves the section the user is in.
+    private var laneRootScreen: VibeLaneSurfaceNavigationViewModel.Screen {
+        switch selectedSection {
+        case .tasks: .dashboard
+        case .vibes: .vibes
+        default: .lanes
+        }
+    }
+
+    private var isLaneSectionActive: Bool {
+        selectedSection == .tasks || selectedSection == .lanes || selectedSection == .vibes
+    }
+
     private func select(_ section: Section) {
         selectedSection = section
         switch section {
         case .overview:
             break
+        case .tasks:
+            laneNavigation.showDashboard()
         case .loops:
             break
         case .lanes:
