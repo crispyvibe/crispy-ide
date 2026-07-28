@@ -89,6 +89,9 @@ extension ContentView {
         if contentViewerStore.vibeCastStore.targetTabID != nil || !items.isEmpty {
             items.append(.vibeCast)
         }
+        if !items.isEmpty {
+            items.append(.vibeLanes)
+        }
         return items
     }
 
@@ -134,6 +137,11 @@ extension ContentView {
         case .vibeCast:
             return items.firstIndex(where: {
                 if case .vibeCast = $0 { return true }
+                return false
+            })
+        case .vibeLanes:
+            return items.firstIndex(where: {
+                if case .vibeLanes = $0 { return true }
                 return false
             })
         case let .acp(tileID, _):
@@ -194,6 +202,8 @@ extension ContentView {
             )
         case .vibeCast:
             presentVibeCastSpotlight(animated: false)
+        case .vibeLanes:
+            presentVibeLanesSpotlight(animated: false)
         case let .acp(tileID, storeID, _, _):
             presentACPSpotlight(tileID: tileID, storeID: storeID, animated: false)
         case let .file(tileID, fileURL):
@@ -210,6 +220,15 @@ extension ContentView {
         let spotlight = makeSpotlightState(
             source: .vibeCast,
             title: AppStrings.VibeCast.title,
+            workingDirectoryURL: spotlightHomeDirectoryURL
+        )
+        setTerminalSpotlight(spotlight, animated: animated)
+    }
+
+    func presentVibeLanesSpotlight(animated: Bool = true) {
+        let spotlight = makeSpotlightState(
+            source: .vibeLanes,
+            title: AppStrings.VibeLanes.title,
             workingDirectoryURL: spotlightHomeDirectoryURL
         )
         setTerminalSpotlight(spotlight, animated: animated)

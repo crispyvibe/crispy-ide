@@ -41,6 +41,9 @@ struct HomeShellContext {
         if walkthroughPresented {
             return nil
         }
+        if case .automation = store.activeSurface {
+            return .automation
+        }
         if case let .appSettings(category) = store.activeSurface {
             return category == .account ? .account : .crispyvibesSettings
         }
@@ -94,6 +97,10 @@ struct HomeShellContext {
 
     func presentAppSettings(_ category: AppSettingsCategory) {
         store.presentAppSettings(category)
+    }
+
+    func presentAutomation() {
+        store.presentAutomation()
     }
 
     func dismissSurface() {

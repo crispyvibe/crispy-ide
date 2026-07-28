@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class AppShellStore: ObservableObject {
     enum ActiveSurface: Equatable {
+        case automation
         case vibespaceSettings(UUID, VibeSpaceSettingsCategory)
         case appSettings(AppSettingsCategory)
     }
@@ -84,6 +85,12 @@ final class AppShellStore: ObservableObject {
 
     func presentAppSettings(_ category: AppSettingsCategory) {
         activeSurface = .appSettings(category)
+        isShowingHome = false
+    }
+
+    func presentAutomation() {
+        activeSurface = .automation
+        isShowingHome = false
     }
 
     func updatePresentedAppSettingsCategory(_ category: AppSettingsCategory) {

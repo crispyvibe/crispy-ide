@@ -25,19 +25,23 @@ Todos let you jot tasks without leaving your flow. Capture one in a second with 
 ### Capture and forget
 1. Press **⌃⌘T**.
 2. (Optional) Click **"Lands in › \<project\>"** to send the todo to a different project or to **VibeSpace** (no specific project).
-3. Type the title and press **Return** — a brief "Todo added" confirmation shows, then the field disappears. Focus returns to wherever you were.
+3. Type the title and press **Return** — once the todo is saved, a brief "Todo added" confirmation shows, then the field disappears. If saving fails, the HUD says so and keeps your text so you can retry.
 
 The target defaults to the project you're currently working in, and updates each time you open the field.
 
 ### Manage todos in the surface
 - Type in the **quick-add** field at the top of the list and press Return to add.
-- Toggle **Project / All** to switch between the focused project's todos and every todo in the VibeSpace.
-- Click a card's circle to **complete** it (completed items move down and gray out); hover a card to reveal **Delete**.
-- Click a card to open its detail on the right.
+- Toggle **Project / All** to switch between the focused project's todos and every todo in the VibeSpace; the header shows active/completed counts.
+- Once the list grows, a **search** field appears — it matches titles and notes.
+- Click a card's circle to **complete** it — it responds instantly and moves into the collapsible **Completed (n)** section at the bottom.
+- Right-click a card for **Complete/Reopen**, a **Color** menu (six sticky colors, drawn as the card's leading edge), and **Delete**; hover also reveals Delete. Deleting confirms **inline** — the trash turns into `Delete? ✓ ✕` right where you clicked (it removes the thread too); moving off the card disarms it.
+- With the list focused, use **↑/↓** to move the selection, **⌦** to arm delete (press **⌦** again to confirm), and **⎋** to cancel or clear the selection.
+- Click a card to open its detail. In a narrow pane the detail takes over the column with a **Back** button; in a wide pane it sits alongside the list.
 
 ### Notes and threads
-- In detail, edit the **title** inline (Return to save).
-- Click the **Notes** area to write a markdown body; press **⌘Return** to save. Bold, italics, code, and links render in preview.
+- In detail, edit the **title** inline — it saves on Return or when you click away.
+- Pick a **sticky color** from the swatches under the title (click the active one to clear it); created/completed times and project/file chips sit alongside.
+- Hover the **Notes** area and click to edit the markdown body; **⌘Return** saves, **⎋** cancels. Bold, italics, code, and links render in preview.
 - Use the **composer** at the bottom to post messages to the todo's **thread**. Messages group by author with a relative time (e.g. "2m"). Messages you post show as **You**; messages added by an AI agent are styled distinctly.
 
 ### From the terminal (CLI)

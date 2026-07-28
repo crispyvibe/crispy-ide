@@ -54,6 +54,8 @@ final class VibeSpaceCanvasActionsCoordinator {
 
     func toggleTodos() { present(.todos) }
 
+    func toggleVibeLanes() { present(.vibeLanes) }
+
     /// Single entry point for surfacing content in a vibespace. Consults
     /// `ContentSurfacePolicy` for the active canvas mode, then routes to the
     /// correct surface — so callers never branch on canvas mode or force a
@@ -111,6 +113,10 @@ final class VibeSpaceCanvasActionsCoordinator {
             if !splitViewStore.activateExistingTab(matching: { $0.kind == .todos }) {
                 contentViewerStore.openTodos()
             }
+        case .vibeLanes:
+            if !splitViewStore.activateExistingTab(matching: { $0.kind == .vibeLanes }) {
+                contentViewerStore.openVibeLanes()
+            }
         case .vibeCast:
             if !splitViewStore.activateExistingTab(matching: { $0.kind == .vibeCast }) {
                 contentViewerStore.openVibeCast()
@@ -127,7 +133,7 @@ final class VibeSpaceCanvasActionsCoordinator {
                 focusProject(project)
             }
             NotificationCenter.default.post(name: .addACPTileToBoard, object: nil)
-        case .conversationThread, .todos, .vibeCast:
+        case .conversationThread, .todos, .vibeLanes, .vibeCast:
             // Policy never routes these to the board today.
             fallbackToDetailTab(content, vibespaceID: vibespaceID,
                                 "PresentableContent \(content.kind) unexpectedly routed to .boardTile")
@@ -152,7 +158,7 @@ final class VibeSpaceCanvasActionsCoordinator {
                 projectIdentifier: project?.projectIdentifier,
                 vibespaceID: vibespaceID
             )
-        case .agentChat, .todos, .vibeCast:
+        case .agentChat, .todos, .vibeLanes, .vibeCast:
             // Policy never routes these to a docked preview today.
             fallbackToDetailTab(content, vibespaceID: vibespaceID,
                                 "PresentableContent \(content.kind) unexpectedly routed to .dockedPreview")
@@ -661,5 +667,3 @@ final class VibeSpaceCanvasActionsCoordinator {
         }
     }
 }
-
-

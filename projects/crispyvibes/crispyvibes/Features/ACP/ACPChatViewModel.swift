@@ -5,6 +5,8 @@ import Foundation
 @MainActor
 final class ACPChatViewModel: ObservableObject {
     private static let maxTimelineEntries = 50_000
+    static let restoredMessageLimit = 6
+    private static let restoredMessageTextLimit = 3_000
 
     @Published var timeline: [ACPTimelineEntry] = []
     @Published var composeText = ""
@@ -112,11 +114,17 @@ final class ACPChatViewModel: ObservableObject {
         rebindSession()
     }
 
-    func bindStandaloneSession(_ session: (any AgentSessionProtocol)?) {
+    /// Binds a standalone process. Managed orchestration may replace the process
+    /// while retaining one durable user-visible transcript, so those callers can
+    /// preserve the existing timeline and persistence context.
+    func bindStandaloneSession(
+        _ session: (any AgentSessionProtocol)?,
+        preserveTimeline: Bool = false
+    ) {
         let didChangeSession = boundStandaloneSession?.id != session?.id
         boundStandaloneSession = session
         activeProjectIdentifier = nil
-        if didChangeSession && !hasRestoredThread {
+        if didChangeSession && !hasRestoredThread && !preserveTimeline {
             timeline.removeAll()
             availableCommands.removeAll()
             isStreaming = false
@@ -134,6 +142,13 @@ final class ACPChatViewModel: ObservableObject {
 
     /// Called by the standalone pane to provide a connect-then-send path.
     var connectAndSend: ((String) -> Void)?
+
+    struct ProgrammaticSendResult {
+        var ok: Bool
+        var responseText: String
+        var errorText: String?
+        var threadID: String?
+    }
 
     func send() {
         let text = composeText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -210,6 +225,79 @@ final class ACPChatViewModel: ObservableObject {
                 self?.finalizeStreaming()
             }
         }
+    }
+
+    /// Sends through the same chat/timeline/persistence path as the compose box,
+    /// but awaits completion so headless orchestrators can make the next decision.
+    func sendProgrammatic(_ text: String) async -> ProgrammaticSendResult {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return ProgrammaticSendResult(ok: false, responseText: "", errorText: "empty prompt", threadID: persistenceContext?.threadID)
+        }
+        guard !isStreaming else {
+            return ProgrammaticSendResult(ok: false, responseText: "", errorText: "session is already streaming", threadID: persistenceContext?.threadID)
+        }
+        guard let session = activeSession else {
+            return ProgrammaticSendResult(ok: false, responseText: "", errorText: "no active ACP session", threadID: persistenceContext?.threadID)
+        }
+
+        promptTask?.cancel()
+        promptTask = nil
+        composeText = ""
+        composeImages = []
+        isStreaming = true
+        markStreamingEntriesComplete()
+
+        let turn = ACPTurnEntry(id: UUID(), timestamp: Date(), userMessage: trimmed)
+        appendTimelineEntry(.turn(turn))
+
+        if persistenceContext == nil {
+            let wsID = self.vibespaceID ?? UUID().uuidString
+            ensureThread(
+                vibespaceID: wsID,
+                projectPath: session.projectPath.path,
+                agentID: session.agentID,
+                transportKind: session.transportKind,
+                model: session.currentModelID ?? ""
+            )
+        }
+
+        let turnID = turn.id.uuidString
+        persistUserMessage(text: trimmed, turnID: turnID)
+
+        var streamEndedWithCompletion = false
+        for await update in session.prompt(trimmed, contentBlocks: nil) {
+            if Task.isCancelled {
+                await session.cancel()
+                break
+            }
+            applyUpdateToActiveTurn(update)
+            if case .turnCompleted = update {
+                streamEndedWithCompletion = true
+                break
+            }
+        }
+
+        finalizeStreaming()
+
+        guard let lastTurn = timeline.last(where: {
+            if case .turn = $0.kind { return true }
+            return false
+        }), case .turn(let completedTurn) = lastTurn.kind else {
+            return ProgrammaticSendResult(
+                ok: false,
+                responseText: "",
+                errorText: "no turn was recorded",
+                threadID: persistenceContext?.threadID
+            )
+        }
+
+        return ProgrammaticSendResult(
+            ok: completedTurn.errorText == nil && (streamEndedWithCompletion || !completedTurn.responseText.isEmpty),
+            responseText: completedTurn.responseText,
+            errorText: completedTurn.errorText,
+            threadID: persistenceContext?.threadID
+        )
     }
 
     func cancelPrompt() {
@@ -625,8 +713,12 @@ final class ACPChatViewModel: ObservableObject {
     /// Restore a thread's conversation history from the persistence store.
     func restoreThread(threadId: String) {
         hasRestoredThread = true
+        let messageLimit = Self.restoredMessageLimit
         Task { [conversationStore, vibespaceID] in
-            async let messagesResult = conversationStore.listMessages(threadId: threadId)
+            async let messagesResult = conversationStore.listMessages(
+                threadId: threadId,
+                limit: messageLimit
+            )
             async let threadResult = conversationStore.getThread(id: threadId)
 
             let messages = await messagesResult
@@ -635,8 +727,9 @@ final class ACPChatViewModel: ObservableObject {
             var restoredTimeline: [ACPTimelineEntry] = []
             for msg in messages {
                 guard let role = msg["role"] as? String,
-                      let text = msg["text"] as? String,
+                      let rawText = msg["text"] as? String,
                       let id = msg["id"] as? String else { continue }
+                let text = Self.restoredDisplayText(rawText)
                 let ts = (msg["createdAt"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) } ?? Date()
                 let entryID = UUID(uuidString: id) ?? UUID()
 
@@ -652,7 +745,6 @@ final class ACPChatViewModel: ObservableObject {
 
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                self.timeline = restoredTimeline
                 self.persistenceContext = PersistenceContext(
                     threadID: threadId,
                     vibespaceID: threadData?["vibespaceId"] as? String ?? vibespaceID ?? "",
@@ -662,6 +754,7 @@ final class ACPChatViewModel: ObservableObject {
                     model: threadData?["model"] as? String ?? "",
                     title: threadData?["title"] as? String ?? ""
                 )
+                self.timeline = restoredTimeline
             }
         }
     }
@@ -672,8 +765,9 @@ final class ACPChatViewModel: ObservableObject {
         var restoredTimeline: [ACPTimelineEntry] = []
         for msg in messages {
             guard let role = msg["role"] as? String,
-                  let text = msg["text"] as? String,
+                  let rawText = msg["text"] as? String,
                   let id = msg["id"] as? String else { continue }
+            let text = Self.restoredDisplayText(rawText)
             let ts = (msg["createdAt"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) } ?? Date()
             let entryID = UUID(uuidString: id) ?? UUID()
 
@@ -687,7 +781,6 @@ final class ACPChatViewModel: ObservableObject {
             }
         }
 
-        timeline = restoredTimeline
         persistenceContext = PersistenceContext(
             threadID: threadId,
             vibespaceID: threadData?["vibespaceId"] as? String ?? vibespaceID ?? "",
@@ -697,5 +790,12 @@ final class ACPChatViewModel: ObservableObject {
             model: threadData?["model"] as? String ?? "",
             title: threadData?["title"] as? String ?? ""
         )
+        timeline = restoredTimeline
+    }
+
+    private static func restoredDisplayText(_ text: String) -> String {
+        guard text.count > restoredMessageTextLimit else { return text }
+        let prefix = text.prefix(restoredMessageTextLimit)
+        return "\(prefix)\n\n[Earlier restored message truncated for UI responsiveness. Full conversation remains stored.]"
     }
 }

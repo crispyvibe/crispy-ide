@@ -127,6 +127,22 @@ extension VibeSpaceTerminalOnlyView {
                     onSendAllFromProjectToNewBoardWindow: sendAllFromProjectToNewBoardWindowAction(for: tile),
                     interactionController: interactionController
                 )
+            } else if tile.isVibeLanes {
+                VibeLaneBoardTileCard(
+                    focusedProjectPath: boardStore.activeProjectPath(surfaceID: surfaceID)
+                        ?? projects.first?.rootURL.standardizedFileURL.path,
+                    isActive: isActive,
+                    onSelect: { boardStore.activateTile(tile.id, requestFocus: false, surfaceID: surfaceID) },
+                    onClose: { boardStore.removeTile(tile.id, surfaceID: surfaceID) },
+                    onSpotlight: { onVibeLanesSpotlightRequested() },
+                    onOpenACPSession: { target in onOpenVibeLaneACPPane?(target) },
+                    onOpenFileTarget: { target in onFileSystemTargetActivated(target, nil) },
+                    boardWindowTransferTargets: boardWindowTargets,
+                    onSendToNewBoardWindow: sendToNewBoardWindowAction(for: tile.id),
+                    onSendToBoardWindow: sendToBoardWindowAction(for: tile.id),
+                    onSendAllFromProjectToNewBoardWindow: sendAllFromProjectToNewBoardWindowAction(for: tile),
+                    interactionController: interactionController
+                )
             } else if tile.isFile, let fileURL = tile.fileURL,
                       let coordinator = dockedFileViewerCoordinator {
                 let group = coordinator.editorGroup(

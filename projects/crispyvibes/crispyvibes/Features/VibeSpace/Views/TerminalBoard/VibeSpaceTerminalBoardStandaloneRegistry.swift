@@ -56,9 +56,11 @@ final class VibeSpaceTerminalBoardStandaloneRegistry {
 struct VibeSpaceTerminalBoardWindowToolbarConfiguration {
     let stateChanges: AnyPublisher<Void, Never>?
     let addVibeCast: () -> Void
+    let addVibeLanes: () -> Void
     let addAgent: (() -> Void)?
     let addBrowser: () -> Void
     let canAddVibeCast: () -> Bool
+    let canAddVibeLanes: () -> Bool
     let canAddAgent: () -> Bool
     let canAddBrowser: () -> Bool
     /// Snapshot of the active vibespace's projects, used to populate the
@@ -85,6 +87,7 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
     private static let toolbarIdentifier = NSToolbar.Identifier("com.crispyvibe.terminalBoard.detached.toolbar")
     private static let terminalIdentifier = NSToolbarItem.Identifier("com.crispyvibe.terminalBoard.detached.toolbar.terminal")
     private static let vibeCastIdentifier = NSToolbarItem.Identifier("com.crispyvibe.terminalBoard.detached.toolbar.vibecast")
+    private static let vibeLanesIdentifier = NSToolbarItem.Identifier("com.crispyvibe.terminalBoard.detached.toolbar.vibe-lanes")
     private static let agentIdentifier = NSToolbarItem.Identifier("com.crispyvibe.terminalBoard.detached.toolbar.agent")
     private static let browserIdentifier = NSToolbarItem.Identifier("com.crispyvibe.terminalBoard.detached.toolbar.browser")
 
@@ -139,6 +142,13 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
                 systemSymbolName: "antenna.radiowaves.left.and.right",
                 action: #selector(addVibeCast(_:))
             )
+        case Self.vibeLanesIdentifier:
+            return toolbarItem(
+                identifier: itemIdentifier,
+                label: AppStrings.VibeLanes.title,
+                systemSymbolName: VibeLaneVisualIdentity.symbolName,
+                action: #selector(addVibeLanes(_:))
+            )
         case Self.agentIdentifier:
             return toolbarItem(
                 identifier: itemIdentifier,
@@ -164,6 +174,8 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
             return configuration.canAddTerminal()
         case Self.vibeCastIdentifier:
             return configuration.canAddVibeCast()
+        case Self.vibeLanesIdentifier:
+            return configuration.canAddVibeLanes()
         case Self.agentIdentifier:
             return configuration.addAgent != nil && configuration.canAddAgent()
         case Self.browserIdentifier:
@@ -174,7 +186,8 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
     }
 
     /// Toolbar item order matches the main window's title-bar pill so the
-    /// detached window feels consistent: Terminal / Agent / Browser / VibeCast.
+    /// detached window feels consistent:
+    /// Terminal / Agent / Browser / VibeCast / Vibe Lanes.
     private var toolbarItemIdentifiers: [NSToolbarItem.Identifier] {
         var identifiers: [NSToolbarItem.Identifier] = [
             .flexibleSpace,
@@ -185,6 +198,7 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
         }
         identifiers.append(Self.browserIdentifier)
         identifiers.append(Self.vibeCastIdentifier)
+        identifiers.append(Self.vibeLanesIdentifier)
         return identifiers
     }
 
@@ -241,6 +255,15 @@ private final class VibeSpaceTerminalBoardWindowToolbarCoordinator: NSObject, NS
             return
         }
         configuration.addVibeCast()
+        toolbar?.validateVisibleItems()
+    }
+
+    @objc private func addVibeLanes(_ sender: Any?) {
+        guard configuration.canAddVibeLanes() else {
+            toolbar?.validateVisibleItems()
+            return
+        }
+        configuration.addVibeLanes()
         toolbar?.validateVisibleItems()
     }
 

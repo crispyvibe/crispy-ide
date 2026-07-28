@@ -201,7 +201,17 @@ struct ContentView: View {
 
     @ViewBuilder
     var mainContent: some View {
-        if let vibespaceSettingsVibeSpaceID = activeVibeSpaceSettingsVibeSpaceID {
+        if case .automation = activeSurface {
+            AutomationSurfaceView(
+                loopManager: appContainer.vibeLoopManager,
+                laneNavigation: appContainer.vibeLaneSurfaceNavigationViewModel,
+                skillStore: appContainer.vibeLaneSkillStore,
+                projectOptions: loopProjectOptions,
+                acpProjects: activeVibeSpaceSession.projects,
+                resolveACPSession: resolveLoopTaskACPSession,
+                onOpenFileTarget: { openTerminalFileSystemTarget($0) }
+            )
+        } else if let vibespaceSettingsVibeSpaceID = activeVibeSpaceSettingsVibeSpaceID {
             vibespaceSettingsSheet(for: vibespaceSettingsVibeSpaceID)
         } else if case .appSettings = activeSurface {
             appSettingsSheet()
@@ -310,7 +320,7 @@ struct ContentView: View {
             return reference.projectPath
         case .terminal(let projectID, _):
             return projects.first(where: { $0.id == projectID })?.projectIdentifier
-        case .vibeCast, .todos, .acpPane:
+        case .vibeCast, .todos, .vibeLanes, .acpPane:
             return nil
         }
     }
@@ -347,6 +357,9 @@ struct ContentView: View {
                 syncWindowTitleWithVibeSpace()
             }
             .onChange(of: activeVibeSpaceSession.focusedProject?.id) { _, _ in
+                syncWindowTitleWithVibeSpace()
+            }
+            .onChange(of: activeSurface) { _, _ in
                 syncWindowTitleWithVibeSpace()
             }
             .onChange(of: contentViewerStore.markdownViewModel.fileURL) { _, fileURL in
@@ -676,23 +689,31 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openTerminalOnlyVibeSpaceView)) { _ in
                 vibespaceCanvasActionsCoordinator.openTerminalOnlyVibeSpaceView()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleVibeCast)) { _ in
-                if ContentSurfacePolicy.surface(for: .vibeCast, mode: selectedVibeSpaceCanvasMode) == .spotlight {
-                    presentVibeCastSpotlight()
-                } else {
-                    vibespaceCanvasActionsCoordinator.toggleVibeCast()
+            .modifier(ContentViewExtraCommands(
+                onToggleVibeCast: {
+                    if ContentSurfacePolicy.surface(for: .vibeCast, mode: selectedVibeSpaceCanvasMode) == .spotlight {
+                        presentVibeCastSpotlight()
+                    } else {
+                        vibespaceCanvasActionsCoordinator.toggleVibeCast()
+                    }
+                },
+                onToggleTodos: {
+                    if ContentSurfacePolicy.surface(for: .todos, mode: selectedVibeSpaceCanvasMode) == .spotlight {
+                        presentTodosSpotlight()
+                    } else {
+                        vibespaceCanvasActionsCoordinator.toggleTodos()
+                    }
+                },
+                onCreateTerminal: { createTerminalFromToolbar(notification: $0) },
+                onOpenAutomation: showAutomationFromAppMenu,
+                onToggleVibeLanes: {
+                    if ContentSurfacePolicy.surface(for: .vibeLanes, mode: selectedVibeSpaceCanvasMode) == .spotlight {
+                        presentVibeLanesSpotlight()
+                    } else {
+                        vibespaceCanvasActionsCoordinator.toggleVibeLanes()
+                    }
                 }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleTodos)) { _ in
-                if ContentSurfacePolicy.surface(for: .todos, mode: selectedVibeSpaceCanvasMode) == .spotlight {
-                    presentTodosSpotlight()
-                } else {
-                    vibespaceCanvasActionsCoordinator.toggleTodos()
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .createTerminalRequested)) { notification in
-                createTerminalFromToolbar(notification: notification)
-            }
+            ))
             .onReceive(NotificationCenter.default.publisher(for: .openAppSettings)) { _ in
                 appShellStore.presentAppSettings(.general)
             }
@@ -793,5 +814,27 @@ struct ContentView: View {
             .environment(\.composeHistoryStore, appContainer.composeHistoryStore)
             .environmentObject(themeManager)
             .preferredColorScheme(preferredAppColorScheme)
+    }
+}
+
+
+/// F059 — extracted notification handlers to keep `ContentView.body` within the
+/// Swift type-checker's complexity budget. Closures capture ContentView state
+/// where the modifier is applied.
+private struct ContentViewExtraCommands: ViewModifier {
+    let onToggleVibeCast: () -> Void
+    let onToggleTodos: () -> Void
+    let onCreateTerminal: (Notification) -> Void
+    let onOpenAutomation: () -> Void
+    let onToggleVibeLanes: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .toggleVibeCast)) { _ in onToggleVibeCast() }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleTodos)) { _ in onToggleTodos() }
+            .onReceive(NotificationCenter.default.publisher(for: .createTerminalRequested)) { onCreateTerminal($0) }
+            .onReceive(NotificationCenter.default.publisher(for: .openAutomation)) { _ in onOpenAutomation() }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleVibeLanes)) { _ in onToggleVibeLanes() }
+            .onReceive(NotificationCenter.default.publisher(for: .openVibeLanes)) { _ in onToggleVibeLanes() }
     }
 }

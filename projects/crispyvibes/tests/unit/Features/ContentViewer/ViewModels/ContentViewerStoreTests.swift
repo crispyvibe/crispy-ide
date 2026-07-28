@@ -171,6 +171,106 @@ final class ContentViewerStoreTests: XCTestCase {
         XCTAssertFalse(splitStore.activeGroup.tabs.contains(where: { $0.id == tab.id }))
     }
 
+    func testOpenVibeLaneACPPaneCreatesPlaceholderForSessionBeforeThreadExists() {
+        let (store, splitStore) = makeSUT()
+        let sessionID = UUID()
+
+        store.openVibeLaneACPPane(
+            target: VibeLaneACPChatTarget(
+                sessionID: sessionID,
+                threadID: nil,
+                projectPath: "/tmp/project"
+            ),
+            projects: []
+        )
+
+        XCTAssertNotNil(store.acpStore(for: sessionID))
+        XCTAssertEqual(splitStore.activeGroup.activeTabID, ContentViewerTab.acpPane(id: sessionID).id)
+        guard let acpStore = store.acpStore(for: sessionID) else {
+            return XCTFail("expected ACP store")
+        }
+        XCTAssertTrue(acpStore.isExternallyManaged)
+        XCTAssertFalse(acpStore.shouldAutoConnect)
+    }
+
+    func testResolveVibeLaneACPStoreDoesNotRequireVibeSpaceOrOpenHiddenTab() {
+        let (store, splitStore) = makeSUT()
+        let sessionID = UUID()
+
+        let resolved = store.resolveVibeLaneACPStore(
+            target: VibeLaneACPChatTarget(
+                sessionID: sessionID,
+                threadID: nil,
+                projectPath: "/tmp/project"
+            )
+        )
+
+        XCTAssertEqual(resolved?.id, sessionID)
+        XCTAssertTrue(resolved?.isExternallyManaged == true)
+        XCTAssertFalse(splitStore.activeGroup.tabs.contains {
+            $0.id == ContentViewerTab.acpPane(id: sessionID).id
+        })
+    }
+
+    func testManagedVibeLaneStoreSurvivesDetachAndReconnectPreparation() throws {
+        let registry = container.acpSessionRegistry
+        let sessionID = UUID()
+        let store = registry.storeForVibeLaneSession(
+            id: sessionID,
+            agentID: "codex",
+            projectPath: "/tmp/project"
+        )
+        store.chatViewModel.timeline = [
+            ACPTimelineEntry(
+                id: UUID(),
+                timestamp: Date(),
+                kind: .userMessage("persisted lane turn")
+            )
+        ]
+
+        registry.detachVibeLaneSession(id: sessionID, ended: false)
+
+        let retained = try XCTUnwrap(registry.store(forID: sessionID))
+        XCTAssertTrue(retained === store)
+        XCTAssertFalse(retained.managedSessionEnded)
+        XCTAssertEqual(retained.chatViewModel.timeline.count, 1)
+
+        let reconnected = registry.storeForVibeLaneSession(
+            id: sessionID,
+            agentID: "codex",
+            projectPath: "/tmp/project"
+        )
+        XCTAssertTrue(reconnected === store)
+        XCTAssertFalse(reconnected.managedSessionEnded)
+        XCTAssertEqual(reconnected.chatViewModel.timeline.count, 1)
+
+        registry.detachVibeLaneSession(id: sessionID, ended: true)
+        XCTAssertTrue(registry.store(forID: sessionID) === store)
+        XCTAssertTrue(store.managedSessionEnded)
+        XCTAssertEqual(store.chatViewModel.timeline.count, 1)
+        registry.removeStore(id: sessionID)
+    }
+
+    func testResolveTerminalVibeLaneTranscriptRestoresEndedState() throws {
+        let (contentStore, _) = makeSUT()
+        let sessionID = UUID()
+        container.acpSessionRegistry.removeStore(id: sessionID)
+
+        let resolved = try XCTUnwrap(contentStore.resolveVibeLaneACPStore(
+            target: VibeLaneACPChatTarget(
+                sessionID: sessionID,
+                threadID: nil,
+                projectPath: "/tmp/project",
+                managedSessionEnded: true
+            )
+        ))
+
+        XCTAssertTrue(resolved.isExternallyManaged)
+        XCTAssertTrue(resolved.managedSessionEnded)
+        XCTAssertFalse(resolved.isConnected)
+        container.acpSessionRegistry.removeStore(id: sessionID)
+    }
+
     func testClosePaneInvokesBrowserCleanupForContainedWebTabs() {
         let (_, splitStore) = makeSUT()
         let browserID = UUID()

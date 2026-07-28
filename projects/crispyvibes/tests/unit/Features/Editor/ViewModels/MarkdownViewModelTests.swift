@@ -147,7 +147,6 @@ final class MarkdownViewModelTests: XCTestCase {
         XCTAssertTrue(opened)
         XCTAssertTrue(viewModel.isEditableDocumentType(.latex))
         XCTAssertTrue(viewModel.supportsMarkupViewModeToggle)
-
         // LaTeX prefers the full-TeX PDF view when a local toolchain is
         // installed, otherwise the dependency-free rich view.
         let expectedDefault: MarkdownViewModel.MarkupViewMode =

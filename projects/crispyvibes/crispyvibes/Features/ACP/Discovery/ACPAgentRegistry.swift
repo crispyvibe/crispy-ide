@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 struct ACPAgentDefinition: Equatable, Sendable, Identifiable {
@@ -97,6 +98,104 @@ enum AgentModelCatalog {
         case .codex:
             return "gpt-5.5"
         }
+    }
+}
+
+struct ACPAgentEngineOptions: Equatable, Sendable {
+    var models: [ACPModelInfo]
+    var modes: [ACPModeInfo]
+    var supportsReasoning: Bool
+
+    static let empty = ACPAgentEngineOptions(models: [], modes: [], supportsReasoning: false)
+}
+
+/// Agent-scoped engine capabilities shared by ACP chat and Vibe Lanes.
+/// Direct integrations have a static catalog; protocol agents publish their
+/// session-discovered models and modes after connecting.
+@MainActor
+final class ACPAgentEngineOptionCatalog: ObservableObject {
+    typealias OptionDiscovery = @MainActor (String) async throws -> ACPAgentEngineOptions
+
+    @Published private var cached: [String: ACPAgentEngineOptions] = [:]
+    @Published private var loadingAgentIDs: Set<String> = []
+    @Published private var discoveryErrors: [String: String] = [:]
+
+    private let discoverOptions: OptionDiscovery?
+    private var loadedAgentIDs: Set<String> = []
+
+    init(discoverOptions: OptionDiscovery? = nil) {
+        self.discoverOptions = discoverOptions
+    }
+
+    func options(for agentID: String?) -> ACPAgentEngineOptions {
+        guard let agentID else { return .empty }
+        if let definition = CLIToolCatalog.agentDefinitions.first(where: { $0.id == agentID }),
+           let integration = definition.directIntegration {
+            return ACPAgentEngineOptions(
+                models: AgentModelCatalog.models(for: integration).map {
+                    ACPModelInfo(modelId: $0.slug, name: $0.name, description: nil)
+                },
+                modes: [
+                    ACPModeInfo(modeId: "default", name: "Default", description: nil),
+                    ACPModeInfo(modeId: "plan", name: "Plan", description: nil),
+                ],
+                supportsReasoning: true
+            )
+        }
+        return cached[agentID] ?? .empty
+    }
+
+    func isLoading(agentID: String?) -> Bool {
+        agentID.map(loadingAgentIDs.contains) ?? false
+    }
+
+    func discoveryError(for agentID: String?) -> String? {
+        agentID.flatMap { discoveryErrors[$0] }
+    }
+
+    /// ACP models and modes are session-scoped capabilities. Probe them once on
+    /// demand so non-chat surfaces can offer the same choices as ACP chat.
+    func loadOptionsIfNeeded(for agentID: String?) async {
+        guard let agentID,
+              CLIToolCatalog.agentDefinitions.first(where: { $0.id == agentID })?.directIntegration == nil,
+              !loadedAgentIDs.contains(agentID),
+              !loadingAgentIDs.contains(agentID),
+              let discoverOptions else {
+            return
+        }
+
+        loadingAgentIDs.insert(agentID)
+        discoveryErrors[agentID] = nil
+        defer { loadingAgentIDs.remove(agentID) }
+
+        do {
+            let options = try await discoverOptions(agentID)
+            record(
+                agentID: agentID,
+                models: options.models,
+                modes: options.modes,
+                supportsReasoning: options.supportsReasoning
+            )
+        } catch {
+            discoveryErrors[agentID] = error.localizedDescription
+        }
+    }
+
+    func record(
+        agentID: String,
+        models: [ACPModelInfo],
+        modes: [ACPModeInfo],
+        supportsReasoning: Bool
+    ) {
+        let options = ACPAgentEngineOptions(
+            models: models,
+            modes: modes,
+            supportsReasoning: supportsReasoning
+        )
+        loadedAgentIDs.insert(agentID)
+        discoveryErrors[agentID] = nil
+        guard cached[agentID] != options else { return }
+        cached[agentID] = options
     }
 }
 

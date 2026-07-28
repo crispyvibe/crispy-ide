@@ -59,6 +59,12 @@ enum AppPreferences {
     static let acpDefaultReasoningLevelKey = "crispyvibes.agent.defaultReasoningLevel"
     static let acpCustomAgentsKey = "crispyvibes.agent.customAgents"
 
+    // MARK: Todo Lane Pipeline (F060)
+    /// Auto-triage mode for todos (off | projectTodosOnly | allTodos).
+    static let todoTriageModeKey = "crispyvibes.todos.triageMode"
+    /// On lane task done — true auto-completes the todo, false offers one-tap.
+    static let todoAutoCompleteOnDoneKey = "crispyvibes.todos.autoCompleteOnDone"
+
     // MARK: Services
     static let textServiceCLIProfileKey = "crispyvibes.services.cliProfile"
     static let textServiceCLITrustModeKey = "crispyvibes.services.cliTrustMode"
@@ -495,6 +501,51 @@ enum AppPreferences {
         } else {
             userDefaults.removeObject(forKey: acpDefaultAgentIDKey)
         }
+    }
+
+    static func acpDefaultModelID(userDefaults: UserDefaults = .standard) -> String? {
+        let trimmed = userDefaults.string(forKey: acpDefaultModelKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let trimmed, !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    static func acpDefaultTrustMode(userDefaults: UserDefaults = .standard) -> CLITrustMode {
+        guard let rawValue = userDefaults.string(forKey: acpDefaultTrustModeKey),
+              let mode = CLITrustMode(rawValue: rawValue) else {
+            return .standard
+        }
+        return mode
+    }
+
+    static func acpDefaultReasoningLevel(userDefaults: UserDefaults = .standard) -> AgentReasoningLevel {
+        guard let rawValue = userDefaults.string(forKey: acpDefaultReasoningLevelKey),
+              let level = AgentReasoningLevel(rawValue: rawValue) else {
+            return .medium
+        }
+        return level
+    }
+
+    // MARK: - Todo Lane Pipeline (F060)
+
+    static func todoTriageMode(userDefaults: UserDefaults = .standard) -> TodoTriageMode {
+        guard let raw = userDefaults.string(forKey: todoTriageModeKey),
+              let mode = TodoTriageMode(rawValue: raw) else {
+            return .projectTodosOnly
+        }
+        return mode
+    }
+
+    static func setTodoTriageMode(_ mode: TodoTriageMode, userDefaults: UserDefaults = .standard) {
+        userDefaults.set(mode.rawValue, forKey: todoTriageModeKey)
+    }
+
+    static func todoAutoCompleteOnDone(userDefaults: UserDefaults = .standard) -> Bool {
+        userDefaults.bool(forKey: todoAutoCompleteOnDoneKey)   // default false = one-tap
+    }
+
+    static func setTodoAutoCompleteOnDone(_ enabled: Bool, userDefaults: UserDefaults = .standard) {
+        userDefaults.set(enabled, forKey: todoAutoCompleteOnDoneKey)
     }
 
     static func resolvedACPDefaultAgent(

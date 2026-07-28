@@ -81,7 +81,15 @@ final class ACPSession: ObservableObject, Identifiable, AgentSessionProtocol {
     func connect() async throws {
         upsertObservedSession(connectionState: "connecting", lastErrorClass: nil)
         do {
-            try await transport.start(executable: agent.executable, arguments: agent.arguments, environment: nil)
+            // F060 — inject the Agent CLI discovery vars (CRISPY_SOCKET,
+            // CRISPY_BUNDLE_ID, bundled bin on PATH) so agents can drive
+            // `crispy todo …` from ANY session — interactive panes, headless
+            // lane workers, and todo refine sessions alike. Same injection
+            // terminals get (F044-R04/R05); the socket still enforces its
+            // process-ancestry check, so this widens discovery, not trust.
+            var environment = CommandPathResolver.environmentWithResolvedPath()
+            TerminalSession.injectAgentCLIEnvironment(into: &environment)
+            try await transport.start(executable: agent.executable, arguments: agent.arguments, environment: environment)
 
             let initializeResponse = try await transport.send(
                 method: "initialize",

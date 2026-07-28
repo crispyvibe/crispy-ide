@@ -74,6 +74,7 @@ enum ContentViewerTabKind: Equatable {
     case file(FileDocumentReference)
     case vibeCast
     case todos
+    case vibeLanes
     case webPage(BrowserTabReference)
     case terminal(projectID: UUID, tabID: UUID)
     case acpPane(id: UUID)
@@ -95,6 +96,8 @@ struct ContentViewerTab: Identifiable, Equatable {
             return "VibeCast"
         case .todos:
             return "Todos"
+        case .vibeLanes:
+            return "Vibe Lanes"
         case .webPage(let reference):
             if let url = reference.seedURL {
                 return BrowserTabDisplayNameFormatter.title(for: url)
@@ -123,6 +126,8 @@ struct ContentViewerTab: Identifiable, Equatable {
             return "antenna.radiowaves.left.and.right"
         case .todos:
             return "checklist"
+        case .vibeLanes:
+            return VibeLaneVisualIdentity.symbolName
         case .webPage:
             return "globe"
         case .terminal:
@@ -146,6 +151,10 @@ struct ContentViewerTab: Identifiable, Equatable {
 
     static var todos: ContentViewerTab {
         ContentViewerTab(id: "todos", kind: .todos)
+    }
+
+    static var vibeLanes: ContentViewerTab {
+        ContentViewerTab(id: "vibeLanes", kind: .vibeLanes)
     }
 
     static func webPage(
@@ -210,6 +219,7 @@ private struct ContentViewerTabDragPayload: Codable, Equatable {
         case file
         case vibeCast
         case todos
+        case vibeLanes
         case webPage
         case terminal
         case acpPane
@@ -237,6 +247,12 @@ private struct ContentViewerTabDragPayload: Codable, Equatable {
             fileReference = nil
         case .todos:
             kind = .todos
+            value = nil
+            customTitle = tab.customTitle
+            browserReference = nil
+            fileReference = nil
+        case .vibeLanes:
+            kind = .vibeLanes
             value = nil
             customTitle = tab.customTitle
             browserReference = nil
@@ -274,6 +290,8 @@ private struct ContentViewerTabDragPayload: Codable, Equatable {
             return .vibeCast
         case .todos:
             return .todos
+        case .vibeLanes:
+            return .vibeLanes
         case .webPage:
             if let browserReference {
                 return .webPage(reference: browserReference, customTitle: customTitle)

@@ -2,7 +2,46 @@ import SwiftUI
 
 extension AppSettingsSheetView {
     var acpAgentCategoryContent: some View {
-        ACPAgentDefaultsCard()
+        VStack(alignment: .leading, spacing: 12) {
+            ACPAgentDefaultsCard()
+            TodoPipelineSettingsCard()
+        }
+    }
+}
+
+/// F060 — todo pipeline knobs: auto-triage mode and done-completion behavior.
+private struct TodoPipelineSettingsCard: View {
+    @AppStorage(AppPreferences.todoTriageModeKey) private var triageModeRaw = TodoTriageMode.projectTodosOnly.rawValue
+    @AppStorage(AppPreferences.todoAutoCompleteOnDoneKey) private var autoCompleteOnDone = false
+
+    var body: some View {
+        SettingsCard(
+            title: AppStrings.TodoPipeline.settingsCardTitle,
+            description: AppStrings.TodoPipeline.settingsCardDescription
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsFieldRow(
+                    title: AppStrings.TodoPipeline.settingsTriageModeTitle,
+                    detail: AppStrings.TodoPipeline.settingsTriageModeDetail
+                ) {
+                    Picker("", selection: Binding(
+                        get: { TodoTriageMode(rawValue: triageModeRaw) ?? .projectTodosOnly },
+                        set: { triageModeRaw = $0.rawValue }
+                    )) {
+                        Text(AppStrings.TodoPipeline.settingsTriageOff).tag(TodoTriageMode.off)
+                        Text(AppStrings.TodoPipeline.settingsTriageProjectOnly).tag(TodoTriageMode.projectTodosOnly)
+                        Text(AppStrings.TodoPipeline.settingsTriageAll).tag(TodoTriageMode.allTodos)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 280)
+                    .accessibilityIdentifier("app.settings.todo-triage-mode")
+                }
+                Toggle(isOn: $autoCompleteOnDone) {
+                    Text(AppStrings.TodoPipeline.settingsAutoCompleteTitle)
+                }
+                .accessibilityIdentifier("app.settings.todo-auto-complete")
+            }
+        }
     }
 }
 

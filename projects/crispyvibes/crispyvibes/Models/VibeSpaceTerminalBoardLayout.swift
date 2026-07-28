@@ -12,6 +12,7 @@ enum TileContentKind: Equatable {
     case terminal
     case file(URL)
     case vibeCast
+    case vibeLanes
     case browser(URL)
     case acp(ACPStandalonePaneSnapshot)
 }
@@ -61,6 +62,7 @@ struct VibeSpaceTerminalBoardTile: Identifiable, Equatable {
     }
 
     var isVibeCast: Bool { contentKind == .vibeCast }
+    var isVibeLanes: Bool { contentKind == .vibeLanes }
     var isFile: Bool { if case .file = contentKind { return true }; return false }
     var isTerminal: Bool { contentKind == .terminal }
 
@@ -94,6 +96,8 @@ extension TileContentKind: Codable {
             self = .file(URL(fileURLWithPath: path))
         case "vibeCast":
             self = .vibeCast
+        case "vibeLanes":
+            self = .vibeLanes
         case "browser":
             // Decode from urlString, fall back to filePath for backward compat
             let raw = try container.decodeIfPresent(String.self, forKey: .urlString)
@@ -117,6 +121,8 @@ extension TileContentKind: Codable {
             try container.encode(url.standardizedFileURL.path, forKey: .filePath)
         case .vibeCast:
             try container.encode("vibeCast", forKey: .type)
+        case .vibeLanes:
+            try container.encode("vibeLanes", forKey: .type)
         case .browser(let url):
             try container.encode("browser", forKey: .type)
             try container.encode(url.absoluteString, forKey: .urlString)

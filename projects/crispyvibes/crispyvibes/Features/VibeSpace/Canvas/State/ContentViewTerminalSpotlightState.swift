@@ -8,6 +8,7 @@ enum SpotlightSwipeDirection {
 enum SpotlightItem {
     case terminal(project: AnyProjectSession, tab: TerminalTab)
     case vibeCast
+    case vibeLanes
     case acp(tileID: UUID, storeID: UUID, title: String, accentColor: Color?)
     case file(tileID: UUID, fileURL: URL)
     case browser(tileID: UUID, url: URL)
@@ -18,6 +19,7 @@ struct TerminalSpotlightState: Identifiable {
         case persistent(terminalViewModel: TerminalViewModel, tabID: UUID)
         case transient(session: TerminalSession)
         case vibeCast
+        case vibeLanes
         case todos
         case acp(tileID: UUID, storeID: UUID)
         case filePreview(target: TerminalFileSystemTarget, group: EditorGroupStore)
@@ -86,6 +88,7 @@ enum SpotlightRestoreDescriptor {
     case file(tileID: UUID, fileURL: URL)
     case acp(tileID: UUID, storeID: UUID)
     case vibeCast
+    case vibeLanes
     case browserPreview(snapshot: BrowserSessionSnapshot, projectPath: String?)
     case browser(tileID: UUID, url: URL)
 }
@@ -93,7 +96,7 @@ enum SpotlightRestoreDescriptor {
 extension TerminalSpotlightState.Source {
     var supportsCarouselNavigation: Bool {
         switch self {
-        case .persistent, .vibeCast, .acp, .file, .browser:
+        case .persistent, .vibeCast, .vibeLanes, .acp, .file, .browser:
             return true
         case .transient, .todos, .filePreview, .browserPreview:
             return false
@@ -104,7 +107,7 @@ extension TerminalSpotlightState.Source {
         switch self {
         case .transient, .filePreview, .browserPreview:
             return true
-        case .persistent, .vibeCast, .todos, .acp, .file, .browser:
+        case .persistent, .vibeCast, .vibeLanes, .todos, .acp, .file, .browser:
             return false
         }
     }
@@ -117,6 +120,8 @@ extension TerminalSpotlightState.Source {
             return "scope"
         case .vibeCast:
             return "antenna.radiowaves.left.and.right"
+        case .vibeLanes:
+            return VibeLaneVisualIdentity.symbolName
         case .todos:
             return "checklist"
         case .acp:
@@ -132,14 +137,23 @@ extension TerminalSpotlightState.Source {
         switch self {
         case .persistent, .transient:
             return true
-        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
+            return false
+        }
+    }
+
+    var supportsBoardPin: Bool {
+        switch self {
+        case .vibeLanes, .filePreview, .browserPreview:
+            return true
+        case .persistent, .transient, .vibeCast, .todos, .acp, .file, .browser:
             return false
         }
     }
 
     var canBeRestored: Bool {
         switch self {
-        case .persistent, .transient, .vibeCast, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .persistent, .transient, .vibeCast, .vibeLanes, .acp, .filePreview, .file, .browserPreview, .browser:
             return true
         case .todos:
             return false
@@ -297,6 +311,8 @@ final class TerminalSpotlightCoordinator: ObservableObject {
             )
         case .vibeCast:
             return .vibeCast
+        case .vibeLanes:
+            return .vibeLanes
         case .todos:
             return nil
         case let .acp(tileID, storeID):
@@ -640,6 +656,8 @@ extension ContentView {
             session.startIfNeeded()
         case .vibeCast:
             break
+        case .vibeLanes:
+            break
         case .todos:
             break
         case .acp:
@@ -717,6 +735,9 @@ extension ContentView {
             return true
         case .vibeCast:
             presentVibeCastSpotlight()
+            return true
+        case .vibeLanes:
+            presentVibeLanesSpotlight(animated: false)
             return true
         case let .acp(tileID, storeID):
             guard vibespaceHydrationCoordinator.boardStore?.tile(for: tileID, includeMinimized: true)?.acpSnapshot?.id == storeID,

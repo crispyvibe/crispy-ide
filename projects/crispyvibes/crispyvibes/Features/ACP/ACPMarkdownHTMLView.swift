@@ -6,6 +6,8 @@ import SwiftUI
 /// Handles block elements (paragraphs, lists, headings) that SwiftUI's
 /// AttributedString(markdown:) collapses into inline text.
 struct MarkdownHTMLView: NSViewRepresentable {
+    private static let plainTextFallbackByteLimit = 50_000
+
     @Environment(\.crispyvibesUIScale) private var uiScale
     let markdown: String
     var font: Font = AppTypographyTokens.body
@@ -39,9 +41,23 @@ struct MarkdownHTMLView: NSViewRepresentable {
         // changed since the last render, skip the expensive XPC-backed HTML parse. This
         // is critical because SwiftUI can invoke updateNSView on every ancestor state
         // change even when our own inputs are unchanged.
-        let fingerprint = "\(resolved.pointSize)|\(colorKey)|\(markdown)"
-        if textView.lastRenderedFingerprint == fingerprint { return }
-        textView.lastRenderedFingerprint = fingerprint
+        if textView.lastRenderedPointSize == resolved.pointSize,
+           textView.lastRenderedColorKey == colorKey,
+           textView.lastRenderedMarkdown == markdown {
+            return
+        }
+        textView.lastRenderedPointSize = resolved.pointSize
+        textView.lastRenderedColorKey = colorKey
+        textView.lastRenderedMarkdown = markdown
+
+        if markdown.utf8.count > Self.plainTextFallbackByteLimit {
+            textView.string = markdown
+            textView.font = resolved
+            textView.textColor = NSColor(foregroundColor ?? Color.primary)
+            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+            textView.invalidateIntrinsicContentSize()
+            return
+        }
 
         let html = MarkdownToHTML.convert(markdown)
         let css = """
@@ -144,10 +160,11 @@ struct MarkdownHTMLView: NSViewRepresentable {
 /// NSTextView subclass that reports correct intrinsic content size for SwiftUI layout.
 final class MarkdownHTMLTextView: NSTextView {
     private var mouseDownLocationInWindow: NSPoint?
-    /// Fingerprint of the last successful render (markdown + font size + color). Used
-    /// by `MarkdownHTMLView.updateNSView` to skip the expensive HTML parse when the
-    /// inputs haven't changed between updates.
-    var lastRenderedFingerprint: String?
+    /// Last successful render inputs. Kept separately so SwiftUI updates do not
+    /// allocate a giant fingerprint string for long restored agent messages.
+    var lastRenderedPointSize: CGFloat = 0
+    var lastRenderedColorKey: String?
+    var lastRenderedMarkdown: String?
 
     override var intrinsicContentSize: NSSize {
         guard let layoutManager, let textContainer else {
