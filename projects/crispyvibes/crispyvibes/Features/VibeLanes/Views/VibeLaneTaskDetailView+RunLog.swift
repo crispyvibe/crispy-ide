@@ -27,6 +27,8 @@ extension VibeLaneTaskDetailView {
                     steerFields(task: task, request: request)
                 case .review:
                     reviewFields(task: task, request: request)
+                case .loopExhausted:
+                    loopExhaustedFields(task: task, request: request)
                 }
             }
             .padding(uiScale.spacing(16))
@@ -40,6 +42,7 @@ extension VibeLaneTaskDetailView {
         case .supply: return AppStrings.VibeLanes.supplyInput
         case .steer: return AppStrings.VibeLanes.steerTask
         case .review: return AppStrings.VibeLanes.reviewStep
+        case .loopExhausted: return AppStrings.VibeLanes.loopDecisionTitle
         }
     }
 
@@ -48,6 +51,40 @@ extension VibeLaneTaskDetailView {
         case .supply: return "square.and.pencil"
         case .steer: return "arrow.triangle.turn.up.right.diamond"
         case .review: return "checkmark.seal"
+        case .loopExhausted: return "repeat.circle"
+        }
+    }
+
+    private func loopExhaustedFields(
+        task: VibeLaneTask,
+        request: VibeLaneInputRequest
+    ) -> some View {
+        HStack(spacing: uiScale.spacing(10)) {
+            Button {
+                Task {
+                    await manager.answerLoopExhaustion(
+                        id: task.id,
+                        requestID: request.id,
+                        advance: true
+                    )
+                }
+            } label: {
+                Label(AppStrings.VibeLanes.advanceTask, systemImage: "arrow.right")
+            }
+            .buttonStyle(.borderedProminent)
+
+            Button(role: .destructive) {
+                Task {
+                    await manager.answerLoopExhaustion(
+                        id: task.id,
+                        requestID: request.id,
+                        advance: false
+                    )
+                }
+            } label: {
+                Label(AppStrings.VibeLanes.stopTask, systemImage: "stop.fill")
+            }
+            .buttonStyle(.bordered)
         }
     }
 

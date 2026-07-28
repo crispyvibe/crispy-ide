@@ -53,7 +53,18 @@ extension VibeLaneTaskManager {
             return nil
         }
         var updated = lane
-        updated.checkpoints = Self.normalizedCheckpoints(updated.checkpoints)
+        let originalCheckpoints = updated.checkpoints
+        updated.checkpoints = Self.normalizedCheckpoints(originalCheckpoints)
+        var keyRemap: [String: String] = [:]
+        for (original, normalized) in zip(originalCheckpoints, updated.checkpoints) {
+            keyRemap[original.key, default: normalized.key] = normalized.key
+        }
+        updated.loopGroups = updated.loopGroups.map { group in
+            var normalized = group
+            normalized.key = Self.normalizedKey(group.key)
+            normalized.members = group.members.map { keyRemap[$0] ?? $0 }
+            return normalized
+        }
         updated.version = (current?.version ?? lane.version) + 1
         updated.seededFingerprint = nil
         do {

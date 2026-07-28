@@ -38,8 +38,11 @@ checkpoint -> checkpoint -> checkpoint -> Outcome
 
 The unit of progress is not "the worker says it is done." It is "this checkpoint
 passed its authored verification; carry its result to the next checkpoint."
-The Spiral moves forward rather than revisiting prior checkpoints: each Vibe
-owns its retry Loop, and the lane accumulates verified outputs and context.
+The Spiral moves forward by default rather than implicitly revisiting prior
+checkpoints: each Vibe owns its retry Loop, and the lane accumulates verified
+outputs and context. An author may additionally group contiguous checkpoints into
+a bounded loop with an explicit output condition; only that group can revisit its
+members.
 
 ## The Core Nouns
 

@@ -172,7 +172,6 @@ struct VibeLaneTaskDetailView: View {
     @ViewBuilder
     private func controlsRow(_ task: VibeLaneTask) -> some View {
         FlowLayout(spacing: uiScale.spacing(8)) {
-            threadButtons(task)
             switch task.state {
             case .running:
                 Button(AppStrings.VibeLanes.stop, role: .destructive) { stop(task.id) }
@@ -247,7 +246,13 @@ struct VibeLaneTaskDetailView: View {
     /// ticking clock — with a pulsing node so "running" visibly runs.
     private func nowStrip(_ task: VibeLaneTask) -> some View {
         let checkpoints = lane?.orderedCheckpoints ?? []
-        let passed = checkpoints.filter { task.run(forKey: $0.key)?.status == .passed }.count
+        let activeGroup = task.activeLoop.flatMap { lane?.loopGroup(forKey: $0.groupKey) }
+        let passed = checkpoints.filter { checkpoint in
+            if activeGroup?.members.contains(checkpoint.key) == true {
+                return task.run(forKey: checkpoint.key, visit: task.currentVisit)?.status == .passed
+            }
+            return task.run(forKey: checkpoint.key)?.status == .passed
+        }.count
         let stepIndex = checkpoints.firstIndex { $0.key == task.currentCheckpointKey } ?? 0
         let current = lane?.checkpoint(forKey: task.currentCheckpointKey)
         let fraction = checkpoints.isEmpty ? 0 : (Double(passed) + 0.5) / Double(checkpoints.count)
@@ -259,6 +264,11 @@ struct VibeLaneTaskDetailView: View {
                     HStack(spacing: uiScale.spacing(8)) {
                         Text(current?.displayTitle ?? task.currentCheckpointKey)
                             .font(.system(size: uiScale.textSize(14), weight: .semibold))
+                        if let activeLoop = task.activeLoop {
+                            Text(AppStrings.VibeLanes.loopIteration(activeLoop.visit + 1))
+                                .font(.system(size: uiScale.textSize(11), weight: .medium))
+                                .foregroundStyle(palette.secondaryTextColor)
+                        }
                         if let cap = current?.bounds.maxAttempts {
                             Text(AppStrings.VibeLanes.attemptRunning(current: task.attemptsOnCurrentCheckpoint + 1, cap: cap))
                                 .font(.system(size: uiScale.textSize(11), weight: .medium))
@@ -300,7 +310,7 @@ struct VibeLaneTaskDetailView: View {
 
     /// Live elapsed time on the current checkpoint's active window; ticks every second.
     private func elapsedBadge(_ task: VibeLaneTask) -> some View {
-        let started = task.run(forKey: task.currentCheckpointKey)?.activeWindowStartedAt
+        let started = task.currentRun?.activeWindowStartedAt
         return TimelineView(.periodic(from: .now, by: 1)) { context in
             if let started {
                 Label(Self.elapsedText(from: started, to: context.date), systemImage: "clock")
@@ -388,7 +398,12 @@ struct VibeLaneTaskDetailView: View {
         let sessionID = sessionRef.flatMap(UUID.init(uuidString:))
         let threadID = nonEmpty(threadRef)
         guard sessionID != nil || threadID != nil else { return nil }
-        return VibeLaneACPChatTarget(sessionID: sessionID, threadID: threadID, projectPath: task.projectPath)
+        return VibeLaneACPChatTarget(
+            sessionID: sessionID,
+            threadID: threadID,
+            projectPath: task.projectPath,
+            managedSessionEnded: task.isTerminal
+        )
     }
 
     func nonEmpty(_ value: String?) -> String? {
@@ -412,6 +427,8 @@ struct VibeLaneTaskDetailView: View {
             return AppStrings.VibeLanes.reasonMisAuthoredLane
         case .steerLimitReached:
             return AppStrings.VibeLanes.reasonSteerLimitReached
+        case .loopExhausted:
+            return AppStrings.VibeLanes.reasonLoopExhausted
         case .done, .none:
             return AppStrings.VibeLanes.reasonStopped
         }

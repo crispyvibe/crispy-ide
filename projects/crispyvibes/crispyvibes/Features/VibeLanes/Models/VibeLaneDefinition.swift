@@ -145,6 +145,141 @@ extension VibeLaneOutputDeclaration {
     }
 }
 
+// MARK: - Loop Groups
+
+/// A side-effect-free condition evaluated against verified lane values after the
+/// final member of a loop-group visit passes.
+indirect enum VibeLaneVariableCondition: Codable, Hashable, Sendable {
+    case equals(variable: String, value: String)
+    case notEquals(variable: String, value: String)
+    case isSet(variable: String)
+    case all([VibeLaneVariableCondition])
+    case any([VibeLaneVariableCondition])
+    case not(VibeLaneVariableCondition)
+
+    var referencedVariables: Set<String> {
+        switch self {
+        case .equals(let variable, _), .notEquals(let variable, _), .isSet(let variable):
+            return [variable]
+        case .all(let conditions), .any(let conditions):
+            return conditions.reduce(into: Set<String>()) { $0.formUnion($1.referencedVariables) }
+        case .not(let condition):
+            return condition.referencedVariables
+        }
+    }
+
+    func evaluate(values: [String: String]) -> Bool {
+        switch self {
+        case .equals(let variable, let expected):
+            return values[variable]?.trimmingCharacters(in: .whitespacesAndNewlines) == expected
+        case .notEquals(let variable, let expected):
+            guard let value = values[variable]?.trimmingCharacters(in: .whitespacesAndNewlines) else {
+                return false
+            }
+            return value != expected
+        case .isSet(let variable):
+            return values[variable]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        case .all(let conditions):
+            return !conditions.isEmpty && conditions.allSatisfy { $0.evaluate(values: values) }
+        case .any(let conditions):
+            return conditions.contains { $0.evaluate(values: values) }
+        case .not(let condition):
+            return !condition.evaluate(values: values)
+        }
+    }
+}
+
+extension VibeLaneVariableCondition {
+    private enum Kind: String, Codable {
+        case equals, notEquals, isSet, all, any, not
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, variable, value, conditions, condition
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .equals:
+            self = .equals(
+                variable: try container.decode(String.self, forKey: .variable),
+                value: try container.decode(String.self, forKey: .value)
+            )
+        case .notEquals:
+            self = .notEquals(
+                variable: try container.decode(String.self, forKey: .variable),
+                value: try container.decode(String.self, forKey: .value)
+            )
+        case .isSet:
+            self = .isSet(variable: try container.decode(String.self, forKey: .variable))
+        case .all:
+            self = .all(try container.decode([Self].self, forKey: .conditions))
+        case .any:
+            self = .any(try container.decode([Self].self, forKey: .conditions))
+        case .not:
+            self = .not(try container.decode(Self.self, forKey: .condition))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .equals(let variable, let value):
+            try container.encode(Kind.equals, forKey: .kind)
+            try container.encode(variable, forKey: .variable)
+            try container.encode(value, forKey: .value)
+        case .notEquals(let variable, let value):
+            try container.encode(Kind.notEquals, forKey: .kind)
+            try container.encode(variable, forKey: .variable)
+            try container.encode(value, forKey: .value)
+        case .isSet(let variable):
+            try container.encode(Kind.isSet, forKey: .kind)
+            try container.encode(variable, forKey: .variable)
+        case .all(let conditions):
+            try container.encode(Kind.all, forKey: .kind)
+            try container.encode(conditions, forKey: .conditions)
+        case .any(let conditions):
+            try container.encode(Kind.any, forKey: .kind)
+            try container.encode(conditions, forKey: .conditions)
+        case .not(let condition):
+            try container.encode(Kind.not, forKey: .kind)
+            try container.encode(condition, forKey: .condition)
+        }
+    }
+}
+
+enum VibeLaneLoopExhaustedBehavior: String, Codable, Hashable, Sendable {
+    case stop
+    case escalate
+    case advance
+}
+
+/// A contiguous, bounded set of ordinary checkpoints that repeats as one unit.
+struct VibeLaneLoopGroup: Codable, Hashable, Identifiable, Sendable {
+    var key: String
+    var members: [String]
+    var maxIterations: Int
+    var exitWhen: VibeLaneVariableCondition
+    var onExhausted: VibeLaneLoopExhaustedBehavior
+
+    var id: String { key }
+
+    init(
+        key: String,
+        members: [String],
+        maxIterations: Int = 3,
+        exitWhen: VibeLaneVariableCondition,
+        onExhausted: VibeLaneLoopExhaustedBehavior = .stop
+    ) {
+        self.key = key
+        self.members = members
+        self.maxIterations = maxIterations
+        self.exitWhen = exitWhen
+        self.onExhausted = onExhausted
+    }
+}
+
 // MARK: - Checkpoint
 
 /// One stage of a lane. Identified by a stable `key`, never by position, so
@@ -331,6 +466,8 @@ struct VibeLaneDefinition: Codable, Hashable, Identifiable, Sendable {
     var detail: String?
     var steerLimit: Int
     var checkpoints: [VibeLaneCheckpoint]
+    /// Authored, non-overlapping checkpoint groups that may repeat as bounded units.
+    var loopGroups: [VibeLaneLoopGroup]
     /// Set when this lane's content was seeded from the shipped starter catalog
     /// (the fingerprint of that shipped content). Cleared on the first user edit.
     /// Pristine starter lanes auto-refresh when the app ships improved content;
@@ -341,12 +478,41 @@ struct VibeLaneDefinition: Codable, Hashable, Identifiable, Sendable {
         checkpoints.sorted { $0.order < $1.order }
     }
 
+    /// Human-readable route. Loop-group members are wrapped in brackets with the
+    /// authored iteration bound so a repeating span never reads as linear.
     var routeSummary: String {
-        orderedCheckpoints.map(\.displayTitle).joined(separator: " -> ")
+        var parts: [String] = []
+        var index = 0
+        let ordered = orderedCheckpoints
+        while index < ordered.count {
+            let checkpoint = ordered[index]
+            guard let group = loopGroup(containing: checkpoint.key),
+                  group.members.first == checkpoint.key else {
+                parts.append(checkpoint.displayTitle)
+                index += 1
+                continue
+            }
+            let titles = group.members.compactMap { self.checkpoint(forKey: $0)?.displayTitle }
+            parts.append("[\(titles.joined(separator: " <-> ")) x\(group.maxIterations)]")
+            index += group.members.count
+        }
+        return parts.joined(separator: " -> ")
     }
 
     func checkpoint(forKey key: String) -> VibeLaneCheckpoint? {
         checkpoints.first { $0.key == key }
+    }
+
+    func loopGroup(forKey key: String) -> VibeLaneLoopGroup? {
+        loopGroups.first { $0.key == key }
+    }
+
+    func loopGroup(containing checkpointKey: String) -> VibeLaneLoopGroup? {
+        loopGroups.first { $0.members.contains(checkpointKey) }
+    }
+
+    func memberPosition(of checkpointKey: String, in group: VibeLaneLoopGroup) -> Int? {
+        group.members.firstIndex(of: checkpointKey)
     }
 
     /// The next checkpoint after the one with `key`, in order, or nil at the end.
@@ -368,6 +534,7 @@ struct VibeLaneDefinition: Codable, Hashable, Identifiable, Sendable {
         detail: String? = nil,
         steerLimit: Int = 1,
         checkpoints: [VibeLaneCheckpoint],
+        loopGroups: [VibeLaneLoopGroup] = [],
         seededFingerprint: String? = nil
     ) {
         self.id = id
@@ -377,13 +544,14 @@ struct VibeLaneDefinition: Codable, Hashable, Identifiable, Sendable {
         self.detail = detail
         self.steerLimit = steerLimit
         self.checkpoints = checkpoints
+        self.loopGroups = loopGroups
         self.seededFingerprint = seededFingerprint
     }
 }
 
 extension VibeLaneDefinition {
     enum CodingKeys: String, CodingKey {
-        case id, schemaVersion, version, name, steerLimit, checkpoints, seededFingerprint
+        case id, schemaVersion, version, name, steerLimit, checkpoints, loopGroups, seededFingerprint
         case detail = "description"
         case legacyDetail = "detail"
     }
@@ -398,6 +566,7 @@ extension VibeLaneDefinition {
             ?? container.decodeIfPresent(String.self, forKey: .legacyDetail)
         steerLimit = try container.decodeIfPresent(Int.self, forKey: .steerLimit) ?? 1
         checkpoints = try container.decode([VibeLaneCheckpoint].self, forKey: .checkpoints)
+        loopGroups = try container.decodeIfPresent([VibeLaneLoopGroup].self, forKey: .loopGroups) ?? []
         seededFingerprint = try container.decodeIfPresent(String.self, forKey: .seededFingerprint)
     }
 
@@ -410,6 +579,9 @@ extension VibeLaneDefinition {
         try container.encodeIfPresent(detail, forKey: .detail)
         try container.encode(steerLimit, forKey: .steerLimit)
         try container.encode(checkpoints, forKey: .checkpoints)
+        if !loopGroups.isEmpty {
+            try container.encode(loopGroups, forKey: .loopGroups)
+        }
         try container.encodeIfPresent(seededFingerprint, forKey: .seededFingerprint)
     }
 }

@@ -173,6 +173,7 @@ extension VibeLoopRunRecord {
         case .missingInput: return AppStrings.VibeLanes.reasonMissingInput
         case .misAuthoredLane: return AppStrings.VibeLanes.reasonMisAuthoredLane
         case .steerLimitReached: return AppStrings.VibeLanes.reasonSteerLimitReached
+        case .loopExhausted: return AppStrings.VibeLanes.reasonLoopExhausted
         }
     }
 }

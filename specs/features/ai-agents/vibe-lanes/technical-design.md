@@ -80,7 +80,10 @@ Responsibilities:
 3. Task is created as `running`, pins `laneVersion`, captures optional repo
    baseline, persists, and schedules. `agentID` remains only as a legacy
    task-wide override for old data/API callers.
-4. Engine begins at `currentCheckpointKey`; each turn carries the pinned
+4. `projectPath` is canonicalized at creation and remains the execution directory
+   for the task's entire lifetime. Carry-forward and checkpoint output never alter
+   it; worker, reviewer, handoff, outcome, retry, and rerun calls all use it.
+5. Engine begins at `currentCheckpointKey`; each turn carries the pinned
    checkpoint's engine configuration.
 
 ### Discover and Resolve a Checkpoint Engine
@@ -103,6 +106,19 @@ Responsibilities:
    ACP trust preference is intentionally ignored for lane execution.
 5. The runner returns a `VibeLaneEngineSnapshot` from the live session. Failure
    to find or apply an explicit option is an execution error, not a fallback.
+
+### Managed ACP Timeline Lifecycle
+
+Worker and reviewer stores are durable transcript owners, not disposable process
+wrappers. When an authored engine change requires a new ACP process, the runner
+detaches the old process but keeps the registered `ACPStandaloneSessionStore`, its
+visible timeline, and its persistence context. The replacement process attaches to
+that same store. Final task release marks the store ended rather than deleting it.
+
+`VibeLaneACPChatTarget` carries terminal ended state. If app/view teardown removed
+the in-memory store, resolving a terminal target recreates the store as ended before
+restoring its thread. The UI therefore renders transcript history without a waiting
+spinner or reconnect affordance.
 
 ### Resolve Skills
 
@@ -240,7 +256,8 @@ without changing budget/history semantics.
 
 - identity/project/title/lane pin;
 - `state`;
-- `currentCheckpointKey`;
+- `currentCheckpointKey` plus `currentVisit`;
+- optional durable `activeLoop` group/member/phase cursor;
 - ACP worker/reviewer session refs;
 - activity and last verification;
 - `carryForward`;
@@ -250,10 +267,16 @@ without changing budget/history semantics.
 - pending human-review engine;
 - optional rerun request and last-rerun checkpoint marker.
 
-`CheckpointRun` includes attempt history, active engine, and budget/rerun
-epoch fields so Steer and isolated rerun can reset future budget without erasing
-history. Every `Attempt` may include the immutable engine snapshot reported by
-its session.
+`CheckpointRun` identity is `(checkpointKey, visit)` and includes predecessor
+lineage, attempt history, active engine, and budget/rerun epoch fields. Steer and
+isolated rerun can reset future budget without erasing history; loop visits remain
+a separate axis from rerun epochs. Every `Attempt` may include the immutable engine
+snapshot reported by its session.
+
+At a group's final member, the engine first persists `evaluatingExit`. It then
+advances, creates the next visit at member zero, or persists an exhaustion outcome.
+An escalated exhaustion persists `awaitingExhaustionDecision`; its passed final
+member is never reopened.
 
 Scheduler rules:
 
@@ -281,6 +304,7 @@ Persist after every transition:
 - open input request creation/answer;
 - steer count changes;
 - active/attempt engine snapshots and rerun state;
+- loop visit, member position, phase, and exhaustion decisions;
 - terminal states.
 
 Lane edits bump `version`. A task resolves the exact `laneVersion` it pinned. The
@@ -289,14 +313,18 @@ relationships with foreign keys. Manager state is published only after the
 corresponding transaction commits.
 
 Skill package files and handoff Markdown remain on disk. The database stores
-linked Skill references plus handoff path/digest metadata. It never dual-writes
-legacy JSON metadata files.
+linked Skill references plus handoff path/digest metadata keyed by
+`(taskID, checkpointKey, visit)` (database schema v8). Visit zero retains the
+legacy `<checkpointKey>.md` filename; later visits use
+`<checkpointKey>-visit-<visit>.md`. It never dual-writes legacy JSON metadata files.
 
 Replay validation rejects tasks with:
 
 - missing lane revision;
 - invalid current checkpoint;
-- checkpoint runs for unknown keys;
+- checkpoint runs for unknown keys or duplicate `(checkpointKey, visit)` identities;
+- a loop cursor whose group, visit, member position, or phase disagrees with the
+  pinned lane and current checkpoint;
 - `needsInput` without exactly one request;
 - non-Needs states with an open request;
 - impossible steer count/history after excluding rerun budget epochs;

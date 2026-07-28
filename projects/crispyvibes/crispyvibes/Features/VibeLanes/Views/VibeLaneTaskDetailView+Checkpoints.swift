@@ -6,9 +6,54 @@ import SwiftUI
 // verification results, and the carry-forward it produced.
 //
 // Worker/reviewer ACP sessions are shared across a task's checkpoints (one
-// continuous thread each), so thread access lives once in the header — never here.
+// continuous thread each). Their entry points sit in the selected step's header
+// beside the rerun action, so all actions for a step are in one place.
 
 extension VibeLaneTaskDetailView {
+
+    /// Worker/reviewer chats plus the per-step rerun, grouped in the step header
+    /// so every action for the selected step sits in one place. The two ACP
+    /// sessions are task-wide (one continuous thread each), not per step.
+    @ViewBuilder
+    func stepActions(_ task: VibeLaneTask, checkpoint: VibeLaneCheckpoint, run: VibeLaneCheckpointRun?) -> some View {
+        if let workerTarget = chatTarget(
+            sessionRef: task.workerSessionRef,
+            threadRef: task.workerThreadRef,
+            task: task
+        ) {
+            Button { onOpenACPSession(workerTarget) } label: {
+                Image(systemName: "message")
+                    .frame(width: uiScale.chromeSize(26), height: uiScale.chromeSize(24))
+            }
+            .buttonStyle(.bordered)
+            .help(AppStrings.VibeLanes.workerThread)
+            .accessibilityLabel(AppStrings.VibeLanes.workerThread)
+        }
+        if let reviewerTarget = chatTarget(
+            sessionRef: task.reviewerSessionRef,
+            threadRef: task.reviewerThreadRef,
+            task: task
+        ) {
+            Button { onOpenACPSession(reviewerTarget) } label: {
+                Image(systemName: "checkmark.seal")
+                    .frame(width: uiScale.chromeSize(26), height: uiScale.chromeSize(24))
+            }
+            .buttonStyle(.bordered)
+            .help(AppStrings.VibeLanes.reviewerThread)
+            .accessibilityLabel(AppStrings.VibeLanes.reviewerThread)
+        }
+        if task.isTerminal, let run, run.startedAt != nil || !run.attempts.isEmpty {
+            Button {
+                rerunCheckpoint = checkpoint
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .frame(width: uiScale.chromeSize(26), height: uiScale.chromeSize(24))
+            }
+            .buttonStyle(.bordered)
+            .help(AppStrings.VibeLanes.rerunStep)
+            .accessibilityLabel(AppStrings.VibeLanes.rerunStep)
+        }
+    }
 
     @ViewBuilder
     func checkpointSplit(_ task: VibeLaneTask) -> some View {
@@ -42,7 +87,9 @@ extension VibeLaneTaskDetailView {
 
     private func checkpointRail(_ task: VibeLaneTask) -> some View {
         let checkpoints = lane?.orderedCheckpoints ?? []
-        let states = checkpoints.map { VibeLaneNodeState.resolve(for: $0, task: task) }
+        let states = checkpoints.map {
+            VibeLaneNodeState.resolve(for: $0, task: task, lane: lane)
+        }
         let selected = effectiveSelection(task)
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(checkpoints.enumerated()), id: \.element.key) { index, checkpoint in
@@ -76,9 +123,19 @@ extension VibeLaneTaskDetailView {
                 // spans exactly the row's natural height (no greedy stretching).
                 Color.clear.frame(width: uiScale.chromeSize(30), height: 1)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(checkpoint.displayTitle)
-                        .font(.system(size: uiScale.textSize(13), weight: (state == .active || state == .needsInput) ? .semibold : .regular))
-                        .foregroundStyle(palette.primaryTextColor)
+                    HStack(spacing: uiScale.spacing(5)) {
+                        Text(checkpoint.displayTitle)
+                            .font(.system(size: uiScale.textSize(13), weight: (state == .active || state == .needsInput) ? .semibold : .regular))
+                            .foregroundStyle(palette.primaryTextColor)
+                        if let loop = lane?.loopGroup(containing: checkpoint.key) {
+                            Label(
+                                AppStrings.VibeLanes.loopIterationsShort(loop.maxIterations),
+                                systemImage: "repeat"
+                            )
+                            .font(.system(size: uiScale.textSize(9), weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                        }
+                    }
                     stepStatusLine(checkpoint, task: task, state: state)
                 }
                 .padding(.vertical, uiScale.spacing(4))
@@ -118,8 +175,11 @@ extension VibeLaneTaskDetailView {
     @ViewBuilder
     func checkpointDetailPane(_ task: VibeLaneTask) -> some View {
         if let checkpoint = lane?.checkpoint(forKey: effectiveSelection(task)) {
-            let run = task.run(forKey: checkpoint.key)
-            let state = VibeLaneNodeState.resolve(for: checkpoint, task: task)
+            let runs = task.checkpointRuns
+                .filter { $0.checkpointKey == checkpoint.key }
+                .sorted { $0.visit < $1.visit }
+            let run = checkpoint.key == task.currentCheckpointKey ? task.currentRun : runs.last
+            let state = VibeLaneNodeState.resolve(for: checkpoint, task: task, lane: lane)
             VStack(alignment: .leading, spacing: uiScale.spacing(12)) {
                 HStack(spacing: uiScale.spacing(10)) {
                     VibeLaneStatusNode(state: state, diameter: uiScale.chromeSize(18), pulses: state == .active)
@@ -127,34 +187,34 @@ extension VibeLaneTaskDetailView {
                         .font(.system(size: uiScale.textSize(17), weight: .semibold))
                         .foregroundStyle(palette.primaryTextColor)
                     Spacer(minLength: 0)
-                    if task.isTerminal, run?.attempts.isEmpty == false {
-                        Button {
-                            rerunCheckpoint = checkpoint
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .frame(width: uiScale.chromeSize(26), height: uiScale.chromeSize(24))
-                        }
-                        .buttonStyle(.bordered)
-                        .help(AppStrings.VibeLanes.rerunStep)
-                        .accessibilityLabel(AppStrings.VibeLanes.rerunStep)
-                    }
+                    stepActions(task, checkpoint: checkpoint, run: run)
                 }
                 stepStatusLine(checkpoint, task: task, state: state)
                 if state == .active, let activeEngine = run?.activeEngine {
                     VibeLaneEngineSummaryView(snapshot: activeEngine)
                 }
 
-                // What happened here (the payoff) comes first…
-                if let run, !run.attempts.isEmpty {
-                    VStack(alignment: .leading, spacing: uiScale.spacing(8)) {
-                        Text(AppStrings.VibeLanes.attempts(run.attempts.count))
-                            .font(.system(size: uiScale.textSize(11), weight: .semibold))
-                            .foregroundStyle(palette.tertiaryTextColor)
-                        ForEach(run.attempts) { VibeLaneAttemptRow(attempt: $0) }
+                // Every visit remains independently inspectable.
+                ForEach(runs) { visitRun in
+                    if !visitRun.attempts.isEmpty || nonEmpty(visitRun.summary) != nil {
+                        VStack(alignment: .leading, spacing: uiScale.spacing(8)) {
+                            if runs.count > 1 {
+                                Text(AppStrings.VibeLanes.loopIteration(visitRun.visit + 1))
+                                    .font(.system(size: uiScale.textSize(11), weight: .semibold))
+                                    .foregroundStyle(palette.tertiaryTextColor)
+                            }
+                            if !visitRun.attempts.isEmpty {
+                                Text(AppStrings.VibeLanes.attempts(visitRun.attempts.count))
+                                    .font(.system(size: uiScale.textSize(11), weight: .semibold))
+                                    .foregroundStyle(palette.tertiaryTextColor)
+                                ForEach(visitRun.attempts) { VibeLaneAttemptRow(attempt: $0) }
+                            }
+                            if let summary = nonEmpty(visitRun.summary),
+                               !summary.lowercased().hasPrefix("passed at attempt") {
+                                carryForward(summary, projectPath: task.projectPath)
+                            }
+                        }
                     }
-                }
-                if let summary = nonEmpty(run?.summary), !summary.lowercased().hasPrefix("passed at attempt") {
-                    carryForward(summary, projectPath: task.projectPath)
                 }
 
                 // …and the authored definition is reference material, collapsed

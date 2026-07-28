@@ -42,6 +42,13 @@ extension CLICommandRouter {
             }
             checkpoints = decoded
         }
+        var loopGroups: [VibeLaneLoopGroup]?
+        if let raw = request.params?["loopGroups"] {
+            guard let decoded = Self.decodeLoopGroups(raw) else {
+                return laneInvalidParams(request, "`loopGroups` does not match the lane loop-group schema")
+            }
+            loopGroups = decoded
+        }
         // Validate EVERY field before the first write. Creating the lane and then
         // rejecting a later parameter would leave a persisted lane behind after
         // an error response.
@@ -54,8 +61,9 @@ extension CLICommandRouter {
         guard var lane = await manager.createLane(name: name) else {
             return lanePersistenceFailed(request, manager: manager)
         }
-        if checkpoints != nil || (detail?.isEmpty == false) || steerLimit != nil {
+        if checkpoints != nil || loopGroups != nil || (detail?.isEmpty == false) || steerLimit != nil {
             if let checkpoints { lane.checkpoints = checkpoints }
+            if let loopGroups { lane.loopGroups = loopGroups }
             if let detail, !detail.isEmpty { lane.detail = detail }
             if let steerLimit { lane.steerLimit = steerLimit }
             guard let updated = await manager.updateLane(lane) else {
@@ -97,8 +105,15 @@ extension CLICommandRouter {
             lane.checkpoints = decoded
             changed = true
         }
+        if let raw = request.params?["loopGroups"] {
+            guard let decoded = Self.decodeLoopGroups(raw) else {
+                return laneInvalidParams(request, "`loopGroups` does not match the lane loop-group schema")
+            }
+            lane.loopGroups = decoded
+            changed = true
+        }
         guard changed else {
-            return laneInvalidParams(request, "nothing to update: provide `name`, `description`, `steerLimit`, or `checkpoints`")
+            return laneInvalidParams(request, "nothing to update: provide `name`, `description`, `steerLimit`, `checkpoints`, or `loopGroups`")
         }
         guard let updated = await manager.updateLane(lane) else {
             return lanePersistenceFailed(request, manager: manager)
@@ -292,6 +307,18 @@ extension CLICommandRouter {
             if answered == nil {
                 return laneInvalidParams(request, "review verdict refused (request may have changed; re-run lane.task.show)")
             }
+        case .loopExhausted:
+            guard let advance = request.params?["advance"]?.boolValue else {
+                return laneInvalidParams(request, "open request is loopExhausted: pass `advance` (true|false)")
+            }
+            answered = await manager.answerLoopExhaustion(
+                id: task.id,
+                requestID: open.id,
+                advance: advance
+            )
+            if answered == nil {
+                return laneInvalidParams(request, "loop decision refused (request may have changed; re-run lane.task.show)")
+            }
         }
         guard let resumed = answered else {
             return .error(id: request.id, code: CLIErrorCode.internalError, message: "answer was not applied")
@@ -396,6 +423,12 @@ extension CLICommandRouter {
         return VibeLaneTaskManager.normalizedCheckpoints(decoded)
     }
 
+    static func decodeLoopGroups(_ raw: CLIJSONValue) -> [VibeLaneLoopGroup]? {
+        guard case .array = raw else { return nil }
+        guard let data = try? JSONEncoder().encode(raw) else { return nil }
+        return try? JSONDecoder().decode([VibeLaneLoopGroup].self, from: data)
+    }
+
     // MARK: - Serialization
 
     private static let laneDateFormatter = ISO8601DateFormatter()
@@ -421,6 +454,14 @@ extension CLICommandRouter {
             case .emptyOutputKey(let index): "step \(index + 1) has an empty output key"
             case .duplicateOutputKey(let index, let key): "step \(index + 1) repeats output `\(key)`"
             case .unsatisfiedInput(let index, let key): "step \(index + 1) needs unavailable input `\(key)`"
+            case .emptyLoopGroupKey: "loop group has an empty key"
+            case .duplicateLoopGroupKey(let key): "duplicate loop group key `\(key)`"
+            case .invalidLoopGroupBounds(let key): "loop group `\(key)` has invalid maxIterations"
+            case .invalidLoopGroupMembers(let key): "loop group `\(key)` needs at least two distinct members"
+            case .missingLoopGroupMember(let groupKey, let memberKey): "loop group `\(groupKey)` references missing step `\(memberKey)`"
+            case .overlappingLoopGroupMember(let memberKey): "step `\(memberKey)` belongs to multiple loop groups"
+            case .noncontiguousLoopGroup(let key): "loop group `\(key)` members must be contiguous and ordered"
+            case .unavailableLoopConditionVariable(let groupKey, let variable): "loop group `\(groupKey)` condition uses unavailable output `\(variable)`"
             case .unresolvedVibeReference(let index, let vibeID, let version):
                 "step \(index + 1) points at missing Vibe \(vibeID.uuidString) v\(version)"
             }
@@ -445,7 +486,35 @@ extension CLICommandRouter {
     static func laneDetailJSON(_ lane: VibeLaneDefinition) -> CLIJSONValue {
         guard case .object(var obj) = laneSummaryJSON(lane) else { return .null }
         obj["checkpoints"] = .array(lane.orderedCheckpoints.map { checkpointJSON($0) })
+        obj["loopGroups"] = .array(lane.loopGroups.map { loopGroupJSON($0) })
         return .object(obj)
+    }
+
+    private static func loopGroupJSON(_ group: VibeLaneLoopGroup) -> CLIJSONValue {
+        .object([
+            "key": .string(group.key),
+            "members": .array(group.members.map { .string($0) }),
+            "maxIterations": .int(group.maxIterations),
+            "exitWhen": conditionJSON(group.exitWhen),
+            "onExhausted": .string(group.onExhausted.rawValue),
+        ])
+    }
+
+    private static func conditionJSON(_ condition: VibeLaneVariableCondition) -> CLIJSONValue {
+        switch condition {
+        case .equals(let variable, let value):
+            return .object(["kind": .string("equals"), "variable": .string(variable), "value": .string(value)])
+        case .notEquals(let variable, let value):
+            return .object(["kind": .string("notEquals"), "variable": .string(variable), "value": .string(value)])
+        case .isSet(let variable):
+            return .object(["kind": .string("isSet"), "variable": .string(variable)])
+        case .all(let conditions):
+            return .object(["kind": .string("all"), "conditions": .array(conditions.map(conditionJSON))])
+        case .any(let conditions):
+            return .object(["kind": .string("any"), "conditions": .array(conditions.map(conditionJSON))])
+        case .not(let nested):
+            return .object(["kind": .string("not"), "condition": conditionJSON(nested)])
+        }
     }
 
     private static func checkpointJSON(_ checkpoint: VibeLaneCheckpoint) -> CLIJSONValue {
@@ -492,6 +561,7 @@ extension CLICommandRouter {
             "laneId": .string(task.laneID.uuidString),
             "laneVersion": .int(task.laneVersion),
             "currentCheckpoint": .string(task.currentCheckpointKey),
+            "currentVisit": .int(task.currentVisit),
             "attemptsOnCurrentCheckpoint": .int(task.attemptsOnCurrentCheckpoint),
             "createdAt": dateString(task.createdAt),
             "updatedAt": dateString(task.updatedAt),
@@ -499,6 +569,14 @@ extension CLICommandRouter {
         if let lane = manager.resolvedLane(for: task) { obj["lane"] = .string(lane.name) }
         if let reason = task.stopReason { obj["stopReason"] = .string(reason.rawValue) }
         if let activity = task.currentActivity { obj["currentActivity"] = .string(activity) }
+        if let active = task.activeLoop {
+            obj["activeLoop"] = .object([
+                "group": .string(active.groupKey),
+                "visit": .int(active.visit),
+                "memberPosition": .int(active.memberPosition),
+                "phase": .string(active.phase.rawValue),
+            ])
+        }
         if let request = task.openInputRequest { obj["openRequest"] = inputRequestJSON(request) }
         return .object(obj)
     }
@@ -521,10 +599,17 @@ extension CLICommandRouter {
         obj["checkpointRuns"] = .array(task.checkpointRuns.map { run in
             var runObj: [String: CLIJSONValue] = [
                 "checkpoint": .string(run.checkpointKey),
+                "visit": .int(run.visit),
                 "status": .string(run.status.rawValue),
                 "attempts": .int(run.attempts.count),
             ]
             if let reason = run.stopReason { runObj["stopReason"] = .string(reason.rawValue) }
+            if let predecessor = run.predecessor {
+                runObj["predecessor"] = .object([
+                    "checkpoint": .string(predecessor.checkpointKey),
+                    "visit": .int(predecessor.visit),
+                ])
+            }
             if let summary = run.summary { runObj["summary"] = .string(summary) }
             return .object(runObj)
         })
@@ -536,8 +621,10 @@ extension CLICommandRouter {
             "id": .string(request.id.uuidString),
             "kind": .string(request.kind.rawValue),
             "checkpoint": .string(request.checkpointKey),
+            "visit": .int(request.visit),
             "prompt": .string(request.prompt),
         ]
+        if let group = request.loopGroupKey { obj["loopGroup"] = .string(group) }
         if !request.missingKeys.isEmpty {
             obj["missingKeys"] = .array(request.missingKeys.map { .string($0) })
         }

@@ -16,9 +16,40 @@ struct AutomationSkillReferenceRecord: Codable, Hashable, Sendable {
 struct AutomationHandoffRecord: Codable, Hashable, Sendable {
     var taskID: UUID
     var checkpointKey: String
+    var visit: Int
     var filePath: String
     var contentDigest: String?
     var updatedAt: Date
+
+    init(
+        taskID: UUID,
+        checkpointKey: String,
+        visit: Int = 0,
+        filePath: String,
+        contentDigest: String?,
+        updatedAt: Date
+    ) {
+        self.taskID = taskID
+        self.checkpointKey = checkpointKey
+        self.visit = visit
+        self.filePath = filePath
+        self.contentDigest = contentDigest
+        self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case taskID, checkpointKey, visit, filePath, contentDigest, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        taskID = try container.decode(UUID.self, forKey: .taskID)
+        checkpointKey = try container.decode(String.self, forKey: .checkpointKey)
+        visit = try container.decodeIfPresent(Int.self, forKey: .visit) ?? 0
+        filePath = try container.decode(String.self, forKey: .filePath)
+        contentDigest = try container.decodeIfPresent(String.self, forKey: .contentDigest)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    }
 }
 
 enum AutomationDatabaseError: LocalizedError {
@@ -334,9 +365,12 @@ final class AutomationDatabaseStore:
     private func handoffRecords(for task: VibeLaneTask) -> [AutomationHandoffRecord] {
         task.checkpointRuns.compactMap { run in
             guard let summary = run.summary else { return nil }
+            let filename = run.visit == 0
+                ? "\(run.checkpointKey).md"
+                : "\(run.checkpointKey)-visit-\(run.visit).md"
             let fileURL = handoffRoot
                 .appendingPathComponent(task.id.uuidString, isDirectory: true)
-                .appendingPathComponent("\(run.checkpointKey).md")
+                .appendingPathComponent(filename)
             guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
             let digest = SHA256.hash(data: Data(summary.utf8))
                 .map { String(format: "%02x", $0) }
@@ -344,6 +378,7 @@ final class AutomationDatabaseStore:
             return AutomationHandoffRecord(
                 taskID: task.id,
                 checkpointKey: run.checkpointKey,
+                visit: run.visit,
                 filePath: fileURL.path,
                 contentDigest: digest,
                 updatedAt: run.endedAt ?? task.updatedAt
@@ -677,10 +712,13 @@ private final class LegacyAutomationReader {
         tasks.flatMap { task in
             task.checkpointRuns.compactMap { run in
                 guard let summary = run.summary else { return nil }
+                let filename = run.visit == 0
+                    ? "\(run.checkpointKey).md"
+                    : "\(run.checkpointKey)-visit-\(run.visit).md"
                 let fileURL = vibeLanesDirectory
                     .appendingPathComponent("handoffs", isDirectory: true)
                     .appendingPathComponent(task.id.uuidString, isDirectory: true)
-                    .appendingPathComponent("\(run.checkpointKey).md")
+                    .appendingPathComponent(filename)
                 guard fileManager.fileExists(atPath: fileURL.path) else { return nil }
                 let digest = SHA256.hash(data: Data(summary.utf8))
                     .map { String(format: "%02x", $0) }
@@ -688,6 +726,7 @@ private final class LegacyAutomationReader {
                 return AutomationHandoffRecord(
                     taskID: task.id,
                     checkpointKey: run.checkpointKey,
+                    visit: run.visit,
                     filePath: fileURL.path,
                     contentDigest: digest,
                     updatedAt: run.endedAt ?? task.updatedAt

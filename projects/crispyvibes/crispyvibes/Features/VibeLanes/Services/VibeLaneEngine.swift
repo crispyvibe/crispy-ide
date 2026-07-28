@@ -74,7 +74,7 @@ final class VibeLaneEngine {
     private func haltForDurabilityLoss(_ input: VibeLaneTask) -> VibeLaneTask {
         var task = input
         let now = clock.now
-        if var run = task.run(forKey: task.currentCheckpointKey), run.status != .passed {
+        if var run = task.currentRun, run.status != .passed {
             run.status = .stopped
             run.stopReason = .error
             run.endedAt = now
@@ -84,6 +84,7 @@ final class VibeLaneEngine {
         task.stopReason = .error
         task.openInputRequest = nil
         task.pendingHumanEngine = nil
+        task.pendingLoopExhaustionAdvance = nil
         task.rerunRequest = nil
         task.currentActivity = AppStrings.VibeLanes.activityStopped(
             AppStrings.VibeLanes.reasonNotDurable
@@ -115,10 +116,28 @@ final class VibeLaneEngine {
                 return try await stopTask(&task, reason: .error)
             }
 
-            ensureRunStarted(&task, checkpointKey: checkpoint.key)
-            let runRecord = task.run(forKey: checkpoint.key)!
-            let attemptsUsed = attemptsUsed(in: runRecord)
+            try await ensureLoopState(for: checkpoint, task: &task)
+            ensureRunStarted(
+                &task,
+                checkpointKey: checkpoint.key,
+                visit: task.currentVisit,
+                predecessor: predecessorVisit(for: checkpoint, task: task)
+            )
+            guard let runRecord = task.currentRun else {
+                return try await stopTask(&task, reason: .error)
+            }
             let engineConfiguration = engineConfiguration(for: checkpoint, task: task)
+            if runRecord.status == .passed {
+                if let finished = try await routeAfterPassedCheckpoint(
+                    checkpoint,
+                    engineConfiguration: engineConfiguration,
+                    task: &task
+                ) {
+                    return finished
+                }
+                continue
+            }
+            let attemptsUsed = attemptsUsed(in: runRecord)
 
             if attemptsUsed == 0 {
                 var requiredSkills = checkpoint.work.skills
@@ -247,6 +266,12 @@ final class VibeLaneEngine {
             )
 
             // 1) Worker does the work.
+            await worker.restoreTranscript(
+                sessionRef: task.workerSessionRef,
+                threadRef: task.workerThreadRef,
+                projectPath: task.projectPath,
+                engine: engineConfiguration
+            )
             let turn = await worker.work(
                 prompt: prompt,
                 projectPath: task.projectPath,
@@ -326,7 +351,7 @@ final class VibeLaneEngine {
         engineConfiguration: VibeLaneEngineConfiguration,
         task: inout VibeLaneTask
     ) async throws -> VibeLaneTask? {
-        guard var runRecord = task.run(forKey: checkpoint.key) else {
+        guard var runRecord = task.currentRun, runRecord.checkpointKey == checkpoint.key else {
             return try await stopTask(&task, reason: .error)
         }
         let attempt = VibeLaneAttempt(
@@ -358,16 +383,25 @@ final class VibeLaneEngine {
         upsert(run: runRecord, in: &task)
         // Persist the handoff durably so later checkpoints (and fresh ACP
         // sessions after a restart) can read the full journey from disk.
-        writeHandoffFile(handoff, task: task, checkpointKey: checkpoint.key)
+        writeHandoffFile(
+            handoff,
+            task: task,
+            checkpointKey: checkpoint.key,
+            visit: runRecord.visit
+        )
         // Store the step's declared outputs into carry-forward. The work turn
         // text is a fallback source so a thin handoff cannot lose outputs the
         // (verified) work turn already emitted.
         recordProducedOutputs(checkpoint, handoff: handoff, workText: workText, task: &task)
 
-        if let rerun = task.rerunRequest, rerun.checkpointKey == checkpoint.key {
+        if let rerun = task.rerunRequest,
+           rerun.checkpointKey == checkpoint.key,
+           rerun.visit == runRecord.visit {
             task.rerunRequest = nil
             task.lastRerunCheckpointKey = checkpoint.key
             task.currentCheckpointKey = rerun.previousCheckpointKey
+            task.currentVisit = rerun.previousVisit
+            task.activeLoop = rerun.previousActiveLoop
             switch rerun.previousState {
             case .done:
                 task.outcomeSummary = try await produceFinalOutcome(
@@ -391,23 +425,266 @@ final class VibeLaneEngine {
             return task
         }
 
-        if let next = lane.checkpoint(after: checkpoint.key) {
-            task.currentCheckpointKey = next.key
-            try await setActivity(
-                &task,
-                AppStrings.VibeLanes.activityMovingTo(next.displayTitle),
-                kind: .system
-            )
+        return try await routeAfterPassedCheckpoint(
+            checkpoint,
+            engineConfiguration: engineConfiguration,
+            task: &task
+        )
+    }
+
+    // MARK: - Loop-group routing
+
+    private func ensureLoopState(
+        for checkpoint: VibeLaneCheckpoint,
+        task: inout VibeLaneTask
+    ) async throws {
+        guard task.rerunRequest == nil,
+              let group = lane.loopGroup(containing: checkpoint.key),
+              let position = group.members.firstIndex(of: checkpoint.key) else {
+            if task.rerunRequest == nil, task.activeLoop != nil {
+                task.activeLoop = nil
+                try await touch(&task)
+            }
+            return
+        }
+        if let active = task.activeLoop,
+           active.groupKey == group.key,
+           active.visit == task.currentVisit,
+           active.memberPosition == position {
+            return
+        }
+        task.activeLoop = VibeLaneLoopRuntimeState(
+            groupKey: group.key,
+            visit: task.currentVisit,
+            memberPosition: position,
+            phase: .runningMember,
+            enteredAt: clock.now
+        )
+        try await touch(&task)
+    }
+
+    private func predecessorVisit(
+        for checkpoint: VibeLaneCheckpoint,
+        task: VibeLaneTask
+    ) -> VibeLaneCheckpointVisit? {
+        if let group = lane.loopGroup(containing: checkpoint.key),
+           let position = group.members.firstIndex(of: checkpoint.key) {
+            if position > 0 {
+                return VibeLaneCheckpointVisit(
+                    checkpointKey: group.members[position - 1],
+                    visit: task.currentVisit
+                )
+            }
+            if task.currentVisit > 0, let last = group.members.last {
+                return VibeLaneCheckpointVisit(
+                    checkpointKey: last,
+                    visit: task.currentVisit - 1
+                )
+            }
+        }
+        let ordered = lane.orderedCheckpoints
+        guard let index = ordered.firstIndex(where: { $0.key == checkpoint.key }), index > 0 else {
             return nil
         }
-        // Final checkpoint: ask the worker for a task-level wrap-up
-        // (kept separate from the per-step handoff).
+        let previousKey = ordered[index - 1].key
+        guard let previous = task.run(forKey: previousKey) else { return nil }
+        return VibeLaneCheckpointVisit(checkpointKey: previousKey, visit: previous.visit)
+    }
+
+    private func routeAfterPassedCheckpoint(
+        _ checkpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> VibeLaneTask? {
+        if let group = lane.loopGroup(containing: checkpoint.key),
+           let position = group.members.firstIndex(of: checkpoint.key) {
+            if position + 1 < group.members.count {
+                let nextKey = group.members[position + 1]
+                guard let next = lane.checkpoint(forKey: nextKey) else {
+                    return try await stopTask(&task, reason: .misAuthoredLane)
+                }
+                task.currentCheckpointKey = next.key
+                task.activeLoop = VibeLaneLoopRuntimeState(
+                    groupKey: group.key,
+                    visit: task.currentVisit,
+                    memberPosition: position + 1,
+                    phase: .runningMember,
+                    enteredAt: task.activeLoop?.enteredAt ?? clock.now
+                )
+                try await setActivity(
+                    &task,
+                    AppStrings.VibeLanes.activityMovingTo(next.displayTitle),
+                    kind: .system
+                )
+                return nil
+            }
+
+            if task.activeLoop?.phase != .evaluatingExit,
+               task.activeLoop?.phase != .awaitingExhaustionDecision {
+                task.activeLoop?.phase = .evaluatingExit
+                try await touch(&task)
+            }
+
+            if let advance = task.pendingLoopExhaustionAdvance {
+                task.pendingLoopExhaustionAdvance = nil
+                if advance {
+                    return try await advanceBeyondLoopGroup(
+                        group,
+                        completedCheckpoint: checkpoint,
+                        engineConfiguration: engineConfiguration,
+                        task: &task
+                    )
+                }
+                return try await stopTask(&task, reason: .loopExhausted)
+            }
+
+            if group.exitWhen.evaluate(values: task.carryForward ?? [:]) {
+                return try await advanceBeyondLoopGroup(
+                    group,
+                    completedCheckpoint: checkpoint,
+                    engineConfiguration: engineConfiguration,
+                    task: &task
+                )
+            }
+
+            let nextVisit = task.currentVisit + 1
+            if nextVisit < group.maxIterations {
+                guard let firstKey = group.members.first,
+                      let first = lane.checkpoint(forKey: firstKey) else {
+                    return try await stopTask(&task, reason: .misAuthoredLane)
+                }
+                task.currentCheckpointKey = first.key
+                task.currentVisit = nextVisit
+                task.activeLoop = VibeLaneLoopRuntimeState(
+                    groupKey: group.key,
+                    visit: nextVisit,
+                    memberPosition: 0,
+                    phase: .runningMember,
+                    enteredAt: clock.now
+                )
+                try await setActivity(
+                    &task,
+                    AppStrings.VibeLanes.activityLoopIteration(
+                        group: group.key,
+                        current: nextVisit + 1,
+                        total: group.maxIterations
+                    ),
+                    kind: .system
+                )
+                return nil
+            }
+
+            switch group.onExhausted {
+            case .stop:
+                return try await stopTask(&task, reason: .loopExhausted)
+            case .advance:
+                appendLog(
+                    &task,
+                    AppStrings.VibeLanes.activityLoopAdvanced(group.key),
+                    kind: .system
+                )
+                return try await advanceBeyondLoopGroup(
+                    group,
+                    completedCheckpoint: checkpoint,
+                    engineConfiguration: engineConfiguration,
+                    task: &task
+                )
+            case .escalate:
+                task.activeLoop?.phase = .awaitingExhaustionDecision
+                task.state = .needsInput
+                task.stopReason = nil
+                task.openInputRequest = VibeLaneInputRequest(
+                    kind: .loopExhausted,
+                    checkpointKey: checkpoint.key,
+                    visit: task.currentVisit,
+                    loopGroupKey: group.key,
+                    createdAt: clock.now,
+                    prompt: AppStrings.VibeLanes.loopExhaustedPrompt(group.key),
+                    reason: .loopExhausted
+                )
+                try await setActivity(&task, AppStrings.VibeLanes.needsYou, kind: .input)
+                return task
+            }
+        }
+
+        return try await advanceAfterCheckpoint(
+            checkpoint,
+            engineConfiguration: engineConfiguration,
+            task: &task
+        )
+    }
+
+    private func advanceBeyondLoopGroup(
+        _ group: VibeLaneLoopGroup,
+        completedCheckpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> VibeLaneTask? {
+        task.activeLoop = nil
+        guard let finalMember = group.members.last,
+              let next = lane.checkpoint(after: finalMember) else {
+            return try await finishTask(
+                after: completedCheckpoint,
+                engineConfiguration: engineConfiguration,
+                task: &task
+            )
+        }
+        task.currentCheckpointKey = next.key
+        task.currentVisit = 0
+        try await setActivity(
+            &task,
+            AppStrings.VibeLanes.activityMovingTo(next.displayTitle),
+            kind: .system
+        )
+        return nil
+    }
+
+    private func advanceAfterCheckpoint(
+        _ checkpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> VibeLaneTask? {
+        guard let next = lane.checkpoint(after: checkpoint.key) else {
+            return try await finishTask(
+                after: checkpoint,
+                engineConfiguration: engineConfiguration,
+                task: &task
+            )
+        }
+        task.currentCheckpointKey = next.key
+        task.currentVisit = 0
+        if let group = lane.loopGroup(containing: next.key),
+           let position = group.members.firstIndex(of: next.key) {
+            task.activeLoop = VibeLaneLoopRuntimeState(
+                groupKey: group.key,
+                visit: 0,
+                memberPosition: position,
+                phase: .runningMember,
+                enteredAt: clock.now
+            )
+        } else {
+            task.activeLoop = nil
+        }
+        try await setActivity(
+            &task,
+            AppStrings.VibeLanes.activityMovingTo(next.displayTitle),
+            kind: .system
+        )
+        return nil
+    }
+
+    private func finishTask(
+        after checkpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> VibeLaneTask {
         let outcome = try await produceFinalOutcome(
             checkpoint: checkpoint,
             engineConfiguration: engineConfiguration,
             task: &task
         )
         task.outcomeSummary = outcome
+        task.activeLoop = nil
         task.state = .done
         task.stopReason = .done
         try await setActivity(&task, AppStrings.VibeLanes.activityDone, kind: .system)
@@ -434,10 +711,16 @@ final class VibeLaneEngine {
             AppStrings.VibeLanes.activityReviewerReviewing,
             kind: .verify
         )
-        let currentRun = task.run(forKey: checkpoint.key)
+        let currentRun = task.currentRun
         let attemptIndex = currentRun.map { run in
             run.attempts.filter { $0.budgetEpoch == run.budgetEpoch }.count
         } ?? 0
+        await reviewer.restoreTranscript(
+            sessionRef: task.reviewerSessionRef,
+            threadRef: task.reviewerThreadRef,
+            projectPath: task.projectPath,
+            engine: engineConfiguration
+        )
         let outcome = await reviewer.review(
             VibeLaneReviewRequest(
                 taskTitle: task.title,
@@ -569,28 +852,38 @@ final class VibeLaneEngine {
         return "Checkpoint \(checkpoint.displayTitle) completed and verified (attempt \(attemptsUsed + 1))."
     }
 
-    /// The handoff doc the previous checkpoint produced, to inject inline.
+    /// The handoff produced by the exact predecessor visit.
     private func inheritedHandoff(forCheckpointKey key: String, task: VibeLaneTask) -> String? {
-        let ordered = lane.orderedCheckpoints
-        guard let idx = ordered.firstIndex(where: { $0.key == key }), idx > 0 else { return nil }
-        let summary = task.run(forKey: ordered[idx - 1].key)?.summary
-        let trimmed = summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard key == task.currentCheckpointKey,
+              let predecessor = task.currentRun?.predecessor,
+              let summary = task.run(for: predecessor)?.summary else { return nil }
+        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 
     // MARK: - Handoff files (durable carry-forward substrate)
 
-    /// Where one checkpoint's handoff lives on disk: `<handoffRoot>/<taskID>/<key>.md`.
-    private func handoffFileURL(taskID: UUID, checkpointKey: String) -> URL? {
-        handoffRoot?
+    private func handoffFileURL(taskID: UUID, checkpointKey: String, visit: Int) -> URL? {
+        let filename = visit == 0
+            ? "\(checkpointKey).md"
+            : "\(checkpointKey)-visit-\(visit).md"
+        return handoffRoot?
             .appendingPathComponent(taskID.uuidString, isDirectory: true)
-            .appendingPathComponent("\(checkpointKey).md")
+            .appendingPathComponent(filename)
     }
 
-    /// Persist a passed checkpoint's handoff to disk. Failures are logged-only —
-    /// the handoff also survives on the checkpoint run record.
-    private func writeHandoffFile(_ text: String, task: VibeLaneTask, checkpointKey: String) {
-        guard let url = handoffFileURL(taskID: task.id, checkpointKey: checkpointKey) else { return }
+    /// Persist one passed checkpoint visit's handoff to disk.
+    private func writeHandoffFile(
+        _ text: String,
+        task: VibeLaneTask,
+        checkpointKey: String,
+        visit: Int
+    ) {
+        guard let url = handoffFileURL(
+            taskID: task.id,
+            checkpointKey: checkpointKey,
+            visit: visit
+        ) else { return }
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
@@ -598,37 +891,55 @@ final class VibeLaneEngine {
             )
             try text.write(to: url, atomically: true, encoding: .utf8)
         } catch {
-            // Non-fatal: inline summary + carry-forward still exist.
+            // Non-fatal: the persisted run summary remains available.
         }
     }
 
-    /// Paths of every earlier passed checkpoint's handoff file, in lane order,
-    /// for injection into the worker prompt (read on demand — never inlined).
-    /// This survives app restarts and fresh ACP sessions, unlike chat memory.
+    private func predecessorChain(for task: VibeLaneTask) -> [VibeLaneCheckpointRun] {
+        var chain: [VibeLaneCheckpointRun] = []
+        var cursor = task.currentRun?.predecessor
+        var seen = Set<VibeLaneCheckpointVisit>()
+        while let identity = cursor, seen.insert(identity).inserted,
+              let run = task.run(for: identity) {
+            chain.append(run)
+            cursor = run.predecessor
+        }
+        return chain.reversed()
+    }
+
+    /// Paths of every predecessor visit, in execution order.
     private func priorHandoffPaths(forCheckpointKey key: String, task: VibeLaneTask) -> String? {
-        guard handoffRoot != nil else { return nil }
-        let ordered = lane.orderedCheckpoints
-        guard let idx = ordered.firstIndex(where: { $0.key == key }), idx > 0 else { return nil }
-        let lines = ordered[..<idx].compactMap { earlier -> String? in
-            guard task.run(forKey: earlier.key)?.status == .passed,
-                  let url = handoffFileURL(taskID: task.id, checkpointKey: earlier.key),
+        guard key == task.currentCheckpointKey, handoffRoot != nil else { return nil }
+        let lines = predecessorChain(for: task).compactMap { run -> String? in
+            guard run.status == .passed,
+                  let checkpoint = lane.checkpoint(forKey: run.checkpointKey),
+                  let url = handoffFileURL(
+                    taskID: task.id,
+                    checkpointKey: run.checkpointKey,
+                    visit: run.visit
+                  ),
                   FileManager.default.fileExists(atPath: url.path) else { return nil }
-            return "- \(earlier.displayTitle): \(url.path)"
+            return "- \(checkpoint.displayTitle) (visit \(run.visit + 1)): \(url.path)"
         }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
-    /// Every passed checkpoint's handoff path, in lane order — the full journey,
-    /// fed to the final outcome prompt so the report is grounded in what each
-    /// step actually recorded rather than end-of-session memory (F060 feedback).
+    /// Every passed visit's handoff path in execution order.
     private func allHandoffPaths(task: VibeLaneTask) -> [String] {
         guard handoffRoot != nil else { return [] }
-        return lane.orderedCheckpoints.compactMap { checkpoint -> String? in
-            guard task.run(forKey: checkpoint.key)?.status == .passed,
-                  let url = handoffFileURL(taskID: task.id, checkpointKey: checkpoint.key),
-                  FileManager.default.fileExists(atPath: url.path) else { return nil }
-            return url.path
-        }
+        return task.checkpointRuns
+            .filter { $0.status == .passed }
+            .sorted {
+                ($0.endedAt ?? .distantPast) < ($1.endedAt ?? .distantPast)
+            }
+            .compactMap { run in
+                guard let url = handoffFileURL(
+                    taskID: task.id,
+                    checkpointKey: run.checkpointKey,
+                    visit: run.visit
+                ), FileManager.default.fileExists(atPath: url.path) else { return nil }
+                return url.path
+            }
     }
 
     // MARK: - Carry-forward contract (declared inputs/outputs)
@@ -957,14 +1268,21 @@ final class VibeLaneEngine {
         checkpointKey: String,
         task: inout VibeLaneTask
     ) async throws {
-        guard var run = task.run(forKey: checkpointKey), run.activeEngine != engine else { return }
+        guard var run = task.currentRun,
+              run.checkpointKey == checkpointKey,
+              run.activeEngine != engine else { return }
         run.activeEngine = engine
         upsert(run: run, in: &task)
         try await touch(&task)
     }
 
-    private func ensureRunStarted(_ task: inout VibeLaneTask, checkpointKey: String) {
-        if var existing = task.run(forKey: checkpointKey) {
+    private func ensureRunStarted(
+        _ task: inout VibeLaneTask,
+        checkpointKey: String,
+        visit: Int,
+        predecessor: VibeLaneCheckpointVisit?
+    ) {
+        if var existing = task.run(forKey: checkpointKey, visit: visit) {
             if existing.status == .pending || existing.status == .needsInput || existing.status == .stopped {
                 existing.status = .running
                 existing.startedAt = existing.startedAt ?? clock.now
@@ -977,6 +1295,8 @@ final class VibeLaneEngine {
         }
         let runRecord = VibeLaneCheckpointRun(
             checkpointKey: checkpointKey,
+            visit: visit,
+            predecessor: predecessor,
             status: .running,
             startedAt: clock.now,
             activeWindowStartedAt: clock.now
@@ -1010,6 +1330,7 @@ final class VibeLaneEngine {
             request: VibeLaneInputRequest(
                 kind: .supply,
                 checkpointKey: checkpoint.key,
+                visit: task.currentVisit,
                 createdAt: clock.now,
                 prompt: prompt.isEmpty ? fallback : prompt,
                 missingKeys: keys
@@ -1034,6 +1355,7 @@ final class VibeLaneEngine {
             request: VibeLaneInputRequest(
                 kind: .review,
                 checkpointKey: checkpoint.key,
+                visit: task.currentVisit,
                 createdAt: clock.now,
                 prompt: prompt
             ),
@@ -1057,7 +1379,7 @@ final class VibeLaneEngine {
                 reason: .steerLimitReached
             )
         }
-        let feedback = task.run(forKey: checkpoint.key)?.attempts.last?.result?.feedback
+        let feedback = task.currentRun?.attempts.last?.result?.feedback
         let prompt = AppStrings.VibeLanes.steerRequestPrompt(
             checkpoint: checkpoint.displayTitle,
             reason: reasonLabel(reason)
@@ -1068,6 +1390,7 @@ final class VibeLaneEngine {
             request: VibeLaneInputRequest(
                 kind: .steer,
                 checkpointKey: checkpoint.key,
+                visit: task.currentVisit,
                 createdAt: clock.now,
                 prompt: prompt,
                 lastFeedback: feedback,
@@ -1083,7 +1406,7 @@ final class VibeLaneEngine {
         request: VibeLaneInputRequest,
         reason: VibeLaneStopReason?
     ) async throws -> VibeLaneTask {
-        if var runRecord = task.run(forKey: checkpoint.key) {
+        if var runRecord = task.currentRun, runRecord.checkpointKey == checkpoint.key {
             runRecord.status = .needsInput
             runRecord.stopReason = reason
             runRecord.endedAt = clock.now
@@ -1097,7 +1420,9 @@ final class VibeLaneEngine {
     }
 
     private func upsert(run: VibeLaneCheckpointRun, in task: inout VibeLaneTask) {
-        if let idx = task.checkpointRuns.firstIndex(where: { $0.checkpointKey == run.checkpointKey }) {
+        if let idx = task.checkpointRuns.firstIndex(where: {
+            $0.checkpointKey == run.checkpointKey && $0.visit == run.visit
+        }) {
             task.checkpointRuns[idx] = run
         } else {
             task.checkpointRuns.append(run)
@@ -1109,7 +1434,7 @@ final class VibeLaneEngine {
         checkpoint: VibeLaneCheckpoint,
         reason: VibeLaneStopReason
     ) async throws -> VibeLaneTask {
-        if var runRecord = task.run(forKey: checkpoint.key) {
+        if var runRecord = task.currentRun, runRecord.checkpointKey == checkpoint.key {
             runRecord.status = .stopped
             runRecord.stopReason = reason
             runRecord.endedAt = clock.now
@@ -1126,6 +1451,7 @@ final class VibeLaneEngine {
         task.stopReason = reason
         task.openInputRequest = nil
         task.pendingHumanEngine = nil
+        task.pendingLoopExhaustionAdvance = nil
         task.rerunRequest = nil
         try await setActivity(
             &task,
@@ -1200,6 +1526,8 @@ final class VibeLaneEngine {
             return AppStrings.VibeLanes.reasonMisAuthoredLane
         case .steerLimitReached:
             return AppStrings.VibeLanes.reasonSteerLimitReached
+        case .loopExhausted:
+            return AppStrings.VibeLanes.reasonLoopExhausted
         case .done:
             return AppStrings.VibeLanes.completed
         }

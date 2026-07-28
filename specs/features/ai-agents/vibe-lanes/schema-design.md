@@ -38,6 +38,7 @@ Lane {
   description:    String?
   steerLimit:     Int                 // max user Steer answers per task/lane run
   steps:          [LaneStep]          // ordered; one or more
+  loopGroups:     [LoopGroup]         // contiguous, disjoint bounded groups
   seededFingerprint: String?          // set when seeded from the shipped starter
                                       // catalog (hash of that content); cleared
                                       // on first user edit
@@ -50,6 +51,22 @@ LaneStep {
   vibeVersion:  Int                   // explicit immutable pin
   requires:     [InputRequirement]
   produces:     [OutputDeclaration]
+}
+
+LoopGroup {
+  key:            String
+  members:        [String]             // >= 2, contiguous lane-step keys
+  maxIterations:  Int                  // > 0
+  exitWhen:       VariableCondition
+  onExhausted:    stop | escalate | advance
+}
+
+VariableCondition {
+  kind:           equals | notEquals | isSet | all | any | not
+  variable:       String?
+  value:          String?
+  conditions:     [VariableCondition]?
+  condition:      VariableCondition?
 }
 
 WorkDefinition {
@@ -170,6 +187,9 @@ Task {
   state:                running | needsInput | stopped | done
   stopReason:           StopReason?
   currentCheckpointKey: String
+  currentVisit:         Int
+  activeLoop:           LoopRuntimeState?
+  pendingLoopExhaustionAdvance: Bool?
 
   workerSessionRef:     String?
   workerThreadRef:      String?
@@ -199,6 +219,8 @@ Task {
 
 CheckpointRun {
   checkpointKey:       String
+  visit:               Int
+  predecessor:         CheckpointVisit?
   status:              pending | running | needsInput | passed | stopped
   stopReason:          StopReason?
   summary:             String?
@@ -209,6 +231,19 @@ CheckpointRun {
   budgetEpoch:         Int            // increments on Steer answer
   rerunEpochCount:     Int            // budget epochs created by isolated rerun
   activeEngine:        EngineSnapshot?
+}
+
+CheckpointVisit {
+  checkpointKey: String
+  visit:         Int
+}
+
+LoopRuntimeState {
+  groupKey:       String
+  visit:          Int
+  memberPosition: Int
+  phase:          runningMember | evaluatingExit | awaitingExhaustionDecision
+  enteredAt:      Date
 }
 
 Attempt {
@@ -239,10 +274,13 @@ including old attempts that may have run in Standard.
 
 RerunRequest {
   checkpointKey:          String
+  visit:                  Int
   engine:                 EngineConfiguration
   previousState:          stopped | done
   previousStopReason:     StopReason?
   previousCheckpointKey:  String
+  previousVisit:          Int
+  previousActiveLoop:     LoopRuntimeState?
   requestedAt:            Date
 }
 
@@ -254,8 +292,10 @@ VerificationResult {
 
 InputRequest {
   id:            UUID
-  kind:          supply | steer | review
+  kind:          supply | steer | review | loopExhausted
   checkpointKey: String
+  visit:         Int
+  loopGroupKey:  String?
   createdAt:     Date
   prompt:        String
   missingKeys:   [String]             // supply only
@@ -304,8 +344,10 @@ Notes:
   is used when an absent required input was not ask-user and no prior checkpoint
   declared it. Fatal misses take precedence over Supply requests.
 - Handoffs are additionally persisted as files under
-  `<handoffRoot>/<taskID>/<checkpointKey>.md`; later checkpoints receive the
-  paths of all earlier passed checkpoints' handoff files. Declared outputs are
+  `<handoffRoot>/<taskID>/<checkpointKey>.md` for visit zero and
+  `<checkpointKey>-visit-<visit>.md` for later visits. Database metadata uses
+  `(taskID, checkpointKey, visit)`. Prompts follow explicit predecessor lineage
+  through all earlier passed visits. Declared outputs are
   parsed from the handoff or, as fallback, the verified work turn, and never
   overwrite-to-delete an existing carry-forward value.
 
@@ -316,6 +358,9 @@ created -> running
 
 running -> running       failed attempt, bounds remain
 running -> running       checkpoint passes, more checkpoints remain
+running -> running       loop exit false, another group visit remains
+running -> needsInput    loop reaches limit with escalate policy
+running -> stopped       loop reaches limit with stop policy
 running -> done          final checkpoint passes
 running -> needsInput    ask-user input missing
 running -> needsInput    exhausted escalate bound under steer limit
@@ -353,6 +398,7 @@ deleteLane(laneID)
 SupplyAnswer { values: [String:String] }
 SteerAnswer  { guidance: String }
 ReviewAnswer { approved: Bool, feedback: String? }  // feedback required on reject
+LoopExhaustionAnswer { advance: Bool }
 ```
 
 Rules:

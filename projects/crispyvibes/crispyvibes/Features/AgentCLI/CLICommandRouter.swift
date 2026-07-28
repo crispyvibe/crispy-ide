@@ -881,6 +881,7 @@ final class CLICommandRouter {
                     .init(name: "description", type: "string", required: false, description: "What the lane is for."),
                     .init(name: "steerLimit", type: "integer", required: false, description: "How many Steer escalations the lane allows.", defaultValue: .int(1)),
                     .init(name: "checkpoints", type: "array", required: false, description: "Checkpoint definitions in the lane schema: [{key, order, work:{goal, instructions?, skills?}, verify:{definition, reviewSkills?, humanReview?}, bounds?:{maxAttempts, timeoutSeconds, onExhausted}, requires?, produces?}]."),
+                    .init(name: "loopGroups", type: "array", required: false, description: "Bounded contiguous groups: [{key, members, maxIterations, exitWhen:{kind, variable?, value?, conditions?, condition?}, onExhausted:stop|escalate|advance}]."),
                 ],
                 result: [.init(name: "lane", type: "object", description: "The created lane definition.")],
                 errors: ["invalid_params", "not_connected"]
@@ -897,6 +898,7 @@ final class CLICommandRouter {
                     .init(name: "description", type: "string", required: false, description: "New description (empty string clears it)."),
                     .init(name: "steerLimit", type: "integer", required: false, description: "New steer limit."),
                     .init(name: "checkpoints", type: "array", required: false, description: "Full replacement checkpoint list (same schema as lane.create)."),
+                    .init(name: "loopGroups", type: "array", required: false, description: "Full replacement authored loop-group list (same schema as lane.create)."),
                 ],
                 result: [.init(name: "lane", type: "object", description: "The updated lane definition.")],
                 errors: ["invalid_params", "not_connected"]
@@ -968,13 +970,14 @@ final class CLICommandRouter {
         CommandRegistration(
             method: "lane.task.answer",
             descriptor: CommandDescriptor(
-                summary: "Answer a task's open input request (F059-R07). Supply: pass `values`. Steer: pass `guidance`. Review: pass `approve` (+ `feedback` when rejecting).",
+                summary: "Answer a task's open input request (F059-R07). Supply: `values`; Steer: `guidance`; Review: `approve`; exhausted loop: `advance`.",
                 params: [
                     .init(name: "id", type: "string", required: true, description: "Task UUID."),
                     .init(name: "values", type: "object", required: false, description: "Supply answers keyed by missing input key."),
                     .init(name: "guidance", type: "string", required: false, description: "Steer guidance fed to the worker as feedback."),
                     .init(name: "approve", type: "boolean", required: false, description: "Review verdict. false requires `feedback`."),
                     .init(name: "feedback", type: "string", required: false, description: "Review rejection feedback (looped back to the worker)."),
+                    .init(name: "advance", type: "boolean", required: false, description: "Exhausted-loop decision: true advances beyond the group; false stops the task."),
                 ],
                 result: [.init(name: "task", type: "object", description: "The resumed task summary.")],
                 errors: ["invalid_params", "not_connected"]

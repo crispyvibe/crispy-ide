@@ -8,6 +8,9 @@ struct VibeLaneCatalogCard: View {
     let lane: VibeLaneDefinition
     let categories: [VibeCategory]
     let onOpen: () -> Void
+    /// Starts a task on this lane. nil hides the action (non-runnable lanes, or
+    /// hosts with no task surface).
+    var onStart: (() -> Void)?
 
     @State private var hovering = false
 
@@ -114,9 +117,13 @@ struct VibeLaneCatalogCard: View {
             } else {
                 HStack(alignment: .top, spacing: 0) {
                     ForEach(Array(previewCheckpoints.enumerated()), id: \.offset) { index, checkpoint in
-                        recipeNode(index: index, title: checkpoint.displayTitle)
+                        let loop = lane.loopGroup(containing: checkpoint.key)
+                        recipeNode(index: index, checkpoint: checkpoint, loop: loop)
                         if index < previewCheckpoints.count - 1 || remainingSteps > 0 {
-                            recipeConnector
+                            let nextLoop = index + 1 < previewCheckpoints.count
+                                ? lane.loopGroup(containing: previewCheckpoints[index + 1].key)
+                                : nil
+                            recipeConnector(isLoop: loop != nil && loop?.key == nextLoop?.key)
                         }
                     }
                     if remainingSteps > 0 {
@@ -127,28 +134,58 @@ struct VibeLaneCatalogCard: View {
         }
     }
 
-    private func recipeNode(index: Int, title: String) -> some View {
-        VStack(spacing: uiScale.spacing(5)) {
+    private func recipeNode(
+        index: Int,
+        checkpoint: VibeLaneCheckpoint,
+        loop: VibeLaneLoopGroup?
+    ) -> some View {
+        let tint = loop == nil ? palette.warningColor : palette.accentColor
+        return VStack(spacing: uiScale.spacing(5)) {
             Text("\(index + 1)")
                 .font(.system(size: uiScale.textSize(9), weight: .bold, design: .monospaced))
-                .foregroundStyle(palette.warningColor)
+                .foregroundStyle(tint)
                 .frame(width: uiScale.chromeSize(22), height: uiScale.chromeSize(22))
-                .background(Circle().fill(palette.warningColor.opacity(0.14)))
-                .overlay(Circle().strokeBorder(palette.warningColor.opacity(0.34)))
-            Text(title)
+                .background(Circle().fill(tint.opacity(0.14)))
+                .overlay(Circle().strokeBorder(tint.opacity(loop == nil ? 0.34 : 0.75)))
+                .overlay(alignment: .topTrailing) {
+                    if loop != nil {
+                        Image(systemName: "repeat")
+                            .font(.system(size: uiScale.iconSize(7), weight: .bold))
+                            .foregroundStyle(tint)
+                            .padding(uiScale.spacing(1))
+                            .background(Circle().fill(palette.canvasSecondaryBackgroundColor))
+                            .offset(x: uiScale.chromeSize(4), y: uiScale.chromeSize(-3))
+                    }
+                }
+            Text(checkpoint.displayTitle)
                 .font(.system(size: uiScale.textSize(9), weight: .semibold))
                 .foregroundStyle(palette.primaryTextColor)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
+            if let loop, loop.members.first == checkpoint.key {
+                Text(AppStrings.VibeLanes.loopIterationsShort(loop.maxIterations))
+                    .font(.system(size: uiScale.textSize(8), weight: .medium))
+                    .foregroundStyle(palette.accentColor)
+                    .lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    private var recipeConnector: some View {
-        Rectangle()
-            .fill(palette.warningColor.opacity(0.34))
-            .frame(width: uiScale.chromeSize(13), height: uiScale.chromeSize(1))
-            .padding(.top, uiScale.chromeSize(11))
+    private func recipeConnector(isLoop: Bool) -> some View {
+        Group {
+            if isLoop {
+                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                    .font(.system(size: uiScale.iconSize(9), weight: .bold))
+                    .foregroundStyle(palette.accentColor)
+                    .frame(width: uiScale.chromeSize(15))
+            } else {
+                Rectangle()
+                    .fill(palette.warningColor.opacity(0.34))
+                    .frame(width: uiScale.chromeSize(13), height: uiScale.chromeSize(1))
+            }
+        }
+        .padding(.top, uiScale.chromeSize(11))
     }
 
     private var overflowNode: some View {
@@ -192,6 +229,17 @@ struct VibeLaneCatalogCard: View {
             .font(.system(size: uiScale.textSize(10), weight: .medium))
             .foregroundStyle(palette.secondaryTextColor)
             Spacer()
+            if lane.isRunnable, let onStart {
+                Button(action: onStart) {
+                    Label(AppStrings.VibeLanes.startTask, systemImage: "play.fill")
+                        .font(.system(size: uiScale.textSize(10), weight: .semibold))
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .help(AppStrings.VibeLanes.startTask)
+                .accessibilityIdentifier("vibeLanes.catalog.start")
+            }
             Image(systemName: "arrow.right")
                 .font(.system(size: uiScale.iconSize(10), weight: .bold))
                 .foregroundStyle(palette.warningColor)

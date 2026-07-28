@@ -21,6 +21,7 @@ enum VibeLaneStopReason: String, Codable, Sendable {
     case missingInput         // a required carry-forward input was not available
     case misAuthoredLane      // a lane required an input no prior step/user can supply
     case steerLimitReached
+    case loopExhausted       // a loop group reached its authored visit bound
 }
 
 enum VibeLanePromptKind: String, Codable, Sendable {
@@ -37,6 +38,25 @@ enum VibeLaneCheckpointRunStatus: String, Codable, Sendable {
     case stopped
 }
 
+struct VibeLaneCheckpointVisit: Codable, Hashable, Sendable {
+    var checkpointKey: String
+    var visit: Int
+}
+
+enum VibeLaneLoopPhase: String, Codable, Hashable, Sendable {
+    case runningMember
+    case evaluatingExit
+    case awaitingExhaustionDecision
+}
+
+struct VibeLaneLoopRuntimeState: Codable, Hashable, Sendable {
+    var groupKey: String
+    var visit: Int
+    var memberPosition: Int
+    var phase: VibeLaneLoopPhase
+    var enteredAt: Date
+}
+
 enum VibeLaneActivityKind: String, Codable, Sendable {
     case system
     case worker
@@ -51,6 +71,8 @@ enum VibeLaneInputRequestKind: String, Codable, Sendable {
     /// The user takes the reviewer's seat: approve the checkpoint's outcome or
     /// send it back with feedback (checkpoints authored with `humanReview`).
     case review
+    /// A loop group reached maxIterations; the user chooses advance or stop.
+    case loopExhausted
 }
 
 /// The outcome of an independent reviewer checking the checkpoint's outcome.
@@ -94,6 +116,8 @@ struct VibeLaneInputRequest: Codable, Hashable, Identifiable, Sendable {
     var id: UUID
     var kind: VibeLaneInputRequestKind
     var checkpointKey: String
+    var visit: Int
+    var loopGroupKey: String?
     var createdAt: Date
     var prompt: String
     var missingKeys: [String]
@@ -104,6 +128,8 @@ struct VibeLaneInputRequest: Codable, Hashable, Identifiable, Sendable {
         id: UUID = UUID(),
         kind: VibeLaneInputRequestKind,
         checkpointKey: String,
+        visit: Int = 0,
+        loopGroupKey: String? = nil,
         createdAt: Date = Date(),
         prompt: String,
         missingKeys: [String] = [],
@@ -113,11 +139,33 @@ struct VibeLaneInputRequest: Codable, Hashable, Identifiable, Sendable {
         self.id = id
         self.kind = kind
         self.checkpointKey = checkpointKey
+        self.visit = visit
+        self.loopGroupKey = loopGroupKey
         self.createdAt = createdAt
         self.prompt = prompt
         self.missingKeys = missingKeys
         self.lastFeedback = lastFeedback
         self.reason = reason
+    }
+}
+
+extension VibeLaneInputRequest {
+    enum CodingKeys: String, CodingKey {
+        case id, kind, checkpointKey, visit, loopGroupKey, createdAt, prompt, missingKeys, lastFeedback, reason
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        kind = try container.decode(VibeLaneInputRequestKind.self, forKey: .kind)
+        checkpointKey = try container.decode(String.self, forKey: .checkpointKey)
+        visit = try container.decodeIfPresent(Int.self, forKey: .visit) ?? 0
+        loopGroupKey = try container.decodeIfPresent(String.self, forKey: .loopGroupKey)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        prompt = try container.decode(String.self, forKey: .prompt)
+        missingKeys = try container.decodeIfPresent([String].self, forKey: .missingKeys) ?? []
+        lastFeedback = try container.decodeIfPresent(String.self, forKey: .lastFeedback)
+        reason = try container.decodeIfPresent(VibeLaneStopReason.self, forKey: .reason)
     }
 }
 
@@ -171,6 +219,8 @@ extension VibeLaneAttempt {
 /// The record of a task working one checkpoint.
 struct VibeLaneCheckpointRun: Codable, Hashable, Identifiable, Sendable {
     var checkpointKey: String
+    var visit: Int
+    var predecessor: VibeLaneCheckpointVisit?
     var status: VibeLaneCheckpointRunStatus
     var stopReason: VibeLaneStopReason?
     var summary: String?
@@ -185,10 +235,12 @@ struct VibeLaneCheckpointRun: Codable, Hashable, Identifiable, Sendable {
     /// active run can show the engine before its attempt is settled.
     var activeEngine: VibeLaneEngineSnapshot?
 
-    var id: String { checkpointKey }
+    var id: String { "\(checkpointKey)#\(visit)" }
 
     init(
         checkpointKey: String,
+        visit: Int = 0,
+        predecessor: VibeLaneCheckpointVisit? = nil,
         status: VibeLaneCheckpointRunStatus = .pending,
         stopReason: VibeLaneStopReason? = nil,
         summary: String? = nil,
@@ -201,6 +253,8 @@ struct VibeLaneCheckpointRun: Codable, Hashable, Identifiable, Sendable {
         activeEngine: VibeLaneEngineSnapshot? = nil
     ) {
         self.checkpointKey = checkpointKey
+        self.visit = visit
+        self.predecessor = predecessor
         self.status = status
         self.stopReason = stopReason
         self.summary = summary
@@ -216,13 +270,15 @@ struct VibeLaneCheckpointRun: Codable, Hashable, Identifiable, Sendable {
 
 extension VibeLaneCheckpointRun {
     enum CodingKeys: String, CodingKey {
-        case checkpointKey, status, stopReason, summary, attempts, startedAt, endedAt, activeWindowStartedAt
+        case checkpointKey, visit, predecessor, status, stopReason, summary, attempts, startedAt, endedAt, activeWindowStartedAt
         case budgetEpoch, rerunEpochCount, activeEngine
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         checkpointKey = try container.decode(String.self, forKey: .checkpointKey)
+        visit = try container.decodeIfPresent(Int.self, forKey: .visit) ?? 0
+        predecessor = try container.decodeIfPresent(VibeLaneCheckpointVisit.self, forKey: .predecessor)
         status = try container.decodeIfPresent(VibeLaneCheckpointRunStatus.self, forKey: .status) ?? .pending
         stopReason = try container.decodeIfPresent(VibeLaneStopReason.self, forKey: .stopReason)
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
@@ -238,11 +294,56 @@ extension VibeLaneCheckpointRun {
 
 struct VibeLaneRerunRequest: Codable, Hashable, Sendable {
     var checkpointKey: String
+    var visit: Int
     var engine: VibeLaneEngineConfiguration
     var previousState: VibeLaneTaskState
     var previousStopReason: VibeLaneStopReason?
     var previousCheckpointKey: String
+    var previousVisit: Int
+    var previousActiveLoop: VibeLaneLoopRuntimeState?
     var requestedAt: Date
+
+    init(
+        checkpointKey: String,
+        visit: Int = 0,
+        engine: VibeLaneEngineConfiguration,
+        previousState: VibeLaneTaskState,
+        previousStopReason: VibeLaneStopReason?,
+        previousCheckpointKey: String,
+        previousVisit: Int = 0,
+        previousActiveLoop: VibeLaneLoopRuntimeState? = nil,
+        requestedAt: Date
+    ) {
+        self.checkpointKey = checkpointKey
+        self.visit = visit
+        self.engine = engine
+        self.previousState = previousState
+        self.previousStopReason = previousStopReason
+        self.previousCheckpointKey = previousCheckpointKey
+        self.previousVisit = previousVisit
+        self.previousActiveLoop = previousActiveLoop
+        self.requestedAt = requestedAt
+    }
+}
+
+extension VibeLaneRerunRequest {
+    enum CodingKeys: String, CodingKey {
+        case checkpointKey, visit, engine, previousState, previousStopReason
+        case previousCheckpointKey, previousVisit, previousActiveLoop, requestedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        checkpointKey = try container.decode(String.self, forKey: .checkpointKey)
+        visit = try container.decodeIfPresent(Int.self, forKey: .visit) ?? 0
+        engine = try container.decode(VibeLaneEngineConfiguration.self, forKey: .engine)
+        previousState = try container.decode(VibeLaneTaskState.self, forKey: .previousState)
+        previousStopReason = try container.decodeIfPresent(VibeLaneStopReason.self, forKey: .previousStopReason)
+        previousCheckpointKey = try container.decode(String.self, forKey: .previousCheckpointKey)
+        previousVisit = try container.decodeIfPresent(Int.self, forKey: .previousVisit) ?? 0
+        previousActiveLoop = try container.decodeIfPresent(VibeLaneLoopRuntimeState.self, forKey: .previousActiveLoop)
+        requestedAt = try container.decode(Date.self, forKey: .requestedAt)
+    }
 }
 
 enum VibeLaneTaskOrigin: Codable, Hashable, Sendable {
@@ -286,6 +387,10 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
     var state: VibeLaneTaskState
     var stopReason: VibeLaneStopReason?
     var currentCheckpointKey: String
+    var currentVisit: Int
+    var activeLoop: VibeLaneLoopRuntimeState?
+    /// Set only while resuming an escalated exhausted-loop decision.
+    var pendingLoopExhaustionAdvance: Bool?
     // ACP sessions (for resume + openable chats).
     var workerSessionRef: String?
     var workerThreadRef: String?
@@ -336,6 +441,9 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
         state: VibeLaneTaskState = .running,
         stopReason: VibeLaneStopReason? = nil,
         currentCheckpointKey: String,
+        currentVisit: Int = 0,
+        activeLoop: VibeLaneLoopRuntimeState? = nil,
+        pendingLoopExhaustionAdvance: Bool? = nil,
         workerSessionRef: String? = nil,
         workerThreadRef: String? = nil,
         reviewerSessionRef: String? = nil,
@@ -368,6 +476,9 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
         self.state = state
         self.stopReason = stopReason
         self.currentCheckpointKey = currentCheckpointKey
+        self.currentVisit = currentVisit
+        self.activeLoop = activeLoop
+        self.pendingLoopExhaustionAdvance = pendingLoopExhaustionAdvance
         self.workerSessionRef = workerSessionRef
         self.workerThreadRef = workerThreadRef
         self.reviewerSessionRef = reviewerSessionRef
@@ -398,7 +509,7 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
     }
 
     var attemptsOnCurrentCheckpoint: Int {
-        guard let run = run(forKey: currentCheckpointKey) else { return 0 }
+        guard let run = currentRun else { return 0 }
         return run.attempts.filter { $0.budgetEpoch == run.budgetEpoch }.count
     }
 
@@ -410,8 +521,27 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
         (activityLog ?? []).sorted { $0.at < $1.at }
     }
 
+    var currentCheckpointVisit: VibeLaneCheckpointVisit {
+        VibeLaneCheckpointVisit(checkpointKey: currentCheckpointKey, visit: currentVisit)
+    }
+
+    func run(forKey key: String, visit: Int) -> VibeLaneCheckpointRun? {
+        checkpointRuns.first { $0.checkpointKey == key && $0.visit == visit }
+    }
+
+    func run(for visit: VibeLaneCheckpointVisit) -> VibeLaneCheckpointRun? {
+        run(forKey: visit.checkpointKey, visit: visit.visit)
+    }
+
+    /// Latest visit for presentation and terminal-task isolated rerun selection.
     func run(forKey key: String) -> VibeLaneCheckpointRun? {
-        checkpointRuns.first { $0.checkpointKey == key }
+        checkpointRuns
+            .filter { $0.checkpointKey == key }
+            .max { $0.visit < $1.visit }
+    }
+
+    var currentRun: VibeLaneCheckpointRun? {
+        run(forKey: currentCheckpointKey, visit: currentVisit)
     }
 
     /// Internal consistency check used before replaying a resumed task.
@@ -422,8 +552,19 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
     func isConsistent(with lane: VibeLaneDefinition) -> Bool {
         guard lane.id == laneID else { return false }
         guard let currentCheckpoint = lane.checkpoint(forKey: currentCheckpointKey) else { return false }
+        if let activeLoop {
+            guard let group = lane.loopGroup(forKey: activeLoop.groupKey),
+                  activeLoop.visit == currentVisit,
+                  activeLoop.visit >= 0,
+                  activeLoop.visit < group.maxIterations,
+                  group.members.indices.contains(activeLoop.memberPosition),
+                  group.members[activeLoop.memberPosition] == currentCheckpointKey else { return false }
+        } else if rerunRequest == nil, lane.loopGroup(containing: currentCheckpointKey) != nil {
+            return false
+        }
         if let rerunRequest {
             guard rerunRequest.checkpointKey == currentCheckpointKey,
+                  rerunRequest.visit == currentVisit,
                   lane.checkpoint(forKey: rerunRequest.checkpointKey) != nil,
                   lane.checkpoint(forKey: rerunRequest.previousCheckpointKey) != nil,
                   state == .running || state == .needsInput else { return false }
@@ -439,11 +580,13 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
             }
         }
         guard steerCount >= 0, steerCount <= lane.steerLimit else { return false }
-        guard Set(checkpointRuns.map(\.checkpointKey)).count == checkpointRuns.count else { return false }
+        guard currentVisit >= 0 else { return false }
+        guard Set(checkpointRuns.map { VibeLaneCheckpointVisit(checkpointKey: $0.checkpointKey, visit: $0.visit) }).count == checkpointRuns.count else { return false }
 
         var consumedSteers = 0
         for runRecord in checkpointRuns {
             guard lane.checkpoint(forKey: runRecord.checkpointKey) != nil else { return false }
+            guard runRecord.visit >= 0 else { return false }
             guard runRecord.budgetEpoch >= 0 else { return false }
             guard runRecord.rerunEpochCount >= 0,
                   runRecord.rerunEpochCount <= runRecord.budgetEpoch else { return false }
@@ -463,21 +606,35 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
         }
         guard consumedSteers <= steerCount else { return false }
 
-        let currentRun = run(forKey: currentCheckpointKey)
+        let currentRun = currentRun
         switch state {
         case .running:
             guard openInputRequest == nil else { return false }
             if let currentRun {
-                guard currentRun.status == .running || currentRun.status == .pending else { return false }
+                switch currentRun.status {
+                case .running, .pending:
+                    break
+                case .passed:
+                    guard let activeLoop,
+                          activeLoop.phase == .evaluatingExit
+                            || activeLoop.phase == .awaitingExhaustionDecision else { return false }
+                case .needsInput, .stopped:
+                    return false
+                }
             }
             return true
 
         case .needsInput:
             guard let request = openInputRequest,
                   request.checkpointKey == currentCheckpointKey,
+                  request.visit == currentVisit,
                   request.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
-                  let currentRun,
-                  currentRun.status == .needsInput else { return false }
+                  let currentRun else { return false }
+            if request.kind == .loopExhausted {
+                guard currentRun.status == .passed else { return false }
+            } else {
+                guard currentRun.status == .needsInput else { return false }
+            }
             return isValid(request: request, checkpoint: currentCheckpoint, run: currentRun, lane: lane)
 
         case .stopped:
@@ -546,6 +703,18 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
             guard request.missingKeys.isEmpty, request.reason == nil else { return false }
             guard checkpoint.verify.humanReview else { return false }
             return true
+
+        case .loopExhausted:
+            guard request.missingKeys.isEmpty,
+                  request.reason == .loopExhausted,
+                  let groupKey = request.loopGroupKey,
+                  let group = lane.loopGroup(forKey: groupKey),
+                  group.onExhausted == .escalate,
+                  group.members.last == checkpoint.key,
+                  activeLoop?.groupKey == groupKey,
+                  activeLoop?.visit == currentVisit,
+                  activeLoop?.phase == .awaitingExhaustionDecision else { return false }
+            return true
         }
     }
 }
@@ -553,6 +722,7 @@ struct VibeLaneTask: Codable, Hashable, Identifiable, Sendable {
 extension VibeLaneTask {
     enum CodingKeys: String, CodingKey {
         case id, projectPath, title, laneID, laneVersion, agentID, origin, state, stopReason, currentCheckpointKey
+        case currentVisit, activeLoop, pendingLoopExhaustionAdvance
         case workerSessionRef, workerThreadRef, reviewerSessionRef, reviewerThreadRef
         case currentActivity, lastVerification, activityLog, workspaceRef, carryForward, outcomeSummary
         case repoBaselineRef, openInputRequest, steerCount, pendingSteerGuidance, pendingHumanVerdict, pendingHumanEngine
@@ -571,6 +741,9 @@ extension VibeLaneTask {
         state = try container.decodeIfPresent(VibeLaneTaskState.self, forKey: .state) ?? .running
         stopReason = try container.decodeIfPresent(VibeLaneStopReason.self, forKey: .stopReason)
         currentCheckpointKey = try container.decode(String.self, forKey: .currentCheckpointKey)
+        currentVisit = try container.decodeIfPresent(Int.self, forKey: .currentVisit) ?? 0
+        activeLoop = try container.decodeIfPresent(VibeLaneLoopRuntimeState.self, forKey: .activeLoop)
+        pendingLoopExhaustionAdvance = try container.decodeIfPresent(Bool.self, forKey: .pendingLoopExhaustionAdvance)
         workerSessionRef = try container.decodeIfPresent(String.self, forKey: .workerSessionRef)
         workerThreadRef = try container.decodeIfPresent(String.self, forKey: .workerThreadRef)
         reviewerSessionRef = try container.decodeIfPresent(String.self, forKey: .reviewerSessionRef)

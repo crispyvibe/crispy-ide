@@ -223,6 +223,7 @@ struct StoredVibeLaneDefinition: Codable {
     var detail: String?
     var steerLimit: Int
     var steps: [Step]
+    var loopGroups: [VibeLaneLoopGroup]?
     var seededFingerprint: String?
 
     init?(_ lane: VibeLaneDefinition) {
@@ -235,6 +236,7 @@ struct StoredVibeLaneDefinition: Codable {
         detail = lane.detail
         steerLimit = lane.steerLimit
         self.steps = steps
+        loopGroups = lane.loopGroups
         seededFingerprint = lane.seededFingerprint
     }
 
@@ -250,6 +252,7 @@ struct StoredVibeLaneDefinition: Codable {
             detail: detail,
             steerLimit: steerLimit,
             checkpoints: steps.map { $0.resolved(current: current, revisions: revisions) },
+            loopGroups: loopGroups ?? [],
             seededFingerprint: seededFingerprint
         )
     }

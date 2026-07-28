@@ -9,6 +9,8 @@ struct VibeLaneCheckpointStepButton: View {
     let checkpoint: VibeLaneCheckpoint
     let isSelected: Bool
     let hasErrors: Bool
+    /// Non-nil when this step belongs to an authored loop group.
+    var loop: VibeLaneLoopGroup?
     let onSelect: () -> Void
 
     var body: some View {
@@ -19,11 +21,18 @@ struct VibeLaneCheckpointStepButton: View {
                     .foregroundStyle(isSelected ? palette.accentColor : palette.secondaryTextColor)
                     .monospacedDigit()
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(checkpoint.displayTitle)
-                        .font(.system(size: uiScale.textSize(12), weight: .semibold))
-                        .foregroundStyle(palette.primaryTextColor)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    HStack(spacing: uiScale.spacing(5)) {
+                        Text(checkpoint.displayTitle)
+                            .font(.system(size: uiScale.textSize(12), weight: .semibold))
+                            .foregroundStyle(palette.primaryTextColor)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if loop != nil {
+                            Image(systemName: "repeat")
+                                .font(.system(size: uiScale.iconSize(9), weight: .bold))
+                                .foregroundStyle(palette.accentColor)
+                        }
+                    }
                     Label(
                         hasErrors ? AppStrings.VibeLanes.laneNeedsSetup : AppStrings.VibeLanes.ready,
                         systemImage: hasErrors ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
@@ -41,7 +50,9 @@ struct VibeLaneCheckpointStepButton: View {
                     .fill(
                         isSelected
                             ? palette.accentColor.opacity(0.10)
-                            : palette.canvasSecondaryBackgroundColor
+                            : (loop == nil
+                                ? palette.canvasSecondaryBackgroundColor
+                                : palette.accentColor.opacity(0.05))
                     )
                     .shadow(color: .black.opacity(isSelected ? 0.0 : 0.05), radius: 3, y: 1)
             )
@@ -54,7 +65,11 @@ struct VibeLaneCheckpointStepButton: View {
             )
         }
         .buttonStyle(.plain)
-        .help(checkpoint.displayTitle)
+        .help(
+            loop.map {
+                "\(checkpoint.displayTitle) — \(AppStrings.VibeLanes.loopBadge(group: $0.key, iterations: $0.maxIterations))"
+            } ?? checkpoint.displayTitle
+        )
     }
 }
 
@@ -216,6 +231,20 @@ enum VibeLaneEditorValidation {
             return AppStrings.VibeLanes.stepNeedsValidOutput(title)
         case .unsatisfiedInput(_, let key):
             return AppStrings.VibeLanes.misAuthoredContractWarning(checkpoint: title, keys: key)
+        case .emptyLoopGroupKey:
+            return AppStrings.VibeLanes.loopGroupNeedsKey
+        case .duplicateLoopGroupKey(let key):
+            return AppStrings.VibeLanes.loopGroupDuplicateKey(key)
+        case .invalidLoopGroupBounds(let key):
+            return AppStrings.VibeLanes.loopGroupInvalidBounds(key)
+        case .invalidLoopGroupMembers(let key), .noncontiguousLoopGroup(let key):
+            return AppStrings.VibeLanes.loopGroupInvalidMembers(key)
+        case .missingLoopGroupMember(let groupKey, let memberKey):
+            return AppStrings.VibeLanes.loopGroupMissingMember(group: groupKey, member: memberKey)
+        case .overlappingLoopGroupMember(let memberKey):
+            return AppStrings.VibeLanes.loopGroupOverlappingMember(memberKey)
+        case .unavailableLoopConditionVariable(let groupKey, let variable):
+            return AppStrings.VibeLanes.loopGroupMissingVariable(group: groupKey, variable: variable)
         case .emptyCheckpointKey, .duplicateCheckpointKey:
             return AppStrings.VibeLanes.keyNormalizationWarning
         case .unresolvedVibeReference:

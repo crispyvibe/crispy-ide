@@ -318,7 +318,11 @@ struct VibeLaneDashboardView: View {
     }
 
     private func nodeState(for checkpoint: VibeLaneCheckpoint, task: VibeLaneTask) -> VibeLaneNodeState {
-        VibeLaneNodeState.resolve(for: checkpoint, task: task)
+        VibeLaneNodeState.resolve(
+            for: checkpoint,
+            task: task,
+            lane: manager.resolvedLane(for: task)
+        )
     }
 
     private func statusText(for task: VibeLaneTask) -> some View {
@@ -377,6 +381,8 @@ struct VibeLaneDashboardView: View {
             return AppStrings.VibeLanes.reasonMisAuthoredLane
         case .steerLimitReached:
             return AppStrings.VibeLanes.reasonSteerLimitReached
+        case .loopExhausted:
+            return AppStrings.VibeLanes.reasonLoopExhausted
         case .done, .none:
             return AppStrings.VibeLanes.reasonStopped
         }

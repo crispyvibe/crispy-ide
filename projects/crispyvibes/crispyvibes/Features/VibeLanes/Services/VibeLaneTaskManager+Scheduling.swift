@@ -43,7 +43,10 @@ extension VibeLaneTaskManager {
               let lane = resolvedLane(for: task),
               let checkpoint = lane.checkpoint(forKey: checkpointKey),
               var run = task.run(forKey: checkpointKey),
-              !run.attempts.isEmpty else {
+              // A step that died before verification (worker/tool error, missing
+              // skill, or another pre-verification error) records no attempt, but it did
+              // run — it must still be rerunnable, or the task is unrecoverable.
+              run.startedAt != nil || !run.attempts.isEmpty else {
             return nil
         }
 
@@ -55,13 +58,18 @@ extension VibeLaneTaskManager {
         let now = clock.now
         task.rerunRequest = VibeLaneRerunRequest(
             checkpointKey: checkpointKey,
+            visit: run.visit,
             engine: engine,
             previousState: task.state,
             previousStopReason: task.stopReason,
             previousCheckpointKey: task.currentCheckpointKey,
+            previousVisit: task.currentVisit,
+            previousActiveLoop: task.activeLoop,
             requestedAt: now
         )
         task.currentCheckpointKey = checkpointKey
+        task.currentVisit = run.visit
+        task.activeLoop = nil
         task.state = .running
         task.stopReason = nil
         task.openInputRequest = nil
@@ -69,10 +77,6 @@ extension VibeLaneTaskManager {
         task.pendingHumanEngine = nil
         task.pendingSteerGuidance = nil
         task.lastRerunCheckpointKey = nil
-        task.workerSessionRef = nil
-        task.workerThreadRef = nil
-        task.reviewerSessionRef = nil
-        task.reviewerThreadRef = nil
 
         run.budgetEpoch += 1
         run.rerunEpochCount += 1
@@ -251,7 +255,8 @@ extension VibeLaneTaskManager {
             guard task.state == .running,
                   let lane = resolvedLane(for: task),
                   let checkpoint = lane.checkpoint(forKey: task.currentCheckpointKey),
-                  let run = task.run(forKey: checkpoint.key),
+                  let run = task.currentRun,
+                  run.checkpointKey == checkpoint.key,
                   run.status == .running,
                   let startedAt = run.activeWindowStartedAt ?? run.startedAt,
                   now.timeIntervalSince(startedAt) > Double(checkpoint.bounds.timeoutSeconds) else {
@@ -276,7 +281,8 @@ extension VibeLaneTaskManager {
     ) async {
         guard var task = task(withID: original.id),
               task.state == .running,
-              var run = task.run(forKey: checkpoint.key) else {
+              var run = task.currentRun,
+              run.checkpointKey == checkpoint.key else {
             return
         }
 
@@ -297,6 +303,7 @@ extension VibeLaneTaskManager {
             task.openInputRequest = VibeLaneInputRequest(
                 kind: .steer,
                 checkpointKey: checkpoint.key,
+                visit: task.currentVisit,
                 createdAt: now,
                 prompt: AppStrings.VibeLanes.steerRequestPrompt(
                     checkpoint: checkpoint.displayTitle,

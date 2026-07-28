@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use libsql::Connection;
+use libsql::{Connection, TransactionBehavior};
 
-pub(crate) const CURRENT_VERSION: i64 = 7;
+pub(crate) const CURRENT_VERSION: i64 = 8;
 
 pub async fn run_migrations(conn: &Connection) -> Result<i64> {
     conn.execute(
@@ -33,6 +33,9 @@ pub async fn run_migrations(conn: &Connection) -> Result<i64> {
     }
     if version < 7 {
         migrate_v7(conn).await.context("V7 migration")?;
+    }
+    if version < 8 {
+        migrate_v8(conn).await.context("V8 migration")?;
     }
 
     Ok(CURRENT_VERSION)
@@ -556,5 +559,57 @@ async fn migrate_v7(conn: &Connection) -> Result<()> {
         })?;
     }
 
+    Ok(())
+}
+
+/// F059 — checkpoint runs may revisit a step as part of an authored loop group,
+/// so handoff identity includes the durable visit number.
+async fn migrate_v8(conn: &Connection) -> Result<()> {
+    let transaction = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .await
+        .context("begin V8 migration")?;
+
+    transaction
+        .execute(
+            "ALTER TABLE automation_handoffs RENAME TO automation_handoffs_v7",
+            (),
+        )
+        .await
+        .context("rename V7 automation_handoffs")?;
+    transaction
+        .execute(
+            "CREATE TABLE automation_handoffs (
+                task_id         TEXT NOT NULL REFERENCES automation_tasks(id) ON DELETE CASCADE,
+                checkpoint_key  TEXT NOT NULL,
+                visit           INTEGER NOT NULL DEFAULT 0 CHECK (visit >= 0),
+                file_path       TEXT NOT NULL,
+                content_digest  TEXT,
+                updated_at      TEXT NOT NULL,
+                PRIMARY KEY (task_id, checkpoint_key, visit)
+            )",
+            (),
+        )
+        .await
+        .context("create V8 automation_handoffs")?;
+    transaction
+        .execute(
+            "INSERT INTO automation_handoffs
+                (task_id, checkpoint_key, visit, file_path, content_digest, updated_at)
+             SELECT task_id, checkpoint_key, 0, file_path, content_digest, updated_at
+             FROM automation_handoffs_v7",
+            (),
+        )
+        .await
+        .context("copy V7 automation_handoffs")?;
+    transaction
+        .execute("DROP TABLE automation_handoffs_v7", ())
+        .await
+        .context("drop V7 automation_handoffs")?;
+    transaction
+        .execute("INSERT INTO schema_version (version) VALUES (8)", ())
+        .await
+        .context("record V8 schema version")?;
+    transaction.commit().await.context("commit V8 migration")?;
     Ok(())
 }

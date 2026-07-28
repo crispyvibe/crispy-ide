@@ -358,6 +358,7 @@ enum AppStrings {
         static let route = String(localized: "vibeLanes.route", defaultValue: "Route")
         static let lane = String(localized: "vibeLanes.lane", defaultValue: "Vibe Lane")
         static let lanes = String(localized: "vibeLanes.lanes", defaultValue: "Vibe Lanes")
+        static let tasks = String(localized: "vibeLanes.tasks", defaultValue: "Tasks")
         static let vibes = String(localized: "vibeLanes.vibes", defaultValue: "Vibes")
         static let yourLanes = String(
             localized: "vibeLanes.yourLanes",
@@ -456,6 +457,23 @@ enum AppStrings {
             defaultValue: "Vibe Lane needs an unsupplied input"
         )
         static let reasonSteerLimitReached = String(localized: "vibeLanes.reason.steerLimitReached", defaultValue: "Steer limit reached")
+        static let reasonLoopExhausted = String(localized: "vibeLanes.reason.loopExhausted", defaultValue: "Loop iteration limit reached")
+        static let loopGroups = String(localized: "vibeLanes.loopGroups", defaultValue: "Loop groups")
+        static let addLoopGroup = String(localized: "vibeLanes.loopGroups.add", defaultValue: "Loop selected steps")
+        static let loopGroupKey = String(localized: "vibeLanes.loopGroups.key", defaultValue: "Loop key")
+        static let loopExitWhen = String(localized: "vibeLanes.loopGroups.exitWhen", defaultValue: "Exit when")
+        static let loopVariable = String(localized: "vibeLanes.loopGroups.variable", defaultValue: "Output")
+        static let loopComparison = String(localized: "vibeLanes.loopGroups.comparison", defaultValue: "Comparison")
+        static let loopEquals = String(localized: "vibeLanes.loopGroups.equals", defaultValue: "Equals")
+        static let loopNotEquals = String(localized: "vibeLanes.loopGroups.notEquals", defaultValue: "Does not equal")
+        static let loopIsSet = String(localized: "vibeLanes.loopGroups.isSet", defaultValue: "Is set")
+        static let loopExpectedValue = String(localized: "vibeLanes.loopGroups.expectedValue", defaultValue: "Expected value")
+        static let loopOnExhausted = String(localized: "vibeLanes.loopGroups.onExhausted", defaultValue: "At iteration limit")
+        static let advanceOnExhausted = String(localized: "vibeLanes.loopGroups.advance", defaultValue: "Advance")
+        static let loopDecisionTitle = String(localized: "vibeLanes.loopGroups.decision.title", defaultValue: "Loop needs a decision")
+        static let stopTask = String(localized: "vibeLanes.loopGroups.decision.stop", defaultValue: "Stop task")
+        static let advanceTask = String(localized: "vibeLanes.loopGroups.decision.advance", defaultValue: "Advance anyway")
+        static let loopGroupNeedsKey = String(localized: "vibeLanes.loopGroups.error.key", defaultValue: "Every loop group needs a unique key.")
         static let supplyInput = String(localized: "vibeLanes.input.supply", defaultValue: "Supply input")
         static let steerTask = String(localized: "vibeLanes.input.steer", defaultValue: "Steer task")
         static let continueTask = String(localized: "vibeLanes.input.continue", defaultValue: "Continue")
@@ -1164,6 +1182,54 @@ enum AppStrings {
             )
         }
 
+        static func activityLoopIteration(group: String, current: Int, total: Int) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.loopIteration", defaultValue: "%@ — iteration %d of %d"),
+                locale: Locale.current,
+                group,
+                current,
+                total
+            )
+        }
+
+        static func activityLoopAdvanced(_ group: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.activity.loopAdvanced", defaultValue: "%@ reached its iteration limit; advancing by policy"),
+                locale: Locale.current,
+                group
+            )
+        }
+
+        static func loopExhaustedPrompt(_ group: String) -> String {
+            String(
+                format: String(localized: "vibeLanes.loopGroups.decision.prompt", defaultValue: "%@ reached its iteration limit without meeting the exit condition. Advance anyway or stop the task."),
+                locale: Locale.current,
+                group
+            )
+        }
+
+        static func loopMaxIterations(_ count: Int) -> String {
+            String(localized: "vibeLanes.loopGroups.maxIterations", defaultValue: "Maximum iterations: \(count)")
+        }
+
+        static func loopIteration(_ iteration: Int) -> String {
+            String(localized: "vibeLanes.loopGroups.iteration", defaultValue: "Iteration \(iteration)")
+        }
+
+        static func loopBadge(group: String, iterations: Int) -> String {
+            String(
+                localized: "vibeLanes.loopGroups.badge",
+                defaultValue: "Loops \(group) up to \(iterations)x"
+            )
+        }
+
+        static func loopIterationsShort(_ iterations: Int) -> String {
+            String(
+                localized: "vibeLanes.loopGroups.iterationsShort",
+                defaultValue: "loops up to \(iterations)x"
+            )
+        }
+
         static func activityStopped(_ reason: String) -> String {
             String(
                 format: String(localized: "vibeLanes.activity.stopped", defaultValue: "Stopped: %@"),
@@ -1240,6 +1306,30 @@ enum AppStrings {
                 locale: Locale.current,
                 detail
             )
+        }
+
+        static func loopGroupDuplicateKey(_ key: String) -> String {
+            String(localized: "vibeLanes.loopGroups.error.duplicateKey", defaultValue: "Loop group key is duplicated: \(key).")
+        }
+
+        static func loopGroupInvalidBounds(_ key: String) -> String {
+            String(localized: "vibeLanes.loopGroups.error.bounds", defaultValue: "Loop group \(key) needs at least one iteration.")
+        }
+
+        static func loopGroupInvalidMembers(_ key: String) -> String {
+            String(localized: "vibeLanes.loopGroups.error.members", defaultValue: "Loop group \(key) must contain at least two contiguous steps in lane order.")
+        }
+
+        static func loopGroupMissingMember(group: String, member: String) -> String {
+            String(localized: "vibeLanes.loopGroups.error.missingMember", defaultValue: "Loop group \(group) references missing step \(member).")
+        }
+
+        static func loopGroupOverlappingMember(_ member: String) -> String {
+            String(localized: "vibeLanes.loopGroups.error.overlap", defaultValue: "Step \(member) belongs to more than one loop group.")
+        }
+
+        static func loopGroupMissingVariable(group: String, variable: String) -> String {
+            String(localized: "vibeLanes.loopGroups.error.variable", defaultValue: "Loop group \(group) exit output \(variable) must be produced by one of its members.")
         }
     }
 
@@ -1433,6 +1523,11 @@ enum AppStrings {
 
     enum Automation {
         static let title = String(localized: "automation.title", defaultValue: "Automation")
+        /// Page heading only; tabs, menus, and window titles keep the plain name.
+        static let headingTitle = String(
+            localized: "automation.heading.title",
+            defaultValue: "Automation (Early Prototype)"
+        )
         static let overview = String(localized: "automation.overview", defaultValue: "Overview")
         static let introTitle = String(
             localized: "automation.intro.title",
@@ -1530,7 +1625,7 @@ enum AppStrings {
         static let openLoops = String(localized: "automation.intro.openLoops", defaultValue: "Open Schedules")
         static let exampleTitle = String(
             localized: "automation.intro.example.title",
-            defaultValue: "Business examples"
+            defaultValue: "Examples"
         )
         static let exampleSubtitle = String(
             localized: "automation.intro.example.subtitle",
@@ -1538,7 +1633,7 @@ enum AppStrings {
         )
         static let exampleSelectorLabel = String(
             localized: "automation.intro.example.selector",
-            defaultValue: "Business scenario"
+            defaultValue: "Example scenario"
         )
         static let exampleExecutiveTitle = String(
             localized: "automation.intro.example.executive.title",
@@ -1648,10 +1743,52 @@ enum AppStrings {
             localized: "automation.intro.example.opportunity.schedule",
             defaultValue: "Fridays at 14:00"
         )
+        static let exampleMultiProviderTitle = String(
+            localized: "automation.intro.example.multiProvider.title",
+            defaultValue: "Claude + GPT Review Cycle"
+        )
+        static let exampleMultiProviderSummary = String(
+            localized: "automation.intro.example.multiProvider.summary",
+            defaultValue: "Claude writes the code and GPT reviews it. Code and Review repeat as a loop group until the review is approved, then the change is summarized."
+        )
+        static let exampleMultiProviderWorkSkill = String(
+            localized: "automation.intro.example.multiProvider.workSkill",
+            defaultValue: "Coding"
+        )
+        static let exampleMultiProviderReviewSkill = String(
+            localized: "automation.intro.example.multiProvider.reviewSkill",
+            defaultValue: "Code Review"
+        )
+        static let exampleMultiProviderFirstVibe = String(
+            localized: "automation.intro.example.multiProvider.firstVibe",
+            defaultValue: "Code (Claude)"
+        )
+        static let exampleMultiProviderSecondVibe = String(
+            localized: "automation.intro.example.multiProvider.secondVibe",
+            defaultValue: "Review (GPT)"
+        )
+        static let exampleMultiProviderThirdVibe = String(
+            localized: "automation.intro.example.multiProvider.thirdVibe",
+            defaultValue: "Summarize"
+        )
+        static let exampleMultiProviderLane = String(
+            localized: "automation.intro.example.multiProvider.lane",
+            defaultValue: "Code and Review Vibe Lane"
+        )
+        static let exampleMultiProviderSchedule = String(
+            localized: "automation.intro.example.multiProvider.schedule",
+            defaultValue: "Weekdays at 17:00"
+        )
         static let exampleVibeCount = String(
             localized: "automation.intro.example.vibeCount",
             defaultValue: "3 Vibes"
         )
+        static func exampleLoopBadge(_ iterations: Int) -> String {
+            String(
+                localized: "automation.intro.example.loopBadge",
+                defaultValue: "Loop group, up to \(iterations)x"
+            )
+        }
     }
 
     // MARK: - Schedules (F061)
@@ -2839,6 +2976,18 @@ enum AppStrings {
         static let managedSessionWaiting = String(
             localized: "acp.managedSession.waiting",
             defaultValue: "Waiting for Vibe Lane session"
+        )
+        static let managedSessionEnded = String(
+            localized: "acp.managedSession.ended",
+            defaultValue: "Session ended"
+        )
+        static let managedSessionEndedTitle = String(
+            localized: "acp.managedSession.ended.title",
+            defaultValue: "Vibe Lane session ended"
+        )
+        static let managedSessionEndedDescription = String(
+            localized: "acp.managedSession.ended.description",
+            defaultValue: "This chat belonged to a Vibe Lane step that has finished. Rerun the step to start a new session."
         )
         static let managedSessionPendingTitle = String(
             localized: "acp.managedSession.pending.title",

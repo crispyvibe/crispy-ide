@@ -16,7 +16,9 @@ of babysitting agent chats. The product model is:
 - **Vibe (Loop)** — one reusable expectation that retries within authored
   bounds until verification passes or the Vibe stops for human direction.
 - **Vibe Lane (Spiral)** — an ordered recipe of pinned Vibes that carries
-  verified evidence, decisions, and outputs forward. It does not jump backward
+  verified evidence, decisions, and outputs forward. It never makes an implicit
+  backward jump; an authored bounded loop group may explicitly revisit its
+  contiguous member checkpoints.
   to earlier checkpoints.
 - **Schedule** — a recurring trigger that starts a new task with a frozen Vibe
   Lane revision.
@@ -130,9 +132,12 @@ MAY be marked `ask-user`.
 ### F059-R03: Task = one run through a Vibe Lane
 
 A task MUST run one user input through a chosen Vibe Lane against one project
-path. The task MUST pin the exact Vibe Lane version it started from. Tasks are
-independent in state: one task stopping, needing input, failing, or completing
-MUST NOT alter another task.
+path. The selected `projectPath` MUST be the execution directory for the entire
+task and MUST NOT be changed by checkpoint output, carry-forward, retry, or rerun.
+If future workspace isolation allocates a worktree, allocation MUST complete before
+the task starts and the resulting path MUST remain immutable. The task MUST pin the
+exact Vibe Lane version it started from. Tasks are independent in state: one task
+stopping, needing input, failing, or completing MUST NOT alter another task.
 
 ### F059-R04: Checkpoint loop and reviewer verdict
 
@@ -279,7 +284,8 @@ For a Done or Stopped task, the user MUST be able to rerun a previously attempte
 checkpoint with an attempt-local engine override. The rerun MUST:
 
 - preserve earlier attempts and their engine snapshots;
-- start a fresh budget epoch and fresh worker/reviewer sessions;
+- start a fresh budget epoch and fresh worker/reviewer processes while retaining
+  their logical transcript history;
 - leave the lane revision and authored checkpoint engine unchanged;
 - return the task to its prior terminal state after the rerun passes;
 - persist enough rerun state for crash-safe validation and resume.
@@ -302,6 +308,37 @@ A surface MUST contain at most one Vibe Lanes tile. Detached title-bar insertion
 MUST disable when the surface is full or already contains the tile. Persistent
 tiles MUST survive layout restoration, participate in carousel navigation, and
 support existing board transfer/detach behavior.
+
+### F059-R14: Managed transcript lifetime
+
+Worker and reviewer transcripts MUST remain openable after their engine-owned ACP
+process disconnects or the task reaches a terminal state. Replacing a process for an
+authored engine change MUST preserve the existing visible timeline and persistence
+context. A terminal transcript restored after app or view recreation MUST render as
+ended and MUST NOT show a waiting-for-session spinner. Process lifetime MUST NOT be
+treated as transcript lifetime.
+
+### F059-R15: Typed lane data boundary
+
+Lane variables MUST carry typed inter-step data only. They MUST NOT alter the task
+`projectPath`, agent, model, mode, reasoning level, or trust mode. Those execution
+choices remain immutable task context or versioned Vibe/checkpoint authoring data.
+
+### F059-R16: Authored multi-checkpoint loop groups
+
+A lane MAY define bounded loop groups over two or more contiguous checkpoints.
+Groups MUST be uniquely named, ordered, non-overlapping, and composed of ordinary
+checkpoints that retain their authored Vibes, engines, skills, bounds, and records.
+After the final member passes, the engine MUST evaluate the authored exit condition
+against declared carry-forward outputs. A true condition advances beyond the group;
+a false condition begins the next visit until `maxIterations` is reached.
+
+Exhaustion MUST follow the authored `stop`, `escalate`, or `advance` behavior.
+Escalation pauses as Needs you and allows an explicit advance-or-stop decision.
+Every checkpoint run, input request, rerun, handoff, and active cursor MUST carry its
+visit identity. Restart/resume MUST route a passed visit without invoking its worker
+or reviewer again. Loop routing MUST NOT change the task directory or any member's
+authored engine configuration.
 
 ## Scenarios
 
@@ -411,6 +448,37 @@ support existing board transfer/detach behavior.
 - **Then** it respectively opens a pinnable spotlight, activates/opens a detail
   tab, or directly inserts one tile into the originating detached surface.
 
+### F059-S16: Carry-forward cannot change execution context
+
+- **Given** a checkpoint emits data named `workdir`, `agent`, or `model`
+- **When** a later checkpoint runs
+- **Then** those values are injected only as ordinary typed context, while every
+  agent invocation uses the task's original `projectPath` and authored engine.
+
+### F059-S17: Terminal transcript reopens as history
+
+- **Given** a worker or reviewer transcript belongs to a terminal task and its
+  in-memory ACP store has been released
+- **When** the user reopens that transcript
+- **Then** its persisted timeline is restored as ended, with no reconnect action
+  or waiting-for-session spinner.
+
+### F059-S18: Two checkpoints repeat as one bounded group
+
+- **Given** an authored loop group `Implement -> Verify` with `maxIterations: 3`
+  and an exit condition `tests_passed == true`
+- **When** the first Verify visit emits `tests_passed: false`
+- **Then** the task returns to Implement at visit 2, preserves visit 1 history and
+  handoffs, and uses each checkpoint's authored engine in the immutable task directory.
+
+### F059-S19: An exhausted loop escalates
+
+- **Given** a loop group reaches its final allowed visit with a false exit condition
+  and `onExhausted: escalate`
+- **When** the final member passes
+- **Then** the task becomes Needs you without changing that passed run, and the user
+  may explicitly advance beyond the group or stop the task.
+
 ## Acceptance Criteria
 
 - The specs, schema, usage guide, UX brief, and threat model consistently define
@@ -425,6 +493,9 @@ support existing board transfer/detach behavior.
   precedence over Supply, and missing outputs never erase carried values.
 - Passed checkpoints persist handoff files; later checkpoints receive all prior
   handoff paths.
+- Authored loop groups repeat only their contiguous members, retain every visit's
+  run and handoff lineage, enforce `maxIterations`, and apply stop/escalate/advance
+  without rebinding directory or engine settings.
 - The transition into Needs you fires a notification exactly once per request.
 - The dashboard sorts **Needs you** tasks first and task detail renders the open
   request with an answer flow.

@@ -24,8 +24,9 @@ Vibe Lanes runs work through reusable processes:
 
 You give a **task** to a Vibe Lane; the lane moves the task through ordered
 **checkpoints** until the work is done, stopped, or waiting for you. A Vibe can
-retry its current checkpoint, but the Vibe Lane does not jump backward to an
-earlier checkpoint.
+retry its current checkpoint. A Vibe Lane never makes an implicit backward jump;
+an authored loop group can explicitly repeat two or more contiguous checkpoints
+as one bounded unit.
 
 Each checkpoint has:
 
@@ -38,6 +39,21 @@ Each checkpoint has:
 Checkpoints pass context forward as named values, so later checkpoints can depend
 on earlier results.
 
+## Looping Multiple Steps
+
+In the Vibe Lane editor, select the first of two adjacent steps and choose **Loop
+selected steps**. The final member must produce the output used by **Exit when**.
+Configure:
+
+- **Maximum iterations** — the total number of complete group visits;
+- **Exit when** — an output comparison (`equals`, `does not equal`, or `is set`);
+- **At iteration limit** — stop, ask you whether to advance, or advance automatically.
+
+Use the plus and minus controls to extend or shrink the contiguous group. Grouped
+steps cannot be reordered across the group boundary. During execution, task detail
+shows each visit separately, including its attempts and handoff. If an escalated
+group reaches its limit, choose **Advance anyway** or **Stop task**.
+
 ## Getting Started
 
 1. Open **Automation**, then choose **Skills**, **Vibes**, or **Vibe Lanes** to
@@ -45,6 +61,8 @@ on earlier results.
    open to run work manually.
 2. Press **New task**, describe the work, and choose a Vibe Lane.
 3. Optionally change the **project directory** (defaults to the focused project).
+   This directory is fixed for the task; checkpoints and carried outputs cannot
+   move later work to another directory.
 4. Review the Vibe Lane route and its read-only per-step engine summaries.
 5. Watch the task move through its checkpoint path.
 6. Open the task when it is **Needs you**, Stopped, or Done.
@@ -219,6 +237,10 @@ Open a task to see:
 - any open Supply, Steer, or Review request;
 - worker and reviewer chats.
 
+Worker and reviewer chats remain readable after the task stops or completes. A
+finished chat is labeled **Session ended**; it does not wait or reconnect unless
+you explicitly rerun a step.
+
 The current checkpoint shows the engine reported by its live session. Completed
 attempts keep their own engine history, so later app-default changes do not
 rewrite what ran.
@@ -231,10 +253,10 @@ A Done or Stopped task can rerun any checkpoint that has attempt history:
 2. Press the rerun button.
 3. Choose the engine for this attempt and press **Rerun**.
 
-The rerun starts fresh worker and reviewer sessions and a fresh bounded attempt
-window. It does not edit the lane or remove earlier attempts. After the step
-passes, the task returns to its previous Done or Stopped state. Downstream steps
-are not automatically replayed.
+The rerun starts fresh worker and reviewer processes in the existing logical chat
+history, plus a fresh bounded attempt window. It does not edit the lane or remove
+earlier attempts. After the step passes, the task returns to its previous Done or
+Stopped state. Downstream steps are not automatically replayed.
 
 ## Running Many Tasks
 

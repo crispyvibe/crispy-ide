@@ -45,15 +45,31 @@ extension VibeLaneEditorView {
 
     func removeCheckpoint() {
         guard draft.checkpoints.indices.contains(selectedIndex) else { return }
+        let removedKey = draft.checkpoints[selectedIndex].key
         draft.checkpoints.remove(at: selectedIndex)
+        draft.loopGroups = draft.loopGroups.compactMap { group in
+            var updated = group
+            updated.members.removeAll { $0 == removedKey }
+            return updated.members.count >= 2 ? updated : nil
+        }
         refreshCheckpointOrder()
         selectedIndex = min(selectedIndex, max(0, draft.checkpoints.count - 1))
+    }
+
+    func canMoveCheckpoint(offset: Int) -> Bool {
+        let newIndex = selectedIndex + offset
+        guard draft.checkpoints.indices.contains(selectedIndex),
+              draft.checkpoints.indices.contains(newIndex) else { return false }
+        return draft.loopGroup(containing: draft.checkpoints[selectedIndex].key) == nil
+            && draft.loopGroup(containing: draft.checkpoints[newIndex].key) == nil
     }
 
     func moveCheckpoint(offset: Int) {
         let newIndex = selectedIndex + offset
         guard draft.checkpoints.indices.contains(selectedIndex),
-              draft.checkpoints.indices.contains(newIndex) else {
+              draft.checkpoints.indices.contains(newIndex),
+              draft.loopGroup(containing: draft.checkpoints[selectedIndex].key) == nil,
+              draft.loopGroup(containing: draft.checkpoints[newIndex].key) == nil else {
             return
         }
         draft.checkpoints.swapAt(selectedIndex, newIndex)

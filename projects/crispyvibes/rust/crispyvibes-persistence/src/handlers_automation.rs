@@ -685,11 +685,12 @@ async fn insert_handoff(transaction: &Transaction, payload: &Value) -> Result<()
     transaction
         .execute(
             "INSERT INTO automation_handoffs
-             (task_id, checkpoint_key, file_path, content_digest, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+             (task_id, checkpoint_key, visit, file_path, content_digest, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             libsql::params![
                 required_string(payload, "taskID")?,
                 required_string(payload, "checkpointKey")?,
+                payload["visit"].as_i64().unwrap_or(0),
                 required_string(payload, "filePath")?,
                 payload["contentDigest"].as_str(),
                 required_string(payload, "updatedAt")?

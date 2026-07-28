@@ -223,14 +223,28 @@ final class VibeLaneTaskManager: ObservableObject {
             logger.warning("createTask: lane \(lane.id.uuidString, privacy: .public) is empty")
             return nil
         }
+        guard let canonicalProjectPath = Self.canonicalProjectPath(projectPath) else {
+            logger.warning("createTask: project path is empty")
+            return nil
+        }
         // F060 — seeded carry-forward lets a dispatched todo satisfy the first
         // checkpoint's `requires` contract without an immediate Supply pause.
         // Same trust class as Supply answers; empty values are dropped.
         let seeded = initialCarryForward?
             .mapValues { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.value.isEmpty }
+        let initialLoop = lane.loopGroup(containing: first.key).flatMap { group -> VibeLaneLoopRuntimeState? in
+            guard let position = group.members.firstIndex(of: first.key) else { return nil }
+            return VibeLaneLoopRuntimeState(
+                groupKey: group.key,
+                visit: 0,
+                memberPosition: position,
+                phase: .runningMember,
+                enteredAt: clock.now
+            )
+        }
         let task = VibeLaneTask(
-            projectPath: projectPath,
+            projectPath: canonicalProjectPath,
             title: title,
             laneID: lane.id,
             laneVersion: lane.version,
@@ -238,6 +252,7 @@ final class VibeLaneTaskManager: ObservableObject {
             origin: origin,
             state: .running,
             currentCheckpointKey: first.key,
+            activeLoop: initialLoop,
             carryForward: (seeded?.isEmpty == false) ? seeded : nil
         )
         do {
@@ -260,7 +275,7 @@ final class VibeLaneTaskManager: ObservableObject {
             return false
         }
         var task = original
-        if var run = task.run(forKey: task.currentCheckpointKey) {
+        if var run = task.currentRun, run.status != .passed {
             run.status = .stopped
             run.stopReason = .stoppedByUser
             run.endedAt = clock.now
@@ -270,6 +285,7 @@ final class VibeLaneTaskManager: ObservableObject {
         task.stopReason = .stoppedByUser
         task.openInputRequest = nil
         task.pendingHumanEngine = nil
+        task.pendingLoopExhaustionAdvance = nil
         task.rerunRequest = nil
         let activity = AppStrings.VibeLanes.activityStopped(AppStrings.VibeLanes.reasonStoppedByYou)
         task.currentActivity = activity
@@ -330,7 +346,7 @@ final class VibeLaneTaskManager: ObservableObject {
         guard !cleaned.isEmpty else { return nil }
         guard var task = validInputTask(id: id, requestID: requestID, kind: .steer),
               let request = task.openInputRequest,
-              var run = task.run(forKey: task.currentCheckpointKey) else { return nil }
+              var run = task.currentRun else { return nil }
         task.pendingSteerGuidance = Self.combinedSteerFeedback(
             reviewerFeedback: request.lastFeedback,
             userGuidance: cleaned
@@ -367,6 +383,23 @@ final class VibeLaneTaskManager: ObservableObject {
         return await resumeFromInput(&task)
     }
 
+    /// Resolve an authored loop group's exhausted escalation without reopening
+    /// the already-passed final member visit.
+    @discardableResult
+    func answerLoopExhaustion(
+        id: UUID,
+        requestID: UUID,
+        advance: Bool
+    ) async -> VibeLaneTask? {
+        guard var task = validInputTask(
+            id: id,
+            requestID: requestID,
+            kind: .loopExhausted
+        ) else { return nil }
+        task.pendingLoopExhaustionAdvance = advance
+        return await resumeFromInput(&task, resumeRun: false)
+    }
+
     /// Delete a task and its durable row. Returns false when the durable delete
     /// failed — the task is then still present, so callers (notably the CLI) must
     /// not report success.
@@ -387,7 +420,7 @@ final class VibeLaneTaskManager: ObservableObject {
             }
             return false
         }
-        if let existing { releaseSessions(for: existing) }
+        if let existing { discardSessions(for: existing) }
         tasks.removeAll { $0.id == id }
         taskCommandPersistence.remove(id)
         persistenceError = nil
@@ -417,13 +450,29 @@ final class VibeLaneTaskManager: ObservableObject {
         reviewer.release(sessionRef: task.reviewerSessionRef)
     }
 
+    func discardSessions(for task: VibeLaneTask) {
+        worker.discard(sessionRef: task.workerSessionRef)
+        reviewer.discard(sessionRef: task.reviewerSessionRef)
+    }
+
+    private static func canonicalProjectPath(_ path: String) -> String? {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let expanded = NSString(string: trimmed).expandingTildeInPath
+        let url = URL(fileURLWithPath: expanded, isDirectory: true)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        return url.path
+    }
+
     private func validInputTask(id: UUID, requestID: UUID, kind: VibeLaneInputRequestKind) -> VibeLaneTask? {
         guard let task = task(withID: id),
               task.state == .needsInput,
               let request = task.openInputRequest,
               request.id == requestID,
               request.kind == kind,
-              request.checkpointKey == task.currentCheckpointKey else {
+              request.checkpointKey == task.currentCheckpointKey,
+              request.visit == task.currentVisit else {
             return nil
         }
         return task
@@ -431,11 +480,12 @@ final class VibeLaneTaskManager: ObservableObject {
 
     private func resumeFromInput(
         _ task: inout VibeLaneTask,
-        now: Date? = nil
+        now: Date? = nil,
+        resumeRun: Bool = true
     ) async -> VibeLaneTask? {
         generation[task.id] = (generation[task.id] ?? 0) + 1
         let timestamp = now ?? clock.now
-        if var run = task.run(forKey: task.currentCheckpointKey) {
+        if resumeRun, var run = task.currentRun {
             run.status = .running
             run.stopReason = nil
             run.endedAt = nil
@@ -471,7 +521,9 @@ final class VibeLaneTaskManager: ObservableObject {
     }
 
     func replace(run: VibeLaneCheckpointRun, in task: inout VibeLaneTask) {
-        if let idx = task.checkpointRuns.firstIndex(where: { $0.checkpointKey == run.checkpointKey }) {
+        if let idx = task.checkpointRuns.firstIndex(where: {
+            $0.checkpointKey == run.checkpointKey && $0.visit == run.visit
+        }) {
             task.checkpointRuns[idx] = run
         } else {
             task.checkpointRuns.append(run)

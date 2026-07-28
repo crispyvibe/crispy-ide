@@ -149,8 +149,26 @@ enum VibeLaneNodeState {
     case stopped
 
     /// Derive the node state for a checkpoint within a task.
-    static func resolve(for checkpoint: VibeLaneCheckpoint, task: VibeLaneTask) -> VibeLaneNodeState {
-        if let runRecord = task.run(forKey: checkpoint.key) {
+    static func resolve(
+        for checkpoint: VibeLaneCheckpoint,
+        task: VibeLaneTask,
+        lane: VibeLaneDefinition? = nil
+    ) -> VibeLaneNodeState {
+        if checkpoint.key == task.currentCheckpointKey, task.state == .needsInput {
+            return .needsInput
+        }
+        let activeGroupContainsCheckpoint = task.activeLoop.flatMap { active in
+            lane?.loopGroup(forKey: active.groupKey)?.members.contains(checkpoint.key)
+        } == true
+        let runRecord: VibeLaneCheckpointRun?
+        if checkpoint.key == task.currentCheckpointKey {
+            runRecord = task.currentRun
+        } else if activeGroupContainsCheckpoint {
+            runRecord = task.run(forKey: checkpoint.key, visit: task.currentVisit)
+        } else {
+            runRecord = task.run(forKey: checkpoint.key)
+        }
+        if let runRecord {
             switch runRecord.status {
             case .passed:
                 return .done

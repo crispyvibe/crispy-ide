@@ -28,10 +28,11 @@ enum VibeLaneCatalog {
     static let libraryReleaseLaneID = UUID(uuidString: "F0590005-0000-0000-0000-000000000005")!
     static let productLaunchLaneID = UUID(uuidString: "F0590006-0000-0000-0000-000000000006")!
     static let researchMemoLaneID = UUID(uuidString: "F0590007-0000-0000-0000-000000000007")!
+    static let codeReviewCycleLaneID = UUID(uuidString: "F0590008-0000-0000-0000-000000000008")!
 
     static func vibeCategory(forLaneID id: UUID) -> VibeCategory {
         switch id {
-        case fixABugLaneID, smallFeatureLaneID, fullFeatureLaneID:
+        case fixABugLaneID, smallFeatureLaneID, fullFeatureLaneID, codeReviewCycleLaneID:
             .engineering
         case incidentResponseLaneID:
             .incidentResponse
@@ -47,7 +48,7 @@ enum VibeLaneCatalog {
     }
 
     static var starterLanes: [VibeLaneDefinition] {
-        [fixABug, smallFeature, fullFeatureDelivery, incidentResponse, libraryRelease, productLaunch, researchMemo]
+        [fixABug, smallFeature, fullFeatureDelivery, codeReviewCycle, incidentResponse, libraryRelease, productLaunch, researchMemo]
     }
 
     static func lane(withID id: UUID) -> VibeLaneDefinition? {
@@ -511,6 +512,98 @@ enum VibeLaneCatalog {
                    """,
                    attempts: 2, minutes: 5,
                    requires: [req("acceptance")]),
+            ]
+        )
+    }
+
+    // MARK: - Implement/test loop (loop-group example)
+
+    /// Demonstrates an authored loop group with two different roles: a coder step
+    /// and an independent reviewer step repeat together until the reviewer
+    /// approves. Each step keeps its own authored engine, so the coder and the
+    /// reviewer can run on different providers.
+    static var codeReviewCycle: VibeLaneDefinition {
+        VibeLaneDefinition(
+            id: codeReviewCycleLaneID,
+            name: "Code and review loop",
+            detail: "Coder writes, reviewer critiques, and the pair repeats until the review is approved. Point each step at a different provider.",
+            steerLimit: 1,
+            checkpoints: [
+                cp("code", 0,
+                   goal: "Write (or revise) the code the task asks for.",
+                   instructions: """
+                   1. On the first iteration, implement the smallest change that satisfies the task, with tests where the \
+                   project expects them.
+                   2. On later iterations, read `review_notes` from the previous iteration and address every point the \
+                   reviewer raised. Do not restart from scratch, and do not weaken, skip, or delete tests.
+                   3. Follow the project's existing structure, conventions, and tooling. Run the project's relevant \
+                   checks before handing off.
+
+                   Deliverable: the change in the working tree, plus a one-line description of what you changed.
+                   """,
+                   skills: ["tdd"],
+                   reviewSkills: ["code-review"],
+                   verify: """
+                   Done when ALL of:
+                   - The working tree contains a coherent change aimed at the task (or at the previous review's findings).
+                   - No test was weakened, skipped, or deleted.
+                   - The change follows the project's conventions and contains no unrelated edits.
+                   """,
+                   attempts: 4, minutes: 45,
+                   produces: [out("change_summary", "one line: what changed and in which files")]),
+                cp("review", 1,
+                   goal: "Independently review the change and return a clear verdict.",
+                   instructions: """
+                   1. Read the full diff and judge it on correctness, edge cases, tests, security, and fit with the \
+                   project's conventions. Verify claims against the repository rather than trusting the summary.
+                   2. Do not edit product code. Your output is the verdict and the findings.
+                   3. Emit `review_verdict` as exactly `approved` only when you would merge it as-is; otherwise emit \
+                   exactly `changes_requested`. This value decides whether the loop repeats, so never approve unverified work.
+                   4. When requesting changes, make `review_notes` specific and actionable: file, line, and what to do.
+
+                   Deliverable: the verdict plus the findings the coder can act on.
+                   """,
+                   skills: ["code-review"],
+                   reviewSkills: ["code-review"],
+                   verify: """
+                   Done when ALL of:
+                   - The review is grounded in the actual diff and repository state, not in the coder's description.
+                   - `review_verdict` is exactly `approved` or `changes_requested` and matches the findings.
+                   - A `changes_requested` verdict lists specific, actionable findings in `review_notes`.
+                   - No product code was modified by this step.
+                   """,
+                   attempts: 3, minutes: 30,
+                   requires: [req("change_summary")],
+                   produces: [
+                    out("review_verdict", "exactly `approved` or `changes_requested`"),
+                    out("review_notes", "the findings: file, line, and what must change"),
+                   ]),
+                cp("summarize", 2,
+                   goal: "Write the handoff for the approved change.",
+                   instructions: """
+                   Summarize concretely:
+                   1. What changed — files and approach, from `change_summary`.
+                   2. How many review rounds it took and what each round fixed.
+                   3. What the reviewer verified before approving, from `review_notes`.
+                   4. Residual risk — anything a human should double-check.
+                   """,
+                   skills: ["writing-clearly"],
+                   verify: """
+                   Done when ALL of:
+                   - The summary states the change, the review history, what was verified, and residual risk.
+                   - Every claim is backed by the working tree or the recorded review.
+                   """,
+                   attempts: 2, minutes: 5,
+                   requires: [req("change_summary"), req("review_notes")]),
+            ],
+            loopGroups: [
+                VibeLaneLoopGroup(
+                    key: "code-review",
+                    members: ["code", "review"],
+                    maxIterations: 3,
+                    exitWhen: .equals(variable: "review_verdict", value: "approved"),
+                    onExhausted: .escalate
+                )
             ]
         )
     }

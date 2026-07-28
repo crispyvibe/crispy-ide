@@ -230,6 +230,9 @@ struct VibeLaneEditorView: View {
                     if !warnings.isEmpty {
                         VibeLaneWarningPanel(warnings: warnings)
                     }
+                    if !draft.loopGroups.isEmpty {
+                        loopGroupsSection
+                    }
                     if let checkpoint = selectedCheckpointBinding {
                         inspector(checkpoint)
                     } else {
@@ -247,25 +250,45 @@ struct VibeLaneEditorView: View {
 
     private var recipeHeader: some View {
         VStack(alignment: .leading, spacing: uiScale.spacing(10)) {
-            Label(AppStrings.VibeLanes.laneRecipe, systemImage: "point.3.connected.trianglepath.dotted")
-                .font(.system(size: uiScale.textSize(13), weight: .semibold))
+            HStack {
+                Label(AppStrings.VibeLanes.laneRecipe, systemImage: "point.3.connected.trianglepath.dotted")
+                    .font(.system(size: uiScale.textSize(13), weight: .semibold))
+                Spacer()
+                Button(action: addLoopGroup) {
+                    Label(AppStrings.VibeLanes.addLoopGroup, systemImage: "repeat")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!canAddLoopGroup)
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: uiScale.spacing(6)) {
                     ForEach(Array(draft.checkpoints.enumerated()), id: \.element.key) { index, checkpoint in
+                        let loop = draft.loopGroup(containing: checkpoint.key)
                         VibeLaneCheckpointStepButton(
                             index: index,
                             checkpoint: checkpoint,
                             isSelected: index == selectedIndex,
                             hasErrors: checkpointHasErrors(at: index),
+                            loop: loop,
                             onSelect: { selectedIndex = index }
                         )
+                        .overlay(alignment: .top) {
+                            if let loop, loop.members.first == checkpoint.key {
+                                loopSpanBadge(loop)
+                                    .alignmentGuide(.top) { $0[.bottom] + uiScale.spacing(2) }
+                            }
+                        }
                         if index < draft.checkpoints.count - 1 {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: uiScale.iconSize(9), weight: .semibold))
-                                .foregroundStyle(palette.tertiaryTextColor)
+                            let nextKey = draft.checkpoints[index + 1].key
+                            let sameLoop = loop != nil && loop?.key == draft.loopGroup(containing: nextKey)?.key
+                            Image(systemName: sameLoop ? "arrow.trianglehead.2.clockwise.rotate.90" : "chevron.right")
+                                .font(.system(size: uiScale.iconSize(sameLoop ? 11 : 9), weight: .semibold))
+                                .foregroundStyle(sameLoop ? palette.accentColor : palette.tertiaryTextColor)
                         }
                     }
                 }
+                .padding(.top, uiScale.spacing(14))
             }
         }
         .padding(.horizontal, uiScale.spacing(18))
@@ -359,13 +382,13 @@ struct VibeLaneEditorView: View {
             Button { moveCheckpoint(offset: -1) } label: {
                 Image(systemName: "chevron.left")
             }
-            .disabled(selectedIndex == 0)
+            .disabled(!canMoveCheckpoint(offset: -1))
             .buttonStyle(.bordered)
             .help(AppStrings.VibeLanes.moveCheckpointLeft)
             Button { moveCheckpoint(offset: 1) } label: {
                 Image(systemName: "chevron.right")
             }
-            .disabled(selectedIndex >= draft.checkpoints.count - 1)
+            .disabled(!canMoveCheckpoint(offset: 1))
             .buttonStyle(.bordered)
             .help(AppStrings.VibeLanes.moveCheckpointRight)
             Button(role: .destructive, action: removeCheckpoint) {
@@ -374,6 +397,242 @@ struct VibeLaneEditorView: View {
             .buttonStyle(.bordered)
             .help(AppStrings.VibeLanes.removeVibeFromLane)
         }
+    }
+
+    private func loopSpanBadge(_ group: VibeLaneLoopGroup) -> some View {
+        Label(
+            AppStrings.VibeLanes.loopBadge(group: group.key, iterations: group.maxIterations),
+            systemImage: "repeat"
+        )
+        .font(.system(size: uiScale.textSize(9), weight: .bold))
+        .foregroundStyle(palette.accentColor)
+        .padding(.horizontal, uiScale.spacing(6))
+        .padding(.vertical, uiScale.spacing(2))
+        .background(palette.accentColor.opacity(0.14), in: Capsule())
+        .fixedSize()
+    }
+
+    private enum SimpleLoopConditionOperator: String, CaseIterable, Identifiable {
+        case equals
+        case notEquals
+        case isSet
+
+        var id: String { rawValue }
+    }
+
+    private var canAddLoopGroup: Bool {
+        guard draft.checkpoints.indices.contains(selectedIndex),
+              draft.checkpoints.indices.contains(selectedIndex + 1) else { return false }
+        let keys = [draft.checkpoints[selectedIndex].key, draft.checkpoints[selectedIndex + 1].key]
+        let claimed = Set(draft.loopGroups.flatMap(\.members))
+        let outputs = keys.flatMap { draft.checkpoint(forKey: $0)?.producedOutputs ?? [] }
+        return keys.allSatisfy { !claimed.contains($0) } && !outputs.isEmpty
+    }
+
+    private func addLoopGroup() {
+        guard canAddLoopGroup else { return }
+        let members = [draft.checkpoints[selectedIndex].key, draft.checkpoints[selectedIndex + 1].key]
+        let variable = members
+            .flatMap { draft.checkpoint(forKey: $0)?.producedOutputs ?? [] }
+            .first ?? ""
+        var suffix = draft.loopGroups.count + 1
+        var key = "loop-\(suffix)"
+        let existing = Set(draft.loopGroups.map(\.key))
+        while existing.contains(key) {
+            suffix += 1
+            key = "loop-\(suffix)"
+        }
+        draft.loopGroups.append(
+            VibeLaneLoopGroup(
+                key: key,
+                members: members,
+                exitWhen: .isSet(variable: variable)
+            )
+        )
+    }
+
+    private var loopGroupsSection: some View {
+        VStack(alignment: .leading, spacing: uiScale.spacing(12)) {
+            Label(AppStrings.VibeLanes.loopGroups, systemImage: "repeat")
+                .font(.system(size: uiScale.textSize(13), weight: .semibold))
+            ForEach(Array(draft.loopGroups.indices), id: \.self) { index in
+                loopGroupCard(index)
+            }
+        }
+    }
+
+    private func loopGroupCard(_ index: Int) -> some View {
+        let group = draft.loopGroups[index]
+        let outputs = group.members.flatMap { draft.checkpoint(forKey: $0)?.producedOutputs ?? [] }
+        return VStack(alignment: .leading, spacing: uiScale.spacing(10)) {
+            HStack {
+                TextField(AppStrings.VibeLanes.loopGroupKey, text: loopGroupKeyBinding(index))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 220)
+                Spacer()
+                Button(role: .destructive) {
+                    draft.loopGroups.remove(at: index)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            HStack(spacing: uiScale.spacing(6)) {
+                ForEach(group.members, id: \.self) { member in
+                    Text(draft.checkpoint(forKey: member)?.displayTitle ?? member)
+                        .font(.system(size: uiScale.textSize(11), weight: .medium))
+                        .padding(.horizontal, uiScale.spacing(8))
+                        .padding(.vertical, uiScale.spacing(5))
+                        .background(palette.canvasSecondaryBackgroundColor, in: Capsule())
+                }
+                Button {
+                    extendLoopGroup(index)
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!canExtendLoopGroup(index))
+                Button {
+                    draft.loopGroups[index].members.removeLast()
+                } label: {
+                    Image(systemName: "minus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(group.members.count <= 2)
+            }
+
+            Stepper(
+                AppStrings.VibeLanes.loopMaxIterations(group.maxIterations),
+                value: loopMaxIterationsBinding(index),
+                in: 1...100
+            )
+
+            HStack(spacing: uiScale.spacing(8)) {
+                Text(AppStrings.VibeLanes.loopExitWhen)
+                    .font(.system(size: uiScale.textSize(11), weight: .semibold))
+                Picker(AppStrings.VibeLanes.loopVariable, selection: loopVariableBinding(index)) {
+                    ForEach(Array(Set(outputs)).sorted(), id: \.self) { output in
+                        Text(output).tag(output)
+                    }
+                }
+                .pickerStyle(.menu)
+                Picker(AppStrings.VibeLanes.loopComparison, selection: loopOperatorBinding(index)) {
+                    Text(AppStrings.VibeLanes.loopEquals).tag(SimpleLoopConditionOperator.equals)
+                    Text(AppStrings.VibeLanes.loopNotEquals).tag(SimpleLoopConditionOperator.notEquals)
+                    Text(AppStrings.VibeLanes.loopIsSet).tag(SimpleLoopConditionOperator.isSet)
+                }
+                .pickerStyle(.menu)
+                if loopConditionParts(group.exitWhen).operator != .isSet {
+                    TextField(AppStrings.VibeLanes.loopExpectedValue, text: loopValueBinding(index))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 180)
+                }
+            }
+
+            Picker(
+                AppStrings.VibeLanes.loopOnExhausted,
+                selection: loopExhaustedBinding(index)
+            ) {
+                Text(AppStrings.VibeLanes.stopOnExhausted).tag(VibeLaneLoopExhaustedBehavior.stop)
+                Text(AppStrings.VibeLanes.escalateOnExhausted).tag(VibeLaneLoopExhaustedBehavior.escalate)
+                Text(AppStrings.VibeLanes.advanceOnExhausted).tag(VibeLaneLoopExhaustedBehavior.advance)
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(uiScale.spacing(14))
+        .vibeLaneCard(tint: .accentColor)
+    }
+
+    private func canExtendLoopGroup(_ index: Int) -> Bool {
+        let group = draft.loopGroups[index]
+        guard let last = group.members.last,
+              let position = draft.orderedCheckpoints.firstIndex(where: { $0.key == last }),
+              position + 1 < draft.orderedCheckpoints.count else { return false }
+        let next = draft.orderedCheckpoints[position + 1].key
+        let claimedElsewhere = Set(
+            draft.loopGroups.enumerated()
+                .filter { $0.offset != index }
+                .flatMap { $0.element.members }
+        )
+        return !claimedElsewhere.contains(next)
+    }
+
+    private func extendLoopGroup(_ index: Int) {
+        guard canExtendLoopGroup(index),
+              let last = draft.loopGroups[index].members.last,
+              let position = draft.orderedCheckpoints.firstIndex(where: { $0.key == last }) else { return }
+        draft.loopGroups[index].members.append(draft.orderedCheckpoints[position + 1].key)
+    }
+
+    private func loopConditionParts(
+        _ condition: VibeLaneVariableCondition
+    ) -> (variable: String, operator: SimpleLoopConditionOperator, value: String) {
+        switch condition {
+        case .equals(let variable, let value): return (variable, .equals, value)
+        case .notEquals(let variable, let value): return (variable, .notEquals, value)
+        case .isSet(let variable): return (variable, .isSet, "")
+        case .all, .any, .not:
+            return (condition.referencedVariables.sorted().first ?? "", .isSet, "")
+        }
+    }
+
+    private func updateLoopCondition(
+        _ index: Int,
+        variable: String? = nil,
+        operator: SimpleLoopConditionOperator? = nil,
+        value: String? = nil
+    ) {
+        let current = loopConditionParts(draft.loopGroups[index].exitWhen)
+        let nextVariable = variable ?? current.variable
+        let nextOperator = `operator` ?? current.operator
+        let nextValue = value ?? current.value
+        switch nextOperator {
+        case .equals:
+            draft.loopGroups[index].exitWhen = .equals(variable: nextVariable, value: nextValue)
+        case .notEquals:
+            draft.loopGroups[index].exitWhen = .notEquals(variable: nextVariable, value: nextValue)
+        case .isSet:
+            draft.loopGroups[index].exitWhen = .isSet(variable: nextVariable)
+        }
+    }
+
+    private func loopGroupKeyBinding(_ index: Int) -> Binding<String> {
+        Binding(get: { draft.loopGroups[index].key }, set: { draft.loopGroups[index].key = $0 })
+    }
+
+    private func loopMaxIterationsBinding(_ index: Int) -> Binding<Int> {
+        Binding(get: { draft.loopGroups[index].maxIterations }, set: { draft.loopGroups[index].maxIterations = $0 })
+    }
+
+    private func loopVariableBinding(_ index: Int) -> Binding<String> {
+        Binding(
+            get: { loopConditionParts(draft.loopGroups[index].exitWhen).variable },
+            set: { updateLoopCondition(index, variable: $0) }
+        )
+    }
+
+    private func loopOperatorBinding(_ index: Int) -> Binding<SimpleLoopConditionOperator> {
+        Binding(
+            get: { loopConditionParts(draft.loopGroups[index].exitWhen).operator },
+            set: { updateLoopCondition(index, operator: $0) }
+        )
+    }
+
+    private func loopValueBinding(_ index: Int) -> Binding<String> {
+        Binding(
+            get: { loopConditionParts(draft.loopGroups[index].exitWhen).value },
+            set: { updateLoopCondition(index, value: $0) }
+        )
+    }
+
+    private func loopExhaustedBinding(_ index: Int) -> Binding<VibeLaneLoopExhaustedBehavior> {
+        Binding(
+            get: { draft.loopGroups[index].onExhausted },
+            set: { draft.loopGroups[index].onExhausted = $0 }
+        )
     }
 
     private var blockingErrors: [String] {

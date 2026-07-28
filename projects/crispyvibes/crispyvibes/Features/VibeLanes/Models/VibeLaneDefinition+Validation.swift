@@ -17,6 +17,14 @@ enum VibeLaneDefinitionIssue: Equatable, Sendable {
     case emptyOutputKey(index: Int)
     case duplicateOutputKey(index: Int, key: String)
     case unsatisfiedInput(index: Int, key: String)
+    case emptyLoopGroupKey
+    case duplicateLoopGroupKey(key: String)
+    case invalidLoopGroupBounds(key: String)
+    case invalidLoopGroupMembers(key: String)
+    case missingLoopGroupMember(groupKey: String, memberKey: String)
+    case overlappingLoopGroupMember(memberKey: String)
+    case noncontiguousLoopGroup(key: String)
+    case unavailableLoopConditionVariable(groupKey: String, variable: String)
     /// The checkpoint pins a `(vibeID, version)` that is no longer in the store,
     /// so its work/verification content could not be hydrated. Marked explicitly
     /// rather than inferred from the resulting empty goal, so an unresolved
@@ -37,7 +45,11 @@ enum VibeLaneDefinitionIssue: Equatable, Sendable {
              .unsatisfiedInput(let index, _),
              .unresolvedVibeReference(let index, _, _):
             return index
-        case .missingLaneName, .missingCheckpoints, .invalidSteerLimit:
+        case .missingLaneName, .missingCheckpoints, .invalidSteerLimit,
+             .emptyLoopGroupKey, .duplicateLoopGroupKey, .invalidLoopGroupBounds,
+             .invalidLoopGroupMembers, .missingLoopGroupMember,
+             .overlappingLoopGroupMember, .noncontiguousLoopGroup,
+             .unavailableLoopConditionVariable:
             return nil
         }
     }
@@ -129,6 +141,49 @@ extension VibeLaneDefinition {
                 } else {
                     producedKeys.insert(key)
                 }
+            }
+        }
+
+        var groupKeys = Set<String>()
+        var claimedMembers = Set<String>()
+        let orderedKeys = orderedCheckpoints.map(\.key)
+        for group in loopGroups {
+            let key = group.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            if key.isEmpty {
+                issues.append(.emptyLoopGroupKey)
+            } else if !groupKeys.insert(key).inserted {
+                issues.append(.duplicateLoopGroupKey(key: key))
+            }
+            if group.maxIterations <= 0 {
+                issues.append(.invalidLoopGroupBounds(key: key))
+            }
+            if group.members.count < 2 || Set(group.members).count != group.members.count {
+                issues.append(.invalidLoopGroupMembers(key: key))
+            }
+
+            var positions: [Int] = []
+            for member in group.members {
+                guard let position = orderedKeys.firstIndex(of: member) else {
+                    issues.append(.missingLoopGroupMember(groupKey: key, memberKey: member))
+                    continue
+                }
+                positions.append(position)
+                if !claimedMembers.insert(member).inserted {
+                    issues.append(.overlappingLoopGroupMember(memberKey: member))
+                }
+            }
+            if positions.count == group.members.count {
+                let expected = Array((positions.first ?? 0)..<(positions.first ?? 0) + positions.count)
+                if positions != expected {
+                    issues.append(.noncontiguousLoopGroup(key: key))
+                }
+            }
+
+            let memberOutputs = Set(group.members.flatMap { member in
+                checkpoint(forKey: member)?.producedOutputs ?? []
+            })
+            for variable in group.exitWhen.referencedVariables where !memberOutputs.contains(variable) {
+                issues.append(.unavailableLoopConditionVariable(groupKey: key, variable: variable))
             }
         }
         return issues
