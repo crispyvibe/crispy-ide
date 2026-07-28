@@ -269,6 +269,7 @@ The writable lane schema uses `steps`, not embedded checkpoints:
       "produces": [
         {
           "key": "release_evidence",
+          "type": "text",
           "description": "Tests and package checks used for the decision."
         }
       ]
@@ -393,7 +394,7 @@ Example:
             "id": "5ac45743-4e3d-4aa5-8ee5-caa15215247d",
             "version": "managed"
           },
-          "produces": [{"key": "release_evidence"}]
+          "produces": [{"key": "release_evidence", "type": "text"}]
         }
       ]
     }
@@ -422,7 +423,9 @@ Example:
 ```
 
 Relative source and project paths resolve against the manifest directory and
-are reported as canonical paths in the plan.
+are reported as canonical paths in the plan. A task's resolved `projectPath` is
+its immutable execution directory; lane variables and checkpoint outputs cannot
+change it.
 
 ## Validation and Planning
 

@@ -22,6 +22,9 @@ struct ACPChatView: View {
     var displayMode: ACPDisplayMode = .detail
     var historyKey: UUID? = nil
     var isExternallyManaged: Bool = false
+    /// The engine has finished with this managed session; the transcript is
+    /// history, not a session that is about to start.
+    var managedSessionEnded: Bool = false
     let isConnecting: Bool
     let connectionError: String?
     let onReconnect: (() -> Void)?
@@ -234,9 +237,17 @@ struct ACPChatView: View {
                 // Title + description
                 VStack(spacing: 8) {
                     if isExternallyManaged {
-                        Text(AppStrings.ACP.managedSessionPendingTitle)
+                        Text(
+                            managedSessionEnded
+                                ? AppStrings.ACP.managedSessionEndedTitle
+                                : AppStrings.ACP.managedSessionPendingTitle
+                        )
                             .font(AppTypographyTokens.headline)
-                        Text(AppStrings.ACP.managedSessionPendingDescription)
+                        Text(
+                            managedSessionEnded
+                                ? AppStrings.ACP.managedSessionEndedDescription
+                                : AppStrings.ACP.managedSessionPendingDescription
+                        )
                             .font(AppTypographyTokens.callout)
                             .foregroundStyle(appThemePalette.secondaryTextColor)
                             .multilineTextAlignment(.center)

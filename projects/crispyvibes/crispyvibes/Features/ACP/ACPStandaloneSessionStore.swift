@@ -32,6 +32,10 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
     /// When set, the user must confirm whether to start a fresh session after resume failed.
     @Published var pendingResumeFailure: String?
     @Published private(set) var isExternallyManaged = false
+    /// True once the engine has torn down an externally managed session. The
+    /// transcript stays readable, but nothing will reconnect it, so the UI must
+    /// not imply a connection is still coming.
+    @Published private(set) var managedSessionEnded = false
     /// The in-flight restore task, awaited by ensureConnected before connecting.
     private var restoreTask: Task<Void, Never>?
 
@@ -350,12 +354,21 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
 
     func teardown() {
         if isExternallyManaged {
-            modelObservations.removeAll()
-            chatViewModel.bindStandaloneSession(nil)
-            session = nil
+            detachExternalVibeLaneSession(ended: true)
             return
         }
         disconnect()
+    }
+
+    /// Detaches the engine-owned process without discarding the transcript.
+    /// Reconfiguration uses `ended: false`; terminal task release uses `true`.
+    func detachExternalVibeLaneSession(ended: Bool) {
+        guard isExternallyManaged else { return }
+        persistSessionMetadata(status: ended ? "completed" : "disconnected")
+        modelObservations.removeAll()
+        chatViewModel.bindStandaloneSession(nil, preserveTimeline: true)
+        session = nil
+        managedSessionEnded = ended
     }
 
     func prepareExternalVibeLaneSession(
@@ -363,9 +376,11 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
         projectPath: String,
         modelID: String? = nil,
         trustMode: CLITrustMode? = nil,
-        reasoningLevel: AgentReasoningLevel? = nil
+        reasoningLevel: AgentReasoningLevel? = nil,
+        isEnded: Bool = false
     ) {
         isExternallyManaged = true
+        managedSessionEnded = isEnded
         selectedAgentID = agentID
         selectedModelID = modelID
         selectedProjectIdentifier = projectPath
@@ -380,6 +395,25 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
         guard chatViewModel.persistenceContext?.threadID != threadID
             || chatViewModel.timeline.isEmpty else { return }
         chatViewModel.restoreThread(threadId: threadID)
+    }
+
+    /// Restores a managed transcript before the engine attaches a replacement
+    /// process, ensuring the next turn appends to the existing durable thread.
+    func restoreManagedThreadIfNeeded(_ threadID: String) async {
+        guard chatViewModel.persistenceContext?.threadID != threadID
+            || chatViewModel.timeline.isEmpty else { return }
+        async let messagesResult = conversationStore.listMessages(
+            threadId: threadID,
+            limit: ACPChatViewModel.restoredMessageLimit
+        )
+        async let threadResult = conversationStore.getThread(id: threadID)
+        let messages = await messagesResult
+        let threadData = await threadResult
+        chatViewModel.applyRestoredData(
+            threadId: threadID,
+            messages: messages,
+            threadData: threadData
+        )
     }
 
     func attachExistingHeadlessSession(
@@ -502,7 +536,10 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
         storedTransportKind = connectedSession.transportKind
         syncAvailableModelsForSelection()
         observeUnexpectedDisconnect(connectedSession)
-        chatViewModel.bindStandaloneSession(connectedSession)
+        chatViewModel.bindStandaloneSession(
+            connectedSession,
+            preserveTimeline: isExternallyManaged
+        )
         persistSessionMetadata(status: "ready")
     }
 
@@ -554,7 +591,10 @@ final class ACPStandaloneSessionStore: ObservableObject, Identifiable {
             }
             .store(in: &modelObservations)
 
-        chatViewModel.bindStandaloneSession(connectedSession)
+        chatViewModel.bindStandaloneSession(
+            connectedSession,
+            preserveTimeline: isExternallyManaged
+        )
         persistSessionMetadata(status: "ready")
     }
 

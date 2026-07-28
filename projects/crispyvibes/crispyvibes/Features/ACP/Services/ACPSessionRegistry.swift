@@ -75,6 +75,7 @@ final class ACPSessionRegistry: ObservableObject {
         modelID: String? = nil,
         trustMode: CLITrustMode? = nil,
         reasoningLevel: AgentReasoningLevel? = nil,
+        isEnded: Bool = false,
         vibespaceID: UUID? = nil
     ) -> ACPStandaloneSessionStore {
         if let existing = store(forID: id) {
@@ -83,7 +84,8 @@ final class ACPSessionRegistry: ObservableObject {
                 projectPath: projectPath,
                 modelID: modelID,
                 trustMode: trustMode,
-                reasoningLevel: reasoningLevel
+                reasoningLevel: reasoningLevel,
+                isEnded: isEnded
             )
             return existing
         }
@@ -93,7 +95,8 @@ final class ACPSessionRegistry: ObservableObject {
             projectPath: projectPath,
             modelID: modelID,
             trustMode: trustMode,
-            reasoningLevel: reasoningLevel
+            reasoningLevel: reasoningLevel,
+            isEnded: isEnded
         )
         pendingStores[store.id] = store
         observeForThreadCreation(store)
@@ -120,6 +123,14 @@ final class ACPSessionRegistry: ObservableObject {
             observeForThreadCreation(store)
         }
         return store
+    }
+
+    /// Detaches an engine-owned process while retaining its registered transcript.
+    /// A replacement process can attach to the same store without losing history.
+    func detachVibeLaneSession(id: UUID, ended: Bool) {
+        guard let store = store(forID: id) else { return }
+        store.detachExternalVibeLaneSession(ended: ended)
+        objectWillChange.send()
     }
 
     /// Remove a store and tear it down.

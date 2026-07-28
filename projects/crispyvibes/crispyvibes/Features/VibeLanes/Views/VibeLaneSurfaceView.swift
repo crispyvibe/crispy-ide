@@ -10,6 +10,7 @@ struct VibeLaneACPChatTarget: Equatable {
     var sessionID: UUID?
     var threadID: String?
     var projectPath: String
+    var managedSessionEnded = false
 }
 
 @MainActor
@@ -20,6 +21,10 @@ struct VibeLaneSurfaceView: View {
     let rootScreen: VibeLaneSurfaceNavigationViewModel.Screen
     let focusedProjectPath: String?
     let onOpenACPSession: (VibeLaneACPChatTarget) -> Void
+    /// Set by hosts that show a task's worker/reviewer chat inside this surface
+    /// (Automation) instead of handing it to a vibespace pane.
+    let resolveACPSession: ((VibeLaneACPChatTarget) -> ACPStandaloneSessionStore?)?
+    let acpProjects: [AnyProjectSession]
     /// F060: opens detected file-path links (outcome, handoffs, activity log)
     /// in the content viewer. nil = links fall back to the system handler.
     let onOpenFileTarget: ((TerminalFileSystemTarget) -> Void)?
@@ -34,11 +39,15 @@ struct VibeLaneSurfaceView: View {
         rootScreen: VibeLaneSurfaceNavigationViewModel.Screen = .dashboard,
         focusedProjectPath: String? = nil,
         onOpenACPSession: @escaping (VibeLaneACPChatTarget) -> Void = { _ in },
+        resolveACPSession: ((VibeLaneACPChatTarget) -> ACPStandaloneSessionStore?)? = nil,
+        acpProjects: [AnyProjectSession] = [],
         onOpenFileTarget: ((TerminalFileSystemTarget) -> Void)? = nil
     ) {
         self.rootScreen = rootScreen
         self.focusedProjectPath = focusedProjectPath
         self.onOpenACPSession = onOpenACPSession
+        self.resolveACPSession = resolveACPSession
+        self.acpProjects = acpProjects
         self.onOpenFileTarget = onOpenFileTarget
     }
 
@@ -50,7 +59,9 @@ struct VibeLaneSurfaceView: View {
                     navigation: navigation,
                     rootScreen: rootScreen,
                     focusedProjectPath: focusedProjectPath,
-                    onOpenACPSession: onOpenACPSession
+                    onOpenACPSession: onOpenACPSession,
+                    resolveACPSession: resolveACPSession,
+                    acpProjects: acpProjects
                 )
             } else {
                 ContentUnavailableView(
@@ -82,6 +93,8 @@ private struct VibeLaneSurfaceContentView: View {
     let rootScreen: VibeLaneSurfaceNavigationViewModel.Screen
     let focusedProjectPath: String?
     let onOpenACPSession: (VibeLaneACPChatTarget) -> Void
+    let resolveACPSession: ((VibeLaneACPChatTarget) -> ACPStandaloneSessionStore?)?
+    let acpProjects: [AnyProjectSession]
 
     @ViewBuilder
     var body: some View {
@@ -103,23 +116,52 @@ private struct VibeLaneSurfaceContentView: View {
                 onShowLanes: { navigation.showLanes() },
                 onShowVibes: { navigation.showVibes() }
             )
-        case .newTask:
-            screenScaffold(title: AppStrings.VibeLanes.newTask, back: .dashboard) {
+        case .newTask(let laneID):
+            screenScaffold(title: AppStrings.VibeLanes.newTask, back: rootScreen) {
                 VibeLaneNewTaskView(
                     manager: manager,
                     focusedProjectPath: focusedProjectPath,
+                    preselectedLaneID: laneID,
                     onStarted: { navigation.showTask($0) },
-                    onCancel: { navigation.showDashboard() }
+                    onCancel: { navigation.show(rootScreen) }
                 )
             }
         case .detail(let id):
-            screenScaffold(title: AppStrings.VibeLanes.task, back: .dashboard) {
+            screenScaffold(title: AppStrings.VibeLanes.task, back: rootScreen) {
                 VibeLaneTaskDetailView(
                     manager: manager,
                     taskID: id,
-                    onOpenACPSession: onOpenACPSession
+                    onOpenACPSession: { target in
+                        // Hosts that can render the chat in place do so; the rest
+                        // hand it to their own pane (vibespace tabs, board tiles).
+                        if resolveACPSession != nil {
+                            navigation.showACPSession(target: target, taskID: id)
+                        } else {
+                            onOpenACPSession(target)
+                        }
+                    }
                 )
                 .id(id)
+            }
+        case .acp(let target, let taskID):
+            screenScaffold(
+                title: AppStrings.VibeLanes.task,
+                back: .detail(taskID)
+            ) {
+                if let store = resolveACPSession?(target) {
+                    ACPStandalonePaneContentView(
+                        store: store,
+                        projects: acpProjects,
+                        onLinkTargetActivated: nil,
+                        onFileSystemTargetActivated: nil
+                    )
+                } else {
+                    ContentUnavailableView(
+                        AppStrings.ACP.managedSessionEndedTitle,
+                        systemImage: "message",
+                        description: Text(AppStrings.ACP.managedSessionEndedDescription)
+                    )
+                }
             }
         case .lanes:
             if rootScreen == .lanes {
@@ -210,7 +252,8 @@ private struct VibeLaneSurfaceContentView: View {
                     guard let lane = await manager.createLane() else { return }
                     navigation.showLaneEditor(id: lane.id)
                 }
-            }
+            },
+            onStartTask: { navigation.showNewTask(laneID: $0) }
         )
     }
 
@@ -297,6 +340,8 @@ private struct VibeLaneSurfaceContentView: View {
             AppStrings.VibeLanes.vibes
         case .vibeEditor:
             AppStrings.VibeLanes.editVibe
+        case .acp:
+            AppStrings.VibeLanes.task
         }
     }
 }

@@ -47,12 +47,28 @@ protocol VibeLaneWorkRunning: AnyObject {
         sessionRef: String?,
         engine: VibeLaneEngineConfiguration
     ) async -> VibeLaneWorkTurn
-    /// Release any ACP session bound to this ref (terminates the subprocess).
+    /// Restore a persisted logical transcript before attaching a fresh process.
+    func restoreTranscript(
+        sessionRef: String?,
+        threadRef: String?,
+        projectPath: String,
+        engine: VibeLaneEngineConfiguration
+    ) async
+    /// Release the process while retaining its durable transcript.
     func release(sessionRef: String?)
+    /// Release the process and discard the in-memory transcript owner.
+    func discard(sessionRef: String?)
 }
 
 extension VibeLaneWorkRunning {
+    func restoreTranscript(
+        sessionRef: String?,
+        threadRef: String?,
+        projectPath: String,
+        engine: VibeLaneEngineConfiguration
+    ) async {}
     func release(sessionRef: String?) {}
+    func discard(sessionRef: String?) { release(sessionRef: sessionRef) }
     func work(prompt: String, projectPath: String, sessionRef: String?) async -> VibeLaneWorkTurn {
         await work(prompt: prompt, projectPath: projectPath, sessionRef: sessionRef, engine: .default)
     }
@@ -124,12 +140,28 @@ struct VibeLaneReviewOutcome: Sendable {
 @MainActor
 protocol VibeLaneReviewing: AnyObject {
     func review(_ request: VibeLaneReviewRequest, sessionRef: String?) async -> VibeLaneReviewOutcome
-    /// Release any ACP session bound to this ref (terminates the subprocess).
+    /// Restore a persisted logical transcript before attaching a fresh process.
+    func restoreTranscript(
+        sessionRef: String?,
+        threadRef: String?,
+        projectPath: String,
+        engine: VibeLaneEngineConfiguration
+    ) async
+    /// Release the process while retaining its durable transcript.
     func release(sessionRef: String?)
+    /// Release the process and discard the in-memory transcript owner.
+    func discard(sessionRef: String?)
 }
 
 extension VibeLaneReviewing {
+    func restoreTranscript(
+        sessionRef: String?,
+        threadRef: String?,
+        projectPath: String,
+        engine: VibeLaneEngineConfiguration
+    ) async {}
     func release(sessionRef: String?) {}
+    func discard(sessionRef: String?) { release(sessionRef: sessionRef) }
 }
 
 // MARK: - Notifier

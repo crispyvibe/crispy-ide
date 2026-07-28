@@ -18,6 +18,7 @@ private final class FakeWorker: VibeLaneWorkRunning {
     var reportedEngine: VibeLaneEngineSnapshot?
     private(set) var calls = 0
     private(set) var prompts: [String] = []
+    private(set) var projectPaths: [String] = []
     private(set) var engines: [VibeLaneEngineConfiguration] = []
     func work(
         prompt: String,
@@ -27,6 +28,7 @@ private final class FakeWorker: VibeLaneWorkRunning {
     ) async -> VibeLaneWorkTurn {
         calls += 1
         prompts.append(prompt)
+        projectPaths.append(projectPath)
         engines.append(engine)
         beforeReturn?()
         let text = responses.isEmpty ? response : responses.removeFirst()
@@ -133,6 +135,44 @@ final class VibeLaneEngineTests: XCTestCase {
         XCTAssertEqual(result.stopReason, .done)
         XCTAssertEqual(result.checkpointRuns.count, 2)
         XCTAssertTrue(result.checkpointRuns.allSatisfy { $0.status == .passed })
+    }
+
+    /// F059-S16: carry-forward is data only. Names that resemble runtime
+    /// configuration cannot move execution or override the pinned Vibe engine.
+    func test_carryForwardCannotChangeTaskDirectoryOrEngine() async {
+        let authoredEngine = VibeLaneEngineConfiguration(
+            agentID: "codex",
+            modelID: "gpt-5.4",
+            modeID: "default",
+            reasoningLevel: .high
+        )
+        var first = cp("a", order: 0)
+        first.engine = authoredEngine
+        var second = cp("b", order: 1)
+        second.engine = authoredEngine
+        let lane = makeLane(checkpoints: [first, second])
+        let worker = FakeWorker()
+        let reviewer = FakeReviewer([pass()])
+        var task = makeTask(lane: lane, projectPath: "/tmp/immutable-vibe-lane-project")
+        task.carryForward = [
+            "workdir": "/tmp/other-project",
+            "agent": "other-agent",
+            "model": "other-model",
+        ]
+
+        let result = await VibeLaneEngine(
+            lane: lane,
+            worker: worker,
+            reviewer: reviewer,
+            clock: FakeClock()
+        ).run(task)
+
+        XCTAssertEqual(result.state, .done)
+        XCTAssertFalse(worker.projectPaths.isEmpty)
+        XCTAssertTrue(worker.projectPaths.allSatisfy { $0 == task.projectPath })
+        XCTAssertTrue(reviewer.requests.allSatisfy { $0.projectPath == task.projectPath })
+        XCTAssertTrue(worker.engines.allSatisfy { $0 == authoredEngine })
+        XCTAssertTrue(reviewer.engines.allSatisfy { $0 == authoredEngine })
     }
 
     /// S02: a checkpoint self-corrects — reviewer fails then passes.

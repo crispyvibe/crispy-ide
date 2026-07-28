@@ -114,11 +114,17 @@ final class ACPChatViewModel: ObservableObject {
         rebindSession()
     }
 
-    func bindStandaloneSession(_ session: (any AgentSessionProtocol)?) {
+    /// Binds a standalone process. Managed orchestration may replace the process
+    /// while retaining one durable user-visible transcript, so those callers can
+    /// preserve the existing timeline and persistence context.
+    func bindStandaloneSession(
+        _ session: (any AgentSessionProtocol)?,
+        preserveTimeline: Bool = false
+    ) {
         let didChangeSession = boundStandaloneSession?.id != session?.id
         boundStandaloneSession = session
         activeProjectIdentifier = nil
-        if didChangeSession && !hasRestoredThread {
+        if didChangeSession && !hasRestoredThread && !preserveTimeline {
             timeline.removeAll()
             availableCommands.removeAll()
             isStreaming = false

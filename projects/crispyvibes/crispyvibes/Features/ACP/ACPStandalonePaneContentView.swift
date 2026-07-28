@@ -91,6 +91,7 @@ struct ACPStandalonePaneContentView: View {
                     displayMode: displayMode,
                     historyKey: store.id,
                     isExternallyManaged: store.isExternallyManaged,
+                    managedSessionEnded: store.managedSessionEnded,
                     isConnecting: store.isConnecting,
                     connectionError: store.connectionError,
                     onReconnect: store.isExternallyManaged ? nil : { Task { await store.connect(projects: projects) } },
@@ -194,11 +195,22 @@ struct ACPStandalonePaneContentView: View {
                     .controlSize(uiScale.controlSize)
             } else if store.isExternallyManaged, !store.isConnected {
                 HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(uiScale.controlSize)
-                    Text(AppStrings.ACP.managedSessionWaiting)
-                        .font(AppTypographyTokens.caption)
-                        .foregroundStyle(palette.secondaryTextColor)
+                    if store.managedSessionEnded {
+                        // The engine finished with this session; a spinner here
+                        // would imply a reconnect that will never happen.
+                        Image(systemName: "checkmark.circle")
+                            .font(AppTypographyTokens.scaledSystem(10))
+                            .foregroundStyle(palette.secondaryTextColor)
+                        Text(AppStrings.ACP.managedSessionEnded)
+                            .font(AppTypographyTokens.caption)
+                            .foregroundStyle(palette.secondaryTextColor)
+                    } else {
+                        ProgressView()
+                            .controlSize(uiScale.controlSize)
+                        Text(AppStrings.ACP.managedSessionWaiting)
+                            .font(AppTypographyTokens.caption)
+                            .foregroundStyle(palette.secondaryTextColor)
+                    }
                 }
             } else if !store.isConnected {
                 Button {

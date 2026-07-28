@@ -189,6 +189,17 @@ engine-option validation, immutable attempt snapshots, and state validation.
   reviewed linked package when they need a stable local copy. Package signing,
   content pinning, and script sandboxing remain future controls.
 
+### F059-T15: Agent output rebinds later execution
+
+- **Vector:** A worker emits a value named `workdir`, `agent`, or `model` so a later
+  checkpoint executes in another directory or with different capabilities.
+- **Impact:** High — review and project-level scheduling no longer describe the
+  environment where later Full Trust work occurs.
+- **Mitigation:** Lane variables are typed inter-step data only. `projectPath` is
+  immutable after task creation, and engine settings remain versioned authored
+  fields on the pinned Vibe/checkpoint. No carry-forward key is interpreted as
+  engine configuration or execution context.
+
 ## Residual Risks
 
 - Reviewer remains probabilistic and can be wrong.

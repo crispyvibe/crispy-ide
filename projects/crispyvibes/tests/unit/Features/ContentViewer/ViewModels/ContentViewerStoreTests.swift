@@ -212,6 +212,65 @@ final class ContentViewerStoreTests: XCTestCase {
         })
     }
 
+    func testManagedVibeLaneStoreSurvivesDetachAndReconnectPreparation() throws {
+        let registry = container.acpSessionRegistry
+        let sessionID = UUID()
+        let store = registry.storeForVibeLaneSession(
+            id: sessionID,
+            agentID: "codex",
+            projectPath: "/tmp/project"
+        )
+        store.chatViewModel.timeline = [
+            ACPTimelineEntry(
+                id: UUID(),
+                timestamp: Date(),
+                kind: .userMessage("persisted lane turn")
+            )
+        ]
+
+        registry.detachVibeLaneSession(id: sessionID, ended: false)
+
+        let retained = try XCTUnwrap(registry.store(forID: sessionID))
+        XCTAssertTrue(retained === store)
+        XCTAssertFalse(retained.managedSessionEnded)
+        XCTAssertEqual(retained.chatViewModel.timeline.count, 1)
+
+        let reconnected = registry.storeForVibeLaneSession(
+            id: sessionID,
+            agentID: "codex",
+            projectPath: "/tmp/project"
+        )
+        XCTAssertTrue(reconnected === store)
+        XCTAssertFalse(reconnected.managedSessionEnded)
+        XCTAssertEqual(reconnected.chatViewModel.timeline.count, 1)
+
+        registry.detachVibeLaneSession(id: sessionID, ended: true)
+        XCTAssertTrue(registry.store(forID: sessionID) === store)
+        XCTAssertTrue(store.managedSessionEnded)
+        XCTAssertEqual(store.chatViewModel.timeline.count, 1)
+        registry.removeStore(id: sessionID)
+    }
+
+    func testResolveTerminalVibeLaneTranscriptRestoresEndedState() throws {
+        let (contentStore, _) = makeSUT()
+        let sessionID = UUID()
+        container.acpSessionRegistry.removeStore(id: sessionID)
+
+        let resolved = try XCTUnwrap(contentStore.resolveVibeLaneACPStore(
+            target: VibeLaneACPChatTarget(
+                sessionID: sessionID,
+                threadID: nil,
+                projectPath: "/tmp/project",
+                managedSessionEnded: true
+            )
+        ))
+
+        XCTAssertTrue(resolved.isExternallyManaged)
+        XCTAssertTrue(resolved.managedSessionEnded)
+        XCTAssertFalse(resolved.isConnected)
+        container.acpSessionRegistry.removeStore(id: sessionID)
+    }
+
     func testClosePaneInvokesBrowserCleanupForContainedWebTabs() {
         let (_, splitStore) = makeSUT()
         let browserID = UUID()

@@ -400,6 +400,28 @@ final class VibeLaneTaskManagerTests: XCTestCase {
         manager.shutdown()
     }
 
+    func test_createTask_canonicalizesImmutableProjectPath() async {
+        let lane = VibeLaneCatalog.fixABug
+        let store = InMemoryVibeLaneStore(lanes: [lane])
+        let manager = makeManager(store: store)
+        await manager.bootstrap()
+        let requestedPath = "/tmp/../tmp"
+        let expectedPath = URL(fileURLWithPath: requestedPath, isDirectory: true)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .path
+
+        let task = await manager.createTask(
+            laneID: lane.id,
+            title: "Canonical project",
+            projectPath: requestedPath
+        )
+
+        XCTAssertEqual(task?.projectPath, expectedPath)
+        XCTAssertEqual(store.loadTasks().first?.projectPath, expectedPath)
+        manager.shutdown()
+    }
+
     /// F060: seeded carry-forward is stored at creation (trimmed, empties
     /// dropped) so a dispatched todo can satisfy the first checkpoint's
     /// requires contract without an immediate Supply pause.
@@ -437,6 +459,8 @@ final class VibeLaneTaskManagerTests: XCTestCase {
             result: VibeLaneVerificationResult(passed: true),
             budgetEpoch: 0
         )
+        let workerSessionRef = UUID().uuidString
+        let reviewerSessionRef = UUID().uuidString
         let task = VibeLaneTask(
             projectPath: "/tmp",
             title: "done",
@@ -445,6 +469,10 @@ final class VibeLaneTaskManagerTests: XCTestCase {
             state: .done,
             stopReason: .done,
             currentCheckpointKey: "build",
+            workerSessionRef: workerSessionRef,
+            workerThreadRef: "worker-thread",
+            reviewerSessionRef: reviewerSessionRef,
+            reviewerThreadRef: "reviewer-thread",
             checkpointRuns: [
                 VibeLaneCheckpointRun(
                     checkpointKey: "build",
@@ -466,6 +494,10 @@ final class VibeLaneTaskManagerTests: XCTestCase {
         XCTAssertEqual(rerunning?.run(forKey: "build")?.budgetEpoch, 1)
         XCTAssertEqual(rerunning?.run(forKey: "build")?.rerunEpochCount, 1)
         XCTAssertEqual(rerunning?.run(forKey: "build")?.attempts, [priorAttempt])
+        XCTAssertEqual(rerunning?.workerSessionRef, workerSessionRef)
+        XCTAssertEqual(rerunning?.workerThreadRef, "worker-thread")
+        XCTAssertEqual(rerunning?.reviewerSessionRef, reviewerSessionRef)
+        XCTAssertEqual(rerunning?.reviewerThreadRef, "reviewer-thread")
         XCTAssertTrue(rerunning?.isConsistent(with: lane) == true)
         XCTAssertNotNil(manager.running[task.id])
         manager.shutdown()

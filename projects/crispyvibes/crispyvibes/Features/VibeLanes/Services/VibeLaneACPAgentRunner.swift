@@ -26,16 +26,45 @@ final class VibeLaneACPAgentRunner: VibeLaneWorkRunning, VibeLaneReviewing {
         self.engineOptionCatalog = engineOptionCatalog ?? ACPAgentEngineOptionCatalog()
     }
 
-    /// Terminate and drop the ACP session bound to this ref (worker or reviewer).
-    func release(sessionRef: String?) {
-        guard let id = sessionRef.flatMap(UUID.init(uuidString:)) else { return }
-        tearDownSession(id: id)
+    func restoreTranscript(
+        sessionRef: String?,
+        threadRef: String?,
+        projectPath: String,
+        engine authoredEngine: VibeLaneEngineConfiguration
+    ) async {
+        guard let id = sessionRef.flatMap(UUID.init(uuidString:)),
+              let threadID = threadRef?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !threadID.isEmpty else { return }
+        let engine = authoredEngine.resolvingDefaults()
+        let store = sessionRegistry.storeForVibeLaneSession(
+            id: id,
+            agentID: engine.agentID ?? AppPreferences.acpDefaultAgentID() ?? "codex",
+            projectPath: projectPath,
+            modelID: engine.modelID,
+            trustMode: VibeLaneEngineConfiguration.enforcedTrustMode,
+            reasoningLevel: engine.reasoningLevel
+        )
+        await store.restoreManagedThreadIfNeeded(threadID)
     }
 
-    private func tearDownSession(id: UUID) {
+    /// Ends the ACP process bound to this ref while retaining its transcript as
+    /// readable task history.
+    func release(sessionRef: String?) {
+        guard let id = sessionRef.flatMap(UUID.init(uuidString:)) else { return }
+        tearDownSession(id: id, ended: true)
+    }
+
+    func discard(sessionRef: String?) {
+        guard let id = sessionRef.flatMap(UUID.init(uuidString:)) else { return }
         sessionConfigurations[id] = nil
         sessionManager.unregisterStandalone(id: id)
         sessionRegistry.removeStore(id: id)
+    }
+
+    private func tearDownSession(id: UUID, ended: Bool) {
+        sessionConfigurations[id] = nil
+        sessionManager.unregisterStandalone(id: id)
+        sessionRegistry.detachVibeLaneSession(id: id, ended: ended)
     }
 
     // MARK: - Worker
@@ -126,7 +155,7 @@ final class VibeLaneACPAgentRunner: VibeLaneWorkRunning, VibeLaneReviewing {
            sessionConfigurations[sessionID] == engine {
             session = existing
         } else {
-            tearDownSession(id: sessionID)
+            tearDownSession(id: sessionID, ended: false)
             do {
                 session = try await sessionManager.connectHeadlessAgent(
                     id: sessionID,

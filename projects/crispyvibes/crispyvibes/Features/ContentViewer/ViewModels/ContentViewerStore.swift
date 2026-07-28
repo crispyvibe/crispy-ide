@@ -239,8 +239,12 @@ final class ContentViewerStore: ObservableObject {
                 id: sessionID,
                 agentID: AppPreferences.acpDefaultAgentID() ?? "codex",
                 projectPath: target.projectPath,
+                isEnded: target.managedSessionEnded,
                 vibespaceID: vibespaceID
             )
+        if target.managedSessionEnded, !store.isConnected {
+            store.detachExternalVibeLaneSession(ended: true)
+        }
         let threadID = target.threadID?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let threadID, !threadID.isEmpty {
             store.restoreThreadIfNeeded(threadID)
