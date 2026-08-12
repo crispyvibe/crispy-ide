@@ -7,6 +7,7 @@ import Foundation
 struct DefaultProjectSessionFactory: ProjectSessionFactory {
     let makeProjectSessionDependencies: @MainActor (UUID?) -> ProjectSessionDependencies
     let terminalViewModelFactory: @MainActor () -> TerminalViewModel
+    let enhancedRemoteExplorerEnabled: @MainActor () -> Bool
     let vibespaceID: UUID?
 
     @MainActor
@@ -27,7 +28,8 @@ struct DefaultProjectSessionFactory: ProjectSessionFactory {
             remotePath: remotePath,
             terminalViewModelFactory: terminalViewModelFactory,
             vibespaceManagement: deps.vibespaceManagement,
-            vibespaceID: deps.vibespaceID
+            vibespaceID: deps.vibespaceID,
+            enhancedExplorerEnabled: enhancedRemoteExplorerEnabled()
         )
         return AnyProjectSession(session)
     }

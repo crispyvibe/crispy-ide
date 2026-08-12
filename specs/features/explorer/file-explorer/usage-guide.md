@@ -93,8 +93,9 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 
 1. Remote (SSH-backed) project roots display an `[ssh]` suffix in the sidebar.
 2. Directories load lazily over SFTP — no preloading of the entire tree.
-3. Live file watching is not supported remotely — use the refresh button for updates.
-4. Transient SSH failures during startup are suppressed; the explorer becomes usable once connected.
+3. By default, use the refresh button for remote updates.
+4. Testers can enable **Enhanced remote file explorer (Beta)** in Settings → Connections; reopen remote projects afterward. Enhanced mode polls the root and expanded directories and applies targeted refreshes.
+5. The explicit refresh button remains available in both modes.
 
 ## Keyboard Shortcuts
 

@@ -14,6 +14,7 @@ extension FolderExplorerView {
             searchQuery: trimmedSearchQuery,
             changedDirectoryIDs: viewModel.changedDirectoryIDs,
             treeMutationRevision: viewModel.treeMutationRevision,
+            allowsFileTransfers: viewModel.supportsFileTransfers,
             allowsScrolling: true,
             rootURL: viewModel.rootURL,
             projectRootURLs: [viewModel.rootURL].compactMap { $0 },
@@ -61,7 +62,8 @@ extension FolderExplorerView {
     }
 
     func handleItemDrop(_ providers: [NSItemProvider], targetDirectoryURL: URL?) -> Bool {
-        guard let targetDirectoryURL else { return false }
+        guard viewModel.supportsFileTransfers,
+              let targetDirectoryURL else { return false }
         ExplorerItemDropPlanner.loadPlans(
             from: providers,
             targetDirectoryURL: targetDirectoryURL,
@@ -76,7 +78,7 @@ extension FolderExplorerView {
     }
 
     func handleTransferDrop(_ plans: [ExplorerItemTransferPlan]) -> Bool {
-        guard !plans.isEmpty else { return false }
+        guard viewModel.supportsFileTransfers, !plans.isEmpty else { return false }
         viewModel.transferItems(using: plans)
         return true
     }

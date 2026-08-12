@@ -88,6 +88,9 @@ enum AppPreferences {
     static let experimentalACPObservabilityVerboseKey = "crispyvibes.experimental.acpObservabilityVerbose"
     static let experimentalTerminalInsightKey = "crispyvibes.experimental.terminalInsight"
 
+    // MARK: Remote
+    static let enhancedRemoteExplorerKey = "crispyvibes.remote.enhancedExplorer"
+
     // MARK: Auth
     static let authCognitoDomainKey = "crispyvibes.auth.cognitoDomain"
     static let authCognitoMacClientIdKey = "crispyvibes.auth.cognitoClientId"

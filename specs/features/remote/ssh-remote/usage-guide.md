@@ -55,7 +55,7 @@ SSH Remote Development enables opening projects, browsing files, running termina
 1. With a remote project open, the file explorer shows the remote directory tree.
 2. Directories load lazily via SFTP — only expanded directories are fetched.
 3. A loading indicator appears during directory fetches.
-4. Basic file operations (create, rename, delete, move) work on remote files.
+4. Basic file operations (create, rename, and delete) work on remote files. Remote drag/drop move is unavailable until drag payloads can verify project and SSH host identity.
 5. Remote project roots show an `[ssh]` suffix and expose an explicit refresh button.
 
 ### Editing Remote Files
@@ -112,6 +112,7 @@ No dedicated keyboard shortcuts for remote operations. Remote terminals use the 
 
 ## Settings
 
+- **Enhanced remote file explorer (Beta)** (App Settings → Connections): Default off per device. When enabled, expanded directories receive targeted metadata polling and mutations refresh their affected folder. Reopen remote projects after changing it.
 - **Connection Profiles** (App Settings → Connections): Named profiles with host, port, username, and key file.
 - **Port Forwards**: Configurable per profile and per vibespace.
 - **Large File Threshold**: Default 10 MB — files above this prompt before download.

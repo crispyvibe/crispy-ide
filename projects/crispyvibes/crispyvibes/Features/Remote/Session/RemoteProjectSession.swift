@@ -34,7 +34,8 @@ final class RemoteProjectSession: ProjectProviding {
         remotePath: String,
         terminalViewModelFactory: @MainActor () -> TerminalViewModel,
         vibespaceManagement: VibeSpaceManagementService? = nil,
-        vibespaceID: UUID? = nil
+        vibespaceID: UUID? = nil,
+        enhancedExplorerEnabled: Bool = false
     ) {
         self.connection = connection
         self.remotePath = remotePath
@@ -44,10 +45,19 @@ final class RemoteProjectSession: ProjectProviding {
 
         let executor = RemoteCommandExecutor(connection: connection)
         let fileSystem = SFTPFileSystemProvider(connection: connection)
-        let watcher = PollingDirectoryWatcher(connection: connection)
+        let watcher = PollingDirectoryWatcher(
+            fileSystem: fileSystem,
+            interval: enhancedExplorerEnabled ? 2.0 : 5.0,
+            snapshotMode: enhancedExplorerEnabled ? .metadata : .namesOnly
+        )
 
         self.fileContent = SFTPFileContentProvider(connection: connection)
-        let explorer = RemoteFolderExplorer(remotePath: remotePath, fileSystem: fileSystem, watcher: watcher)
+        let explorer = RemoteFolderExplorer(
+            remotePath: remotePath,
+            fileSystem: fileSystem,
+            watcher: watcher,
+            enhancedMode: enhancedExplorerEnabled
+        )
         self.folderExplorer = explorer
         self.gitExplorer = LocalGitExplorer(explorer: explorer, commandExecutor: executor)
 

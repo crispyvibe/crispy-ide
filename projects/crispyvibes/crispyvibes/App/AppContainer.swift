@@ -328,7 +328,8 @@ struct AppContainer {
                 remotePath: parsed.remotePath,
                 terminalViewModelFactory: { [self] in makeTerminalViewModel() },
                 vibespaceManagement: vibespaceManagement,
-                vibespaceID: vibespaceID
+                vibespaceID: vibespaceID,
+                enhancedExplorerEnabled: experimentalFeatures.isEnhancedRemoteExplorerEnabled
             ))
         }
         return makeProjectSession(rootURL: URL(fileURLWithPath: identifier), vibespaceID: vibespaceID)

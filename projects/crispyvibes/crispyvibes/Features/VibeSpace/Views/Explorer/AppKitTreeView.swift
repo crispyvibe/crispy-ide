@@ -15,6 +15,7 @@ struct AppKitTreeView: NSViewRepresentable {
     let searchQuery: String
     let changedDirectoryIDs: Set<String>
     let treeMutationRevision: Int
+    let allowsFileTransfers: Bool
     let allowsScrolling: Bool
     let usesIntrinsicContentHeight: Bool
     var rootURL: URL? = nil
@@ -32,6 +33,7 @@ struct AppKitTreeView: NSViewRepresentable {
         searchQuery: String,
         changedDirectoryIDs: Set<String> = [],
         treeMutationRevision: Int = 0,
+        allowsFileTransfers: Bool = true,
         allowsScrolling: Bool,
         usesIntrinsicContentHeight: Bool = true,
         rootURL: URL? = nil,
@@ -48,6 +50,7 @@ struct AppKitTreeView: NSViewRepresentable {
         self.searchQuery = searchQuery
         self.changedDirectoryIDs = changedDirectoryIDs
         self.treeMutationRevision = treeMutationRevision
+        self.allowsFileTransfers = allowsFileTransfers
         self.allowsScrolling = allowsScrolling
         self.usesIntrinsicContentHeight = usesIntrinsicContentHeight
         self.rootURL = rootURL
@@ -147,15 +150,21 @@ struct AppKitTreeView: NSViewRepresentable {
 
         if rootsChanged {
             applyRootDiff(outline: outline, coordinator: coordinator, oldRoots: oldRoots, newRoots: rootItems)
-            _ = coordinator.consumePendingTreeMutationRevision()
+            if coordinator.consumePendingTreeMutationRevision() {
+                coordinator.reloadChangedDirectoryNodes()
+            }
             coordinator.syncExpansionState()
         } else if searchChanged {
             outline.reloadData()
             coordinator.syncExpansionState()
         } else {
-            // Skip subtree reloads once the rename field editor is active so AppKit
-            // does not recreate the cell view mid-edit.
-            if renamingID == nil,
+            let renameTargetAlreadyVisible: Bool
+            if let renamingID, let node = coordinator.nodeCache[renamingID] {
+                renameTargetAlreadyVisible = outline.row(forItem: node) >= 0
+            } else {
+                renameTargetAlreadyVisible = false
+            }
+            if !renameTargetAlreadyVisible,
                coordinator.consumePendingTreeMutationRevision() {
                 coordinator.reloadChangedDirectoryNodes()
                 coordinator.syncExpansionState()

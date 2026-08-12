@@ -7,6 +7,8 @@ extension AppSettingsSheetView {
 }
 
 private struct RemoteSSHSettingsContent: View {
+    @AppStorage(AppPreferences.enhancedRemoteExplorerKey)
+    private var enhancedRemoteExplorer = false
     @StateObject private var profileStore = SSHProfileStore()
     @StateObject private var testVM = SSHProfileTestViewModel()
     @State private var isShowingConnectionSheet = false
@@ -14,7 +16,22 @@ private struct RemoteSSHSettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            enhancedExplorerSection
             connectionProfilesSection
+        }
+    }
+
+    private var enhancedExplorerSection: some View {
+        SettingsCard(
+            title: AppStrings.Settings.Remote.enhancedExplorerTitle,
+            description: AppStrings.Settings.Remote.enhancedExplorerDescription
+        ) {
+            Toggle(
+                AppStrings.Settings.Remote.enhancedExplorerTitle,
+                isOn: $enhancedRemoteExplorer
+            )
+            .accessibilityIdentifier("app.settings.remote.enhanced-explorer")
+            .toggleStyle(.switch)
         }
     }
 

@@ -1734,6 +1734,96 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
         XCTAssertEqual(labelField.stringValue, "renamed")
     }
 
+    func testTransferDisabledTreeDoesNotWritePathOnlyDragPayload() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AppKitTreeRemoteTransfer-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+        let fileURL = temporaryDirectory.appendingPathComponent("same-path.txt")
+        try Data().write(to: fileURL)
+        let file = FileItem(url: fileURL, isDirectory: false)
+        var renameText = ""
+        let treeView = AppKitTreeView(
+            rootItems: [file],
+            expandedIDs: [],
+            loadingIDs: [],
+            selectedID: nil,
+            renamingID: nil,
+            searchQuery: "",
+            allowsFileTransfers: false,
+            allowsScrolling: true,
+            renameText: Binding(
+                get: { renameText },
+                set: { renameText = $0 }
+            ),
+            onAction: { _ in },
+            onTransferDrop: { _ in
+                XCTFail("Transfer-disabled tree must not invoke transfer handling.")
+                return true
+            }
+        )
+
+        let (coordinator, _, _, _) = makeMountedOutline(for: treeView)
+        let node = coordinator.node(for: file)
+
+        XCTAssertNil(coordinator.outlineView(coordinator.outlineView!, pasteboardWriterForItem: node))
+    }
+
+    func testChangedExpandedParentReloadMakesNewRenameTargetVisible() throws {
+        let existingFile = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Sources/old.txt"),
+            isDirectory: false
+        )
+        let newFile = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Sources/untitled"),
+            isDirectory: false
+        )
+        let initialDirectory = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Sources"),
+            isDirectory: true,
+            children: [existingFile]
+        )
+        let updatedDirectory = FileItem(
+            url: initialDirectory.url,
+            isDirectory: true,
+            children: [existingFile, newFile]
+        )
+        var renameText = "untitled"
+        let treeView = AppKitTreeView(
+            rootItems: [initialDirectory],
+            expandedIDs: [initialDirectory.id],
+            loadingIDs: [],
+            selectedID: newFile.id,
+            renamingID: newFile.id,
+            searchQuery: "",
+            allowsScrolling: true,
+            renameText: Binding(
+                get: { renameText },
+                set: { renameText = $0 }
+            ),
+            onAction: { _ in },
+            onTransferDrop: { _ in false }
+        )
+
+        let (coordinator, _, outlineView, window) = makeMountedOutline(for: treeView)
+        XCTAssertNil(coordinator.nodeCache[newFile.id])
+
+        coordinator.rootItems = [updatedDirectory]
+        coordinator.changedDirectoryIDs = [initialDirectory.id]
+        coordinator.treeMutationRevision = 1
+        coordinator.refreshNodeCache(with: [updatedDirectory])
+        let newNode = try XCTUnwrap(coordinator.nodeCache[newFile.id])
+        XCTAssertEqual(outlineView.row(forItem: newNode), -1)
+
+        XCTAssertTrue(coordinator.consumePendingTreeMutationRevision())
+        coordinator.reloadChangedDirectoryNodes()
+        coordinator.syncExpansionState()
+
+        withExtendedLifetime(window) {
+            XCTAssertGreaterThanOrEqual(outlineView.row(forItem: newNode), 0)
+        }
+    }
+
     private func makeDirectoryItem(path: String) -> FileItem {
         FileItem(url: URL(fileURLWithPath: path), isDirectory: true)
     }

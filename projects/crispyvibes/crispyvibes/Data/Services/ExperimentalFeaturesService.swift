@@ -10,6 +10,7 @@ protocol ExperimentalFeaturesProviding: ObservableObject {
     var isACPObservabilityVerboseEnabled: Bool { get }
     var acpObservabilityMode: ACPObservabilityMode { get }
     var isTerminalInsightEnabled: Bool { get }
+    var isEnhancedRemoteExplorerEnabled: Bool { get }
 }
 
 @MainActor
@@ -20,6 +21,7 @@ final class ExperimentalFeaturesService: ExperimentalFeaturesProviding {
     @Published private(set) var isACPObservabilityEnabled: Bool
     @Published private(set) var isACPObservabilityVerboseEnabled: Bool
     @Published private(set) var isTerminalInsightEnabled: Bool
+    @Published private(set) var isEnhancedRemoteExplorerEnabled: Bool
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -48,6 +50,7 @@ final class ExperimentalFeaturesService: ExperimentalFeaturesProviding {
             forKey: AppPreferences.experimentalACPObservabilityVerboseKey
         )
         self.isTerminalInsightEnabled = defaults.bool(forKey: AppPreferences.experimentalTerminalInsightKey)
+        self.isEnhancedRemoteExplorerEnabled = defaults.bool(forKey: AppPreferences.enhancedRemoteExplorerKey)
 
         defaults.publisher(for: \.experimentalTmuxIntegration)
             .receive(on: RunLoop.main)
@@ -82,6 +85,19 @@ final class ExperimentalFeaturesService: ExperimentalFeaturesProviding {
             .receive(on: RunLoop.main)
             .sink { [weak self] value in self?.isTerminalInsightEnabled = value }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(
+            for: UserDefaults.didChangeNotification,
+            object: defaults
+        )
+        .receive(on: RunLoop.main)
+        .sink { [weak self, weak defaults] _ in
+            guard let defaults else { return }
+            self?.isEnhancedRemoteExplorerEnabled = defaults.bool(
+                forKey: AppPreferences.enhancedRemoteExplorerKey
+            )
+        }
+        .store(in: &cancellables)
     }
 }
 

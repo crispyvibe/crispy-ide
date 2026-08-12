@@ -844,6 +844,17 @@ enum AppStrings {
             )
         }
 
+        enum Remote {
+            static let enhancedExplorerTitle = String(
+                localized: "settings.remote.enhancedExplorer.title",
+                defaultValue: "Enhanced remote file explorer (Beta)"
+            )
+            static let enhancedExplorerDescription = String(
+                localized: "settings.remote.enhancedExplorer.description",
+                defaultValue: "Uses targeted folder refreshes and improved change detection for SSH projects. Reopen remote projects after changing this setting."
+            )
+        }
+
         // Reset
         enum Reset {
             static let title = String(localized: "settings.reset.title")

@@ -98,6 +98,10 @@ Git operations (status, diff, stage, unstage, commit, branch, checkout, history)
 
 Remote project roots MUST expose explicit refresh affordances where live file watching is unavailable (`supportsLiveWatching = false`).
 
+### F034-R21: Enhanced Remote Explorer Beta
+
+Settings → Connections MUST expose a per-device **Enhanced remote file explorer (Beta)** toggle that defaults off. Newly-created remote sessions MUST snapshot the setting and use either legacy root-name polling or enhanced SFTP metadata polling. Enhanced mode MUST watch the root plus expanded directories, refresh only affected directories, detect same-name metadata changes, and make create/rename/delete mutations visible without requiring collapse/re-expansion. Changing the setting requires reopening remote projects.
+
 ## Scenarios
 
 ### Scenario F034-S01: Create and connect an SSH profile
@@ -185,6 +189,15 @@ Remote project roots MUST expose explicit refresh affordances where live file wa
 **When** user opens the source control sidebar
 **Then** the sidebar shows "Git is not installed" — same as local behavior
 
+### Scenario F034-S13: Opt into enhanced remote explorer refresh
+
+**Given** Enhanced remote file explorer is disabled by default on a device
+**When** the user enables it in Settings → Connections and reopens a remote project
+**Then** the project root and expanded directories are polled using metadata snapshots
+**And** creating, renaming, or deleting an item refreshes its affected directory
+**And** a newly-created nested item appears and enters inline rename without collapsing its parent
+**And** disabling the setting and reopening the project restores legacy behavior
+
 ## Acceptance Criteria
 
 - SSH connection profiles can be created, edited, deleted, and tested.
@@ -196,7 +209,7 @@ Remote project roots MUST expose explicit refresh affordances where live file wa
 - Remote terminals open with host badge, support all rail interactions.
 - Remote file explorer displays lazy directory tree via SFTP.
 - Files can be opened, edited, and saved remotely.
-- Create, rename, delete, and move operations work on remote files.
+- Create, rename, and delete operations work on remote files; drag/drop move remains deferred until payloads include project and SSH host identity.
 - Large file prompt appears above configured threshold.
 - Remote projects persist in vibespace config across restarts.
 - Remote projects connect asynchronously; failures degrade gracefully.
@@ -216,4 +229,5 @@ Remote project roots MUST expose explicit refresh affordances where live file wa
 
 | Date | Change | Author |
 |------|--------|--------|
+| Unreleased | Added default-off enhanced remote explorer polling and create/rename/delete refresh requirements; remote drag/drop remains deferred pending host identity. | — |
 | 2026-04-15 | Initial draft — migrated from phase-12-ssh-remote-development.md | — |

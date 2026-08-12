@@ -126,6 +126,19 @@ Published via `ProjectMetadata.connectionState`. Views bind to this for host bad
 
 `ProjectSessionFactory` (protocol, with `DefaultProjectSessionFactory` as concrete conformer) creates `AnyProjectSession` via `makeLocal(rootURL:)` or `makeRemote(connection:remotePath:)`. Injected into `VibeSpaceState`.
 
+### Enhanced Remote Explorer
+
+`crispyvibes.remote.enhancedExplorer` is a per-device, default-off beta setting shown under Settings → Connections. `AppContainer` injects its current value when constructing `RemoteProjectSession`; active sessions are not hot-swapped, so remote projects must be reopened after a change.
+
+`PollingDirectoryWatcher` has two snapshot modes:
+
+- **Legacy:** root-only, names-only snapshots on the existing five-second cadence.
+- **Enhanced:** immediate SFTP baselines for the root plus expanded directories, followed by two-second snapshots of name, type, size, and modification date.
+
+Enhanced watcher callbacks identify changed directories. `RemoteFolderExplorer` routes them through a per-directory refresh coordinator that serializes listings, coalesces one follow-up pass, and rejects responses from prior tree generations after reconnect. Manual refresh lists the root and every expanded directory. Create, rename, and delete refresh their affected parent directories before completing visible selection/rename state. Rename components reject separators, `.` and `..`; creation chooses collision-safe names. Remote drag/drop remains unavailable because path-only drag payloads cannot verify project and SSH host identity.
+
+The watcher still reports `supportsLiveWatching = false`: polling is best-effort, and the explicit refresh affordance remains available. No remote helper or server agent is installed.
+
 ## Dependencies (frameworks, libraries)
 
 - `SFTPSubprocess` — subprocess-based SFTP client for remote file operations. No third-party SSH library is used.

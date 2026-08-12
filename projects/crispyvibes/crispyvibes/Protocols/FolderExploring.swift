@@ -32,6 +32,9 @@ protocol FolderExploring: ObservableObject {
     /// false for remote → views show a manual refresh button instead of live updates.
     var supportsLiveWatching: Bool { get }
 
+    /// false when drag payloads cannot safely prove project and host identity.
+    var supportsFileTransfers: Bool { get }
+
     // MARK: - Git State
 
     var gitStatusItems: [GitStatusItem] { get }

@@ -66,6 +66,7 @@ final class AnyFolderExplorer: ObservableObject {
     var changedDirectoryIDs: Set<String> { _wrapped.changedDirectoryIDs }
     var treeMutationRevision: Int { _wrapped.treeMutationRevision }
     var supportsLiveWatching: Bool { _wrapped.supportsLiveWatching }
+    var supportsFileTransfers: Bool { _wrapped.supportsFileTransfers }
 
     // MARK: - Git State
 

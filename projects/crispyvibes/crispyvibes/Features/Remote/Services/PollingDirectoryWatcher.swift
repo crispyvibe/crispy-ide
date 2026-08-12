@@ -2,70 +2,128 @@
 
 import Foundation
 
-/// Watches remote directories for changes by polling via SSH ls.
-/// Used instead of FSEvents for remote file systems.
+/// Watches remote directories by comparing periodic SFTP directory snapshots.
+/// Enhanced mode includes metadata so same-name file changes are observable.
+@MainActor
 final class PollingDirectoryWatcher: DirectoryWatching {
+    enum SnapshotMode {
+        case namesOnly
+        case metadata
+    }
+
     var onPathsChanged: ((_ changedPaths: Set<String>) -> Void)?
 
-    private let connection: SSHConnection
-    private let interval: TimeInterval
-    private var watchedPaths: [String] = []
-    private var snapshots: [String: Set<String>] = [:]
-    private var pollTask: Task<Void, Never>?
+    private struct EntryFingerprint: Hashable {
+        let name: String
+        let isDirectory: Bool?
+        let size: UInt64?
+        let modificationTime: TimeInterval?
+    }
 
-    init(connection: SSHConnection, interval: TimeInterval = 5.0) {
-        self.connection = connection
+    private let fileSystem: any FileSystemProviding
+    private let interval: TimeInterval
+    private let snapshotMode: SnapshotMode
+    private var watchedPaths: [String] = []
+    private var snapshots: [String: Set<EntryFingerprint>] = [:]
+    private var pollTask: Task<Void, Never>?
+    private var generation: UInt64 = 0
+
+    init(
+        fileSystem: any FileSystemProviding,
+        interval: TimeInterval = 5.0,
+        snapshotMode: SnapshotMode = .namesOnly
+    ) {
+        self.fileSystem = fileSystem
         self.interval = interval
+        self.snapshotMode = snapshotMode
     }
 
     func watch(paths: [String]) {
-        watchedPaths = paths
-        // Prune snapshots for paths no longer watched
-        let watchedSet = Set(paths)
+        watchedPaths = Array(Set(paths.map(Self.normalizePath))).sorted()
+        let watchedSet = Set(watchedPaths)
         snapshots = snapshots.filter { watchedSet.contains($0.key) }
-        startPolling()
+        restartPolling()
     }
 
     func stop() {
+        generation &+= 1
         pollTask?.cancel()
         pollTask = nil
+        watchedPaths.removeAll()
         snapshots.removeAll()
     }
 
-    // MARK: - Private
-
-    private func startPolling() {
+    private func restartPolling() {
+        generation &+= 1
+        let requestGeneration = generation
         pollTask?.cancel()
         pollTask = Task { [weak self] in
+            guard let self else { return }
+            await poll(generation: requestGeneration)
+
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64((self?.interval ?? 5.0) * 1_000_000_000))
-                guard let self, !Task.isCancelled else { return }
-                await self.poll()
+                do {
+                    try await Task.sleep(
+                        nanoseconds: UInt64(max(interval, 0.05) * 1_000_000_000)
+                    )
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                await poll(generation: requestGeneration)
             }
         }
     }
 
-    private func poll() async {
-        let isConnected = await MainActor.run { connection.state == .connected }
-        guard isConnected else { return }
+    private func poll(generation requestGeneration: UInt64) async {
+        let paths = watchedPaths
         var changedPaths = Set<String>()
 
-        for path in watchedPaths {
-            let escaped = path.replacingOccurrences(of: "'", with: "'\\''")
-            guard let output = try? await connection.executeCommand("ls -1a '\(escaped)' 2>/dev/null") else { continue }
-            let entries = Set(output.split(whereSeparator: \.isNewline).map(String.init).filter { $0 != "." && $0 != ".." })
-
-            if let previous = snapshots[path], previous != entries {
-                changedPaths.insert(path)
+        for path in paths {
+            guard !Task.isCancelled, requestGeneration == generation else { return }
+            do {
+                let descriptors = try await fileSystem.contentsOfDirectory(at: path)
+                guard !Task.isCancelled, requestGeneration == generation else { return }
+                let snapshot = Set(descriptors.map(fingerprint))
+                if let previous = snapshots[path], previous != snapshot {
+                    changedPaths.insert(path)
+                }
+                snapshots[path] = snapshot
+            } catch {
+                // Preserve the last successful snapshot. A reconnect or transient
+                // SFTP failure must not turn an unavailable listing into a delete.
+                continue
             }
-            snapshots[path] = entries
         }
 
-        if !changedPaths.isEmpty {
-            let pathsToReport = changedPaths
-            await MainActor.run { self.onPathsChanged?(pathsToReport) }
+        guard !Task.isCancelled, requestGeneration == generation, !changedPaths.isEmpty else { return }
+        onPathsChanged?(changedPaths)
+    }
+
+    private func fingerprint(_ descriptor: FileItemDescriptor) -> EntryFingerprint {
+        switch snapshotMode {
+        case .namesOnly:
+            return EntryFingerprint(
+                name: descriptor.name,
+                isDirectory: nil,
+                size: nil,
+                modificationTime: nil
+            )
+        case .metadata:
+            return EntryFingerprint(
+                name: descriptor.name,
+                isDirectory: descriptor.isDirectory,
+                size: descriptor.size,
+                modificationTime: descriptor.modificationDate?.timeIntervalSince1970
+            )
         }
     }
 
-    deinit { pollTask?.cancel() }
+    private static func normalizePath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
+    }
+
+    deinit {
+        pollTask?.cancel()
+    }
 }

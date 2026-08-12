@@ -337,7 +337,16 @@ extension ContentView {
             project.terminal.openOrSelectTab(for: url)
         case .openInSplitHorizontal(let item): vm.openInSplitHorizontal(item)
         case .openInSplitVertical(let item): vm.openInSplitVertical(item)
-        case .requestDelete(let item): vm.deleteItem(item)
+        case .requestDelete(let item):
+            let alert = NSAlert()
+            alert.messageText = AppStrings.Explorer.deleteItemTitle
+            alert.informativeText = item.displayName
+            alert.addButton(withTitle: AppStrings.Explorer.deleteItemConfirm)
+            alert.addButton(withTitle: AppStrings.Common.cancel)
+            alert.alertStyle = .warning
+            if alert.runModal() == .alertFirstButtonReturn {
+                vm.deleteItem(item)
+            }
         }
     }
 
@@ -345,7 +354,8 @@ extension ContentView {
         _ plans: [ExplorerItemTransferPlan],
         for project: AnyProjectSession
     ) -> Bool {
-        guard !plans.isEmpty else { return false }
+        guard project.folderExplorer.supportsFileTransfers,
+              !plans.isEmpty else { return false }
         project.folderExplorer.transferItems(using: plans)
         return true
     }

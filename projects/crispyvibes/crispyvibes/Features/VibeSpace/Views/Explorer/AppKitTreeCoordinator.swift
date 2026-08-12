@@ -141,14 +141,16 @@ extension AppKitTreeView {
         // MARK: Drag source
 
         func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> (any NSPasteboardWriting)? {
-            guard let node = item as? TreeNode else { return nil }
+            guard parent.allowsFileTransfers,
+                  let node = item as? TreeNode else { return nil }
             return VibeSpaceDragPayload(url: node.item.url).makePasteboardItem()
         }
 
         // MARK: Drop target
 
         func outlineView(_ outlineView: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
-            guard let targetURL = dropTargetURL(for: item) else { return [] }
+            guard parent.allowsFileTransfers,
+                  let targetURL = dropTargetURL(for: item) else { return [] }
             // F052: a shelf item moves into the project (with shelf + tab retarget).
             if info.draggingPasteboard.availableType(from: [ShelfItemDrag.pasteboardType]) != nil {
                 return .move
@@ -161,7 +163,8 @@ extension AppKitTreeView {
         }
 
         func outlineView(_ outlineView: NSOutlineView, acceptDrop info: any NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
-            guard let targetURL = dropTargetURL(for: item) else { return false }
+            guard parent.allowsFileTransfers,
+                  let targetURL = dropTargetURL(for: item) else { return false }
             // F052: shelf item → move into the target directory; ContentView does
             // the moveItem + shelf/tab retarget off this notification. The path
             // comes from the in-app drag holder (reading custom-type data back

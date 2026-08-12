@@ -5,4 +5,5 @@ import Foundation
 
 extension FolderExplorerViewModel: FolderExploring {
     var supportsLiveWatching: Bool { true }
+    var supportsFileTransfers: Bool { true }
 }

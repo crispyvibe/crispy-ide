@@ -63,6 +63,8 @@ Toggling expansion adds/removes from expanded set. Collapsing a directory also c
 
 `DirectoryWatcher` backed by **FSEvents** for local file systems; polling watcher for remote.
 
+Remote projects default to the legacy root-only names snapshot. When **Enhanced remote file explorer (Beta)** is enabled before session construction, the poller takes immediate metadata snapshots for the root and expanded directories on a two-second cadence. Remote mutations and watcher callbacks then use the same targeted parent-directory refresh policy; manual refresh reconciles every expanded directory. The setting is per-device, defaults off, and requires reopening remote projects.
+
 Watched paths: project root + all currently expanded directories. Synchronized on expand/collapse and after tree load. Cap: **256 simultaneously watched paths** (shallower directories prioritized by depth, then alphabetically).
 
 `DirectoryWatcher` produces structured `Event` objects containing:
@@ -105,7 +107,7 @@ Watcher-triggered refreshes use `showLoadingState: false` to avoid loading spinn
 - Only one `listTree` request per directory can be in flight. Additional requests coalesce into one follow-up pass, and their callers wait for that pass.
 - A tree-session identifier prevents responses from a previous project/root session from applying after the root changes.
 - Watcher paths received while Files is inactive or the initial root load is incomplete are retained. Returning to Files, or completing the initial load, replays those paths.
-- Create refreshes and expands the affected parent before setting selection and inline rename state. Rename, delete, move, and copy refresh only their affected parent directories.
+- Create refreshes and expands the affected parent before setting selection and inline rename state. Rename and delete refresh only their affected parent directories. Existing local move and copy operations continue to refresh their source and destination parents.
 - Successful directory snapshots reconcile selection and rename paths inside that directory. Missing items are cleared, and a removed selected folder falls back to its nearest surviving ancestor.
 
 ### Outline Reconciliation

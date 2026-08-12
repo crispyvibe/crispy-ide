@@ -92,6 +92,13 @@ SSH Remote Development enables opening projects, browsing files, running termina
 - **Likelihood:** Medium — developers routinely work with secrets in terminals.
 - **Mitigation:** Remote terminals use the same Ghostty rendering as local terminals — scrollback is in-memory only. Terminal sessions show a disconnected/terminated state on SSH drop (no stale content). Crispy does not persist terminal scrollback to disk. This is the same risk as local terminal usage. Linked NFR: SEC-Data-Protection.
 
+### F034-T10: Remote explorer mutation and polling abuse
+
+- **Vector:** A crafted rename component could escape its parent directory, or expanding many remote directories could create excessive SFTP polling work.
+- **Impact:** Mutation outside the displayed folder or avoidable remote/network load.
+- **Likelihood:** Low — mutations are user initiated and the enhanced mode is opt-in.
+- **Mitigation:** Enhanced rename rejects empty names, separators, `.` and `..`. Watch requests are normalized, deduplicated, capped at 256 paths, and use one shared two-second polling task. Failed listings preserve the last successful snapshot rather than synthesizing deletion. The legacy behavior remains available through the default-off Connections setting. Linked NFRs: SEC-Input-Sanitization, PERF-Responsiveness.
+
 ## Residual Risks
 
 - The remote host is fully trusted once connected. Any command executed via SSH has the remote user's full permissions. This is inherent to SSH.

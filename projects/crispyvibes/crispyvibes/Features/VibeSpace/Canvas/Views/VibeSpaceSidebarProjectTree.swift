@@ -184,6 +184,7 @@ struct ProjectFileTreeView: View {
                 searchQuery: viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines),
                 changedDirectoryIDs: viewModel.changedDirectoryIDs,
                 treeMutationRevision: viewModel.treeMutationRevision,
+                allowsFileTransfers: viewModel.supportsFileTransfers,
                 allowsScrolling: false,
                 usesIntrinsicContentHeight: false,
                 rootURL: viewModel.rootURL,
