@@ -2,6 +2,13 @@ import Foundation
 import XCTest
 @testable import CrispyVibes
 
+/// F060 test double: container construction needs a triage runner; tests here
+/// never trigger triage, so it just returns nil.
+@MainActor
+private final class NoopTriageRunner: TodoTriageRunning {
+    func runTriage(prompt: String, projectPath: String) async -> String? { nil }
+}
+
 @MainActor
 final class RemoteProjectSessionTests: XCTestCase {
     private var container: AppContainer!
@@ -717,6 +724,45 @@ final class RemoteProjectSessionTests: XCTestCase {
         let shelfStore = ShelfStore(persistenceStore: appPersistenceStore)
         let cliCommandRouter = CLICommandRouter(shelfStore: shelfStore)
         let cliSocketServer = CLISocketServer(router: cliCommandRouter)
+        let vibeLanesDirectory = appPersistenceStore.appFileURL(
+            relativePath: "VibeLanes",
+            isDirectory: true
+        )
+        let loopsDirectory = appPersistenceStore.appFileURL(
+            relativePath: "Loops",
+            isDirectory: true
+        )
+        let skillsDirectory = appPersistenceStore.appFileURL(
+            relativePath: "VibeLanes/skills",
+            isDirectory: true
+        )
+        let automationDatabaseStore = AutomationDatabaseStore(
+            conversationStore: agentConversationStore,
+            catalog: VibeLaneCatalog.starterLanes,
+            vibeLanesDirectory: vibeLanesDirectory,
+            loopsDirectory: loopsDirectory,
+            skillsDirectory: skillsDirectory
+        )
+        let vibeLaneTaskManager = VibeLaneTaskManager(
+            store: InMemoryVibeLaneStore(lanes: VibeLaneCatalog.starterLanes),
+            worker: VibeLaneUnimplementedWorkRunner()
+        )
+        let vibeLaneSkillStore = VibeLaneSkillStore(
+            rootURL: skillsDirectory
+        )
+        let vibeLoopManager = VibeLoopManager(
+            store: InMemoryVibeLoopStore(),
+            laneManager: vibeLaneTaskManager
+        )
+        let vibeLoopScheduler = VibeLoopScheduler(manager: vibeLoopManager)
+        let automationBootstrapCoordinator = AutomationBootstrapCoordinator(
+            store: automationDatabaseStore,
+            laneManager: vibeLaneTaskManager,
+            loopManager: vibeLoopManager,
+            skillStore: vibeLaneSkillStore,
+            scheduler: vibeLoopScheduler,
+            resumeTasks: false
+        )
         return AppContainer(
             appPersistenceStore: appPersistenceStore,
             vibespacePersistenceStore: vibespacePersistenceStore,
@@ -740,6 +786,21 @@ final class RemoteProjectSessionTests: XCTestCase {
             agentConversationStore: agentConversationStore,
             vibespaceCommentStore: VibeSpaceCommentStore(conversationStore: agentConversationStore),
             vibespaceTodoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
+            vibeLaneTaskManager: vibeLaneTaskManager,
+            vibeLaneSkillStore: vibeLaneSkillStore,
+            vibeLoopManager: vibeLoopManager,
+            vibeLoopScheduler: vibeLoopScheduler,
+            automationBootstrapCoordinator: automationBootstrapCoordinator,
+            todoLanePipelineBridge: TodoLanePipelineBridge(
+                todoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
+                laneManager: VibeLaneTaskManager(store: InMemoryVibeLaneStore(lanes: []), worker: VibeLaneUnimplementedWorkRunner())
+            ),
+            todoTriageCoordinator: TodoTriageCoordinator(
+                todoStore: VibeSpaceTodoStore(conversationStore: agentConversationStore),
+                laneManager: VibeLaneTaskManager(store: InMemoryVibeLaneStore(lanes: []), worker: VibeLaneUnimplementedWorkRunner()),
+                runner: NoopTriageRunner()
+            ),
+            vibeLaneSurfaceNavigationViewModel: VibeLaneSurfaceNavigationViewModel(),
             commentLifecycleCoordinator: CommentLifecycleCoordinator(store: VibeSpaceCommentStore(conversationStore: agentConversationStore)),
             externalAgentSessionService: ExternalAgentSessionService(),
             acpSessionRegistry: acpSessionRegistry,

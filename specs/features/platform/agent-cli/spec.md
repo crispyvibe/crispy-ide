@@ -147,6 +147,7 @@ Detailed per-command requirements and scenarios live in category-specific docs:
 | Browser | [commands-browser.md](commands-browser.md) | `browser.open`, `browser.snapshot`, `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload`, `browser.eval`, `browser.click`, `browser.type`, `browser.wait`, `browser.screenshot`, `browser.console`, `browser.dialog` |
 | Shortcuts | [commands-shortcuts.md](commands-shortcuts.md) | `shortcut.list`, `shortcut.add` |
 | VibeSpace | [commands-vibespace.md](commands-vibespace.md) | `vibespace.list`, `vibespace.current`, `pane.list`, `vibespace.addProject`, `vibespace.removeProject`, `vibespace.parkProject`, `vibespace.activateProject`, `vibespace.listProjects` |
+| Vibe Lanes | [commands-lanes.md](commands-lanes.md) | `lane.list`, `lane.show`, `lane.create`, `lane.update`, `lane.delete`, `lane.restoreStarters`, `lane.task.create`, `lane.task.list`, `lane.task.show`, `lane.task.answer`, `lane.task.stop`, `lane.task.delete` |
 | Todo | [F053 Quick Todos](../../vibespace/todos/spec.md) | `todo.add`, `todo.list`, `todo.complete`, `todo.reopen`, `todo.update`, `todo.remove`, `todo.show`, `todo.message.add` |
 
 ## Error Codes
@@ -275,6 +276,7 @@ None at this time.
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-07-12 | Added Vibe Lanes command category (`lane.*`, `lane.task.*`): lane authoring and task control with F059-R10 parity. See commands-lanes.md. | Manu |
 | 2026-05-14 | Initial draft extracted from prior planning notes | Manu |
 | 2026-05-17 | Marked feature implemented; added per-category implementation status table; retired planning docs | Manu |
 | 2026-05-30 | Replaced process-ancestry authorization (F044-R02) with owner-only `0600` socket access so any same-user process (incl. ACP agents, tmux/ssh shells) can use the CLI; removed `CLIProcessAncestry` and the bypass flag. See F051 (Remote Agent CLI). | Manu |

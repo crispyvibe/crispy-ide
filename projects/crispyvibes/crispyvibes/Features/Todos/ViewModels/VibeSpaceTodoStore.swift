@@ -18,6 +18,10 @@ final class VibeSpaceTodoStore: ObservableObject {
     /// Thread messages per todo id, fetched on demand for the detail view.
     @Published private(set) var messagesByTodo: [String: [TodoMessage]] = [:]
 
+    /// F060 — file links per todo id, fetched on demand like thread messages.
+    /// Written only by the +Pipeline extension (same-file-family discipline).
+    @Published var fileLinksByTodo: [String: [TodoFileLink]] = [:]
+
     /// Bumps on every successful write so views can coalesce-refresh.
     @Published private(set) var lastChangeID: UUID = UUID()
 
@@ -107,12 +111,23 @@ final class VibeSpaceTodoStore: ObservableObject {
     }
 
     func setCompleted(id: String, completed: Bool) async -> Bool {
-        await mutate(method: "todo.complete", params: ["id": id, "completed": completed])
+        // Optimistic: flip locally so the checkbox responds instantly, then
+        // reconcile with the helper (refresh restores truth on failure).
+        applyOptimistic(id: id) { todo in
+            todo.status = completed ? .completed : .active
+            todo.completedAt = completed ? TodoStoreClock.nowISO() : nil
+        }
+        return await mutate(method: "todo.complete", params: ["id": id, "completed": completed])
     }
 
     @discardableResult
     func delete(id: String) async -> Bool {
-        await mutate(method: "todo.delete", params: ["id": id])
+        // Optimistic removal; the snapshot is restored on failure.
+        let snapshot = todos
+        todos.removeAll { $0.id == id }
+        let ok = await mutate(method: "todo.delete", params: ["id": id])
+        if !ok { todos = snapshot }
+        return ok
     }
 
     // MARK: - Thread
@@ -172,11 +187,20 @@ final class VibeSpaceTodoStore: ObservableObject {
 
     // MARK: - Helpers
 
+    /// Mutate the cached copy of a todo in place (optimistic UI). The follow-up
+    /// `refresh()` inside `mutate` reconciles with the helper's truth.
+    private func applyOptimistic(id: String, _ change: (inout Todo) -> Void) {
+        guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
+        var todo = todos[index]
+        change(&todo)
+        todos[index] = todo
+    }
+
     private func mutate(method: String, params: [String: Any]) async -> Bool {
         guard let result = await conversationStore.send(method: method, params: params) else {
-            recordError("persistence helper unavailable"); return false
+            recordError("persistence helper unavailable"); await refresh(); return false
         }
-        if let err = result.errorMessage { recordError(err); return false }
+        if let err = result.errorMessage { recordError(err); await refresh(); return false }
         await refresh()
         bumpChange()
         return true
@@ -191,4 +215,25 @@ final class VibeSpaceTodoStore: ObservableObject {
         logger.warning("todo op error: \(message, privacy: .public)")
         lastErrorMessage = message
     }
+
+    // MARK: - Pipeline plumbing (F060, used by the +Pipeline extension)
+
+    /// Send a pipeline RPC and unwrap its value; records errors like `mutate`
+    /// but leaves refresh/change-bump policy to the caller.
+    func sendPipeline(method: String, params: [String: Any]) async -> [String: Any]? {
+        guard let result = await conversationStore.send(method: method, params: params) else {
+            recordError("persistence helper unavailable"); return nil
+        }
+        if let err = result.errorMessage { recordError(err); return nil }
+        return result.value ?? [:]
+    }
+
+    /// Extension-visible change bump (keeps `bumpChange` private to this file).
+    func noteChanged() { bumpChange() }
+}
+
+/// Second-precision ISO timestamps matching the persistence helper's format.
+enum TodoStoreClock {
+    private static let iso = ISO8601DateFormatter()
+    static func nowISO() -> String { iso.string(from: Date()) }
 }

@@ -24,6 +24,11 @@ final class ContentSurfacePolicyTests: XCTestCase {
         XCTAssertEqual(ContentSurfacePolicy.surface(for: .todos, mode: .detailed), .detailTab)
     }
 
+    func test_vibeLanes_spotlightInBoardMode_detailTabInDetailed() {
+        XCTAssertEqual(ContentSurfacePolicy.surface(for: .vibeLanes, mode: .terminalOnly), .spotlight)
+        XCTAssertEqual(ContentSurfacePolicy.surface(for: .vibeLanes, mode: .detailed), .detailTab)
+    }
+
     func test_vibeCast_spotlightInBoardMode_detailTabInDetailed() {
         XCTAssertEqual(ContentSurfacePolicy.surface(for: .vibeCast, mode: .terminalOnly), .spotlight)
         XCTAssertEqual(ContentSurfacePolicy.surface(for: .vibeCast, mode: .detailed), .detailTab)
@@ -57,5 +62,9 @@ final class ContentSurfacePolicyTests: XCTestCase {
     func test_spotlightPin_boardTileInBoardMode_detailTabInDetailed() {
         XCTAssertEqual(ContentSurfacePolicy.surface(for: .spotlightPin, mode: .terminalOnly), .boardTile)
         XCTAssertEqual(ContentSurfacePolicy.surface(for: .spotlightPin, mode: .detailed), .detailTab)
+    }
+
+    func test_vibeLanesSpotlight_supportsPinningToBoard() {
+        XCTAssertTrue(TerminalSpotlightState.Source.vibeLanes.supportsBoardPin)
     }
 }

@@ -116,6 +116,7 @@ final class ContentViewerStore: ObservableObject {
 
     func openVibeCast() { activeGroup.openTab(.vibeCast) }
     func openTodos() { activeGroup.openTab(.todos) }
+    func openVibeLanes() { activeGroup.openTab(.vibeLanes) }
 
     func makeACPStore(
         focusedProject: AnyProjectSession?,
@@ -189,6 +190,66 @@ final class ContentViewerStore: ObservableObject {
             return
         }
         activeGroup.openTab(.acpPane(id: id))
+    }
+
+    func openExistingACPPane(id: UUID) {
+        guard sessionRegistry.store(forID: id) != nil else { return }
+        ensureACPPaneTab(id: id)
+    }
+
+    func openVibeLaneACPPane(
+        target: VibeLaneACPChatTarget,
+        projects: [AnyProjectSession],
+        vibespaceID: UUID? = nil
+    ) {
+        if let store = resolveVibeLaneACPStore(target: target, vibespaceID: vibespaceID) {
+            ensureACPPaneTab(id: store.id)
+            return
+        }
+
+        let threadID = target.threadID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let validThreadID = threadID?.isEmpty == false ? threadID : nil
+        guard let validThreadID else { return }
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let thread = await self.conversationStore.getThread(id: validThreadID)
+            let agentID = (thread?["agentId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                ?? AppPreferences.acpDefaultAgentID()
+                ?? "codex"
+            let storedProjectPath = (thread?["projectPath"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let resolvedProjectPath = storedProjectPath?.isEmpty == false ? storedProjectPath! : target.projectPath
+            _ = self.openACPPaneForThread(
+                agentId: agentID.isEmpty ? "codex" : agentID,
+                projectPath: resolvedProjectPath,
+                threadId: validThreadID,
+                projects: projects,
+                vibespaceID: vibespaceID
+            )
+        }
+    }
+
+    func resolveVibeLaneACPStore(
+        target: VibeLaneACPChatTarget,
+        vibespaceID: UUID? = nil
+    ) -> ACPStandaloneSessionStore? {
+        guard let sessionID = target.sessionID else { return nil }
+        let store = sessionRegistry.store(forID: sessionID)
+            ?? sessionRegistry.storeForVibeLaneSession(
+                id: sessionID,
+                agentID: AppPreferences.acpDefaultAgentID() ?? "codex",
+                projectPath: target.projectPath,
+                isEnded: target.managedSessionEnded,
+                vibespaceID: vibespaceID
+            )
+        if target.managedSessionEnded, !store.isConnected {
+            store.detachExternalVibeLaneSession(ended: true)
+        }
+        let threadID = target.threadID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let threadID, !threadID.isEmpty {
+            store.restoreThreadIfNeeded(threadID)
+        }
+        return store
     }
 
     func removeACPStore(id: UUID) {

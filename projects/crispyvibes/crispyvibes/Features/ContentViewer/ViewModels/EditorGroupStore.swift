@@ -55,7 +55,7 @@ final class EditorGroupStore: ObservableObject, Identifiable {
                 return url.standardizedFileURL.path.hasPrefix(prefix)
             case .webPage(let reference):
                 return reference.projectPath == rootPath
-            case .vibeCast, .todos, .terminal, .acpPane:
+            case .vibeCast, .todos, .vibeLanes, .terminal, .acpPane:
                 return true
             }
         }
@@ -69,7 +69,7 @@ final class EditorGroupStore: ObservableObject, Identifiable {
                 documentReference: reference,
                 fileContentProvider: fileContentProvider
             )
-        case .vibeCast, .todos, .webPage, .terminal, .acpPane:
+        case .vibeCast, .todos, .vibeLanes, .webPage, .terminal, .acpPane:
             activateOrInsertTab(tab, setActive: true)
         }
     }

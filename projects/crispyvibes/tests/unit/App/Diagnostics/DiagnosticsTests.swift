@@ -144,6 +144,9 @@ final class DiagnosticsTests: XCTestCase {
 
     func testAppDelegateRegistersServicesOnLaunchCallbacks() {
         let delegate = AppDelegate()
+        // This test exercises the real launch path, so opt out of the guard
+        // that skips launch side effects under XCTest.
+        delegate.isRunningUnitTests = false
         NSApp.servicesProvider = nil
 
         delegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))

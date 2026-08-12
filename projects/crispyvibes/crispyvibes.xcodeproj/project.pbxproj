@@ -22,7 +22,50 @@
 		0497B88F0AF64D49E7BFCB7A /* VibeSpaceHydrationCoordinatorProjectRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0497B88F0AF64D49E7BFCB7B /* VibeSpaceHydrationCoordinatorProjectRuntime.swift */; };
 		0518CC8301136F84758C8E94 /* TerminalSessionDelegateAndView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132A680C12159B6827A422A2 /* TerminalSessionDelegateAndView.swift */; };
 		06B0E5AD4B4CA235BF427C7C /* Todo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10A547C43FD1C507328A502 /* Todo.swift */; };
+		06E4F1B9B96FDBB5FE6819D0 /* VibeLaneACPAgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A8F0537E9CA3973816FA8C2 /* VibeLaneACPAgentRunner.swift */; };
+		E05900000000000000000002 /* VibeLaneEngineConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05900000000000000000001 /* VibeLaneEngineConfiguration.swift */; };
+		E05900000000000000000004 /* VibeLaneEngineViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05900000000000000000003 /* VibeLaneEngineViews.swift */; };
+		E05900000000000000000006 /* VibeLaneEditorSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05900000000000000000005 /* VibeLaneEditorSupportViews.swift */; };
+		E07000000000000000000001 /* VibeLaneSkillsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07000000000000000000011 /* VibeLaneSkillsEditor.swift */; };
+		E07100000000000000000001 /* VibeLaneSkillDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07100000000000000000011 /* VibeLaneSkillDefinition.swift */; };
+		E07200000000000000000001 /* VibeLaneSkillStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07200000000000000000011 /* VibeLaneSkillStore.swift */; };
+		E07700000000000000000001 /* AutomationDatabaseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07700000000000000000011 /* AutomationDatabaseStore.swift */; };
+		E07300000000000000000001 /* SkillLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07300000000000000000011 /* SkillLibraryView.swift */; };
+		E07400000000000000000001 /* SkillLibraryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07400000000000000000011 /* SkillLibraryDetailView.swift */; };
+		E07600000000000000000001 /* SkillLibraryDetailSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07600000000000000000011 /* SkillLibraryDetailSupport.swift */; };
+		E07500000000000000000001 /* VibeLaneSkillStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07500000000000000000011 /* VibeLaneSkillStoreTests.swift */; };
+		E07500000000000000000002 /* VibeLaneEngineNoRepositoryActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07500000000000000000012 /* VibeLaneEngineNoRepositoryActionsTests.swift */; };
+		E05900000000000000000008 /* VibeLaneDefinition+Validation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05900000000000000000007 /* VibeLaneDefinition+Validation.swift */; };
+		E0590000000000000000000A /* VibeLaneEditorView+Editing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05900000000000000000009 /* VibeLaneEditorView+Editing.swift */; };
+		E06300000000000000000001 /* VibeDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06300000000000000000011 /* VibeDefinition.swift */; };
+		E06300000000000000000002 /* VibeLaneReferenceResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06300000000000000000012 /* VibeLaneReferenceResolver.swift */; };
+		E06300000000000000000003 /* VibeLaneTaskManager+VibeAuthoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06300000000000000000013 /* VibeLaneTaskManager+VibeAuthoring.swift */; };
+		E06300000000000000000004 /* VibeLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06300000000000000000014 /* VibeLibraryView.swift */; };
+		E06300000000000000000005 /* VibeEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06300000000000000000015 /* VibeEditorView.swift */; };
+		E06500000000000000000001 /* VibeLibraryInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06500000000000000000011 /* VibeLibraryInspectorView.swift */; };
+		E06800000000000000000001 /* VibeLibrarySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06800000000000000000011 /* VibeLibrarySupport.swift */; };
+		E06900000000000000000001 /* VibeLaneCatalogCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06900000000000000000002 /* VibeLaneCatalogCard.swift */; };
+		E06110000000000000000001 /* VibeLoopDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06100000000000000000001 /* VibeLoopDefinition.swift */; };
+		E06110000000000000000002 /* VibeLoopScheduleCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06100000000000000000002 /* VibeLoopScheduleCalculator.swift */; };
+		E06110000000000000000003 /* VibeLoopStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06100000000000000000003 /* VibeLoopStore.swift */; };
+		E06110000000000000000004 /* VibeLoopManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06100000000000000000004 /* VibeLoopManager.swift */; };
+		E06110000000000000000005 /* VibeLoopManager+Scheduling.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06100000000000000000005 /* VibeLoopManager+Scheduling.swift */; };
+		E06110000000000000000006 /* VibeLoopScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06100000000000000000006 /* VibeLoopScheduler.swift */; };
+		E06110000000000000000007 /* VibeLoopPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06100000000000000000007 /* VibeLoopPresentation.swift */; };
+		E06110000000000000000008 /* VibeLoopsSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06100000000000000000008 /* VibeLoopsSurfaceView.swift */; };
+		E06110000000000000000009 /* VibeLoopDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06100000000000000000009 /* VibeLoopDashboardView.swift */; };
+		E0611000000000000000000A /* VibeLoopDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0610000000000000000000A /* VibeLoopDetailView.swift */; };
+		E0611000000000000000000B /* VibeLoopEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0610000000000000000000B /* VibeLoopEditorView.swift */; };
+		E0611000000000000000000C /* VibeLoopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0610000000000000000000C /* VibeLoopTests.swift */; };
+		E0611000000000000000000D /* VibeLoopEditorView+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0610000000000000000000D /* VibeLoopEditorView+Actions.swift */; };
+		E06410000000000000000001 /* AutomationSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06400000000000000000001 /* AutomationSurfaceView.swift */; };
+		E06410000000000000000002 /* VibeLoopEditorView+Lane.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06400000000000000000002 /* VibeLoopEditorView+Lane.swift */; };
+		E06610000000000000000001 /* AutomationOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06600000000000000000001 /* AutomationOverviewView.swift */; };
+		E06710000000000000000001 /* AutomationConceptArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06700000000000000000001 /* AutomationConceptArtwork.swift */; };
+		E07810000000000000000001 /* AutomationOverviewView+Example.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07800000000000000000001 /* AutomationOverviewView+Example.swift */; };
+		E07A10000000000000000001 /* AutomationOverviewExampleScenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07A00000000000000000001 /* AutomationOverviewExampleScenario.swift */; };
 		0712012CB5DE266E34DA28DC /* CommentsFloatingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA858148B9A59001BF0F265B /* CommentsFloatingButton.swift */; };
+		073C0269BAD0F956F57F01FC /* CLICommandRouterLaneHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED5EE8FCA6C4F67602237A /* CLICommandRouterLaneHandlers.swift */; };
 		07D2EA07007D8D68E650FEBE /* CommentsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F18E469D8C6B1BC9042B2E5 /* CommentsPanelView.swift */; };
 		0953282E16DB48F7A99DC0E9 /* CodeEditorCommentBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126E91B4976C63221AAF2FDB /* CodeEditorCommentBridge.swift */; };
 		09BB59F8EDE71FDA6E87AF37 /* MarkdownViewModelDetection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE84DF2B373C9E623AEFA7F /* MarkdownViewModelDetection.swift */; };
@@ -45,8 +88,6 @@
 		17D2FB0E3252D64055270C63 /* MermaidRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07D2FB0E3252D64055270C63 /* MermaidRenderer.swift */; };
 		17D9F9867D965C7BF79D5718 /* CrispyVibesBrowserWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBC20EA6850FBCF7E4B11E7 /* CrispyVibesBrowserWebView.swift */; };
 		18A7EBE079747898EC0BCA41 /* VibeSpaceStateParkingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */; };
-		C2D00000000000000000002C /* WorktreeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002B /* WorktreeServiceTests.swift */; };
-		C2D0000000000000000000F1 /* ContentSurfacePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */; };
 		1A2B3C4D5E6F708090A0B0C0 /* NewTerminalPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3C4D5E6F70809091A1B1C1 /* NewTerminalPopover.swift */; };
 		1C1584E11C4B8C1A48B680DB /* TerminalSessionCommandDispatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59932D5C5F2165C815170786 /* TerminalSessionCommandDispatch.swift */; };
 		1D7A942377D2F5058C127D21 /* BoardInteractionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9319FACD47F3ED87CD2C2D28 /* BoardInteractionControllerTests.swift */; };
@@ -71,6 +112,7 @@
 		2BCD0396759CBC899BCAAD21 /* CLICommandRouterVibeSpaceHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D5ABD4E1C9E71C6467FD94 /* CLICommandRouterVibeSpaceHandlers.swift */; };
 		2CEE36CBBFEF8933E7727B14 /* VibeSpaceStateProjectLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50E22EF9FC72DEDD4B9C1EE /* VibeSpaceStateProjectLifecycle.swift */; };
 		2D1DCD67877241F89C6BCB0D /* DockPreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0CF4FF5DF014F92AB8CB4EF /* DockPreviewPanel.swift */; };
+		2F71A1D13D1AD0FD4AD2DA04 /* VibeLaneTaskManager+LaneAuthoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B0902A4D4D5092BB7F3324 /* VibeLaneTaskManager+LaneAuthoring.swift */; };
 		300F45B5C752B574148B46E6 /* VibeSpaceStateProjectSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D3BB01476BBF1488E1F2D8 /* VibeSpaceStateProjectSettings.swift */; };
 		30140E7A74CF2A046752C176 /* ShortcutPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFE41179110DAD31D25DB684 /* ShortcutPanelView.swift */; };
 		312029A2909C2BD59101A417 /* BrowserContentWithCommentsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4940EB928207AB21AFC121F8 /* BrowserContentWithCommentsPanel.swift */; };
@@ -98,8 +140,12 @@
 		4468BC8228D29DA26C337B9B /* MarkupRenderedEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D285C6841FBC59920516899B /* MarkupRenderedEditor.swift */; };
 		45A93A598B9D942D7136F7AE /* CognitoAuthSecurity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5BBF05816A1090A85D2DCF /* CognitoAuthSecurity.swift */; };
 		471A1BB3099F260DAE4DBCAD /* VibeSpaceCommentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57DEC7821EEEACF151FECA8A /* VibeSpaceCommentStore.swift */; };
+		4744C9A37EFA19842BB0DC05 /* VibeLaneTaskManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69F4D0E0927324707AFDE0E5 /* VibeLaneTaskManager.swift */; };
+		47610635DE52CB32E72FC6DB /* TodoLanePipelineBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CAC0E23C24AD54378D4EAA /* TodoLanePipelineBridge.swift */; };
 		47B53CDB56AB2E554D04CCA1 /* TerminalViewModelPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3FE6FAFD6CEFD6F405CDCC8 /* TerminalViewModelPresets.swift */; };
+		4A52CF244EFCA40F136C29AB /* VibeSpaceTodoStore+Pipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BBC39557E2F0B68F6293A0 /* VibeSpaceTodoStore+Pipeline.swift */; };
 		4D3D58F6C8B598C33C214C27 /* ContentViewerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BAE2841F03545E269F6EFDD /* ContentViewerStore.swift */; };
+		4D6799B6E0587CABAA74BB5C /* VibeLaneEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BFF12512F077CD0144F494 /* VibeLaneEngine.swift */; };
 		4D9920E1BF6882F852B59F49 /* CommentComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5E248E0EB174262C13D55E /* CommentComposerView.swift */; };
 		4DB91B0943D48D0D0BAFC7BF /* ContentViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07F79DDEABC0DC12B03FD2CE /* ContentViewerView.swift */; };
 		4EFB9324CEA6CB1A105CAF9D /* TextProcessorServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99C9C15D74A9A0AA1C73543 /* TextProcessorServiceTests.swift */; };
@@ -115,14 +161,17 @@
 		56B5C23101C0ABE697D63CF9 /* VibeSpaceCreationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C5A2ED329D5AC1702D6CFC9 /* VibeSpaceCreationSheet.swift */; };
 		56C0B4D87073D35389B31A10 /* BrowserUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56C0B4D87073D35389B31A11 /* BrowserUITests.swift */; };
 		5857D60C955AC139CBFFE529 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E17915A86400AF658357F229 /* GhosttyKit.xcframework */; };
+		5957FF3965CB93A27FE8B8E9 /* VibeLaneTaskManager+Scheduling.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCBDCBE0D6BFDBE06A34288E /* VibeLaneTaskManager+Scheduling.swift */; };
 		5977CBD83FD790EAA3CCCEA9 /* AppStringsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9D04C023ECA7860320E2454 /* AppStringsTests.swift */; };
 		59F000000000000000000001 /* AppInstallationGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59F000000000000000000002 /* AppInstallationGuard.swift */; };
 		5B64D70B110F447C2294C442 /* AppSettingsSheetViewAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 945C6B70739C085F2804B473 /* AppSettingsSheetViewAccount.swift */; };
 		5B7A9A418FBBDFA90B56171B /* ACPTransportLineSplittingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECDFAB6F0BC012FB2C4CC08 /* ACPTransportLineSplittingTests.swift */; };
 		5C825C0689595A8E7520E24B /* PaneWorkerExecutorExplorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A228D3B76D4641CDB38B798B /* PaneWorkerExecutorExplorer.swift */; };
 		5C8720A6C10CE5F9F89241F3 /* VibeSpaceShortcutProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBBE7D844ED39E3B639FD097 /* VibeSpaceShortcutProvider.swift */; };
+		5D4E85ECB6DAB391921231F7 /* VibeLaneTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBCFF2D8A107BD85D191632E /* VibeLaneTask.swift */; };
 		5D668E07E2E171FBDC906100 /* ProjectTerminalCycler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5318B5755F24CA6A642FE9BE /* ProjectTerminalCycler.swift */; };
 		5E660404EA2F7CC3CE135E90 /* DocumentBufferStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DEA95BFF4306F7F0ECB3A17 /* DocumentBufferStore.swift */; };
+		5E9000000000000000000001 /* VibeLaneSurfaceNavigationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E9000000000000000000002 /* VibeLaneSurfaceNavigationViewModel.swift */; };
 		5F9AC102F309DD435E656E2A /* VibeSpaceLifecycleUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7007E7015EF44ABB0F29E016 /* VibeSpaceLifecycleUITests.swift */; };
 		600BB2E81D0B0D2F34EAEE49 /* SyntaxAndLanguageDefinitionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BBC85DC6ED9747F21C01CFB /* SyntaxAndLanguageDefinitionTests.swift */; };
 		60872035673E4AEE3ADBC8C2 /* TerminalScrollAssistGlass.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B35413BD94CAA17FBD88E11 /* TerminalScrollAssistGlass.swift */; };
@@ -132,6 +181,7 @@
 		61A011CB5305F6B3F7008C98 /* AppSettingsSheetViewVibeSpaceDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E876F0BB5C27EDD5C17D516 /* AppSettingsSheetViewVibeSpaceDefaults.swift */; };
 		61C9C440F44BEFDFBC23AE95 /* MarkdownViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E496F764F317F6CF1D17EB6C /* MarkdownViewModelTests.swift */; };
 		63C077BC1478B582ECC83CFC /* BrowserNavigationDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35A301396AF677A5C0D8A03 /* BrowserNavigationDelegate.swift */; };
+		64077656201C88C21450FDE0 /* VibeLaneCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFE3D0D3690D22779D4E580C /* VibeLaneCatalog.swift */; };
 		64AE811696FFF5D380301C6C /* DockedBrowserCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC88DC71693F1743BE1E4977 /* DockedBrowserCoordinator.swift */; };
 		64D5024F37E76E20279F2299 /* VibeSpaceManagementServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D317F45F04D0D239F99C4DC /* VibeSpaceManagementServiceTests.swift */; };
 		65BFCAB5A176730417450E54 /* VibeSpaceSettingsSupportTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F85CBD4C7375558EDDF503 /* VibeSpaceSettingsSupportTypes.swift */; };
@@ -154,22 +204,22 @@
 		6E1F0A10D7D1453D9A8B1007 /* EditorBehavioralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E1F0A10D7D1453D9A8B2007 /* EditorBehavioralTests.swift */; };
 		6F83C0C0CB0A24A19576B480 /* ExperimentalFeaturesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D6C6A4F23E0455223B0EF0 /* ExperimentalFeaturesService.swift */; };
 		6FA4BD284BDEBA8D5E488476 /* LaTeXPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4570EEA7054A98314CA30D1 /* LaTeXPreviewView.swift */; };
-		A1B2C3D4E5F600000000A002 /* LaTeXCompiledPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */; };
-		A1B2C3D4E5F600000000A006 /* LaTeXNativeCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */; };
-		A1B2C3D4E5F600000000A00A /* CompiledPreviewSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */; };
-		A1B2C3D4E5F600000000A008 /* DocumentFormatPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */; };
 		7021E3A3A4EFF7F72F53CF1C /* CognitoAuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 864E2DDA5731BFA89130C3E0 /* CognitoAuthServiceTests.swift */; };
 		713EBEBB7BBA2718C22A0E0D /* DirectoryWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86AA2FA103460BD2D86D755C /* DirectoryWatcher.swift */; };
 		714EBEBB7BBA2718C22A0E0E /* GitHeadWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86AB2FA103460BD2D86D755D /* GitHeadWatcher.swift */; };
+		71AF0C23A6AACB006D95B24A /* TodoDetailView+FileLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFA422CA5E01016492AB7CC2 /* TodoDetailView+FileLinks.swift */; };
 		71D056556E0640337330B412 /* terminfo in Resources */ = {isa = PBXBuildFile; fileRef = F0CAE1777488E5369283C502 /* terminfo */; };
 		72AE69C93ECCAB7C2B92E31E /* TerminalViewModelShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FD58BB6E9A668A39536E33D /* TerminalViewModelShortcuts.swift */; };
 		730EEB6C55E2F1F24C7D0387 /* CommentGutterIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B314F2B61948B6D1BC3DCFF /* CommentGutterIndicator.swift */; };
 		7322C47AFB44E0D4D5B96D4A /* VibeCastStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA1678594BDC20B78A36C24 /* VibeCastStore.swift */; };
 		7585A221AADB58362497B6AA /* EditableRasterImageCanvasViewRendering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7792B6DF8AA43845A0CEEF49 /* EditableRasterImageCanvasViewRendering.swift */; };
 		7685C7E0E6D068FC69A8FC46 /* TerminalViewModelTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AFE902D189DEB4CE721F8C3 /* TerminalViewModelTabs.swift */; };
+		76FC9EA27490239454F420E6 /* VibeLaneTaskDetailView+RunLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69689D0A5DEDEF5FFA55BFA4 /* VibeLaneTaskDetailView+RunLog.swift */; };
+		76FC9EA27490239454F420F0 /* VibeLaneEditorView+Contract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69689D0A5DEDEF5FFA55BFB0 /* VibeLaneEditorView+Contract.swift */; };
 		7821EBF769F001F0BABA0F0C /* TerminalViewModelTestsExecutionFlows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D40B67F5AF706A291328CEE /* TerminalViewModelTestsExecutionFlows.swift */; };
 		785554E6966466B1459D8C57 /* ContextSummaryGenerating.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4BEE53B3AFE95AC5CB99A55 /* ContextSummaryGenerating.swift */; };
 		785ACCA93D1CBC27A40E06F3 /* TodoQuickCaptureOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6929502A5AE9CA15649651FF /* TodoQuickCaptureOverlay.swift */; };
+		79863344CC94941FEACE9C8E /* VibeLaneRunners.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530ABB9F36003F3025877DAF /* VibeLaneRunners.swift */; };
 		79A260A512FBDAD8067D9EC2 /* VibeSpacePersistenceIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E084AEC5005817CDE77C59BF /* VibeSpacePersistenceIntegrationTests.swift */; };
 		7A3F6DFA8D0B4C3E90000001 /* VibeSpaceStackedProjectRailSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3F6DFA8D0B4C3E90000002 /* VibeSpaceStackedProjectRailSupport.swift */; };
 		7A3F6DFA8D0B4C3E90000003 /* ContentViewStackedProjectRailActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3F6DFA8D0B4C3E90000004 /* ContentViewStackedProjectRailActions.swift */; };
@@ -177,6 +227,7 @@
 		7A3F6DFA8D0B4C3E90000007 /* GhosttyTerminalRuntimeCallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3F6DFA8D0B4C3E90000008 /* GhosttyTerminalRuntimeCallbacks.swift */; };
 		7A63EA928789CC92001FA728 /* VibeSpaceManagementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04BCFD47BCD045FC69391031 /* VibeSpaceManagementService.swift */; };
 		7ABA9E9C933617F63BFAAA26 /* SerialTaskQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B09E173B53D66230B2C17655 /* SerialTaskQueue.swift */; };
+		7C714F0CD6EFAFF5B881D84E /* TodoPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40E1C8306B4A1FF2D91BB2CD /* TodoPipeline.swift */; };
 		7D6038213B6FD38E66509899 /* AppSettingsSheetContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6979D608CA6926C1AF712494 /* AppSettingsSheetContent.swift */; };
 		7DAEBC5A5586122F1375844C /* SessionMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51AE4E055CB8863F7F099186 /* SessionMetadata.swift */; };
 		7E30E212A37754AF565B5859 /* TodoStoreEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A7BFBE7491D028837AE2C4 /* TodoStoreEnvironment.swift */; };
@@ -187,6 +238,7 @@
 		809D18FB53D31C6D2DC38586 /* FileContentWithCommentsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6AA19904C977CF683CBA76A /* FileContentWithCommentsPanel.swift */; };
 		822E1636A77348618D5ECBCE /* DockPinnedFileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF7D79F15364EE58DF4F8D1 /* DockPinnedFileView.swift */; };
 		82992CD38F6A88E43ECAE627 /* ContextSummaryGeneratorIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD35DBB00AD4DD604BEF0E0A /* ContextSummaryGeneratorIntegrationTests.swift */; };
+		829AEACBE3F6EAB3BA8C8E94 /* VibeLaneTaskManager+CatalogSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287D68E62CFFF20539B72A7E /* VibeLaneTaskManager+CatalogSummary.swift */; };
 		8352E169A78CAD2862E8EABE /* VibeSpaceConfigModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C074D30346BA4C294F7D99F /* VibeSpaceConfigModels.swift */; };
 		84E6893FC3DFC547D9472468 /* CommentInlinePopoverComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83CF57205435C79F0DEF204 /* CommentInlinePopoverComposer.swift */; };
 		85DCB48F3B107C5B5D47AE50 /* BrowserPanelViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0C96874C1E64A720CEE20B /* BrowserPanelViewModel.swift */; };
@@ -199,21 +251,27 @@
 		8B00DF720ECC8FF71F5D1776 /* CrispyVibesTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76C94DDF7BFCFC61501B66D /* CrispyVibesTheme.swift */; };
 		8E1DF645A9D0F8A3F2681855 /* AppDelegateUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5066B81F27895F458A4C4B66 /* AppDelegateUpdates.swift */; };
 		8EF90551983A68DC2B5EB469 /* CodeEditorCommentBridgeEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD0B13CCDCFC58AF1CE523F /* CodeEditorCommentBridgeEnvironment.swift */; };
+		8EFF4E107110F481A2DE6E62 /* TodoDispatchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1268567D4D016BBA6A65009 /* TodoDispatchSheet.swift */; };
+		8F94C751E822F4C8169D0222 /* VibeLaneDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B93F5CB477A08637C7A82BEE /* VibeLaneDashboardView.swift */; };
 		8FF9AAA58B404AAC9B7D57D1 /* DockPreviewBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B51662ADBA65455898E6CA36 /* DockPreviewBridge.swift */; };
 		90755CDE11049F32EB082416 /* TerminalRenameUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC7BEA0CC570BABA0298A7D /* TerminalRenameUITests.swift */; };
 		9153B6793168E8F1F0BE8200 /* VibeSpaceSessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A64DBAAEF2A79985D739A412 /* VibeSpaceSessionState.swift */; };
 		925F4EB8E767E980A3F9F1C6 /* GitDiffPreviewParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45184A9D9E2893F75D5A2AB4 /* GitDiffPreviewParsing.swift */; };
 		92B06328100B2AD7FA928723 /* AppThemePaletteTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F8A17EF26817B99BF61226 /* AppThemePaletteTypes.swift */; };
+		939ED71B15FF98B8B4606059 /* VibeLaneNewTaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2632CCD47C9B45D78CA6A42 /* VibeLaneNewTaskView.swift */; };
 		93A43C758C5A20A048F43BA2 /* CommentAnchorRelocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F26FC2BEE5DCBEBDBDF7692 /* CommentAnchorRelocatorTests.swift */; };
 		A8C001000000000000000001 /* MarkdownRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C001000000000000000003 /* MarkdownRuntimeTests.swift */; };
 		A8C001000000000000000002 /* CodeEditorCommentBridgeStabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C001000000000000000004 /* CodeEditorCommentBridgeStabilityTests.swift */; };
 		93FFFF6B9927D0B41702B83B /* TerminalSessionAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 198FC39D6403581793135228 /* TerminalSessionAppearance.swift */; };
 		95244885A7F9873771A98E78 /* EditorDropZoneOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D057D20F79F8DE3AD7C8756 /* EditorDropZoneOverlay.swift */; };
+		957E6F16A24C5E3FEB74957A /* VibeLaneTaskDetailView+Checkpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55FD12203C5C37515029A80 /* VibeLaneTaskDetailView+Checkpoints.swift */; };
 		95C59CC8111B80C96DFB78B4 /* BoardSpatialNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 967D7A8F95E9085063F44D87 /* BoardSpatialNavigation.swift */; };
 		9606E2432CDCB7BED118E1B1 /* PaneWorkerExecutorSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E957D6548C4B119C8C44F4A9 /* PaneWorkerExecutorSupport.swift */; };
+		96DEA0538B5D210B24FE5C45 /* TodoLanePipelineEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFFA303CB5073284761CB517 /* TodoLanePipelineEnvironment.swift */; };
 		976ADE743E3BEC3D032CF289 /* ContextSummaryPromptEvolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 642D176FE38820BBB44E67CB /* ContextSummaryPromptEvolutionTests.swift */; };
 		985E70CDD77A2DA9D606040F /* BoardHitTesting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136156E9F56987AB0BA1B754 /* BoardHitTesting.swift */; };
 		9A1B2C3D4E5F60718293A4B5 /* SSHProfileTestViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1B2C3D4E5F60718293A4B6 /* SSHProfileTestViewModelTests.swift */; };
+		9BFDB7394B097843DD4BEDB8 /* CLICommandRouterTodoPipelineHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C23045159513D47E748CDF3 /* CLICommandRouterTodoPipelineHandlers.swift */; };
 		9CFAC346FBD81679F360D5D5 /* MarkdownViewModelEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65D91C56DD875A98CF22860E /* MarkdownViewModelEditing.swift */; };
 		9D6B53B31B44D970839BAAF9 /* IOSurface.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D29548E45635BC4A2C7E3DD /* IOSurface.framework */; };
 		9D9E97AEF9B55DCF760B96F8 /* AppShellModelTestsVibeSpaceAndTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = E826F8E8F690FD18AFCDC36B /* AppShellModelTestsVibeSpaceAndTerminal.swift */; };
@@ -239,8 +297,6 @@
 		A10000000000000000000013 /* highlight.min.js in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000014 /* highlight.min.js */; };
 		A10000000000000000000014 /* marked.umd.js in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000015 /* marked.umd.js */; };
 		A10000000000000000000015 /* turndown.js in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000016 /* turndown.js */; };
-		KATEXMINJS00000000000002 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = KATEXMINJS00000000000001 /* katex.min.js */; };
-		AUTORENDERJS000000000002 /* auto-render.min.js in Resources */ = {isa = PBXBuildFile; fileRef = AUTORENDERJS000000000001 /* auto-render.min.js */; };
 		A10000000000000000000016 /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000017 /* THIRD_PARTY_NOTICES.md */; };
 		A10000000000000000000017 /* PaneWorkerInfrastructure.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000018 /* PaneWorkerInfrastructure.swift */; };
 		A10000000000000000000018 /* ProjectSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000019 /* ProjectSession.swift */; };
@@ -300,6 +356,7 @@
 		A10000000000000000000055 /* VibeSpaceSourceControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000055 /* VibeSpaceSourceControlView.swift */; };
 		A10000000000000000000056 /* TextServiceCLIPresetCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000056 /* TextServiceCLIPresetCatalog.swift */; };
 		A10000000000000000000057 /* VibeSpaceTerminalBoardViewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000057 /* VibeSpaceTerminalBoardViewSupport.swift */; };
+		A05910000000000000000001 /* VibeLaneBoardTileCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B05910000000000000000001 /* VibeLaneBoardTileCard.swift */; };
 		A10000000000000000000058 /* VibeSpaceTerminalBoardStandaloneRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000058 /* VibeSpaceTerminalBoardStandaloneRegistry.swift */; };
 		A10000000000000000000059 /* VibeSpaceTerminalBoardLayoutSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000059 /* VibeSpaceTerminalBoardLayoutSync.swift */; };
 		A1000000000000000000005A /* VibeSpaceTerminalBoardStoreSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005A /* VibeSpaceTerminalBoardStoreSync.swift */; };
@@ -336,6 +393,10 @@
 		A1000000000000000000100 /* TerminalFocusCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000100 /* TerminalFocusCoordinator.swift */; };
 		A100000000000000SEC00001 /* ShellEscaping.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000SEC00001 /* ShellEscaping.swift */; };
 		A10A79D33652DBFDC5C10E83 /* ContextSummaryGeneratorOutputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7928968273FED6D651B2C92 /* ContextSummaryGeneratorOutputTests.swift */; };
+		A1B2C3D4E5F600000000A002 /* LaTeXCompiledPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */; };
+		A1B2C3D4E5F600000000A006 /* LaTeXNativeCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */; };
+		A1B2C3D4E5F600000000A008 /* DocumentFormatPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */; };
+		A1B2C3D4E5F600000000A00A /* CompiledPreviewSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */; };
 		A1B2C3D4E5F60718192A3B4C /* BrowserDownloadDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E6F7081920A1B2C3D4E5F6 /* BrowserDownloadDelegate.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* AppKitTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* AppKitTreeView.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F4 /* AppKitTreeSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F5 /* AppKitTreeSupportViews.swift */; };
@@ -383,6 +444,7 @@
 		A20000000000000000000010 /* VibeSpaceAndNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000000000000000000011 /* VibeSpaceAndNavigationUITests.swift */; };
 		A20000000000000000000011 /* EditorWorkflowsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000000000000000000012 /* EditorWorkflowsUITests.swift */; };
 		A20000000000000000000012 /* ChromeAndSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000000000000000000013 /* ChromeAndSettingsUITests.swift */; };
+		A24EA200037B699FC9A877D6 /* TodoTriageCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A014C92CD65106310BAA725B /* TodoTriageCoordinator.swift */; };
 		A26121C187142A5FF972DC9F /* AppSettingsCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83F370FF6AEC8118E61569E3 /* AppSettingsCategory.swift */; };
 		A2C604330B2B32123D5B4A86 /* VibeSpaceCreationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F2EAFA76B7352F15DB045A5 /* VibeSpaceCreationUITests.swift */; };
 		A359D567FF7F29670D8EABCB /* VibeSpaceIntegrityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C399CBB30D80247DC28C1529 /* VibeSpaceIntegrityUITests.swift */; };
@@ -394,6 +456,7 @@
 		A4B5C6D7E8F9012345678902 /* RemoteProjectSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B5C6D7E8F9012345678901 /* RemoteProjectSessionTests.swift */; };
 		A4B5C6D7E8F9012345678904 /* VibeSpaceSidebarSessionBrowserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B5C6D7E8F9012345678903 /* VibeSpaceSidebarSessionBrowserTests.swift */; };
 		A4B5C6D7E8F9012345678911 /* RemoteProjectSessionMemoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B5C6D7E8F9012345678910 /* RemoteProjectSessionMemoryTests.swift */; };
+		A56BF64CBEACFEB1639539DC /* VibeLaneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CD09548E37830691626D8F /* VibeLaneEditorView.swift */; };
 		A56CF2B47CF0613270A46CB8 /* TerminalDiagnosticsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A3A6D8DD46C08154CBFF56 /* TerminalDiagnosticsSnapshot.swift */; };
 		A5C413D858192E1EEF5F8B90 /* VibeSpaceMultiProjectUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D8EB8B8342C31938D394917 /* VibeSpaceMultiProjectUITests.swift */; };
 		A5F0C1112223334445556667 /* StackedRailPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F0C1112223334445556668 /* StackedRailPresentationTests.swift */; };
@@ -435,8 +498,13 @@
 		A9C100000000000000000020 /* AgentDockPreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C200000000000000000020 /* AgentDockPreviewPanel.swift */; };
 		AABBCCDD11223344EEFF0002 /* CLISocketServerResilienceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDD11223344EEFF0001 /* CLISocketServerResilienceTests.swift */; };
 		AABBCCDD11223344EEFF0004 /* CLIExecRelayServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDD11223344EEFF0003 /* CLIExecRelayServerTests.swift */; };
+		ABAC103CE1D6F1C0FC4455CE /* CLICommandRouterLaneHandlersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD3DFBD11157174F11A7E1B /* CLICommandRouterLaneHandlersTests.swift */; };
 		ABCD1234ABCD1234ABCD1234 /* VibeSpaceSourceControlViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABCD1234ABCD1234ABCD1235 /* VibeSpaceSourceControlViewModelTests.swift */; };
 		AC0010010000000000000001 /* ACPTransportPromptCompletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0010010000000000000002 /* ACPTransportPromptCompletionTests.swift */; };
+		AC0010010000000000000003 /* ACPSelectableTextMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0010010000000000000004 /* ACPSelectableTextMarkdownTests.swift */; };
+		AC0020010000000000000001 /* TodoCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0020010000000000000002 /* TodoCardView.swift */; };
+		AC0020010000000000000003 /* TodoDetailView+Thread.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0020010000000000000004 /* TodoDetailView+Thread.swift */; };
+		AC0020010000000000000005 /* TodoModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0020010000000000000006 /* TodoModelTests.swift */; };
 		AC0FD49C84289D78F9B704A1 /* AppSettingsSheetViewServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 206C8EB4200B59A816EE2E28 /* AppSettingsSheetViewServices.swift */; };
 		AC38DDE6494D4A5566EC3EF7 /* ContentViewWelcomeActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCAEFE3BD8A91015716AAC0B /* ContentViewWelcomeActions.swift */; };
 		ACPCV010002000200020002 /* ACPChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACPCV010001000100010001 /* ACPChatView.swift */; };
@@ -455,11 +523,14 @@
 		ADD00000000000000000000A /* VibeSpaceTerminalBoardStoreAddTileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD00000000000000000000B /* VibeSpaceTerminalBoardStoreAddTileTests.swift */; };
 		ADD00000000000000000000C /* ComposeHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD00000000000000000000D /* ComposeHistoryTests.swift */; };
 		AF7DE45178894ED06A93BEF5 /* TodoDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A27B25FC728E29CA267B700 /* TodoDetailView.swift */; };
+		AUTORENDERJS000000000002 /* auto-render.min.js in Resources */ = {isa = PBXBuildFile; fileRef = AUTORENDERJS000000000001 /* auto-render.min.js */; };
 		B01C6B5E7DAE99CE841EE969 /* PaneWorkerClientAndFileIconTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 554E867E1559D589DF6F2399 /* PaneWorkerClientAndFileIconTests.swift */; };
 		B01E0C43357F74CC1DD0F369 /* ContentViewCatalogRecentSnapshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C52B060B3A6451F1736E911 /* ContentViewCatalogRecentSnapshots.swift */; };
 		B07C004F1D67ADBFE12DD9FB /* ContentViewerTabItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C235B644DB6B4114D40498D /* ContentViewerTabItemView.swift */; };
 		B0BB8F5CBB06CE1610F4262D /* BrowserSessionSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F690A12F261C88910EFB66E4 /* BrowserSessionSnapshot.swift */; };
+		B0F37E28180E620893A26864 /* VibeLaneTaskManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E560CB6F98E328DF6C45AB2 /* VibeLaneTaskManagerTests.swift */; };
 		B1A2C88AC3924AF22C8A2944 /* TerminalSessionVibeSpaceIDInjectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B691073B465571583494E749 /* TerminalSessionVibeSpaceIDInjectionTests.swift */; };
+		B33EF8AC8E62493A555EACAE /* VibeLaneEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A29318A4682F8193126C04B /* VibeLaneEngineTests.swift */; };
 		B3C4D5E6F7A8091A2B3C4D5E /* TerminalMemoryLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6978869504132 /* TerminalMemoryLifecycleTests.swift */; };
 		B441F918527A716B3B4CFEA6 /* DocumentBufferStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B3444C6DBB3A395D597D916 /* DocumentBufferStoreTests.swift */; };
 		B46CBA75328AC61E4AAEDF6B /* OperationMetricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC6AE2F6E509F8231A2F2CA /* OperationMetricsStore.swift */; };
@@ -468,6 +539,7 @@
 		B55E7F9AEC76560D834D7AE5 /* CLICommandRouterTodoHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36614E48DD50988227BE2397 /* CLICommandRouterTodoHandlers.swift */; };
 		B5AE1C535A5B3A6A008F3200 /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076F010F6417EBE98E5BEA2B /* AppStrings.swift */; };
 		B5FB3BE1789896D0D9D04FCF /* VibeSpaceSettingsRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D25D8E9DD2F083E4FE0B3D /* VibeSpaceSettingsRows.swift */; };
+		B68FFB8EC8CA8623C5786936 /* TodoLanePipelineBridge+Refine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 407FFFC97EF08AA1FE486B28 /* TodoLanePipelineBridge+Refine.swift */; };
 		B8679E2B487A2F623E34192C /* PDFFilePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6865C7E06CEF39B3C6CB25 /* PDFFilePreview.swift */; };
 		B8679E2B487A2F623E34193D /* OfficeFilePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6865C7E06CEF39B3C6CB26 /* OfficeFilePreview.swift */; };
 		B8726F953C9643F288E13085 /* VibeSpaceCommentStore+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81B5C5D65C6208BA60E03C62 /* VibeSpaceCommentStore+Helpers.swift */; };
@@ -494,14 +566,6 @@
 		C146610DAC25776F24C15D48 /* LaTeXRuntime in Resources */ = {isa = PBXBuildFile; fileRef = AFBDF00B5F802FCC349FAB84 /* LaTeXRuntime */; };
 		C1BC645B356BA596BE12DC7A /* AppDelegateDefaultsObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4859A806650A6BA1D0A035E1 /* AppDelegateDefaultsObservation.swift */; };
 		C2D000000000000000000002 /* VibeSpaceSidebarProjectTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000001 /* VibeSpaceSidebarProjectTree.swift */; };
-		C2D000000000000000000022 /* UnifiedSidebarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000021 /* UnifiedSidebarModels.swift */; };
-		C2D000000000000000000030 /* UnifiedSidebarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002F /* UnifiedSidebarViewModel.swift */; };
-		C2D00000000000000000002E /* ContentViewUnifiedSidebarActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */; };
-		C2D000000000000000000028 /* WorktreeServicing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000027 /* WorktreeServicing.swift */; };
-		C2D00000000000000000002A /* WorktreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000029 /* WorktreeService.swift */; };
-		C2D0000000000000000000F3 /* ContentPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D0000000000000000000F2 /* ContentPresentation.swift */; };
-		C2D000000000000000000024 /* VibeSpaceWorktreeNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */; };
-		C2D000000000000000000026 /* VibeSpaceRepositoryNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */; };
 		C2D000000000000000000004 /* VibeSpaceSidebarFilesPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000003 /* VibeSpaceSidebarFilesPane.swift */; };
 		C2D000000000000000000006 /* VibeSpaceSidebarGitPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000005 /* VibeSpaceSidebarGitPane.swift */; };
 		C2D000000000000000000008 /* VibeSpaceSidebarSessionsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000007 /* VibeSpaceSidebarSessionsPane.swift */; };
@@ -510,6 +574,16 @@
 		C2D00000000000000000000E /* VibeSpaceSidebarSessionsSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000000D /* VibeSpaceSidebarSessionsSectionView.swift */; };
 		C2D000000000000000000010 /* ContentViewVibeSpaceSessionActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000000F /* ContentViewVibeSpaceSessionActions.swift */; };
 		C2D000000000000000000012 /* VibeSpaceSidebarSessionBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000011 /* VibeSpaceSidebarSessionBrowser.swift */; };
+		C2D000000000000000000022 /* UnifiedSidebarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000021 /* UnifiedSidebarModels.swift */; };
+		C2D000000000000000000024 /* VibeSpaceWorktreeNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */; };
+		C2D000000000000000000026 /* VibeSpaceRepositoryNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */; };
+		C2D000000000000000000028 /* WorktreeServicing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000027 /* WorktreeServicing.swift */; };
+		C2D00000000000000000002A /* WorktreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D000000000000000000029 /* WorktreeService.swift */; };
+		C2D00000000000000000002C /* WorktreeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002B /* WorktreeServiceTests.swift */; };
+		C2D00000000000000000002E /* ContentViewUnifiedSidebarActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */; };
+		C2D000000000000000000030 /* UnifiedSidebarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002F /* UnifiedSidebarViewModel.swift */; };
+		C2D0000000000000000000F1 /* ContentSurfacePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */; };
+		C2D0000000000000000000F3 /* ContentPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D0000000000000000000F2 /* ContentPresentation.swift */; };
 		C33CEF4AAE6E999443C526C6 /* SettingsNavigationPrimitives.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE3899E41EA3ED6345C6BC8 /* SettingsNavigationPrimitives.swift */; };
 		C3F1A2B3C4D5E6F708091011 /* SpotlightComposePathSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3F1A2B3C4D5E6F708091012 /* SpotlightComposePathSearch.swift */; };
 		C477873228D31248136564F0 /* TerminalSessionRestorerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BFE01099A8314E77A7B1C92 /* TerminalSessionRestorerTests.swift */; };
@@ -517,11 +591,14 @@
 		C559FB9A25B159A634DFF6C0 /* FolderExplorerViewContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 633901F0EDCE14DD2AF2ADC3 /* FolderExplorerViewContent.swift */; };
 		C5E2F3A4B8D1C6E70A3B5D96 /* TmuxSessionManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6F3A4B5C9E2D7F81B4C6EA7 /* TmuxSessionManagerView.swift */; };
 		C627BBFF2BAF347866C1D624 /* CommentsPanelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B48BEA0656487163CCF63B /* CommentsPanelStore.swift */; };
+		C6EFFFF46782710BCE58B43C /* VibeLaneTaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04067DD661E5EC4F3CD5998F /* VibeLaneTaskDetailView.swift */; };
 		CA236CBA319775488D5DBD6F /* DocumentBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23EA96D1CFF07A8293EEBA96 /* DocumentBuffer.swift */; };
 		CB3B841C2CB93CDF8D2307D8 /* CommentAnchorRelocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBC70FEF6D3A6B356C76C41 /* CommentAnchorRelocator.swift */; };
 		CBCF01DF80515CE0F3A10F78 /* FileAndTerminalTabModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517062A015F8AC31D71399DE /* FileAndTerminalTabModelTests.swift */; };
 		CC0EC7B8EF2918CF78828C9D /* ConversationSidebarModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BD5FDF4B4E2C01B9F72AD1 /* ConversationSidebarModelTests.swift */; };
 		CCDC8997D1ABDB93ECD16E3E /* CLICommandRouterBrowserListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */; };
+		CEAF93C0FD3F0D1AC6A7E063 /* VibeLaneEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB3A4F852B6A6806A989F1B /* VibeLaneEnvironment.swift */; };
+		CF6F0163AD573DABCD9E344F /* VibeLaneDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B92CF15A43141EB1791CF6 /* VibeLaneDefinition.swift */; };
 		7D07D07D07D07D07D07D0001 /* CLICommandRouterTodoListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D07D07D07D07D07D07D0002 /* CLICommandRouterTodoListTests.swift */; };
 		CF7E9F73D069C12EABF2BF0A /* MarkdownCodeLanguageKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E32CB088807BC6862F4DA0 /* MarkdownCodeLanguageKind.swift */; };
 		D11111111111111111111111 /* VibeSpaceDragPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = D11111111111111111111101 /* VibeSpaceDragPayload.swift */; };
@@ -546,6 +623,7 @@
 		D9D927D01EE110B6880FD523 /* SplitViewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60AD37927F889992F179B32E /* SplitViewStore.swift */; };
 		D9F5D0CF4021B85B05339FDA /* TerminalViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E011AAEE5E559AC0428E2FDB /* TerminalViewModelTests.swift */; };
 		DA8C959DB6FD659FE55DEA75 /* SplitPaneContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D84C0E18521D9C2882467D3F /* SplitPaneContentView.swift */; };
+		DAC3BF85D443B4A50D4E9B68 /* VibeLaneSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9BAD59FC56EDC3734C423F8 /* VibeLaneSurfaceView.swift */; };
 		DC331362DC66449682E7E0F7 /* DockedFileViewerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 824C7252BECF4694AF5D911A /* DockedFileViewerCoordinator.swift */; };
 		DD000000000000000000000A /* ConnectionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000009 /* ConnectionState.swift */; };
 		DD000000000000000000000C /* FileItemDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000000B /* FileItemDescriptor.swift */; };
@@ -606,6 +684,7 @@
 		DD00000000000000000000A0 /* SFTPSubprocess.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC00000000000000000000A0 /* SFTPSubprocess.swift */; };
 		DD2AE35E202FEDAE25DDAE90 /* AppUpdateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DAFC08ACF27FB2EA6382047 /* AppUpdateModels.swift */; };
 		DD2AE35E202FEDAE25DDAE91 /* AppUpdateChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DAFC08ACF27FB2EA6382048 /* AppUpdateChannel.swift */; };
+		DDC5EB118F22CFF315D4B56C /* TodoPipelineModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3114BF3EE3054946C165C732 /* TodoPipelineModelTests.swift */; };
 		DEE84BD13B440D00A0AB77F9 /* SettingsLayoutPrimitives.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B9CCF2E2BA8AB7F99D4190 /* SettingsLayoutPrimitives.swift */; };
 		E1A0B3C4D7F2A8E90C4B6D51 /* TmuxSessionBehavior.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B1C4D5E8A3B9F01D5C7E62 /* TmuxSessionBehavior.swift */; };
 		E1C0DE000000000000000001 /* HomeVibeSpaceImportUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0DE000000000000000002 /* HomeVibeSpaceImportUseCase.swift */; };
@@ -626,6 +705,7 @@
 		E3A363AAC9564B47588BD936 /* BufferState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6E5EE50F3205E59ABAEDC1 /* BufferState.swift */; };
 		E5046963815DCC77F01689E0 /* ContentViewWelcomeRecents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE101D119D54DCBF66222F5 /* ContentViewWelcomeRecents.swift */; };
 		E51F95445354EE0DDFF642A7 /* AppShellModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01B341FEE8A9DC4469441377 /* AppShellModelTests.swift */; };
+		E539E26F06B29CCE8B717771 /* TodoTriageCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799BBF92EE2EE91A96604C7D /* TodoTriageCoordinatorTests.swift */; };
 		E5BCFF6A7EA603B2CCD8E072 /* TerminalViewModelStartup.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBD54AF933A3E4389DCCA047 /* TerminalViewModelStartup.swift */; };
 		E6BAF5437DBE0E55353BDE78 /* BrowserBoardTileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031D73B65E3AFBFC100BC9CB /* BrowserBoardTileView.swift */; };
 		E7798CF8B29A3E08BDE514C5 /* TerminalSessionSupportTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59F6EA2BA86B7B89811145FB /* TerminalSessionSupportTypes.swift */; };
@@ -633,6 +713,7 @@
 		E7A100000000000000000002 /* ContentViewDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A100000000000000000102 /* ContentViewDependencies.swift */; };
 		E8CCA6F781C7B7A24CD46F78 /* VibeSpaceStateInternals.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AAE33D95547E086D4EA872 /* VibeSpaceStateInternals.swift */; };
 		E9399A471341216BF7F773E5 /* VibeSpaceStatePropertyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A3A9BC98EE2EEA2320FBF2 /* VibeSpaceStatePropertyTests.swift */; };
+		E9D23F024AFC976406CB9418 /* TodoLanePipelineBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1522AAFFF1358DB37AA7BA64 /* TodoLanePipelineBridgeTests.swift */; };
 		EA5E55100000000000000001 /* ExternalAgentSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA5E55200000000000000001 /* ExternalAgentSessionService.swift */; };
 		EA5E55100000000000000002 /* VibeSpaceSidebarExternalSessionsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA5E55200000000000000002 /* VibeSpaceSidebarExternalSessionsPane.swift */; };
 		EA5E55100000000000000003 /* ExternalAgentSessionPreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA5E55200000000000000003 /* ExternalAgentSessionPreviewPanel.swift */; };
@@ -642,6 +723,7 @@
 		EC7E87D893D1FACB05340A28 /* ExcalidrawSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED8BCD0F971E01F41A6C3B9 /* ExcalidrawSchemeHandler.swift */; };
 		F04100000000000000000002 /* TerminalContextSummarySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04100000000000000000001 /* TerminalContextSummarySession.swift */; };
 		F04100000000000000000004 /* ContextSummaryObservabilityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04100000000000000000003 /* ContextSummaryObservabilityStore.swift */; };
+		F0F049531520B40660DD932B /* VibeLaneLanesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C704F2F6D6AEDAC3E2226FD4 /* VibeLaneLanesView.swift */; };
 		F157AAD72BD9FF36699FE746 /* TodoMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F875041564222EFE739F84D0 /* TodoMessage.swift */; };
 		F1A2B3C4D5E6F7A8B9C0D1E2 /* FileTreeFlatRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E3 /* FileTreeFlatRow.swift */; };
 		F1A8F1C4760E51B9D414C5FA /* SettingsPrimitives.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CAFF374AB8A27082386A013 /* SettingsPrimitives.swift */; };
@@ -654,8 +736,11 @@
 		F3A42259CDABBC4188102A69 /* BoardSpatialNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7DA8CEC673D186321CAF2E8 /* BoardSpatialNavigationTests.swift */; };
 		F64B81B608FC22C1E7D303E7 /* DiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7999E66ED37905E67181EC /* DiagnosticsTests.swift */; };
 		F64B81B608FC22C1E7D303E8 /* GitHeadWatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7999E66ED37905E67181ED /* GitHeadWatcherTests.swift */; };
+		F6A1CE4FD2106CADBFA01707 /* VibeLaneStatusNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = D799A6DB0FF7D7F24E465B14 /* VibeLaneStatusNode.swift */; };
+		F7772D0304A86109B7C402AD /* TodoDetailView+InlineTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F75E9309E1D7BBC12428909 /* TodoDetailView+InlineTrigger.swift */; };
 		FAA15B35135AEBD03B88BDDC /* MarkdownEditorPlugins.swift in Sources */ = {isa = PBXBuildFile; fileRef = C058007C6BE57237190D272A /* MarkdownEditorPlugins.swift */; };
 		FB119B1240A0612B8A365F42 /* AppSettingsSheetViewGeneral.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EB1846F17F63B52C6107C8 /* AppSettingsSheetViewGeneral.swift */; };
+		FCD7E87F663B142C7F4358F9 /* VibeLaneStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F67EAC41E07966A94095CB /* VibeLaneStore.swift */; };
 		FEA0000000000000000000B2 /* NotebookEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA0000000000000000000B1 /* NotebookEditorView.swift */; };
 		FEB16CONT00000002 /* BrowserContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEB16CONT00000001 /* BrowserContentView.swift */; };
 		FEEA9B453BF8FA015665A631 /* TerminalScrollbackReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8609591BDD5DC51654C9EE /* TerminalScrollbackReader.swift */; };
@@ -667,6 +752,7 @@
 		INS0000000000000000000B /* TerminalGridDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00000000000000000002 /* TerminalGridDiff.swift */; };
 		INS0000000000000000000C /* TerminalGridSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00000000000000000003 /* TerminalGridSnapshot.swift */; };
 		INS0000000000000000000D /* TerminalInsightObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00000000000000000004 /* TerminalInsightObserver.swift */; };
+		KATEXMINJS00000000000002 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = KATEXMINJS00000000000001 /* katex.min.js */; };
 		SEC00002000000000000TEST /* ShellEscapingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SEC00002000000000000FILE /* ShellEscapingTests.swift */; };
 		SEC00003000000000000TEST /* EditorHTMLSecurityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SEC00003000000000000FILE /* EditorHTMLSecurityTests.swift */; };
 /* End PBXBuildFile section */
@@ -686,6 +772,7 @@
 		00F72377C9FA23F598D0560F /* BoardCursorRegionsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BoardCursorRegionsTests.swift; sourceTree = "<group>"; };
 		01B341FEE8A9DC4469441377 /* AppShellModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppShellModelTests.swift; sourceTree = "<group>"; };
 		031D73B65E3AFBFC100BC9CB /* BrowserBoardTileView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BrowserBoardTileView.swift; sourceTree = "<group>"; };
+		04067DD661E5EC4F3CD5998F /* VibeLaneTaskDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneTaskDetailView.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneTaskDetailView.swift; sourceTree = "<group>"; };
 		0411FF8667D7C866547292F7 /* VibeSpaceBehavioralTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceBehavioralTests.swift; sourceTree = "<group>"; };
 		0497B88F0AF64D49E7BFCB7B /* VibeSpaceHydrationCoordinatorProjectRuntime.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceHydrationCoordinatorProjectRuntime.swift; sourceTree = "<group>"; };
 		04BCFD47BCD045FC69391031 /* VibeSpaceManagementService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceManagementService.swift; sourceTree = "<group>"; };
@@ -695,6 +782,30 @@
 		07D2FB0E3252D64055270C63 /* MermaidRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MermaidRenderer.swift; sourceTree = "<group>"; };
 		07F79DDEABC0DC12B03FD2CE /* ContentViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewerView.swift; sourceTree = "<group>"; };
 		08A6B8FFEF1DD101437D5A55 /* ACPDiffSpotlightPanel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPDiffSpotlightPanel.swift; sourceTree = "<group>"; };
+		08B92CF15A43141EB1791CF6 /* VibeLaneDefinition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneDefinition.swift; path = crispyvibes/Features/VibeLanes/Models/VibeLaneDefinition.swift; sourceTree = "<group>"; };
+		E05900000000000000000001 /* VibeLaneEngineConfiguration.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneEngineConfiguration.swift; path = crispyvibes/Features/VibeLanes/Models/VibeLaneEngineConfiguration.swift; sourceTree = "<group>"; };
+		E05900000000000000000003 /* VibeLaneEngineViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneEngineViews.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneEngineViews.swift; sourceTree = "<group>"; };
+		E05900000000000000000005 /* VibeLaneEditorSupportViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneEditorSupportViews.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneEditorSupportViews.swift; sourceTree = "<group>"; };
+		E07000000000000000000011 /* VibeLaneSkillsEditor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneSkillsEditor.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneSkillsEditor.swift; sourceTree = "<group>"; };
+		E07100000000000000000011 /* VibeLaneSkillDefinition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneSkillDefinition.swift; path = crispyvibes/Features/VibeLanes/Models/VibeLaneSkillDefinition.swift; sourceTree = "<group>"; };
+		E07200000000000000000011 /* VibeLaneSkillStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneSkillStore.swift; path = crispyvibes/Features/VibeLanes/Services/VibeLaneSkillStore.swift; sourceTree = "<group>"; };
+		E07700000000000000000011 /* AutomationDatabaseStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AutomationDatabaseStore.swift; path = crispyvibes/Features/VibeLanes/Services/AutomationDatabaseStore.swift; sourceTree = "<group>"; };
+		E07300000000000000000011 /* SkillLibraryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SkillLibraryView.swift; path = crispyvibes/Features/VibeLanes/Views/SkillLibraryView.swift; sourceTree = "<group>"; };
+		E07400000000000000000011 /* SkillLibraryDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SkillLibraryDetailView.swift; path = crispyvibes/Features/VibeLanes/Views/SkillLibraryDetailView.swift; sourceTree = "<group>"; };
+		E07600000000000000000011 /* SkillLibraryDetailSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SkillLibraryDetailSupport.swift; path = crispyvibes/Features/VibeLanes/Views/SkillLibraryDetailSupport.swift; sourceTree = "<group>"; };
+		E07500000000000000000011 /* VibeLaneSkillStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneSkillStoreTests.swift; path = tests/unit/Features/AIAgents/VibeLaneSkillStoreTests.swift; sourceTree = "<group>"; };
+		E07500000000000000000012 /* VibeLaneEngineNoRepositoryActionsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneEngineNoRepositoryActionsTests.swift; path = tests/unit/Features/AIAgents/VibeLaneEngineNoRepositoryActionsTests.swift; sourceTree = "<group>"; };
+		E05900000000000000000007 /* VibeLaneDefinition+Validation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "VibeLaneDefinition+Validation.swift"; path = "crispyvibes/Features/VibeLanes/Models/VibeLaneDefinition+Validation.swift"; sourceTree = "<group>"; };
+		E05900000000000000000009 /* VibeLaneEditorView+Editing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "VibeLaneEditorView+Editing.swift"; path = "crispyvibes/Features/VibeLanes/Views/VibeLaneEditorView+Editing.swift"; sourceTree = "<group>"; };
+		E06300000000000000000011 /* VibeDefinition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeDefinition.swift; path = crispyvibes/Features/VibeLanes/Models/VibeDefinition.swift; sourceTree = "<group>"; };
+		E06300000000000000000012 /* VibeLaneReferenceResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneReferenceResolver.swift; path = crispyvibes/Features/VibeLanes/Services/VibeLaneReferenceResolver.swift; sourceTree = "<group>"; };
+		E06300000000000000000013 /* VibeLaneTaskManager+VibeAuthoring.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "VibeLaneTaskManager+VibeAuthoring.swift"; path = "crispyvibes/Features/VibeLanes/Services/VibeLaneTaskManager+VibeAuthoring.swift"; sourceTree = "<group>"; };
+		E06300000000000000000014 /* VibeLibraryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLibraryView.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLibraryView.swift; sourceTree = "<group>"; };
+		E06300000000000000000015 /* VibeEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeEditorView.swift; path = crispyvibes/Features/VibeLanes/Views/VibeEditorView.swift; sourceTree = "<group>"; };
+		E06500000000000000000011 /* VibeLibraryInspectorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLibraryInspectorView.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLibraryInspectorView.swift; sourceTree = "<group>"; };
+		E06800000000000000000011 /* VibeLibrarySupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLibrarySupport.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLibrarySupport.swift; sourceTree = "<group>"; };
+		E06900000000000000000002 /* VibeLaneCatalogCard.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneCatalogCard.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneCatalogCard.swift; sourceTree = "<group>"; };
+		0AB3A4F852B6A6806A989F1B /* VibeLaneEnvironment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneEnvironment.swift; path = crispyvibes/Features/VibeLanes/Support/VibeLaneEnvironment.swift; sourceTree = "<group>"; };
 		0AD193064B64FF69822E0C9D /* ViewCompositionSmokeTestsPreviews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ViewCompositionSmokeTestsPreviews.swift; sourceTree = "<group>"; };
 		0BA53C083B84B24A49BBBD6F /* PlainTextEditor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlainTextEditor.swift; sourceTree = "<group>"; };
 		0BAE2841F03545E269F6EFDD /* ContentViewerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewerStore.swift; sourceTree = "<group>"; };
@@ -707,6 +818,7 @@
 		A8C001000000000000000003 /* MarkdownRuntimeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownRuntimeTests.swift; sourceTree = "<group>"; };
 		A8C001000000000000000004 /* CodeEditorCommentBridgeStabilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CodeEditorCommentBridgeStabilityTests.swift; sourceTree = "<group>"; };
 		126E91B4976C63221AAF2FDB /* CodeEditorCommentBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CodeEditorCommentBridge.swift; sourceTree = "<group>"; };
+		12CAC0E23C24AD54378D4EAA /* TodoLanePipelineBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoLanePipelineBridge.swift; path = crispyvibes/Features/AIAgents/TodoLanePipeline/TodoLanePipelineBridge.swift; sourceTree = "<group>"; };
 		132A680C12159B6827A422A2 /* TerminalSessionDelegateAndView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalSessionDelegateAndView.swift; sourceTree = "<group>"; };
 		136156E9F56987AB0BA1B754 /* BoardHitTesting.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BoardHitTesting.swift; sourceTree = "<group>"; };
 		139E835F21B21CEDD426B772 /* FolderExplorerViewSidebar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FolderExplorerViewSidebar.swift; sourceTree = "<group>"; };
@@ -714,9 +826,11 @@
 		146492E9B482321B0EDE401C /* CrossFileCommentsViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CrossFileCommentsViewModel.swift; sourceTree = "<group>"; };
 		14A3A6D8DD46C08154CBFF56 /* TerminalDiagnosticsSnapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalDiagnosticsSnapshot.swift; sourceTree = "<group>"; };
 		14BD5FDF4B4E2C01B9F72AD1 /* ConversationSidebarModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationSidebarModelTests.swift; sourceTree = "<group>"; };
+		1522AAFFF1358DB37AA7BA64 /* TodoLanePipelineBridgeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoLanePipelineBridgeTests.swift; path = tests/unit/Features/AIAgents/TodoLanePipelineBridgeTests.swift; sourceTree = "<group>"; };
 		188A11D13A8A6C4FAB7FA023 /* VibeSpaceTerminalBoardStoreClickToSelectTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreClickToSelectTests.swift; sourceTree = "<group>"; };
 		18A3A7D34EB7845DFA10934B /* AppSettingsSheetViewExperimental.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewExperimental.swift; sourceTree = "<group>"; };
 		198FC39D6403581793135228 /* TerminalSessionAppearance.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalSessionAppearance.swift; sourceTree = "<group>"; };
+		1A29318A4682F8193126C04B /* VibeLaneEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneEngineTests.swift; path = tests/unit/Features/AIAgents/VibeLaneEngineTests.swift; sourceTree = "<group>"; };
 		1C10DD2CC61E19052BAA9F09 /* ProjectActivityTracker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectActivityTracker.swift; sourceTree = "<group>"; };
 		1E92418B200ACDDB12645E1B /* ThemePresetQuickButton.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemePresetQuickButton.swift; sourceTree = "<group>"; };
 		1F2EAFA76B7352F15DB045A5 /* VibeSpaceCreationUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceCreationUITests.swift; sourceTree = "<group>"; };
@@ -725,6 +839,7 @@
 		23EA96D1CFF07A8293EEBA96 /* DocumentBuffer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DocumentBuffer.swift; path = DocumentBuffer.swift; sourceTree = "<group>"; };
 		24B04DBC007A39BEEC9FBB14 /* ViewCompositionSmokeTestsSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ViewCompositionSmokeTestsSupport.swift; sourceTree = "<group>"; };
 		2838982B250D876FB0885673 /* DeveloperToolsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeveloperToolsView.swift; sourceTree = "<group>"; };
+		287D68E62CFFF20539B72A7E /* VibeLaneTaskManager+CatalogSummary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "VibeLaneTaskManager+CatalogSummary.swift"; path = "crispyvibes/Features/VibeLanes/Services/VibeLaneTaskManager+CatalogSummary.swift"; sourceTree = "<group>"; };
 		2890F320B60E8D7A11AA3302 /* AppShortcutSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppShortcutSettings.swift; sourceTree = "<group>"; };
 		2890F320B60E8D7A11AA3304 /* AppSettingsSheetViewShortcuts.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewShortcuts.swift; sourceTree = "<group>"; };
 		2A4D5BA41C043B89D06725A3 /* TerminalViewModelTestsDiagnosticsAndEscaping.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalViewModelTestsDiagnosticsAndEscaping.swift; sourceTree = "<group>"; };
@@ -733,9 +848,13 @@
 		2B3C4D5E6F70809091A1B1C1 /* NewTerminalPopover.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewTerminalPopover.swift; sourceTree = "<group>"; };
 		2C87877DBEDEC9C55F838F4D /* PersistenceAdapters.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PersistenceAdapters.swift; sourceTree = "<group>"; };
 		2CBC70FEF6D3A6B356C76C41 /* CommentAnchorRelocator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentAnchorRelocator.swift; sourceTree = "<group>"; };
+		2CED5EE8FCA6C4F67602237A /* CLICommandRouterLaneHandlers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterLaneHandlers.swift; sourceTree = "<group>"; };
+		2E560CB6F98E328DF6C45AB2 /* VibeLaneTaskManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneTaskManagerTests.swift; path = tests/unit/Features/AIAgents/VibeLaneTaskManagerTests.swift; sourceTree = "<group>"; };
 		2F6E5EE50F3205E59ABAEDC1 /* BufferState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BufferState.swift; path = BufferState.swift; sourceTree = "<group>"; };
 		2FD58BB6E9A668A39536E33D /* TerminalViewModelShortcuts.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalViewModelShortcuts.swift; sourceTree = "<group>"; };
+		30CD09548E37830691626D8F /* VibeLaneEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneEditorView.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneEditorView.swift; sourceTree = "<group>"; };
 		31022095BE5C98ED18B3821E /* FolderExplorerViewModelTreeLifecycle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FolderExplorerViewModelTreeLifecycle.swift; sourceTree = "<group>"; };
+		3114BF3EE3054946C165C732 /* TodoPipelineModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoPipelineModelTests.swift; path = tests/unit/Features/Todos/TodoPipelineModelTests.swift; sourceTree = "<group>"; };
 		3296F6202DC717584444FCC9 /* ACPSessionRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPSessionRegistry.swift; sourceTree = "<group>"; };
 		340EC356A826F1BCC6D77394 /* LayoutPersistencePropertyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LayoutPersistencePropertyTests.swift; sourceTree = "<group>"; };
 		36614E48DD50988227BE2397 /* CLICommandRouterTodoHandlers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterTodoHandlers.swift; sourceTree = "<group>"; };
@@ -752,10 +871,13 @@
 		3AAD273E7CADCF147834D4F1 /* VibeSpaceProjectFocusUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceProjectFocusUseCase.swift; sourceTree = "<group>"; };
 		3AFE902D189DEB4CE721F8C3 /* TerminalViewModelTabs.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalViewModelTabs.swift; sourceTree = "<group>"; };
 		3BAF0E29A080BF961EB2DF29 /* ExcalidrawRuntime */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; path = ExcalidrawRuntime; sourceTree = "<group>"; };
+		3C23045159513D47E748CDF3 /* CLICommandRouterTodoPipelineHandlers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterTodoPipelineHandlers.swift; sourceTree = "<group>"; };
 		3E8609591BDD5DC51654C9EE /* TerminalScrollbackReader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalScrollbackReader.swift; sourceTree = "<group>"; };
 		3ED8BCD0F971E01F41A6C3B9 /* ExcalidrawSchemeHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExcalidrawSchemeHandler.swift; sourceTree = "<group>"; };
 		3F18E469D8C6B1BC9042B2E5 /* CommentsPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentsPanelView.swift; sourceTree = "<group>"; };
 		4025929B68F822AAB31DEF26 /* PaneWorkerExecutorGit.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PaneWorkerExecutorGit.swift; sourceTree = "<group>"; };
+		407FFFC97EF08AA1FE486B28 /* TodoLanePipelineBridge+Refine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "TodoLanePipelineBridge+Refine.swift"; path = "crispyvibes/Features/AIAgents/TodoLanePipeline/TodoLanePipelineBridge+Refine.swift"; sourceTree = "<group>"; };
+		40E1C8306B4A1FF2D91BB2CD /* TodoPipeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoPipeline.swift; path = Todos/Models/TodoPipeline.swift; sourceTree = "<group>"; };
 		41D507F69B95A06D5ECD74E4 /* CommentsCodeEditorOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentsCodeEditorOverlay.swift; sourceTree = "<group>"; };
 		45184A9D9E2893F75D5A2AB4 /* GitDiffPreviewParsing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GitDiffPreviewParsing.swift; sourceTree = "<group>"; };
 		4859A806650A6BA1D0A035E1 /* AppDelegateDefaultsObservation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegateDefaultsObservation.swift; sourceTree = "<group>"; };
@@ -777,6 +899,7 @@
 		5066B81F27895F458A4C4B66 /* AppDelegateUpdates.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegateUpdates.swift; sourceTree = "<group>"; };
 		517062A015F8AC31D71399DE /* FileAndTerminalTabModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FileAndTerminalTabModelTests.swift; sourceTree = "<group>"; };
 		51AE4E055CB8863F7F099186 /* SessionMetadata.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionMetadata.swift; sourceTree = "<group>"; };
+		530ABB9F36003F3025877DAF /* VibeLaneRunners.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneRunners.swift; path = crispyvibes/Features/VibeLanes/Services/VibeLaneRunners.swift; sourceTree = "<group>"; };
 		5318B5755F24CA6A642FE9BE /* ProjectTerminalCycler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectTerminalCycler.swift; sourceTree = "<group>"; };
 		53D3BB01476BBF1488E1F2D8 /* VibeSpaceStateProjectSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateProjectSettings.swift; sourceTree = "<group>"; };
 		554E867E1559D589DF6F2399 /* PaneWorkerClientAndFileIconTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PaneWorkerClientAndFileIconTests.swift; sourceTree = "<group>"; };
@@ -788,11 +911,13 @@
 		59F000000000000000000002 /* AppInstallationGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInstallationGuard.swift; sourceTree = "<group>"; };
 		59F6EA2BA86B7B89811145FB /* TerminalSessionSupportTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalSessionSupportTypes.swift; sourceTree = "<group>"; };
 		5A5E352DDC30713F3D5AE4D8 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = "<group>"; };
+		5A8F0537E9CA3973816FA8C2 /* VibeLaneACPAgentRunner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneACPAgentRunner.swift; path = crispyvibes/Features/VibeLanes/Services/VibeLaneACPAgentRunner.swift; sourceTree = "<group>"; };
 		5C84CC2FE33D503E79B8CF98 /* AppPersistenceDataStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppPersistenceDataStore.swift; sourceTree = "<group>"; };
 		5C9C1F8E3A5A38C9C43E8859 /* CLICommandRouterBrowserOpenTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterBrowserOpenTests.swift; sourceTree = "<group>"; };
 		5D29548E45635BC4A2C7E3DD /* IOSurface.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOSurface.framework; path = System/Library/Frameworks/IOSurface.framework; sourceTree = "<group>"; };
 		5D40B67F5AF706A291328CEE /* TerminalViewModelTestsExecutionFlows.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalViewModelTestsExecutionFlows.swift; sourceTree = "<group>"; };
 		5D50A1D9AEA8276930D75BC6 /* VibeSpacePersistenceStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpacePersistenceStore.swift; sourceTree = "<group>"; };
+		5E9000000000000000000002 /* VibeLaneSurfaceNavigationViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneSurfaceNavigationViewModel.swift; path = crispyvibes/Features/VibeLanes/ViewModels/VibeLaneSurfaceNavigationViewModel.swift; sourceTree = "<group>"; };
 		60AD37927F889992F179B32E /* SplitViewStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitViewStore.swift; sourceTree = "<group>"; };
 		633901F0EDCE14DD2AF2ADC3 /* FolderExplorerViewContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FolderExplorerViewContent.swift; sourceTree = "<group>"; };
 		642D176FE38820BBB44E67CB /* ContextSummaryPromptEvolutionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContextSummaryPromptEvolutionTests.swift; sourceTree = "<group>"; };
@@ -803,8 +928,11 @@
 		68D7F499FED252B116EF5F8B /* CLICommandRouterCommentsHandlers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLICommandRouterCommentsHandlers.swift; sourceTree = "<group>"; };
 		6929502A5AE9CA15649651FF /* TodoQuickCaptureOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoQuickCaptureOverlay.swift; path = Todos/Views/TodoQuickCaptureOverlay.swift; sourceTree = "<group>"; };
 		693A6536CC82EA75F8F3D672 /* TerminalPresetServices.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalPresetServices.swift; sourceTree = "<group>"; };
+		69689D0A5DEDEF5FFA55BFA4 /* VibeLaneTaskDetailView+RunLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "crispyvibes/Features/VibeLanes/Views/VibeLaneTaskDetailView+RunLog.swift"; sourceTree = "<group>"; };
+		69689D0A5DEDEF5FFA55BFB0 /* VibeLaneEditorView+Contract.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "crispyvibes/Features/VibeLanes/Views/VibeLaneEditorView+Contract.swift"; sourceTree = "<group>"; };
 		6979D608CA6926C1AF712494 /* AppSettingsSheetContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetContent.swift; sourceTree = "<group>"; };
 		69D8F23A94579CEBE723EC48 /* AppSettingsSheetViewRemoteSSH.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewRemoteSSH.swift; sourceTree = "<group>"; };
+		69F4D0E0927324707AFDE0E5 /* VibeLaneTaskManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneTaskManager.swift; path = crispyvibes/Features/VibeLanes/Services/VibeLaneTaskManager.swift; sourceTree = "<group>"; };
 		6AA1678594BDC20B78A36C24 /* VibeCastStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeCastStore.swift; sourceTree = "<group>"; };
 		6BBC85DC6ED9747F21C01CFB /* SyntaxAndLanguageDefinitionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SyntaxAndLanguageDefinitionTests.swift; sourceTree = "<group>"; };
 		6C97A2C2D606503AE5625033 /* MarkdownEditorViewFindReplace.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownEditorViewFindReplace.swift; sourceTree = "<group>"; };
@@ -824,6 +952,7 @@
 		7792B6DF8AA43845A0CEEF49 /* EditableRasterImageCanvasViewRendering.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditableRasterImageCanvasViewRendering.swift; sourceTree = "<group>"; };
 		787EE95D352218FABFA40A50 /* FolderExplorerViewModelHelpers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FolderExplorerViewModelHelpers.swift; sourceTree = "<group>"; };
 		7942B13E3F67980C56B7E606 /* ghostty */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = folder; name = ghostty; path = GhosttyRuntime/ghostty; sourceTree = "<group>"; };
+		799BBF92EE2EE91A96604C7D /* TodoTriageCoordinatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoTriageCoordinatorTests.swift; path = tests/unit/Features/AIAgents/TodoTriageCoordinatorTests.swift; sourceTree = "<group>"; };
 		7A3F6DFA8D0B4C3E90000002 /* VibeSpaceStackedProjectRailSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceStackedProjectRailSupport.swift; sourceTree = "<group>"; };
 		7A3F6DFA8D0B4C3E90000004 /* ContentViewStackedProjectRailActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewStackedProjectRailActions.swift; sourceTree = "<group>"; };
 		7A3F6DFA8D0B4C3E90000006 /* TerminalSessionLaunchSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionLaunchSupport.swift; sourceTree = "<group>"; };
@@ -853,6 +982,7 @@
 		864E2DDA5731BFA89130C3E0 /* CognitoAuthServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CognitoAuthServiceTests.swift; sourceTree = "<group>"; };
 		86AA2FA103460BD2D86D755C /* DirectoryWatcher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DirectoryWatcher.swift; sourceTree = "<group>"; };
 		86AB2FA103460BD2D86D755D /* GitHeadWatcher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GitHeadWatcher.swift; sourceTree = "<group>"; };
+		86BBC39557E2F0B68F6293A0 /* VibeSpaceTodoStore+Pipeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "VibeSpaceTodoStore+Pipeline.swift"; path = "Todos/ViewModels/VibeSpaceTodoStore+Pipeline.swift"; sourceTree = "<group>"; };
 		88247A21318E150B911A0593 /* TerminalViewComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalViewComponents.swift; sourceTree = "<group>"; };
 		88A2A70496B1D17D1044FBEE /* VibeSpaceTerminalBoardStoreBulkMoveTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreBulkMoveTests.swift; sourceTree = "<group>"; };
 		89A3A9BC98EE2EEA2320FBF2 /* VibeSpaceStatePropertyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStatePropertyTests.swift; sourceTree = "<group>"; };
@@ -865,7 +995,9 @@
 		8C5181BCA894219EFFA30152 /* TerminalFileDropSupportTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalFileDropSupportTests.swift; sourceTree = "<group>"; };
 		8CE84DF2B373C9E623AEFA7F /* MarkdownViewModelDetection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownViewModelDetection.swift; sourceTree = "<group>"; };
 		8D317F45F04D0D239F99C4DC /* VibeSpaceManagementServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceManagementServiceTests.swift; sourceTree = "<group>"; };
+		8DD3DFBD11157174F11A7E1B /* CLICommandRouterLaneHandlersTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CLICommandRouterLaneHandlersTests.swift; path = tests/unit/Features/AIAgents/CLICommandRouterLaneHandlersTests.swift; sourceTree = "<group>"; };
 		8E0D8879FE7C4FA90BBAEC05 /* AppDiagnostics.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDiagnostics.swift; sourceTree = "<group>"; };
+		8F75E9309E1D7BBC12428909 /* TodoDetailView+InlineTrigger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "TodoDetailView+InlineTrigger.swift"; path = "Todos/Views/TodoDetailView+InlineTrigger.swift"; sourceTree = "<group>"; };
 		920C5E83B762C0FB5A0C90E5 /* VibeSpacePersistenceServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpacePersistenceServiceTests.swift; sourceTree = "<group>"; };
 		92B48BEA0656487163CCF63B /* CommentsPanelStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentsPanelStore.swift; sourceTree = "<group>"; };
 		9319FACD47F3ED87CD2C2D28 /* BoardInteractionControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BoardInteractionControllerTests.swift; sourceTree = "<group>"; };
@@ -884,9 +1016,14 @@
 		9EAF5625ED1F5A23A8232462 /* TerminalPresetModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalPresetModels.swift; sourceTree = "<group>"; };
 		9F1559F53B1144C2961079C5 /* DocumentBufferTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DocumentBufferTests.swift; path = DocumentBufferTests.swift; sourceTree = "<group>"; };
 		9FE3899E41EA3ED6345C6BC8 /* SettingsNavigationPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsNavigationPrimitives.swift; sourceTree = "<group>"; };
+		A014C92CD65106310BAA725B /* TodoTriageCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoTriageCoordinator.swift; path = crispyvibes/Features/AIAgents/TodoLanePipeline/TodoTriageCoordinator.swift; sourceTree = "<group>"; };
 		A10A547C43FD1C507328A502 /* Todo.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Todo.swift; path = Todos/Models/Todo.swift; sourceTree = "<group>"; };
 		A12D51EBA7514F74FBD39501 /* VibeSpaceCreationResultTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceCreationResultTests.swift; sourceTree = "<group>"; };
 		A1A6559E6C9FD7520C810F00 /* TerminalContextSummary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalContextSummary.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXCompiledPreviewView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXNativeCompiler.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentFormatPreviews.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompiledPreviewSupportViews.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* AppKitTreeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppKitTreeView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F5 /* AppKitTreeSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitTreeSupportViews.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F7 /* AppKitTreeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitTreeCoordinator.swift; sourceTree = "<group>"; };
@@ -953,6 +1090,10 @@
 		AABBCCDD11223344EEFF0003 /* CLIExecRelayServerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CLIExecRelayServerTests.swift; sourceTree = "<group>"; };
 		ABCD1234ABCD1234ABCD1235 /* VibeSpaceSourceControlViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceSourceControlViewModelTests.swift; sourceTree = "<group>"; };
 		AC0010010000000000000002 /* ACPTransportPromptCompletionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPTransportPromptCompletionTests.swift; sourceTree = "<group>"; };
+		AC0010010000000000000004 /* ACPSelectableTextMarkdownTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPSelectableTextMarkdownTests.swift; sourceTree = "<group>"; };
+		AC0020010000000000000002 /* TodoCardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoCardView.swift; path = Todos/Views/TodoCardView.swift; sourceTree = "<group>"; };
+		AC0020010000000000000004 /* TodoDetailView+Thread.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "TodoDetailView+Thread.swift"; path = "Todos/Views/TodoDetailView+Thread.swift"; sourceTree = "<group>"; };
+		AC0020010000000000000006 /* TodoModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoModelTests.swift; path = tests/unit/Features/Todos/TodoModelTests.swift; sourceTree = "<group>"; };
 		AC48D35FCD58D084483C9917 /* ACPMarkdownHTMLView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPMarkdownHTMLView.swift; sourceTree = "<group>"; };
 		AC939FB5A606E7578660CFF6 /* TerminalContextSummaryViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalContextSummaryViewModel.swift; sourceTree = "<group>"; };
 		ACPCV010001000100010001 /* ACPChatView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPChatView.swift; sourceTree = "<group>"; };
@@ -974,6 +1115,7 @@
 		AFBDF00B5F802FCC349FAB84 /* LaTeXRuntime */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; name = LaTeXRuntime; path = LaTeXRuntime; sourceTree = "<group>"; };
 		AFD0B13CCDCFC58AF1CE523F /* CodeEditorCommentBridgeEnvironment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CodeEditorCommentBridgeEnvironment.swift; sourceTree = "<group>"; };
 		AFE41179110DAD31D25DB684 /* ShortcutPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ShortcutPanelView.swift; path = crispyvibes/Features/Terminal/Views/ShortcutPanelView.swift; sourceTree = "<group>"; };
+		AUTORENDERJS000000000001 /* auto-render.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "auto-render.min.js"; sourceTree = "<group>"; };
 		B09E173B53D66230B2C17655 /* SerialTaskQueue.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SerialTaskQueue.swift; sourceTree = "<group>"; };
 		B100000000000000000000001 /* Crispy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Crispy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B100000000000000000000002 /* CrispyVibesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrispyVibesApp.swift; sourceTree = "<group>"; };
@@ -997,8 +1139,6 @@
 		B100000000000000000000014 /* highlight.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = highlight.min.js; sourceTree = "<group>"; };
 		B100000000000000000000015 /* marked.umd.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = marked.umd.js; sourceTree = "<group>"; };
 		B100000000000000000000016 /* turndown.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = turndown.js; sourceTree = "<group>"; };
-		KATEXMINJS00000000000001 /* katex.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = katex.min.js; sourceTree = "<group>"; };
-		AUTORENDERJS000000000001 /* auto-render.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = auto-render.min.js; sourceTree = "<group>"; };
 		B100000000000000000000017 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
 		B100000000000000000000018 /* PaneWorkerInfrastructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneWorkerInfrastructure.swift; sourceTree = "<group>"; };
 		B100000000000000000000019 /* ProjectSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSession.swift; sourceTree = "<group>"; };
@@ -1057,6 +1197,7 @@
 		B100000000000000000000055 /* VibeSpaceSourceControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSourceControlView.swift; sourceTree = "<group>"; };
 		B100000000000000000000056 /* TextServiceCLIPresetCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextServiceCLIPresetCatalog.swift; sourceTree = "<group>"; };
 		B100000000000000000000057 /* VibeSpaceTerminalBoardViewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardViewSupport.swift; sourceTree = "<group>"; };
+		B05910000000000000000001 /* VibeLaneBoardTileCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeLaneBoardTileCard.swift; sourceTree = "<group>"; };
 		B100000000000000000000058 /* VibeSpaceTerminalBoardStandaloneRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStandaloneRegistry.swift; sourceTree = "<group>"; };
 		B100000000000000000000059 /* VibeSpaceTerminalBoardLayoutSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardLayoutSync.swift; sourceTree = "<group>"; };
 		B10000000000000000000005A /* VibeSpaceTerminalBoardStoreSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceTerminalBoardStoreSync.swift; sourceTree = "<group>"; };
@@ -1096,6 +1237,7 @@
 		B10DA0000000000000DA00B3 /* ManageVibeSpacesViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ManageVibeSpacesViewModelTests.swift; sourceTree = "<group>"; };
 		B10DA0000000000000DA00B4 /* AppSettingsSheetViewVibeSpaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewVibeSpaces.swift; sourceTree = "<group>"; };
 		B10DA0000000000000DA00B5 /* AppSettingsVibeSpacesContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsVibeSpacesContext.swift; sourceTree = "<group>"; };
+		B1268567D4D016BBA6A65009 /* TodoDispatchSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoDispatchSheet.swift; path = crispyvibes/Features/AIAgents/TodoLanePipeline/TodoDispatchSheet.swift; sourceTree = "<group>"; };
 		B1A199FBB4076712252D28F5 /* TextGenerationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextGenerationService.swift; sourceTree = "<group>"; };
 		B1D000000000000000000001 /* ContentViewStackedProjectRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewStackedProjectRail.swift; sourceTree = "<group>"; };
 		B1D000000000000000000002 /* ContentViewTerminalSpotlightState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewTerminalSpotlightState.swift; sourceTree = "<group>"; };
@@ -1131,8 +1273,6 @@
 		B34C57F74BECDBDC098D2F00 /* TerminalContextSummaryViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalContextSummaryViewModelTests.swift; sourceTree = "<group>"; };
 		B3FE6FAFD6CEFD6F405CDCC8 /* TerminalViewModelPresets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalViewModelPresets.swift; sourceTree = "<group>"; };
 		B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateParkingTests.swift; sourceTree = "<group>"; };
-		C2D00000000000000000002B /* WorktreeServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/VibeSpace/WorktreeServiceTests.swift; sourceTree = SOURCE_ROOT; };
-		C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/VibeSpace/Support/ContentSurfacePolicyTests.swift; sourceTree = SOURCE_ROOT; };
 		B4D2E5F6A7C8B9012F3A4D85 /* TmuxService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmuxService.swift; sourceTree = "<group>"; };
 		B51662ADBA65455898E6CA36 /* DockPreviewBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DockPreviewBridge.swift; sourceTree = "<group>"; };
 		B5EB1846F17F63B52C6107C8 /* AppSettingsSheetViewGeneral.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewGeneral.swift; sourceTree = "<group>"; };
@@ -1140,6 +1280,7 @@
 		B6AA19904C977CF683CBA76A /* FileContentWithCommentsPanel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FileContentWithCommentsPanel.swift; sourceTree = "<group>"; };
 		B76C94DDF7BFCFC61501B66D /* CrispyVibesTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CrispyVibesTheme.swift; sourceTree = "<group>"; };
 		B7808136826BD4B7F68AFE68 /* SplitLayoutEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitLayoutEngine.swift; sourceTree = "<group>"; };
+		B93F5CB477A08637C7A82BEE /* VibeLaneDashboardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneDashboardView.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneDashboardView.swift; sourceTree = "<group>"; };
 		BBBE7D844ED39E3B639FD097 /* VibeSpaceShortcutProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeSpaceShortcutProvider.swift; path = crispyvibes/Features/Terminal/Support/VibeSpaceShortcutProvider.swift; sourceTree = "<group>"; };
 		BF905C32F32F1A4D3625D045 /* ProjectSessionStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectSessionStateTests.swift; sourceTree = "<group>"; };
 		BFD7BF556597A1485639E590 /* ProjectSessionPersistenceServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectSessionPersistenceServiceTests.swift; sourceTree = "<group>"; };
@@ -1163,14 +1304,6 @@
 		C1B9CCF2E2BA8AB7F99D4190 /* SettingsLayoutPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsLayoutPrimitives.swift; sourceTree = "<group>"; };
 		C2C1E3B2A8770E85559D71C4 /* MeasuredPaneWorker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeasuredPaneWorker.swift; sourceTree = "<group>"; };
 		C2D000000000000000000001 /* VibeSpaceSidebarProjectTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarProjectTree.swift; sourceTree = "<group>"; };
-		C2D000000000000000000021 /* UnifiedSidebarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedSidebarModels.swift; sourceTree = "<group>"; };
-		C2D00000000000000000002F /* UnifiedSidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Canvas/State/UnifiedSidebarViewModel.swift; sourceTree = SOURCE_ROOT; };
-		C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewUnifiedSidebarActions.swift; sourceTree = "<group>"; };
-		C2D000000000000000000027 /* WorktreeServicing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Protocols/WorktreeServicing.swift; sourceTree = SOURCE_ROOT; };
-		C2D000000000000000000029 /* WorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Services/WorktreeService.swift; sourceTree = SOURCE_ROOT; };
-		C2D0000000000000000000F2 /* ContentPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Canvas/Support/ContentPresentation.swift; sourceTree = SOURCE_ROOT; };
-		C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceWorktreeNodeView.swift; sourceTree = "<group>"; };
-		C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceRepositoryNodeView.swift; sourceTree = "<group>"; };
 		C2D000000000000000000003 /* VibeSpaceSidebarFilesPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarFilesPane.swift; sourceTree = "<group>"; };
 		C2D000000000000000000005 /* VibeSpaceSidebarGitPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarGitPane.swift; sourceTree = "<group>"; };
 		C2D000000000000000000007 /* VibeSpaceSidebarSessionsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarSessionsPane.swift; sourceTree = "<group>"; };
@@ -1179,9 +1312,20 @@
 		C2D00000000000000000000D /* VibeSpaceSidebarSessionsSectionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarSessionsSectionView.swift; sourceTree = "<group>"; };
 		C2D00000000000000000000F /* ContentViewVibeSpaceSessionActions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentViewVibeSpaceSessionActions.swift; sourceTree = "<group>"; };
 		C2D000000000000000000011 /* VibeSpaceSidebarSessionBrowser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarSessionBrowser.swift; sourceTree = "<group>"; };
+		C2D000000000000000000021 /* UnifiedSidebarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedSidebarModels.swift; sourceTree = "<group>"; };
+		C2D000000000000000000023 /* VibeSpaceWorktreeNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceWorktreeNodeView.swift; sourceTree = "<group>"; };
+		C2D000000000000000000025 /* VibeSpaceRepositoryNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceRepositoryNodeView.swift; sourceTree = "<group>"; };
+		C2D000000000000000000027 /* WorktreeServicing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Protocols/WorktreeServicing.swift; sourceTree = SOURCE_ROOT; };
+		C2D000000000000000000029 /* WorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Services/WorktreeService.swift; sourceTree = SOURCE_ROOT; };
+		C2D00000000000000000002B /* WorktreeServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/VibeSpace/WorktreeServiceTests.swift; sourceTree = SOURCE_ROOT; };
+		C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewUnifiedSidebarActions.swift; sourceTree = "<group>"; };
+		C2D00000000000000000002F /* UnifiedSidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Canvas/State/UnifiedSidebarViewModel.swift; sourceTree = SOURCE_ROOT; };
+		C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/VibeSpace/Support/ContentSurfacePolicyTests.swift; sourceTree = SOURCE_ROOT; };
+		C2D0000000000000000000F2 /* ContentPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Canvas/Support/ContentPresentation.swift; sourceTree = SOURCE_ROOT; };
 		C399CBB30D80247DC28C1529 /* VibeSpaceIntegrityUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceIntegrityUITests.swift; sourceTree = "<group>"; };
 		C3F1A2B3C4D5E6F708091012 /* SpotlightComposePathSearch.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpotlightComposePathSearch.swift; sourceTree = "<group>"; };
 		C4BEE53B3AFE95AC5CB99A55 /* ContextSummaryGenerating.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContextSummaryGenerating.swift; sourceTree = "<group>"; };
+		C704F2F6D6AEDAC3E2226FD4 /* VibeLaneLanesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneLanesView.swift; sourceTree = "<group>"; };
 		C7928968273FED6D651B2C92 /* ContextSummaryGeneratorOutputTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContextSummaryGeneratorOutputTests.swift; sourceTree = "<group>"; };
 		C850D0319273F42F5F35D3D3 /* WhiteboardEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WhiteboardEditorView.swift; sourceTree = "<group>"; };
 		C8BD9E9406E1A48F91E574B8 /* SplitPaneLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitPaneLayout.swift; sourceTree = "<group>"; };
@@ -1257,23 +1401,25 @@
 		D1A2B3C4D5E6F70809101113 /* TerminalInlineTriggerController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalInlineTriggerController.swift; sourceTree = "<group>"; };
 		D1C000000000000000000002 /* ContentViewTerminalLinkPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewTerminalLinkPreview.swift; sourceTree = "<group>"; };
 		D22222222222222222222201 /* ExplorerItemDropPlannerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExplorerItemDropPlannerTests.swift; sourceTree = "<group>"; };
+		D2632CCD47C9B45D78CA6A42 /* VibeLaneNewTaskView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneNewTaskView.swift; sourceTree = "<group>"; };
 		D285C6841FBC59920516899B /* MarkupRenderedEditor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkupRenderedEditor.swift; sourceTree = "<group>"; };
 		D2A6E434F948D8B68CAC439F /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = "<group>"; };
+		D3F67EAC41E07966A94095CB /* VibeLaneStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneStore.swift; path = crispyvibes/Features/VibeLanes/Services/VibeLaneStore.swift; sourceTree = "<group>"; };
 		D43F43FE8D544F062D06C00E /* BrowserUIDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserUIDelegate.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserUIDelegate.swift; sourceTree = "<group>"; };
 		D4570EEA7054A98314CA30D1 /* LaTeXPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXPreviewView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F600000000A001 /* LaTeXCompiledPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXCompiledPreviewView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F600000000A005 /* LaTeXNativeCompiler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaTeXNativeCompiler.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F600000000A009 /* CompiledPreviewSupportViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompiledPreviewSupportViews.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F600000000A007 /* DocumentFormatPreviews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentFormatPreviews.swift; sourceTree = "<group>"; };
 		D4A0B11E0000000000000002 /* BoardInlinePickerOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardInlinePickerOverlay.swift; sourceTree = "<group>"; };
+		D55FD12203C5C37515029A80 /* VibeLaneTaskDetailView+Checkpoints.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "crispyvibes/Features/VibeLanes/Views/VibeLaneTaskDetailView+Checkpoints.swift"; sourceTree = "<group>"; };
 		D5D6B746834B459ADED44AAA /* PaneWorkerExecutorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PaneWorkerExecutorTests.swift; sourceTree = "<group>"; };
 		D5E6F7081920A1B2C3D4E5F6 /* BrowserDownloadDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserDownloadDelegate.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserDownloadDelegate.swift; sourceTree = "<group>"; };
 		D5E6F7A8B9C0D1E2F3A4B5C6 /* ContentViewerMemoryLifecycleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentViewerMemoryLifecycleTests.swift; sourceTree = "<group>"; };
 		D6F3A4B5C9E2D7F81B4C6EA7 /* TmuxSessionManagerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TmuxSessionManagerView.swift; sourceTree = "<group>"; };
 		D7463292292ABF01E520D874 /* EditorSessionState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorSessionState.swift; sourceTree = "<group>"; };
+		D799A6DB0FF7D7F24E465B14 /* VibeLaneStatusNode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneStatusNode.swift; sourceTree = "<group>"; };
 		D7F29233D7DB62CAF6C56565 /* BrowserCommentURLNormalizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BrowserCommentURLNormalizer.swift; sourceTree = "<group>"; };
 		D84C0E18521D9C2882467D3F /* SplitPaneContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitPaneContentView.swift; sourceTree = "<group>"; };
+		D8BFF12512F077CD0144F494 /* VibeLaneEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneEngine.swift; path = crispyvibes/Features/VibeLanes/Services/VibeLaneEngine.swift; sourceTree = "<group>"; };
 		D94906EA32A42238B55587C4 /* AutosaveScheduler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AutosaveScheduler.swift; path = AutosaveScheduler.swift; sourceTree = "<group>"; };
+		D9BAD59FC56EDC3734C423F8 /* VibeLaneSurfaceView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneSurfaceView.swift; path = crispyvibes/Features/VibeLanes/Views/VibeLaneSurfaceView.swift; sourceTree = "<group>"; };
 		DCAEFE3BD8A91015716AAC0B /* ContentViewWelcomeActions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentViewWelcomeActions.swift; sourceTree = "<group>"; };
 		DEBC20EA6850FBCF7E4B11E7 /* CrispyVibesBrowserWebView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CrispyVibesBrowserWebView.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/CrispyVibesBrowserWebView.swift; sourceTree = "<group>"; };
 		DF6865C7E06CEF39B3C6CB25 /* PDFFilePreview.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PDFFilePreview.swift; sourceTree = "<group>"; };
@@ -1316,6 +1462,9 @@
 		EE83452DC02F821972872F31 /* AutosaveSchedulerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AutosaveSchedulerTests.swift; path = AutosaveSchedulerTests.swift; sourceTree = "<group>"; };
 		EF0C96874C1E64A720CEE20B /* BrowserPanelViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserPanelViewModel.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserPanelViewModel.swift; sourceTree = "<group>"; };
 		EF299D701415E664DCB1234F /* VibeSpacePersistenceService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpacePersistenceService.swift; sourceTree = "<group>"; };
+		EFA422CA5E01016492AB7CC2 /* TodoDetailView+FileLinks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "TodoDetailView+FileLinks.swift"; path = "Todos/Views/TodoDetailView+FileLinks.swift"; sourceTree = "<group>"; };
+		EFE3D0D3690D22779D4E580C /* VibeLaneCatalog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneCatalog.swift; path = crispyvibes/Features/VibeLanes/Services/VibeLaneCatalog.swift; sourceTree = "<group>"; };
+		EFFA303CB5073284761CB517 /* TodoLanePipelineEnvironment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodoLanePipelineEnvironment.swift; path = crispyvibes/Features/AIAgents/TodoLanePipeline/TodoLanePipelineEnvironment.swift; sourceTree = "<group>"; };
 		EFFA679768A1D8A7C2392526 /* TodosSurfaceView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodosSurfaceView.swift; path = Todos/Views/TodosSurfaceView.swift; sourceTree = "<group>"; };
 		F0194D9BA74F59A8949BEBD8 /* ViewCompositionSmokeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ViewCompositionSmokeTests.swift; sourceTree = "<group>"; };
 		F03E14DD32805ECE1E3E7F65 /* CommentModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommentModels.swift; sourceTree = "<group>"; };
@@ -1327,6 +1476,7 @@
 		F1A2B3C4D5E6F7A8B9C0D1E3 /* FileTreeFlatRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FileTreeFlatRow.swift; sourceTree = "<group>"; };
 		F1E2D3C4B5A6978869504132 /* TerminalMemoryLifecycleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalMemoryLifecycleTests.swift; sourceTree = "<group>"; };
 		F2144BF95283676CB26DB22E /* ProjectPaneLayoutStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectPaneLayoutStateTests.swift; sourceTree = "<group>"; };
+		F2B0902A4D4D5092BB7F3324 /* VibeLaneTaskManager+LaneAuthoring.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "crispyvibes/Features/VibeLanes/Services/VibeLaneTaskManager+LaneAuthoring.swift"; sourceTree = "<group>"; };
 		F2B1C4D5E8A3B9F01D5C7E62 /* TmuxSessionBehavior.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TmuxSessionBehavior.swift; sourceTree = "<group>"; };
 		F2D000000000000000000001 /* HomeCatalogCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeCatalogCoordinator.swift; sourceTree = "<group>"; };
 		F347CC78926BFD8BEF0DB270 /* BoardCursorRegions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BoardCursorRegions.swift; sourceTree = "<group>"; };
@@ -1339,8 +1489,29 @@
 		F877D8A93D205ADA375BFE6D /* TerminalScrollbackSearchOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalScrollbackSearchOverlay.swift; sourceTree = "<group>"; };
 		F929E1E343D4388CC4D3B983 /* CrossFileCommentsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CrossFileCommentsView.swift; sourceTree = "<group>"; };
 		F9D04C023ECA7860320E2454 /* AppStringsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppStringsTests.swift; sourceTree = "<group>"; };
+		FBCFF2D8A107BD85D191632E /* VibeLaneTask.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneTask.swift; path = crispyvibes/Features/VibeLanes/Models/VibeLaneTask.swift; sourceTree = "<group>"; };
+		E06100000000000000000001 /* VibeLoopDefinition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Models/VibeLoopDefinition.swift; sourceTree = "<group>"; };
+		E06100000000000000000002 /* VibeLoopScheduleCalculator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Services/VibeLoopScheduleCalculator.swift; sourceTree = "<group>"; };
+		E06100000000000000000003 /* VibeLoopStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Services/VibeLoopStore.swift; sourceTree = "<group>"; };
+		E06100000000000000000004 /* VibeLoopManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Services/VibeLoopManager.swift; sourceTree = "<group>"; };
+		E06100000000000000000005 /* VibeLoopManager+Scheduling.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "crispyvibes/Features/Loops/Services/VibeLoopManager+Scheduling.swift"; sourceTree = "<group>"; };
+		E06100000000000000000006 /* VibeLoopScheduler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Services/VibeLoopScheduler.swift; sourceTree = "<group>"; };
+		E06100000000000000000007 /* VibeLoopPresentation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Support/VibeLoopPresentation.swift; sourceTree = "<group>"; };
+		E06100000000000000000008 /* VibeLoopsSurfaceView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Views/VibeLoopsSurfaceView.swift; sourceTree = "<group>"; };
+		E06100000000000000000009 /* VibeLoopDashboardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Views/VibeLoopDashboardView.swift; sourceTree = "<group>"; };
+		E0610000000000000000000A /* VibeLoopDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Views/VibeLoopDetailView.swift; sourceTree = "<group>"; };
+		E0610000000000000000000B /* VibeLoopEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Views/VibeLoopEditorView.swift; sourceTree = "<group>"; };
+		E0610000000000000000000C /* VibeLoopTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/AIAgents/VibeLoopTests.swift; sourceTree = "<group>"; };
+		E0610000000000000000000D /* VibeLoopEditorView+Actions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "crispyvibes/Features/Loops/Views/VibeLoopEditorView+Actions.swift"; sourceTree = "<group>"; };
+		E06400000000000000000001 /* AutomationSurfaceView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Views/AutomationSurfaceView.swift; sourceTree = "<group>"; };
+		E06400000000000000000002 /* VibeLoopEditorView+Lane.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "crispyvibes/Features/Loops/Views/VibeLoopEditorView+Lane.swift"; sourceTree = "<group>"; };
+		E06600000000000000000001 /* AutomationOverviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Views/AutomationOverviewView.swift; sourceTree = "<group>"; };
+		E06700000000000000000001 /* AutomationConceptArtwork.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Views/AutomationConceptArtwork.swift; sourceTree = "<group>"; };
+		E07800000000000000000001 /* AutomationOverviewView+Example.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "crispyvibes/Features/Loops/Views/AutomationOverviewView+Example.swift"; sourceTree = "<group>"; };
+		E07A00000000000000000001 /* AutomationOverviewExampleScenario.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/Loops/Views/AutomationOverviewExampleScenario.swift; sourceTree = "<group>"; };
 		FBD1B77585A0E502758BCED3 /* CrispyVibesThemeManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CrispyVibesThemeManager.swift; sourceTree = "<group>"; };
 		FC80C95D8DA94C7F8595A668 /* AppSettingsSheetViewNerd.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsSheetViewNerd.swift; sourceTree = "<group>"; };
+		FCBDCBE0D6BFDBE06A34288E /* VibeLaneTaskManager+Scheduling.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "crispyvibes/Features/VibeLanes/Services/VibeLaneTaskManager+Scheduling.swift"; sourceTree = "<group>"; };
 		FEA0000000000000000000B1 /* NotebookEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotebookEditorView.swift; sourceTree = "<group>"; };
 		FEB16CONT00000001 /* BrowserContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserContentView.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserContentView.swift; sourceTree = "<group>"; };
 		FF5BBF05816A1090A85D2DCF /* CognitoAuthSecurity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CognitoAuthSecurity.swift; sourceTree = "<group>"; };
@@ -1351,6 +1522,7 @@
 		INS00000000000000000002 /* TerminalGridDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalGridDiff.swift; sourceTree = "<group>"; };
 		INS00000000000000000003 /* TerminalGridSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalGridSnapshot.swift; sourceTree = "<group>"; };
 		INS00000000000000000004 /* TerminalInsightObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInsightObserver.swift; sourceTree = "<group>"; };
+		KATEXMINJS00000000000001 /* katex.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = katex.min.js; sourceTree = "<group>"; };
 		SEC00002000000000000FILE /* ShellEscapingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShellEscapingTests.swift; sourceTree = "<group>"; };
 		SEC00003000000000000FILE /* EditorHTMLSecurityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorHTMLSecurityTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -1742,7 +1914,11 @@
 			isa = PBXGroup;
 			children = (
 				052F463B82C756B2CD782D33 /* TodosPanelView.swift */,
+				AC0020010000000000000002 /* TodoCardView.swift */,
 				8A27B25FC728E29CA267B700 /* TodoDetailView.swift */,
+				AC0020010000000000000004 /* TodoDetailView+Thread.swift */,
+				8F75E9309E1D7BBC12428909 /* TodoDetailView+InlineTrigger.swift */,
+				EFA422CA5E01016492AB7CC2 /* TodoDetailView+FileLinks.swift */,
 				EFFA679768A1D8A7C2392526 /* TodosSurfaceView.swift */,
 				6929502A5AE9CA15649651FF /* TodoQuickCaptureOverlay.swift */,
 			);
@@ -1814,6 +1990,7 @@
 			children = (
 				7ECDFAB6F0BC012FB2C4CC08 /* ACPTransportLineSplittingTests.swift */,
 				AC0010010000000000000002 /* ACPTransportPromptCompletionTests.swift */,
+				AC0010010000000000000004 /* ACPSelectableTextMarkdownTests.swift */,
 			);
 			name = ACP;
 			sourceTree = "<group>";
@@ -2095,6 +2272,23 @@
 				1752689199BEDAB2DF625822 /* Views */,
 			);
 			path = VibeCast;
+			sourceTree = "<group>";
+		};
+		7DCE945E34188FBA094ECEDB /* VibeLanesTests */ = {
+			isa = PBXGroup;
+			children = (
+				1A29318A4682F8193126C04B /* VibeLaneEngineTests.swift */,
+				E07500000000000000000011 /* VibeLaneSkillStoreTests.swift */,
+				E07500000000000000000012 /* VibeLaneEngineNoRepositoryActionsTests.swift */,
+				2E560CB6F98E328DF6C45AB2 /* VibeLaneTaskManagerTests.swift */,
+				E0610000000000000000000C /* VibeLoopTests.swift */,
+				799BBF92EE2EE91A96604C7D /* TodoTriageCoordinatorTests.swift */,
+				1522AAFFF1358DB37AA7BA64 /* TodoLanePipelineBridgeTests.swift */,
+				AC0020010000000000000006 /* TodoModelTests.swift */,
+				3114BF3EE3054946C165C732 /* TodoPipelineModelTests.swift */,
+				8DD3DFBD11157174F11A7E1B /* CLICommandRouterLaneHandlersTests.swift */,
+			);
+			name = VibeLanesTests;
 			sourceTree = "<group>";
 		};
 		7EA9B666C9667649BFCC3038 /* Home */ = {
@@ -2395,6 +2589,8 @@
 				A6E1A000000000000000071D /* CLIKeyMapping.swift */,
 				68D7F499FED252B116EF5F8B /* CLICommandRouterCommentsHandlers.swift */,
 				36614E48DD50988227BE2397 /* CLICommandRouterTodoHandlers.swift */,
+				3C23045159513D47E748CDF3 /* CLICommandRouterTodoPipelineHandlers.swift */,
+				2CED5EE8FCA6C4F67602237A /* CLICommandRouterLaneHandlers.swift */,
 			);
 			name = AgentCLI;
 			path = AgentCLI;
@@ -2679,6 +2875,9 @@
 				4F8E28ED2F5199FF00EF82B1 /* Recovered References */,
 				85E17D0049494DE66AD67649 /* vendor */,
 				8C2E189A9B62A3B8F48E8445 /* Frameworks */,
+				C5C04FA4995A8B8C2107F014 /* VibeLanes */,
+				E06120000000000000000001 /* Loops */,
+				7DCE945E34188FBA094ECEDB /* VibeLanesTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -2867,6 +3066,86 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		C5C04FA4995A8B8C2107F014 /* VibeLanes */ = {
+			isa = PBXGroup;
+			children = (
+				E06300000000000000000011 /* VibeDefinition.swift */,
+				E07100000000000000000011 /* VibeLaneSkillDefinition.swift */,
+				08B92CF15A43141EB1791CF6 /* VibeLaneDefinition.swift */,
+				E05900000000000000000007 /* VibeLaneDefinition+Validation.swift */,
+				E05900000000000000000001 /* VibeLaneEngineConfiguration.swift */,
+				FBCFF2D8A107BD85D191632E /* VibeLaneTask.swift */,
+				530ABB9F36003F3025877DAF /* VibeLaneRunners.swift */,
+				D3F67EAC41E07966A94095CB /* VibeLaneStore.swift */,
+				E07700000000000000000011 /* AutomationDatabaseStore.swift */,
+				E06300000000000000000012 /* VibeLaneReferenceResolver.swift */,
+				12CAC0E23C24AD54378D4EAA /* TodoLanePipelineBridge.swift */,
+				407FFFC97EF08AA1FE486B28 /* TodoLanePipelineBridge+Refine.swift */,
+				A014C92CD65106310BAA725B /* TodoTriageCoordinator.swift */,
+				B1268567D4D016BBA6A65009 /* TodoDispatchSheet.swift */,
+				EFFA303CB5073284761CB517 /* TodoLanePipelineEnvironment.swift */,
+				D8BFF12512F077CD0144F494 /* VibeLaneEngine.swift */,
+				EFE3D0D3690D22779D4E580C /* VibeLaneCatalog.swift */,
+				69F4D0E0927324707AFDE0E5 /* VibeLaneTaskManager.swift */,
+				5E9000000000000000000002 /* VibeLaneSurfaceNavigationViewModel.swift */,
+				0AB3A4F852B6A6806A989F1B /* VibeLaneEnvironment.swift */,
+				B93F5CB477A08637C7A82BEE /* VibeLaneDashboardView.swift */,
+				04067DD661E5EC4F3CD5998F /* VibeLaneTaskDetailView.swift */,
+				D9BAD59FC56EDC3734C423F8 /* VibeLaneSurfaceView.swift */,
+				30CD09548E37830691626D8F /* VibeLaneEditorView.swift */,
+				69689D0A5DEDEF5FFA55BFB0 /* VibeLaneEditorView+Contract.swift */,
+				E05900000000000000000009 /* VibeLaneEditorView+Editing.swift */,
+				E05900000000000000000005 /* VibeLaneEditorSupportViews.swift */,
+				E07000000000000000000011 /* VibeLaneSkillsEditor.swift */,
+				E07200000000000000000011 /* VibeLaneSkillStore.swift */,
+				E07300000000000000000011 /* SkillLibraryView.swift */,
+				E07400000000000000000011 /* SkillLibraryDetailView.swift */,
+				E07600000000000000000011 /* SkillLibraryDetailSupport.swift */,
+				E05900000000000000000003 /* VibeLaneEngineViews.swift */,
+				5A8F0537E9CA3973816FA8C2 /* VibeLaneACPAgentRunner.swift */,
+				FCBDCBE0D6BFDBE06A34288E /* VibeLaneTaskManager+Scheduling.swift */,
+				287D68E62CFFF20539B72A7E /* VibeLaneTaskManager+CatalogSummary.swift */,
+				F2B0902A4D4D5092BB7F3324 /* VibeLaneTaskManager+LaneAuthoring.swift */,
+				E06300000000000000000013 /* VibeLaneTaskManager+VibeAuthoring.swift */,
+				D2632CCD47C9B45D78CA6A42 /* VibeLaneNewTaskView.swift */,
+				C704F2F6D6AEDAC3E2226FD4 /* VibeLaneLanesView.swift */,
+				E06900000000000000000002 /* VibeLaneCatalogCard.swift */,
+				E06300000000000000000014 /* VibeLibraryView.swift */,
+				E06800000000000000000011 /* VibeLibrarySupport.swift */,
+				E06500000000000000000011 /* VibeLibraryInspectorView.swift */,
+				E06300000000000000000015 /* VibeEditorView.swift */,
+				69689D0A5DEDEF5FFA55BFA4 /* VibeLaneTaskDetailView+RunLog.swift */,
+				D55FD12203C5C37515029A80 /* VibeLaneTaskDetailView+Checkpoints.swift */,
+				D799A6DB0FF7D7F24E465B14 /* VibeLaneStatusNode.swift */,
+			);
+			name = VibeLanes;
+			sourceTree = "<group>";
+		};
+		E06120000000000000000001 /* Loops */ = {
+			isa = PBXGroup;
+			children = (
+				E06100000000000000000001 /* VibeLoopDefinition.swift */,
+				E06100000000000000000002 /* VibeLoopScheduleCalculator.swift */,
+				E06100000000000000000003 /* VibeLoopStore.swift */,
+				E06100000000000000000004 /* VibeLoopManager.swift */,
+				E06100000000000000000005 /* VibeLoopManager+Scheduling.swift */,
+				E06100000000000000000006 /* VibeLoopScheduler.swift */,
+				E06100000000000000000007 /* VibeLoopPresentation.swift */,
+				E06100000000000000000008 /* VibeLoopsSurfaceView.swift */,
+				E06100000000000000000009 /* VibeLoopDashboardView.swift */,
+				E0610000000000000000000A /* VibeLoopDetailView.swift */,
+				E0610000000000000000000B /* VibeLoopEditorView.swift */,
+				E0610000000000000000000D /* VibeLoopEditorView+Actions.swift */,
+				E06400000000000000000001 /* AutomationSurfaceView.swift */,
+				E06600000000000000000001 /* AutomationOverviewView.swift */,
+				E07800000000000000000001 /* AutomationOverviewView+Example.swift */,
+				E07A00000000000000000001 /* AutomationOverviewExampleScenario.swift */,
+				E06700000000000000000001 /* AutomationConceptArtwork.swift */,
+				E06400000000000000000002 /* VibeLoopEditorView+Lane.swift */,
+			);
+			name = Loops;
+			sourceTree = "<group>";
+		};
 		C6DA45413ACE0312B7393316 /* support */ = {
 			isa = PBXGroup;
 			children = (
@@ -2908,7 +3187,9 @@
 			isa = PBXGroup;
 			children = (
 				A10A547C43FD1C507328A502 /* Todo.swift */,
+				40E1C8306B4A1FF2D91BB2CD /* TodoPipeline.swift */,
 				E9CACAAC6CF3CDA8AB81F1E5 /* VibeSpaceTodoStore.swift */,
+				86BBC39557E2F0B68F6293A0 /* VibeSpaceTodoStore+Pipeline.swift */,
 				50FA7DF4A78CC98E49F828E9 /* Views */,
 				90B04FEA37589933E01D375F /* Models */,
 				8AD016F7CFE0A3CE2548D4B8 /* Support */,
@@ -3396,6 +3677,7 @@
 				B10000000000000000000004F /* VibeSpaceTerminalBoardInteractionDecorations.swift */,
 				B100000000000000000000050 /* VibeSpaceTerminalBoardDockingOverlays.swift */,
 				B100000000000000000000057 /* VibeSpaceTerminalBoardViewSupport.swift */,
+				B05910000000000000000001 /* VibeLaneBoardTileCard.swift */,
 				B10000000000000000000004D /* VibeSpaceDirectoryCandidate.swift */,
 				031D73B65E3AFBFC100BC9CB /* BrowserBoardTileView.swift */,
 				7BF7D79F15364EE58DF4F8D1 /* DockPinnedFileView.swift */,
@@ -3939,6 +4221,7 @@
 				A10000000000000000000050 /* VibeSpaceTerminalBoardInteractionDecorations.swift in Sources */,
 				A10000000000000000000051 /* VibeSpaceTerminalBoardDockingOverlays.swift in Sources */,
 				A10000000000000000000057 /* VibeSpaceTerminalBoardViewSupport.swift in Sources */,
+				A05910000000000000000001 /* VibeLaneBoardTileCard.swift in Sources */,
 				A1000000000000000000004E /* VibeSpaceDirectoryCandidate.swift in Sources */,
 				A1000000000000000000000B /* TerminalView.swift in Sources */,
 				A1000000000000000000000C /* TextProcessorService.swift in Sources */,
@@ -4238,9 +4521,16 @@
 				312029A2909C2BD59101A417 /* BrowserContentWithCommentsPanel.swift in Sources */,
 				84E6893FC3DFC547D9472468 /* CommentInlinePopoverComposer.swift in Sources */,
 				06B0E5AD4B4CA235BF427C7C /* Todo.swift in Sources */,
+				7C714F0CD6EFAFF5B881D84E /* TodoPipeline.swift in Sources */,
 				0351684DC70D1835A9A411F9 /* VibeSpaceTodoStore.swift in Sources */,
+				4A52CF244EFCA40F136C29AB /* VibeSpaceTodoStore+Pipeline.swift in Sources */,
 				B55E7F9AEC76560D834D7AE5 /* CLICommandRouterTodoHandlers.swift in Sources */,
+				9BFDB7394B097843DD4BEDB8 /* CLICommandRouterTodoPipelineHandlers.swift in Sources */,
 				B4F27F84D163A07A52C85BB3 /* TodosPanelView.swift in Sources */,
+				AC0020010000000000000001 /* TodoCardView.swift in Sources */,
+				AC0020010000000000000003 /* TodoDetailView+Thread.swift in Sources */,
+				F7772D0304A86109B7C402AD /* TodoDetailView+InlineTrigger.swift in Sources */,
+				71AF0C23A6AACB006D95B24A /* TodoDetailView+FileLinks.swift in Sources */,
 				F157AAD72BD9FF36699FE746 /* TodoMessage.swift in Sources */,
 				AF7DE45178894ED06A93BEF5 /* TodoDetailView.swift in Sources */,
 				C09D89721027C10CCAA0790B /* TodosSurfaceView.swift in Sources */,
@@ -4249,11 +4539,78 @@
 				0C8CD0D1BDE6AAC394E69A7B /* WhiteboardEditorView.swift in Sources */,
 				38666CDE2B58A50BBF132632 /* WhiteboardDocument.swift in Sources */,
 				EC7E87D893D1FACB05340A28 /* ExcalidrawSchemeHandler.swift in Sources */,
+				E06300000000000000000001 /* VibeDefinition.swift in Sources */,
 				6FA4BD284BDEBA8D5E488476 /* LaTeXPreviewView.swift in Sources */,
 				A1B2C3D4E5F600000000A002 /* LaTeXCompiledPreviewView.swift in Sources */,
 				A1B2C3D4E5F600000000A006 /* LaTeXNativeCompiler.swift in Sources */,
 				A1B2C3D4E5F600000000A00A /* CompiledPreviewSupportViews.swift in Sources */,
 				A1B2C3D4E5F600000000A008 /* DocumentFormatPreviews.swift in Sources */,
+				CF6F0163AD573DABCD9E344F /* VibeLaneDefinition.swift in Sources */,
+				E05900000000000000000008 /* VibeLaneDefinition+Validation.swift in Sources */,
+				E05900000000000000000002 /* VibeLaneEngineConfiguration.swift in Sources */,
+				5D4E85ECB6DAB391921231F7 /* VibeLaneTask.swift in Sources */,
+				79863344CC94941FEACE9C8E /* VibeLaneRunners.swift in Sources */,
+				FCD7E87F663B142C7F4358F9 /* VibeLaneStore.swift in Sources */,
+				E07700000000000000000001 /* AutomationDatabaseStore.swift in Sources */,
+				E06300000000000000000002 /* VibeLaneReferenceResolver.swift in Sources */,
+				47610635DE52CB32E72FC6DB /* TodoLanePipelineBridge.swift in Sources */,
+				B68FFB8EC8CA8623C5786936 /* TodoLanePipelineBridge+Refine.swift in Sources */,
+				A24EA200037B699FC9A877D6 /* TodoTriageCoordinator.swift in Sources */,
+				8EFF4E107110F481A2DE6E62 /* TodoDispatchSheet.swift in Sources */,
+				96DEA0538B5D210B24FE5C45 /* TodoLanePipelineEnvironment.swift in Sources */,
+				4D6799B6E0587CABAA74BB5C /* VibeLaneEngine.swift in Sources */,
+				64077656201C88C21450FDE0 /* VibeLaneCatalog.swift in Sources */,
+				4744C9A37EFA19842BB0DC05 /* VibeLaneTaskManager.swift in Sources */,
+				5E9000000000000000000001 /* VibeLaneSurfaceNavigationViewModel.swift in Sources */,
+				CEAF93C0FD3F0D1AC6A7E063 /* VibeLaneEnvironment.swift in Sources */,
+				8F94C751E822F4C8169D0222 /* VibeLaneDashboardView.swift in Sources */,
+				C6EFFFF46782710BCE58B43C /* VibeLaneTaskDetailView.swift in Sources */,
+				DAC3BF85D443B4A50D4E9B68 /* VibeLaneSurfaceView.swift in Sources */,
+				A56BF64CBEACFEB1639539DC /* VibeLaneEditorView.swift in Sources */,
+				76FC9EA27490239454F420F0 /* VibeLaneEditorView+Contract.swift in Sources */,
+				E0590000000000000000000A /* VibeLaneEditorView+Editing.swift in Sources */,
+				E05900000000000000000006 /* VibeLaneEditorSupportViews.swift in Sources */,
+				E07000000000000000000001 /* VibeLaneSkillsEditor.swift in Sources */,
+				E07100000000000000000001 /* VibeLaneSkillDefinition.swift in Sources */,
+				E07200000000000000000001 /* VibeLaneSkillStore.swift in Sources */,
+				E07300000000000000000001 /* SkillLibraryView.swift in Sources */,
+				E07400000000000000000001 /* SkillLibraryDetailView.swift in Sources */,
+				E07600000000000000000001 /* SkillLibraryDetailSupport.swift in Sources */,
+				E05900000000000000000004 /* VibeLaneEngineViews.swift in Sources */,
+				06E4F1B9B96FDBB5FE6819D0 /* VibeLaneACPAgentRunner.swift in Sources */,
+				5957FF3965CB93A27FE8B8E9 /* VibeLaneTaskManager+Scheduling.swift in Sources */,
+				829AEACBE3F6EAB3BA8C8E94 /* VibeLaneTaskManager+CatalogSummary.swift in Sources */,
+				2F71A1D13D1AD0FD4AD2DA04 /* VibeLaneTaskManager+LaneAuthoring.swift in Sources */,
+				E06300000000000000000003 /* VibeLaneTaskManager+VibeAuthoring.swift in Sources */,
+				939ED71B15FF98B8B4606059 /* VibeLaneNewTaskView.swift in Sources */,
+				F0F049531520B40660DD932B /* VibeLaneLanesView.swift in Sources */,
+				E06900000000000000000001 /* VibeLaneCatalogCard.swift in Sources */,
+				E06300000000000000000004 /* VibeLibraryView.swift in Sources */,
+				E06800000000000000000001 /* VibeLibrarySupport.swift in Sources */,
+				E06500000000000000000001 /* VibeLibraryInspectorView.swift in Sources */,
+				E06300000000000000000005 /* VibeEditorView.swift in Sources */,
+				76FC9EA27490239454F420E6 /* VibeLaneTaskDetailView+RunLog.swift in Sources */,
+				957E6F16A24C5E3FEB74957A /* VibeLaneTaskDetailView+Checkpoints.swift in Sources */,
+				F6A1CE4FD2106CADBFA01707 /* VibeLaneStatusNode.swift in Sources */,
+				E06110000000000000000001 /* VibeLoopDefinition.swift in Sources */,
+				E06110000000000000000002 /* VibeLoopScheduleCalculator.swift in Sources */,
+				E06110000000000000000003 /* VibeLoopStore.swift in Sources */,
+				E06110000000000000000004 /* VibeLoopManager.swift in Sources */,
+				E06110000000000000000005 /* VibeLoopManager+Scheduling.swift in Sources */,
+				E06110000000000000000006 /* VibeLoopScheduler.swift in Sources */,
+				E06110000000000000000007 /* VibeLoopPresentation.swift in Sources */,
+				E06110000000000000000008 /* VibeLoopsSurfaceView.swift in Sources */,
+				E06110000000000000000009 /* VibeLoopDashboardView.swift in Sources */,
+				E0611000000000000000000A /* VibeLoopDetailView.swift in Sources */,
+				E0611000000000000000000B /* VibeLoopEditorView.swift in Sources */,
+				E0611000000000000000000D /* VibeLoopEditorView+Actions.swift in Sources */,
+				E06410000000000000000001 /* AutomationSurfaceView.swift in Sources */,
+				E06610000000000000000001 /* AutomationOverviewView.swift in Sources */,
+				E07810000000000000000001 /* AutomationOverviewView+Example.swift in Sources */,
+				E07A10000000000000000001 /* AutomationOverviewExampleScenario.swift in Sources */,
+				E06710000000000000000001 /* AutomationConceptArtwork.swift in Sources */,
+				E06410000000000000000002 /* VibeLoopEditorView+Lane.swift in Sources */,
+				073C0269BAD0F956F57F01FC /* CLICommandRouterLaneHandlers.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4352,7 +4709,18 @@
 				CC0EC7B8EF2918CF78828C9D /* ConversationSidebarModelTests.swift in Sources */,
 				5B7A9A418FBBDFA90B56171B /* ACPTransportLineSplittingTests.swift in Sources */,
 				AC0010010000000000000001 /* ACPTransportPromptCompletionTests.swift in Sources */,
+				AC0010010000000000000003 /* ACPSelectableTextMarkdownTests.swift in Sources */,
+				AC0020010000000000000005 /* TodoModelTests.swift in Sources */,
+				DDC5EB118F22CFF315D4B56C /* TodoPipelineModelTests.swift in Sources */,
 				93A43C758C5A20A048F43BA2 /* CommentAnchorRelocatorTests.swift in Sources */,
+				B33EF8AC8E62493A555EACAE /* VibeLaneEngineTests.swift in Sources */,
+				E07500000000000000000001 /* VibeLaneSkillStoreTests.swift in Sources */,
+				E07500000000000000000002 /* VibeLaneEngineNoRepositoryActionsTests.swift in Sources */,
+				B0F37E28180E620893A26864 /* VibeLaneTaskManagerTests.swift in Sources */,
+				E539E26F06B29CCE8B717771 /* TodoTriageCoordinatorTests.swift in Sources */,
+				E9D23F024AFC976406CB9418 /* TodoLanePipelineBridgeTests.swift in Sources */,
+				ABAC103CE1D6F1C0FC4455CE /* CLICommandRouterLaneHandlersTests.swift in Sources */,
+				E0611000000000000000000C /* VibeLoopTests.swift in Sources */,
 				A8C001000000000000000001 /* MarkdownRuntimeTests.swift in Sources */,
 				A8C001000000000000000002 /* CodeEditorCommentBridgeStabilityTests.swift in Sources */,
 			);

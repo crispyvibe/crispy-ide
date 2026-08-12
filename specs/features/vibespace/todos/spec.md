@@ -23,16 +23,16 @@ A todo MUST be creatable from anywhere in the app via a hotkey-invoked floating 
 The capture HUD MUST default to the currently-focused project (snapshotted when it opens) and MUST show that target and allow retargeting to any project in the vibespace or to the vibespace-level (no-project) inbox.
 
 ### F053-R03: Capture confirmation
-On save, the HUD MUST show a brief (~1s) success confirmation with animation before dismissing.
+On save, the HUD MUST show a brief (~1s) success confirmation with animation before dismissing — only after the write actually persists. If the write fails, the HUD MUST show the error and keep the typed text so the capture is not lost.
 
 ### F053-R04: Dockable surface
-Todos MUST be presentable as a dockable content-viewer surface (master list + detail), opened/toggled from the toolbar — the same docking model as VibeCast.
+Todos MUST be presentable as a dockable content-viewer surface (master list + detail), opened/toggled from the toolbar — the same docking model as VibeCast. The surface MUST adapt to its container: wide hosts show list and detail side by side; narrow panes collapse to a single column where selecting a card pushes the detail with a Back control.
 
 ### F053-R05: List & scoping
-The list MUST show sticky-note cards scoped to the focused project with an "All in VibeSpace" toggle, support a quick-add field, completion toggle, and delete, with active items sorted before completed.
+The list MUST show sticky-note cards scoped to the focused project with an "All in VibeSpace" toggle, support a quick-add field, completion toggle, and delete, with active items in a stable creation-order section above a collapsible "Completed (n)" section. Sort keys MUST NOT change on edit (no reorder-under-the-cursor). The header MUST show active/completed counts; a search field (shown once the list grows) filters by title and body. Each card MUST render its sticky color as a leading edge and offer complete/color/delete from a context menu. Deletion MUST be confirmed inline, adjacent to the delete control (no modal dialog — the control morphs into confirm/cancel in place); it cascades to the thread. Completion and deletion MUST update optimistically and reconcile with the store, and store errors MUST surface in a dismissible banner. ↑/↓ move selection, ⌦ arms the inline delete confirm (⌦ again commits), and ⎋ cancels the confirm or clears selection when the list has focus.
 
 ### F053-R06: Detail, rich text & threads
-The detail pane MUST support an inline-editable title, a markdown notes body (edit/preview), and a flat thread of markdown messages with a composer. Consecutive same-author messages MUST group under a single header with a relative timestamp; user and agent authorship MUST be visually distinguished.
+The detail pane MUST support an inline-editable title (committing on Return and on focus loss), a sticky-color picker, created/completed metadata with project and attached-file chips, a markdown notes body (edit/preview with a visible hover affordance and ⎋ cancel), and a flat thread of markdown messages with a composer. Consecutive same-author messages MUST group under a single header with a relative timestamp; user and agent authorship MUST be visually distinguished.
 
 ### F053-R07: CLI access
 The CLI MUST expose `todo.add|list|complete|reopen|update|remove|show` and `todo.message.add`, with project context resolved from `_env.project_path`. CLI mutations MUST be indistinguishable from UI ones and update the UI live.
@@ -76,7 +76,13 @@ Reminders are out of scope for v1. The schema reserves `due_at`/`reminder_at` so
 **When** an agent runs `crispy todo message add <id> --text "…"` **Then** an agent-authored (distinctly styled) message appears live in the thread.
 
 ### Scenario F053-S10: Complete / delete
-**When** the user toggles completion **Then** the todo is marked completed (struck through, sorted down); deleting removes it and clears selection if it was selected.
+**When** the user toggles completion **Then** the card updates instantly (optimistically) and moves into the collapsible Completed section; delete arms an inline confirm next to the control (confirm deletes and clears selection if selected, cancel or moving away disarms).
+
+### Scenario F053-S14: Narrow-pane adaptation
+**Given** the Todos surface is hosted in a pane narrower than the two-column breakpoint **When** the user selects a card **Then** the detail replaces the list with a Back control, and widening the pane restores the side-by-side layout.
+
+### Scenario F053-S15: Sticky color
+**When** the user assigns a color from a card's context menu or the detail color picker **Then** the card renders that color as its leading edge, and `crispy todo add --color <tag>` produces the same result.
 
 ### Scenario F053-S11: CLI add / list / show
 **When** an agent runs `crispy todo add --text "X"`, `crispy todo list`, and `crispy todo show <id>` **Then** the todo is created in the resolved project, listed, and shown with its full thread; the open surface updates live.
@@ -111,3 +117,4 @@ Reminders are out of scope for v1. The schema reserves `due_at`/`reminder_at` so
 | 2026-06-03 | Initial spec (sidebar panel; SQLite; reminders deferred). |
 | 2026-06-04 | Reworked to the shipped feature: dockable surface (VibeCast model), per-todo rich-text notes + flat threads, instant-capture HUD with project picker + success feedback, palette theming + `crispyvibesUIScale`. Status → implemented. |
 | 2026-06-19 | Surfacing now goes through the centralized `ContentSurfacePolicy` (ADR-003): in Terminal Board view Todos floats as a spotlight instead of being a detail-tab-only surface that the board hid. |
+| 2026-07-11 | Management-surface overhaul: adaptive one/two-column layout (R04), stable sections with counts + search + sticky-color rendering + optimistic updates + confirmed deletes + error banner + keyboard navigation (R05), honest capture confirmation (R03), detail metadata/color picker/focus-loss title commit (R06). Added S14/S15; model logic covered by `TodoModelTests`. |

@@ -102,6 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PaneWorkerBootstrap.isPaneTaskProcess
     }
 
+    /// Skips launch side effects under XCTest. Stored (not computed) so tests
+    /// that exercise the launch path itself can opt back in.
+    var isRunningUnitTests: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
     deinit {
         for observer in windowObservers {
             NotificationCenter.default.removeObserver(observer)
@@ -118,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        guard !isRunningUnitTests else { return }
         guard !isPaneWorkerProcess else { return }
         NSWindow.allowsAutomaticWindowTabbing = false
         NSApp.servicesProvider = textProcessorService
@@ -125,6 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard !isRunningUnitTests else { return }
         guard !isPaneWorkerProcess else { return }
         AppPreferences.migrateUserDefaultsIfNeeded()
         if AppInstallationGuard.handleLaunchIfNeeded() {
@@ -166,11 +172,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        guard !isRunningUnitTests else { return }
         guard !isPaneWorkerProcess else { return }
         // Self-heal: if the Agent CLI listener died (e.g. a fatal accept error
         // left the socket orphaned), this rebinds it. No-op when already
         // serving, since start() guards on the running flag.
         startAgentCLISocketServerIfEnabled()
+        appContainer?.vibeLoopScheduler.reconcileNow()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -178,6 +186,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             appContainer?.terminalBoardDetachedWindowManager.closeAll()
             appContainer?.terminalBoardStandaloneRegistry.shutdownAll()
+            appContainer?.vibeLoopScheduler.shutdown()
+            appContainer?.vibeLoopManager.shutdown()
+            appContainer?.automationBootstrapCoordinator.shutdown()
+            appContainer?.vibeLaneTaskManager.shutdown()
             appContainer?.cliSocketServer.shutdown()
             cliExecRelayServer?.shutdown()
             appContainer?.jupyterServerService.shutdownAll()

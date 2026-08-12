@@ -25,6 +25,7 @@ enum ContentKind: Equatable {
     case agentChat
     case conversationThread
     case todos
+    case vibeLanes
     case vibeCast
     /// `preferTemporary` (the "Temporary Terminal" row) always spotlights,
     /// regardless of canvas mode.
@@ -42,6 +43,7 @@ enum PresentableContent {
     case agentChat(project: AnyProjectSession?, preferredAgentID: String?)
     case conversationThread(ConversationThreadSummary)
     case todos
+    case vibeLanes
     case vibeCast
 
     var kind: ContentKind {
@@ -49,6 +51,7 @@ enum PresentableContent {
         case .agentChat: return .agentChat
         case .conversationThread: return .conversationThread
         case .todos: return .todos
+        case .vibeLanes: return .vibeLanes
         case .vibeCast: return .vibeCast
         }
     }
@@ -76,7 +79,7 @@ enum ContentSurfacePolicy {
         case .conversationThread, .file:
             // Surface as a floating preview over the board, otherwise a tab.
             return mode == .terminalOnly ? .dockedPreview : .detailTab
-        case .todos, .vibeCast:
+        case .todos, .vibeLanes, .vibeCast:
             // Float over the board (pin/dismiss like other previews); a detail
             // tab when already in detailed.
             return mode == .terminalOnly ? .spotlight : .detailTab

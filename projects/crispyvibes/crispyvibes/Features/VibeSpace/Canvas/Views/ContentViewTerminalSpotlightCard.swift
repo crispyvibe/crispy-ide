@@ -177,7 +177,7 @@ extension ContentView {
             return { signal in
                 session.sendRawText(signal)
             }
-        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
             return nil
         }
     }
@@ -303,6 +303,18 @@ extension ContentView {
                 },
                 isActive: true,
                 onManageShortcutsRequested: spotlight.onManageShortcutsRequested
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .vibeLanes:
+            VibeLaneSurfaceView(
+                focusedProjectPath: vibespaceView.focusedProject?.rootURL.standardizedFileURL.path,
+                onOpenACPSession: {
+                    contentViewerStore.openVibeLaneACPPane(
+                        target: $0,
+                        projects: vibespaceView.activeVibeSpaceProjects,
+                        vibespaceID: activeVibeSpaceID
+                    )
+                }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .todos:
@@ -445,18 +457,13 @@ extension ContentView {
         switch spotlight.source {
         case .filePreview, .file, .browserPreview, .browser:
             return true
-        case .persistent, .transient, .vibeCast, .todos, .acp:
+        case .persistent, .transient, .vibeCast, .vibeLanes, .todos, .acp:
             return false
         }
     }
 
     private func spotlightSupportsBoardPin(_ spotlight: TerminalSpotlightState) -> Bool {
-        switch spotlight.source {
-        case .filePreview, .browserPreview:
-            return true
-        case .persistent, .transient, .vibeCast, .todos, .acp, .file, .browser:
-            return false
-        }
+        spotlight.source.supportsBoardPin
     }
 
     private func pinSpotlightToDetailedViewer(_ spotlight: TerminalSpotlightState) {
@@ -505,7 +512,7 @@ extension ContentView {
                 snapshot: viewModel.sessionSnapshot()
             )
             contentViewerStore.activeGroup.openTab(.webPage(reference: reference))
-        case .persistent, .transient, .vibeCast, .todos, .acp:
+        case .persistent, .transient, .vibeCast, .vibeLanes, .todos, .acp:
             return
         }
         dismissTerminalSpotlight()
@@ -527,6 +534,10 @@ extension ContentView {
                 projectPath: spotlight.owningProjectRootURL?.path
             ) else { return }
             dockedBrowserCoordinator.promotePreview(to: tileID)
+        case .vibeLanes:
+            guard boardStore.addVibeLanesTile(
+                surfaceID: spotlight.surfaceID ?? boardStore.primarySurfaceID
+            ) else { return }
         case .persistent, .transient, .vibeCast, .todos, .acp, .file, .browser:
             return
         }
@@ -566,7 +577,7 @@ struct SpotlightTerminalInputBar: View {
             return terminalViewModel.session(for: tabID)
         case let .transient(session):
             return session
-        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
             return nil
         }
     }
@@ -723,7 +734,7 @@ struct SpotlightTerminalInputBar: View {
         switch spotlight.source {
         case let .persistent(_, tabID): return tabID
         case let .transient(session): return session.id
-        case .vibeCast, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
+        case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
             return nil
         }
     }

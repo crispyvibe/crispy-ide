@@ -84,6 +84,85 @@ class ACPSessionManager: ObservableObject {
         projectSessionsByIdentifier[projectIdentifier]
     }
 
+    /// F059 — connect a headless session bound to a working directory, stored
+    /// per-UUID so multiple Vibe Lane tasks can run independent sessions. Uses
+    /// the background host context (no project session object required).
+    func connectHeadless(
+        id: UUID,
+        workingDirectory: URL,
+        agent: ACPAgentDefinition,
+        origin: String = "vibelane",
+        autoAllowPermissions: Bool = true
+    ) async throws -> ACPSession {
+        (standaloneSessions[id] as? ACPSession)?.disconnect()
+        let session = makeSession(
+            hostContext: .background(workingDirectory: workingDirectory),
+            agent: agent,
+            origin: origin,
+            autoAllowPermissions: autoAllowPermissions
+        )
+        try await session.connect()
+        standaloneSessions[id] = session
+        return session
+    }
+
+    /// Connect any installed agent for a headless Vibe Lane session. ACP agents
+    /// use the protocol transport; Codex and Claude Code use the same direct
+    /// integrations as ACP chat so model, trust, mode, and reasoning are real
+    /// session settings rather than lane-only metadata.
+    func connectHeadlessAgent(
+        id: UUID,
+        workingDirectory: URL,
+        agent: ACPDiscoveredAgent,
+        origin: String,
+        trustMode: CLITrustMode,
+        modelID: String?,
+        reasoningLevel: AgentReasoningLevel
+    ) async throws -> any AgentSessionProtocol {
+        standaloneSessions[id]?.disconnect()
+
+        let session: any AgentSessionProtocol
+        if let integration = agent.directIntegration {
+            switch integration {
+            case .claudeCode:
+                session = ClaudeCodeSession(
+                    projectPath: workingDirectory,
+                    executable: agent.executablePath ?? agent.executable,
+                    agentName: agent.title,
+                    trustMode: trustMode,
+                    model: modelID,
+                    reasoningLevel: reasoningLevel
+                )
+            case .codex:
+                session = CodexSession(
+                    projectPath: workingDirectory,
+                    executable: agent.executablePath ?? agent.executable,
+                    agentName: agent.title,
+                    trustMode: trustMode,
+                    model: modelID,
+                    reasoningLevel: reasoningLevel
+                )
+            }
+            let permissionHandler = ACPPermissionHandler(observabilityStore: observabilityStore)
+            permissionHandler.allowAll = trustMode == .fullTrust
+            session.installPermissionHandler(permissionHandler)
+        } else {
+            guard let definition = agent.agentDefinition else {
+                throw ACPTransportError.agentError("Agent unavailable: \(agent.id)")
+            }
+            session = makeSession(
+                hostContext: .background(workingDirectory: workingDirectory),
+                agent: definition,
+                origin: origin,
+                autoAllowPermissions: trustMode == .fullTrust
+            )
+        }
+
+        try await session.connect()
+        standaloneSessions[id] = session
+        return session
+    }
+
     func disconnect(projectIdentifier: String) {
         projectSessionsByIdentifier.removeValue(forKey: projectIdentifier)?.disconnect()
     }

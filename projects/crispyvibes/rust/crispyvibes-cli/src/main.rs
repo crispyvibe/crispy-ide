@@ -37,10 +37,10 @@ enum Command {
     Ping,
     /// Returns the channel client's resolved context (surface, vibespace, project).
     Whoami,
-    /// List all supported methods, or describe one when METHOD is given.
+    /// List every command category, one category's commands, or one method's schema.
     Help {
-        /// When provided, returns the full schema for just that method.
-        method: Option<String>,
+        /// A category name (e.g. `lane`) or an exact method name. Omit to list all categories.
+        topic: Option<String>,
     },
     /// Shelf operations.
     #[command(subcommand)]
@@ -219,6 +219,62 @@ enum TodoCommand {
     /// Thread message operations.
     #[command(subcommand)]
     Message(TodoMessageCommand),
+    /// File link operations (F060).
+    #[command(subcommand)]
+    File(TodoFileCommand),
+    /// Triage operations (F060).
+    #[command(subcommand)]
+    Triage(TodoTriageCommand),
+    /// Dispatch a todo to a lane, creating a lane task (F060).
+    Dispatch {
+        /// Todo ID.
+        id: String,
+        /// Lane name or UUID.
+        #[arg(long)]
+        lane: String,
+        /// Input override as key=value (repeatable).
+        #[arg(long = "input", value_name = "KEY=VALUE")]
+        input: Vec<String>,
+        /// Dispatch even when required inputs are unresolved.
+        #[arg(long)]
+        allow_unresolved: bool,
+    },
+}
+
+/// F060: todo file links.
+#[derive(Subcommand, Debug)]
+enum TodoFileCommand {
+    /// Link a file to a todo.
+    Add {
+        /// Todo ID.
+        id: String,
+        /// File path (absolute or project-relative).
+        #[arg(long)]
+        path: String,
+    },
+    /// Unlink a file from a todo.
+    Remove {
+        /// Todo ID.
+        id: String,
+        /// File path (matches the path used when adding).
+        #[arg(long)]
+        path: String,
+    },
+    /// List files linked to a todo.
+    List {
+        /// Todo ID.
+        id: String,
+    },
+}
+
+/// F060: todo triage.
+#[derive(Subcommand, Debug)]
+enum TodoTriageCommand {
+    /// Show the triage result for a todo.
+    Show {
+        /// Todo ID.
+        id: String,
+    },
 }
 
 /// F053: todo thread messages.
@@ -512,8 +568,8 @@ fn run(cli: Cli) -> Result<(), String> {
     let (method, params): (&str, Value) = match cli.command {
         Command::Ping => ("ping", json!({})),
         Command::Whoami => ("whoami", json!({})),
-        Command::Help { method } => match method {
-            Some(m) => ("help", json!({ "method": m })),
+        Command::Help { topic } => match topic {
+            Some(t) => ("help", json!({ "topic": t })),
             None => ("help", json!({})),
         },
         Command::Shelf(ShelfCommand::Add { path, select }) => (
@@ -719,6 +775,26 @@ fn run(cli: Cli) -> Result<(), String> {
             "todo.message.add",
             json!({ "id": id, "text": text }),
         ),
+        Command::Todo(TodoCommand::File(TodoFileCommand::Add { id, path })) => (
+            "todo.file.add",
+            json!({ "id": id, "path": path }),
+        ),
+        Command::Todo(TodoCommand::File(TodoFileCommand::Remove { id, path })) => (
+            "todo.file.remove",
+            json!({ "id": id, "path": path }),
+        ),
+        Command::Todo(TodoCommand::File(TodoFileCommand::List { id })) => (
+            "todo.file.list",
+            json!({ "id": id }),
+        ),
+        Command::Todo(TodoCommand::Triage(TodoTriageCommand::Show { id })) => (
+            "todo.triage.show",
+            json!({ "id": id }),
+        ),
+        Command::Todo(TodoCommand::Dispatch { id, lane, input, allow_unresolved }) => (
+            "todo.dispatch",
+            dispatch_params(id, lane, &input, allow_unresolved)?,
+        ),
     };
 
     let response = send_request(&socket_path, method, params, &env)?;
@@ -729,6 +805,32 @@ fn run(cli: Cli) -> Result<(), String> {
         print_human(method, &response);
     }
     Ok(())
+}
+
+/// F060: builds the `todo.dispatch` params. `--input` values are split on the
+/// FIRST `=` into key/value pairs and sent as an `inputs` object only when at
+/// least one was given; `allowUnresolved` is included only when the flag is set.
+fn dispatch_params(
+    id: String,
+    lane: String,
+    inputs: &[String],
+    allow_unresolved: bool,
+) -> Result<Value, String> {
+    let mut params = json!({ "id": id, "lane": lane });
+    if !inputs.is_empty() {
+        let mut object = serde_json::Map::new();
+        for raw in inputs {
+            let (key, value) = raw.split_once('=').ok_or_else(|| {
+                format!("invalid --input {raw:?}: expected key=value")
+            })?;
+            object.insert(key.to_string(), Value::String(value.to_string()));
+        }
+        params["inputs"] = Value::Object(object);
+    }
+    if allow_unresolved {
+        params["allowUnresolved"] = Value::Bool(true);
+    }
+    Ok(params)
 }
 
 fn resolve_socket_path(explicit: Option<&PathBuf>) -> Result<PathBuf, String> {
@@ -911,12 +1013,16 @@ fn print_human(method: &str, result: &Value) {
                     }
                 }
             }
-            // List mode: app overview, concepts, then domain-grouped commands.
-            let app = result.get("app").and_then(Value::as_str).unwrap_or("Crispy");
-            let summary = result.get("summary").and_then(Value::as_str).unwrap_or("");
-            println!("{app}");
-            if !summary.is_empty() {
-                println!("  {summary}");
+            // List mode: app overview, concepts, then category-grouped commands.
+            // A single-category response omits `app`, so print only the category.
+            let is_single_category = result.get("app").is_none();
+            if !is_single_category {
+                let app = result.get("app").and_then(Value::as_str).unwrap_or("Crispy");
+                let summary = result.get("summary").and_then(Value::as_str).unwrap_or("");
+                println!("{app}");
+                if !summary.is_empty() {
+                    println!("  {summary}");
+                }
             }
             if let Some(concepts) = result.get("concepts").and_then(Value::as_array) {
                 if !concepts.is_empty() {
@@ -930,6 +1036,7 @@ fn print_human(method: &str, result: &Value) {
                 }
             }
             if let Some(domains) = result.get("domains").and_then(Value::as_array) {
+                let multiple = domains.len() > 1;
                 for domain in domains {
                     println!();
                     let name = domain.get("name").and_then(Value::as_str).unwrap_or("?");
@@ -943,6 +1050,10 @@ fn print_human(method: &str, result: &Value) {
                             println!("    {method:<22}  {summary}");
                         }
                     }
+                }
+                if multiple {
+                    println!();
+                    println!("Run `crispy help <category>` for one category, or `crispy help <method>` for a method's full schema.");
                 }
             }
         }
@@ -1200,9 +1311,83 @@ fn print_human(method: &str, result: &Value) {
             let id = result.get("id").and_then(Value::as_str).unwrap_or("?");
             println!("message added: {id}");
         }
+        "todo.file.add" => {
+            let path = result.get("path").and_then(Value::as_str).unwrap_or("?");
+            println!("linked: {path}");
+        }
+        "todo.file.remove" => {
+            let removed = result.get("removed").and_then(Value::as_bool).unwrap_or(false);
+            println!("{}", if removed { "unlinked" } else { "not linked" });
+        }
+        "todo.file.list" => {
+            if let Some(files) = result.get("files").and_then(Value::as_array) {
+                if files.is_empty() {
+                    println!("(no linked files)");
+                } else {
+                    for f in files {
+                        let path = f.get("path").and_then(Value::as_str).unwrap_or("?");
+                        let missing = f.get("missing").and_then(Value::as_bool).unwrap_or(false);
+                        let mark_missing = if missing { "  (missing)" } else { "" };
+                        match f.get("line").and_then(Value::as_i64) {
+                            Some(line) => println!("{path}:{line}{mark_missing}"),
+                            None => println!("{path}{mark_missing}"),
+                        }
+                    }
+                }
+            }
+        }
+        "todo.triage.show" => {
+            if let Some(triage) = result.get("triage").and_then(Value::as_str) {
+                // The triage payload arrives as an encoded JSON string; pretty-print it.
+                match serde_json::from_str::<Value>(triage) {
+                    Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default()),
+                    Err(_) => println!("{triage}"),
+                }
+            } else {
+                println!("(no triage)");
+            }
+        }
+        "todo.dispatch" => {
+            let task_id = result.get("taskId").and_then(Value::as_str).unwrap_or("?");
+            println!("dispatched: {task_id}");
+        }
         _ => {
             let pretty = serde_json::to_string_pretty(result).unwrap_or_default();
             println!("{pretty}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dispatch_params_minimal_omits_inputs_and_allow_unresolved() {
+        let params = dispatch_params("t1".into(), "build".into(), &[], false).unwrap();
+        assert_eq!(params, json!({ "id": "t1", "lane": "build" }));
+    }
+
+    #[test]
+    fn dispatch_params_splits_inputs_on_first_equals() {
+        let inputs = vec!["branch=feature/x".to_string(), "note=a=b=c".to_string()];
+        let params = dispatch_params("t1".into(), "build".into(), &inputs, false).unwrap();
+        assert_eq!(
+            params["inputs"],
+            json!({ "branch": "feature/x", "note": "a=b=c" })
+        );
+    }
+
+    #[test]
+    fn dispatch_params_includes_allow_unresolved_only_when_set() {
+        let params = dispatch_params("t1".into(), "build".into(), &[], true).unwrap();
+        assert_eq!(params["allowUnresolved"], json!(true));
+    }
+
+    #[test]
+    fn dispatch_params_rejects_input_without_equals() {
+        let inputs = vec!["missing-separator".to_string()];
+        let err = dispatch_params("t1".into(), "build".into(), &inputs, false).unwrap_err();
+        assert!(err.contains("expected key=value"), "unexpected error: {err}");
     }
 }

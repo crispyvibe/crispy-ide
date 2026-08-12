@@ -1,0 +1,1535 @@
+import Foundation
+
+// F059 — the execution engine. Drives ONE task through its lane's checkpoints.
+// Per checkpoint it loops: run the worker on the Work Definition, then run the
+// Verification Definition (an independent reviewer of the outcome). On pass the
+// worker writes a short HANDOFF that is persisted to a handoff FILE on disk and
+// becomes durable context for every later checkpoint (injected by path, like
+// skills, so a fresh ACP session can recover the full journey after a restart);
+// on fail it feeds the result back and retries; on a bound it stops.
+// The engine orchestrates context — it points at handoff files and carries only
+// small declared key/value outputs — rather than acting as the payload carrier.
+// The engine never reads the worker's free-form text to decide completion.
+
+/// Thrown when a state transition could not be made durable. Carries the task
+/// as it stood at that moment so the engine can halt on the last known state
+/// instead of continuing to act on a project it can no longer record.
+struct VibeLaneDurabilityLoss: Error {
+    let task: VibeLaneTask
+}
+
+@MainActor
+final class VibeLaneEngine {
+    private let lane: VibeLaneDefinition
+    private let worker: VibeLaneWorkRunning
+    private let reviewer: VibeLaneReviewing
+    private let skillsRoot: URL?
+    /// Root directory for persisted handoff files (`<root>/<taskID>/<checkpointKey>.md`).
+    /// nil (tests/previews) falls back to inline-only handoff context.
+    private let handoffRoot: URL?
+    private let clock: VibeLaneClock
+    /// Called after every state transition so the caller can persist + publish.
+    /// Throwing means the transition is NOT durable; the engine then halts
+    /// rather than letting a full-trust agent keep changing the project while
+    /// the recorded state falls behind (a restart would replay that work).
+    private let onTransition: @MainActor (VibeLaneTask) async throws -> Void
+
+    init(
+        lane: VibeLaneDefinition,
+        worker: VibeLaneWorkRunning,
+        reviewer: VibeLaneReviewing? = nil,
+        skillsRoot: URL? = nil,
+        handoffRoot: URL? = nil,
+        clock: VibeLaneClock = VibeLaneSystemClock(),
+        onTransition: @escaping @MainActor (VibeLaneTask) async throws -> Void = { _ in }
+    ) {
+        self.lane = lane
+        self.worker = worker
+        self.reviewer = reviewer ?? VibeLaneUnavailableReviewer()
+        self.skillsRoot = skillsRoot
+        self.handoffRoot = handoffRoot
+        self.clock = clock
+        self.onTransition = onTransition
+    }
+
+    /// Drive the task until it is done, stopped, or waiting for user input.
+    /// Honors cancellation of the surrounding Swift task.
+    ///
+    /// Durability is a precondition for continuing: if any transition cannot be
+    /// persisted, `execute` throws `VibeLaneDurabilityLoss` and the run halts
+    /// here without invoking the worker or reviewer again.
+    func run(_ input: VibeLaneTask) async -> VibeLaneTask {
+        do {
+            return try await execute(input)
+        } catch let loss as VibeLaneDurabilityLoss {
+            return haltForDurabilityLoss(loss.task)
+        } catch {
+            return haltForDurabilityLoss(input)
+        }
+    }
+
+    /// Halt on the last known state without publishing (the write that got us
+    /// here already failed). The caller records the persistence error and will
+    /// retry this terminal state itself.
+    private func haltForDurabilityLoss(_ input: VibeLaneTask) -> VibeLaneTask {
+        var task = input
+        let now = clock.now
+        if var run = task.currentRun, run.status != .passed {
+            run.status = .stopped
+            run.stopReason = .error
+            run.endedAt = now
+            upsert(run: run, in: &task)
+        }
+        task.state = .stopped
+        task.stopReason = .error
+        task.openInputRequest = nil
+        task.pendingHumanEngine = nil
+        task.pendingLoopExhaustionAdvance = nil
+        task.rerunRequest = nil
+        task.currentActivity = AppStrings.VibeLanes.activityStopped(
+            AppStrings.VibeLanes.reasonNotDurable
+        )
+        appendLog(
+            &task,
+            AppStrings.VibeLanes.activityStopped(AppStrings.VibeLanes.reasonNotDurable),
+            kind: .error,
+            at: now
+        )
+        task.updatedAt = now
+        return task
+    }
+
+    private func execute(_ input: VibeLaneTask) async throws -> VibeLaneTask {
+        var task = input
+        if task.state == .needsInput {
+            return task
+        }
+        task.state = .running
+        task.stopReason = nil
+        try await setActivity(&task, AppStrings.VibeLanes.activityStarting, kind: .system)
+
+        while true {
+            if Swift.Task.isCancelled {
+                return try await stopTask(&task, reason: .stoppedByUser)
+            }
+            guard let checkpoint = lane.checkpoint(forKey: task.currentCheckpointKey) else {
+                return try await stopTask(&task, reason: .error)
+            }
+
+            try await ensureLoopState(for: checkpoint, task: &task)
+            ensureRunStarted(
+                &task,
+                checkpointKey: checkpoint.key,
+                visit: task.currentVisit,
+                predecessor: predecessorVisit(for: checkpoint, task: task)
+            )
+            guard let runRecord = task.currentRun else {
+                return try await stopTask(&task, reason: .error)
+            }
+            let engineConfiguration = engineConfiguration(for: checkpoint, task: task)
+            if runRecord.status == .passed {
+                if let finished = try await routeAfterPassedCheckpoint(
+                    checkpoint,
+                    engineConfiguration: engineConfiguration,
+                    task: &task
+                ) {
+                    return finished
+                }
+                continue
+            }
+            let attemptsUsed = attemptsUsed(in: runRecord)
+
+            if attemptsUsed == 0 {
+                var requiredSkills = checkpoint.work.skills
+                if !checkpoint.verify.humanReview {
+                    requiredSkills.append(contentsOf: checkpoint.verify.reviewSkills)
+                }
+                let missingSkills = missingSkillReferences(
+                    requiredSkills,
+                    projectPath: task.projectPath
+                )
+                if !missingSkills.isEmpty {
+                    appendLog(
+                        &task,
+                        AppStrings.VibeLanes.activitySkillUnavailable,
+                        kind: .error,
+                        detail: missingSkills.joined(separator: ", ")
+                    )
+                    return try await stopAtCheckpoint(&task, checkpoint: checkpoint, reason: .error)
+                }
+            }
+
+            // A human Review verdict answered while paused settles the pending
+            // attempt first — the work already happened; never re-run the worker.
+            if checkpoint.verify.humanReview, let verdict = task.pendingHumanVerdict {
+                let usedEngine = task.pendingHumanEngine
+                task.pendingHumanVerdict = nil
+                task.pendingHumanEngine = nil
+                try await touch(&task)
+                let kind: VibeLanePromptKind = attemptsUsed == 0 ? .goal : .feedback
+                if let finished = try await settleAttempt(
+                    verdict,
+                    promptKind: kind,
+                    checkpoint: checkpoint,
+                    workText: "",
+                    engine: usedEngine,
+                    engineConfiguration: engineConfiguration,
+                    task: &task
+                ) {
+                    return finished
+                }
+                continue
+            }
+
+            // Contract: required carry-forward inputs must exist before entering.
+            // Fatal resolutions come first so the user is never asked to Supply a
+            // value for a task that must stop anyway.
+            if attemptsUsed == 0 {
+                let missing = missingRequiredInputs(checkpoint, task: task)
+                if !missing.fatal.isEmpty {
+                    appendLog(
+                        &task,
+                        AppStrings.VibeLanes.activityMissingInput,
+                        kind: .error,
+                        detail: missing.fatal.map(\.key).joined(separator: ", ")
+                    )
+                    // A key an earlier checkpoint declared it would produce is a
+                    // runtime emission failure (missingInput); a key nothing could
+                    // ever supply is an authoring error (misAuthoredLane).
+                    let reason: VibeLaneStopReason = missing.fatal
+                        .allSatisfy { isDeclaredProducedEarlier(key: $0.key, before: checkpoint) }
+                        ? .missingInput
+                        : .misAuthoredLane
+                    return try await stopAtCheckpoint(&task, checkpoint: checkpoint, reason: reason)
+                }
+                if !missing.askUser.isEmpty {
+                    return try await needsSupply(&task, checkpoint: checkpoint, missing: missing.askUser)
+                }
+            }
+
+            // Bound: attempt cap.
+            if attemptsUsed >= checkpoint.bounds.maxAttempts {
+                return try await handleExhaustedBound(
+                    &task,
+                    checkpoint: checkpoint,
+                    reason: .verificationFailed
+                )
+            }
+            // Bound: time limit (since the checkpoint started).
+            if let startedAt = runRecord.activeWindowStartedAt ?? runRecord.startedAt,
+               clock.now.timeIntervalSince(startedAt) > Double(checkpoint.bounds.timeoutSeconds) {
+                return try await handleExhaustedBound(
+                    &task,
+                    checkpoint: checkpoint,
+                    reason: .timeout
+                )
+            }
+
+            let steerGuidance = task.pendingSteerGuidance?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let hasSteerGuidance = steerGuidance?.isEmpty == false
+            let promptKind: VibeLanePromptKind = hasSteerGuidance ? .steer : (attemptsUsed == 0 ? .goal : .feedback)
+            // Rebuild the checkpoint context on every attempt. A retry may occur
+            // after app restart or ACP reconnect, so correctness cannot depend on
+            // volatile chat memory from the first prompt.
+            let skillsText = skillsReference(checkpoint.work.skills)
+            let inherited = inheritedHandoff(forCheckpointKey: checkpoint.key, task: task)
+            let inputsText = carryForwardInputs(for: checkpoint, task: task)
+            let handoffPathsText = priorHandoffPaths(forCheckpointKey: checkpoint.key, task: task)
+            let prompt = Self.buildPrompt(
+                taskTitle: task.title,
+                checkpoint: checkpoint,
+                kind: promptKind,
+                lastFeedback: hasSteerGuidance ? steerGuidance : runRecord.attempts.last?.result?.feedback,
+                skillsText: skillsText,
+                inheritedHandoff: inherited,
+                inputsText: inputsText,
+                handoffPathsText: handoffPathsText
+            )
+            if hasSteerGuidance {
+                task.pendingSteerGuidance = nil
+                try await touch(&task)
+            }
+
+            if task.workerSessionRef == nil {
+                task.workerSessionRef = UUID().uuidString
+                appendLog(&task, AppStrings.VibeLanes.activityWorkerChatReady, kind: .worker)
+                try await touch(&task)
+            }
+            try await setActivity(
+                &task,
+                AppStrings.VibeLanes.activityWorking(
+                    checkpoint: checkpoint.displayTitle,
+                    current: attemptsUsed + 1,
+                    cap: checkpoint.bounds.maxAttempts
+                ),
+                kind: .worker
+            )
+
+            // 1) Worker does the work.
+            await worker.restoreTranscript(
+                sessionRef: task.workerSessionRef,
+                threadRef: task.workerThreadRef,
+                projectPath: task.projectPath,
+                engine: engineConfiguration
+            )
+            let turn = await worker.work(
+                prompt: prompt,
+                projectPath: task.projectPath,
+                sessionRef: task.workerSessionRef,
+                engine: engineConfiguration
+            )
+            let workText = turn.responseText ?? ""
+            if let ref = turn.sessionRef { task.workerSessionRef = ref }
+            if let ref = turn.threadRef { task.workerThreadRef = ref }
+            if let usedEngine = turn.engine {
+                try await recordActiveEngine(
+                    usedEngine,
+                    checkpointKey: checkpoint.key,
+                    task: &task
+                )
+            }
+            if Swift.Task.isCancelled {
+                return try await stopTask(&task, reason: .stoppedByUser)
+            }
+            if timedOut(runRecord, checkpoint: checkpoint) {
+                return try await handleExhaustedBound(
+                    &task,
+                    checkpoint: checkpoint,
+                    reason: .timeout
+                )
+            }
+            guard turn.ok else {
+                let note = turn.note?.trimmingCharacters(in: .whitespacesAndNewlines)
+                appendLog(
+                    &task,
+                    AppStrings.VibeLanes.activityWorkerError,
+                    kind: .error,
+                    detail: (note?.isEmpty == false) ? note : nil
+                )
+                return try await stopAtCheckpoint(&task, checkpoint: checkpoint, reason: .error)
+            }
+
+            // 2) Verification decides "done". A human-review checkpoint pauses
+            // here for the user's verdict; otherwise the reviewer agent judges.
+            if checkpoint.verify.humanReview {
+                task.pendingHumanEngine = turn.engine
+                try await touch(&task)
+                return try await needsHumanReview(&task, checkpoint: checkpoint)
+            }
+            let verification = try await verify(
+                checkpoint,
+                engineConfiguration: engineConfiguration,
+                task: &task
+            )
+            if let finished = try await settleAttempt(
+                verification.result,
+                promptKind: promptKind,
+                checkpoint: checkpoint,
+                workText: workText,
+                engine: verification.engine ?? turn.engine,
+                engineConfiguration: engineConfiguration,
+                task: &task
+            ) {
+                return finished
+            }
+            // Failed verification (or an advance) → loop again; bounds are
+            // re-checked at the top before any retry.
+        }
+    }
+
+    /// Records the attempt and, on PASS, runs the shared pass path: handoff,
+    /// declared outputs, and advancing the lane. Returns the finished task when
+    /// the lane is done; nil when the loop should continue (advance or retry).
+    /// A completed PASS stands even if the time bound elapsed while verifying —
+    /// the bound did not run out "first".
+    private func settleAttempt(
+        _ result: VibeLaneVerificationResult,
+        promptKind: VibeLanePromptKind,
+        checkpoint: VibeLaneCheckpoint,
+        workText: String,
+        engine: VibeLaneEngineSnapshot?,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> VibeLaneTask? {
+        guard var runRecord = task.currentRun, runRecord.checkpointKey == checkpoint.key else {
+            return try await stopTask(&task, reason: .error)
+        }
+        let attempt = VibeLaneAttempt(
+            index: runRecord.attempts.count,
+            promptKind: promptKind,
+            result: result,
+            at: clock.now,
+            budgetEpoch: runRecord.budgetEpoch,
+            engine: engine
+        )
+        runRecord.attempts.append(attempt)
+        runRecord.activeEngine = engine
+        upsert(run: runRecord, in: &task)
+        task.lastVerification = result
+        try await touch(&task)
+
+        guard result.passed else { return nil }
+
+        runRecord.status = .passed
+        runRecord.endedAt = clock.now
+        // Every step ends with a handoff summary.
+        let handoff = try await produceHandoff(
+            checkpoint: checkpoint,
+            attemptsUsed: max(0, runRecord.attempts.count - 1),
+            engineConfiguration: engineConfiguration,
+            task: &task
+        )
+        runRecord.summary = handoff
+        upsert(run: runRecord, in: &task)
+        // Persist the handoff durably so later checkpoints (and fresh ACP
+        // sessions after a restart) can read the full journey from disk.
+        writeHandoffFile(
+            handoff,
+            task: task,
+            checkpointKey: checkpoint.key,
+            visit: runRecord.visit
+        )
+        // Store the step's declared outputs into carry-forward. The work turn
+        // text is a fallback source so a thin handoff cannot lose outputs the
+        // (verified) work turn already emitted.
+        recordProducedOutputs(checkpoint, handoff: handoff, workText: workText, task: &task)
+
+        if let rerun = task.rerunRequest,
+           rerun.checkpointKey == checkpoint.key,
+           rerun.visit == runRecord.visit {
+            task.rerunRequest = nil
+            task.lastRerunCheckpointKey = checkpoint.key
+            task.currentCheckpointKey = rerun.previousCheckpointKey
+            task.currentVisit = rerun.previousVisit
+            task.activeLoop = rerun.previousActiveLoop
+            switch rerun.previousState {
+            case .done:
+                task.outcomeSummary = try await produceFinalOutcome(
+                    checkpoint: checkpoint,
+                    engineConfiguration: engineConfiguration,
+                    task: &task
+                )
+                task.state = .done
+                task.stopReason = .done
+            case .stopped:
+                task.state = .stopped
+                task.stopReason = rerun.previousStopReason ?? .stoppedByUser
+            case .running, .needsInput:
+                return try await stopTask(&task, reason: .error)
+            }
+            try await setActivity(
+                &task,
+                AppStrings.VibeLanes.activityRerunCompleted,
+                kind: .system
+            )
+            return task
+        }
+
+        return try await routeAfterPassedCheckpoint(
+            checkpoint,
+            engineConfiguration: engineConfiguration,
+            task: &task
+        )
+    }
+
+    // MARK: - Loop-group routing
+
+    private func ensureLoopState(
+        for checkpoint: VibeLaneCheckpoint,
+        task: inout VibeLaneTask
+    ) async throws {
+        guard task.rerunRequest == nil,
+              let group = lane.loopGroup(containing: checkpoint.key),
+              let position = group.members.firstIndex(of: checkpoint.key) else {
+            if task.rerunRequest == nil, task.activeLoop != nil {
+                task.activeLoop = nil
+                try await touch(&task)
+            }
+            return
+        }
+        if let active = task.activeLoop,
+           active.groupKey == group.key,
+           active.visit == task.currentVisit,
+           active.memberPosition == position {
+            return
+        }
+        task.activeLoop = VibeLaneLoopRuntimeState(
+            groupKey: group.key,
+            visit: task.currentVisit,
+            memberPosition: position,
+            phase: .runningMember,
+            enteredAt: clock.now
+        )
+        try await touch(&task)
+    }
+
+    private func predecessorVisit(
+        for checkpoint: VibeLaneCheckpoint,
+        task: VibeLaneTask
+    ) -> VibeLaneCheckpointVisit? {
+        if let group = lane.loopGroup(containing: checkpoint.key),
+           let position = group.members.firstIndex(of: checkpoint.key) {
+            if position > 0 {
+                return VibeLaneCheckpointVisit(
+                    checkpointKey: group.members[position - 1],
+                    visit: task.currentVisit
+                )
+            }
+            if task.currentVisit > 0, let last = group.members.last {
+                return VibeLaneCheckpointVisit(
+                    checkpointKey: last,
+                    visit: task.currentVisit - 1
+                )
+            }
+        }
+        let ordered = lane.orderedCheckpoints
+        guard let index = ordered.firstIndex(where: { $0.key == checkpoint.key }), index > 0 else {
+            return nil
+        }
+        let previousKey = ordered[index - 1].key
+        guard let previous = task.run(forKey: previousKey) else { return nil }
+        return VibeLaneCheckpointVisit(checkpointKey: previousKey, visit: previous.visit)
+    }
+
+    private func routeAfterPassedCheckpoint(
+        _ checkpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> VibeLaneTask? {
+        if let group = lane.loopGroup(containing: checkpoint.key),
+           let position = group.members.firstIndex(of: checkpoint.key) {
+            if position + 1 < group.members.count {
+                let nextKey = group.members[position + 1]
+                guard let next = lane.checkpoint(forKey: nextKey) else {
+                    return try await stopTask(&task, reason: .misAuthoredLane)
+                }
+                task.currentCheckpointKey = next.key
+                task.activeLoop = VibeLaneLoopRuntimeState(
+                    groupKey: group.key,
+                    visit: task.currentVisit,
+                    memberPosition: position + 1,
+                    phase: .runningMember,
+                    enteredAt: task.activeLoop?.enteredAt ?? clock.now
+                )
+                try await setActivity(
+                    &task,
+                    AppStrings.VibeLanes.activityMovingTo(next.displayTitle),
+                    kind: .system
+                )
+                return nil
+            }
+
+            if task.activeLoop?.phase != .evaluatingExit,
+               task.activeLoop?.phase != .awaitingExhaustionDecision {
+                task.activeLoop?.phase = .evaluatingExit
+                try await touch(&task)
+            }
+
+            if let advance = task.pendingLoopExhaustionAdvance {
+                task.pendingLoopExhaustionAdvance = nil
+                if advance {
+                    return try await advanceBeyondLoopGroup(
+                        group,
+                        completedCheckpoint: checkpoint,
+                        engineConfiguration: engineConfiguration,
+                        task: &task
+                    )
+                }
+                return try await stopTask(&task, reason: .loopExhausted)
+            }
+
+            if group.exitWhen.evaluate(values: task.carryForward ?? [:]) {
+                return try await advanceBeyondLoopGroup(
+                    group,
+                    completedCheckpoint: checkpoint,
+                    engineConfiguration: engineConfiguration,
+                    task: &task
+                )
+            }
+
+            let nextVisit = task.currentVisit + 1
+            if nextVisit < group.maxIterations {
+                guard let firstKey = group.members.first,
+                      let first = lane.checkpoint(forKey: firstKey) else {
+                    return try await stopTask(&task, reason: .misAuthoredLane)
+                }
+                task.currentCheckpointKey = first.key
+                task.currentVisit = nextVisit
+                task.activeLoop = VibeLaneLoopRuntimeState(
+                    groupKey: group.key,
+                    visit: nextVisit,
+                    memberPosition: 0,
+                    phase: .runningMember,
+                    enteredAt: clock.now
+                )
+                try await setActivity(
+                    &task,
+                    AppStrings.VibeLanes.activityLoopIteration(
+                        group: group.key,
+                        current: nextVisit + 1,
+                        total: group.maxIterations
+                    ),
+                    kind: .system
+                )
+                return nil
+            }
+
+            switch group.onExhausted {
+            case .stop:
+                return try await stopTask(&task, reason: .loopExhausted)
+            case .advance:
+                appendLog(
+                    &task,
+                    AppStrings.VibeLanes.activityLoopAdvanced(group.key),
+                    kind: .system
+                )
+                return try await advanceBeyondLoopGroup(
+                    group,
+                    completedCheckpoint: checkpoint,
+                    engineConfiguration: engineConfiguration,
+                    task: &task
+                )
+            case .escalate:
+                task.activeLoop?.phase = .awaitingExhaustionDecision
+                task.state = .needsInput
+                task.stopReason = nil
+                task.openInputRequest = VibeLaneInputRequest(
+                    kind: .loopExhausted,
+                    checkpointKey: checkpoint.key,
+                    visit: task.currentVisit,
+                    loopGroupKey: group.key,
+                    createdAt: clock.now,
+                    prompt: AppStrings.VibeLanes.loopExhaustedPrompt(group.key),
+                    reason: .loopExhausted
+                )
+                try await setActivity(&task, AppStrings.VibeLanes.needsYou, kind: .input)
+                return task
+            }
+        }
+
+        return try await advanceAfterCheckpoint(
+            checkpoint,
+            engineConfiguration: engineConfiguration,
+            task: &task
+        )
+    }
+
+    private func advanceBeyondLoopGroup(
+        _ group: VibeLaneLoopGroup,
+        completedCheckpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> VibeLaneTask? {
+        task.activeLoop = nil
+        guard let finalMember = group.members.last,
+              let next = lane.checkpoint(after: finalMember) else {
+            return try await finishTask(
+                after: completedCheckpoint,
+                engineConfiguration: engineConfiguration,
+                task: &task
+            )
+        }
+        task.currentCheckpointKey = next.key
+        task.currentVisit = 0
+        try await setActivity(
+            &task,
+            AppStrings.VibeLanes.activityMovingTo(next.displayTitle),
+            kind: .system
+        )
+        return nil
+    }
+
+    private func advanceAfterCheckpoint(
+        _ checkpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> VibeLaneTask? {
+        guard let next = lane.checkpoint(after: checkpoint.key) else {
+            return try await finishTask(
+                after: checkpoint,
+                engineConfiguration: engineConfiguration,
+                task: &task
+            )
+        }
+        task.currentCheckpointKey = next.key
+        task.currentVisit = 0
+        if let group = lane.loopGroup(containing: next.key),
+           let position = group.members.firstIndex(of: next.key) {
+            task.activeLoop = VibeLaneLoopRuntimeState(
+                groupKey: group.key,
+                visit: 0,
+                memberPosition: position,
+                phase: .runningMember,
+                enteredAt: clock.now
+            )
+        } else {
+            task.activeLoop = nil
+        }
+        try await setActivity(
+            &task,
+            AppStrings.VibeLanes.activityMovingTo(next.displayTitle),
+            kind: .system
+        )
+        return nil
+    }
+
+    private func finishTask(
+        after checkpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> VibeLaneTask {
+        let outcome = try await produceFinalOutcome(
+            checkpoint: checkpoint,
+            engineConfiguration: engineConfiguration,
+            task: &task
+        )
+        task.outcomeSummary = outcome
+        task.activeLoop = nil
+        task.state = .done
+        task.stopReason = .done
+        try await setActivity(&task, AppStrings.VibeLanes.activityDone, kind: .system)
+        return task
+    }
+
+    // MARK: - Verification
+
+    /// An independent reviewer checks the checkpoint's OUTCOME against its
+    /// authored verification definition and returns PASS/FAIL with feedback.
+    /// Authored in the lane — nothing hardcoded.
+    private func verify(
+        _ checkpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> (result: VibeLaneVerificationResult, engine: VibeLaneEngineSnapshot?) {
+        if task.reviewerSessionRef == nil {
+            task.reviewerSessionRef = UUID().uuidString
+            appendLog(&task, AppStrings.VibeLanes.activityReviewerChatReady, kind: .verify)
+            try await touch(&task)
+        }
+        try await setActivity(
+            &task,
+            AppStrings.VibeLanes.activityReviewerReviewing,
+            kind: .verify
+        )
+        let currentRun = task.currentRun
+        let attemptIndex = currentRun.map { run in
+            run.attempts.filter { $0.budgetEpoch == run.budgetEpoch }.count
+        } ?? 0
+        await reviewer.restoreTranscript(
+            sessionRef: task.reviewerSessionRef,
+            threadRef: task.reviewerThreadRef,
+            projectPath: task.projectPath,
+            engine: engineConfiguration
+        )
+        let outcome = await reviewer.review(
+            VibeLaneReviewRequest(
+                taskTitle: task.title,
+                projectPath: task.projectPath,
+                checkpoint: checkpoint,
+                attemptIndex: attemptIndex,
+                engine: engineConfiguration,
+                reviewSkillsText: skillsReference(checkpoint.verify.reviewSkills)
+            ),
+            sessionRef: task.reviewerSessionRef
+        )
+        if let ref = outcome.sessionRef { task.reviewerSessionRef = ref }
+        if let ref = outcome.threadRef { task.reviewerThreadRef = ref }
+        let detail = [outcome.summary, Self.outputSnippet(outcome.evidence ?? "")]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+        if outcome.passed {
+            try await setActivity(
+                &task,
+                AppStrings.VibeLanes.activityReviewerAccepted,
+                kind: .verify
+            )
+        } else {
+            try await setActivity(
+                &task,
+                AppStrings.VibeLanes.activityReviewerRejected,
+                kind: .verify
+            )
+        }
+        return (
+            VibeLaneVerificationResult(
+                passed: outcome.passed,
+                detail: detail.isEmpty ? nil : detail,
+                feedback: outcome.passed ? nil : (outcome.feedback ?? "The reviewer did not return a clear PASS.")
+            ),
+            outcome.engine
+        )
+    }
+
+    // MARK: - Skills (referenced by path; agents read them on demand)
+
+    /// List skill paths for a worker or reviewer prompt. A bare name (e.g. "tdd")
+    /// resolves to the installed skill library; an explicit path (contains "/",
+    /// "~", or absolute) is used as-is (project-relative or absolute). The agent
+    /// reads each skill's SKILL.md itself as needed — we never inline contents.
+    private func skillsReference(_ paths: [String]) -> String? {
+        let cleaned = paths.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { return nil }
+        return cleaned.map { entry -> String in
+            let resolved: String
+            if entry.hasPrefix("/") || entry.hasPrefix("~") || entry.contains("/") {
+                resolved = entry
+            } else if let root = skillsRoot {
+                resolved = root.appendingPathComponent(entry).path
+            } else {
+                resolved = entry
+            }
+            return "- \(resolved)"
+        }.joined(separator: "\n")
+    }
+
+    private func missingSkillReferences(
+        _ references: [String],
+        projectPath: String
+    ) -> [String] {
+        references.compactMap { rawReference in
+            let reference = rawReference.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !reference.isEmpty else { return nil }
+
+            let url: URL
+            if reference.hasPrefix("/") {
+                url = URL(fileURLWithPath: reference)
+            } else if reference.hasPrefix("~") {
+                url = URL(
+                    fileURLWithPath: NSString(string: reference).expandingTildeInPath
+                )
+            } else if reference.contains("/") {
+                url = URL(fileURLWithPath: projectPath, isDirectory: true)
+                    .appendingPathComponent(reference)
+            } else if let skillsRoot {
+                url = skillsRoot.appendingPathComponent(reference)
+            } else {
+                return nil
+            }
+
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+                return reference
+            }
+            if isDirectory.boolValue {
+                let entrypoint = url.appendingPathComponent("SKILL.md")
+                return FileManager.default.fileExists(atPath: entrypoint.path)
+                    ? nil
+                    : reference
+            }
+            return url.lastPathComponent == "SKILL.md" ? nil : reference
+        }
+    }
+
+    // MARK: - Handoff baton
+
+    /// Ask the worker (same session) to write a short handoff for the next step.
+    /// An empty response is retried once — the handoff is the one artifact later
+    /// steps depend on. A persistent failure never fails the task (it already
+    /// passed verification); we fall back to a derived summary.
+    private func produceHandoff(
+        checkpoint: VibeLaneCheckpoint,
+        attemptsUsed: Int,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> String {
+        try await setActivity(
+            &task,
+            AppStrings.VibeLanes.activityWritingHandoff,
+            kind: .worker
+        )
+        for _ in 0..<2 {
+            let turn = await worker.work(
+                prompt: Self.handoffPrompt(checkpoint: checkpoint),
+                projectPath: task.projectPath,
+                sessionRef: task.workerSessionRef,
+                engine: engineConfiguration
+            )
+            if let ref = turn.sessionRef { task.workerSessionRef = ref }
+            if let ref = turn.threadRef { task.workerThreadRef = ref }
+            let text = (turn.responseText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty { return text }
+        }
+        return "Checkpoint \(checkpoint.displayTitle) completed and verified (attempt \(attemptsUsed + 1))."
+    }
+
+    /// The handoff produced by the exact predecessor visit.
+    private func inheritedHandoff(forCheckpointKey key: String, task: VibeLaneTask) -> String? {
+        guard key == task.currentCheckpointKey,
+              let predecessor = task.currentRun?.predecessor,
+              let summary = task.run(for: predecessor)?.summary else { return nil }
+        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    // MARK: - Handoff files (durable carry-forward substrate)
+
+    private func handoffFileURL(taskID: UUID, checkpointKey: String, visit: Int) -> URL? {
+        let filename = visit == 0
+            ? "\(checkpointKey).md"
+            : "\(checkpointKey)-visit-\(visit).md"
+        return handoffRoot?
+            .appendingPathComponent(taskID.uuidString, isDirectory: true)
+            .appendingPathComponent(filename)
+    }
+
+    /// Persist one passed checkpoint visit's handoff to disk.
+    private func writeHandoffFile(
+        _ text: String,
+        task: VibeLaneTask,
+        checkpointKey: String,
+        visit: Int
+    ) {
+        guard let url = handoffFileURL(
+            taskID: task.id,
+            checkpointKey: checkpointKey,
+            visit: visit
+        ) else { return }
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try text.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            // Non-fatal: the persisted run summary remains available.
+        }
+    }
+
+    private func predecessorChain(for task: VibeLaneTask) -> [VibeLaneCheckpointRun] {
+        var chain: [VibeLaneCheckpointRun] = []
+        var cursor = task.currentRun?.predecessor
+        var seen = Set<VibeLaneCheckpointVisit>()
+        while let identity = cursor, seen.insert(identity).inserted,
+              let run = task.run(for: identity) {
+            chain.append(run)
+            cursor = run.predecessor
+        }
+        return chain.reversed()
+    }
+
+    /// Paths of every predecessor visit, in execution order.
+    private func priorHandoffPaths(forCheckpointKey key: String, task: VibeLaneTask) -> String? {
+        guard key == task.currentCheckpointKey, handoffRoot != nil else { return nil }
+        let lines = predecessorChain(for: task).compactMap { run -> String? in
+            guard run.status == .passed,
+                  let checkpoint = lane.checkpoint(forKey: run.checkpointKey),
+                  let url = handoffFileURL(
+                    taskID: task.id,
+                    checkpointKey: run.checkpointKey,
+                    visit: run.visit
+                  ),
+                  FileManager.default.fileExists(atPath: url.path) else { return nil }
+            return "- \(checkpoint.displayTitle) (visit \(run.visit + 1)): \(url.path)"
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    /// Every passed visit's handoff path in execution order.
+    private func allHandoffPaths(task: VibeLaneTask) -> [String] {
+        guard handoffRoot != nil else { return [] }
+        return task.checkpointRuns
+            .filter { $0.status == .passed }
+            .sorted {
+                ($0.endedAt ?? .distantPast) < ($1.endedAt ?? .distantPast)
+            }
+            .compactMap { run in
+                guard let url = handoffFileURL(
+                    taskID: task.id,
+                    checkpointKey: run.checkpointKey,
+                    visit: run.visit
+                ), FileManager.default.fileExists(atPath: url.path) else { return nil }
+                return url.path
+            }
+    }
+
+    // MARK: - Carry-forward contract (declared inputs/outputs)
+
+    private func missingRequiredInputs(
+        _ checkpoint: VibeLaneCheckpoint,
+        task: VibeLaneTask
+    ) -> (askUser: [VibeLaneInputRequirement], fatal: [VibeLaneInputRequirement]) {
+        let carried = task.carryForward ?? [:]
+        var askUser: [VibeLaneInputRequirement] = []
+        var fatal: [VibeLaneInputRequirement] = []
+        for input in checkpoint.inputRequirements {
+            let value = carried[input.key]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard value.isEmpty else { continue }
+            if input.askUser {
+                askUser.append(input)
+            } else {
+                fatal.append(input)
+            }
+        }
+        return (askUser, fatal)
+    }
+
+    /// Whether any checkpoint ordered before `checkpoint` declares `key` in its
+    /// `produces`. Distinguishes a worker emission failure (missingInput) from a
+    /// lane that could never satisfy the requirement (misAuthoredLane).
+    private func isDeclaredProducedEarlier(key: String, before checkpoint: VibeLaneCheckpoint) -> Bool {
+        let ordered = lane.orderedCheckpoints
+        guard let idx = ordered.firstIndex(where: { $0.key == checkpoint.key }) else { return false }
+        return ordered[..<idx].contains { $0.producedOutputs.contains(key) }
+    }
+
+    /// The `key: value` lines for this step's required inputs, to inject into its prompt.
+    private func carryForwardInputs(for checkpoint: VibeLaneCheckpoint, task: VibeLaneTask) -> String? {
+        let carried = task.carryForward ?? [:]
+        let lines = checkpoint.requiredInputs.compactMap { key -> String? in
+            guard let value = carried[key], !value.isEmpty else { return nil }
+            return "- \(key): \(value)"
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    /// Parse `OUTPUT <key>: <value>` lines from the handoff (falling back to the
+    /// verified work turn's text) and store the step's declared outputs into
+    /// carry-forward. Missing declared outputs are logged, not hard-failed, and
+    /// NEVER delete a value already carried forward (e.g. a user-supplied one);
+    /// a later checkpoint that requires a truly absent key resolves it through
+    /// the missing-input rules.
+    private func recordProducedOutputs(
+        _ checkpoint: VibeLaneCheckpoint,
+        handoff: String,
+        workText: String = "",
+        task: inout VibeLaneTask
+    ) {
+        let declared = checkpoint.producedOutputs
+        guard !declared.isEmpty else { return }
+        let fromHandoff = Self.parseOutputs(handoff)
+        let fromWork = Self.parseOutputs(workText)
+        var carried = task.carryForward ?? [:]
+        var missing: [String] = []
+        for key in declared {
+            if let value = fromHandoff[key] ?? fromWork[key], !value.isEmpty {
+                carried[key] = value
+            } else {
+                missing.append(key)
+            }
+        }
+        task.carryForward = carried
+        if !missing.isEmpty {
+            appendLog(&task, AppStrings.VibeLanes.activityMissingOutput, kind: .system, detail: missing.joined(separator: ", "))
+        }
+    }
+
+    /// Extract `OUTPUT <key>: <value>` lines from worker text.
+    static func parseOutputs(_ text: String) -> [String: String] {
+        var outputs: [String: String] = [:]
+        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard line.uppercased().hasPrefix("OUTPUT ") else { continue }
+            let rest = line.dropFirst("OUTPUT ".count)
+            guard let colon = rest.firstIndex(of: ":") else { continue }
+            let key = rest[..<colon].trimmingCharacters(in: .whitespaces)
+            let value = rest[rest.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            if !key.isEmpty, !value.isEmpty { outputs[key] = value }
+        }
+        return outputs
+    }
+
+    /// On the final checkpoint, ask the worker for a wrap-up of the whole task so
+    /// the Done state has a clear outcome. Failures fall back to a derived line.
+    private func produceFinalOutcome(
+        checkpoint: VibeLaneCheckpoint,
+        engineConfiguration: VibeLaneEngineConfiguration,
+        task: inout VibeLaneTask
+    ) async throws -> String {
+        try await setActivity(
+            &task,
+            AppStrings.VibeLanes.activityWritingOutcome,
+            kind: .worker
+        )
+        let turn = await worker.work(
+            prompt: Self.finalOutcomePrompt(
+                taskTitle: task.title,
+                handoffPaths: allHandoffPaths(task: task)
+            ),
+            projectPath: task.projectPath,
+            sessionRef: task.workerSessionRef,
+            engine: engineConfiguration
+        )
+        if let ref = turn.sessionRef { task.workerSessionRef = ref }
+        if let ref = turn.threadRef { task.workerThreadRef = ref }
+        let text = (turn.responseText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? "Task completed: \(task.title)." : text
+    }
+
+    static func finalOutcomePrompt(taskTitle: String, handoffPaths: [String] = []) -> String {
+        var prompt = """
+        All checkpoints for this task are complete and verified. Write the FINAL OUTCOME report the user \
+        will read on the task's Done screen — it is the single artifact they judge this task by, so make \
+        every line earn its place. Ground every claim in the actual repository state: re-check files and \
+        results before citing them; never repeat a claim from memory you can verify on disk.
+
+        ## Task
+        \(taskTitle)
+
+        Rules:
+        - Concrete over general: exact file paths (path:line where useful), commands run, test names and \
+        counts, commit refs, URLs. A reader should be able to click/verify every reference.
+        - No process narration ("first I explored…"), no praise, no restating the task.
+        - If something is partially done or was descoped, say so plainly under Follow-ups.
+
+        Use exactly this structure:
+
+        ## Outcome
+        2–4 sentences: what now exists that didn't before, and whether it fully satisfies the task.
+
+        ## What changed
+        Bullet list of the files/artifacts that changed, each with its path and a clause on what changed \
+        in it. Include new tests here.
+
+        ## How it's verified
+        The exact checks that prove it works: commands + their results, test suites + pass counts, or \
+        manual verification steps taken. Quote real numbers.
+
+        ## Where it lives
+        Branch, commits, PRs, or URLs — exact references.
+
+        ## Follow-ups
+        Deferred work, known risks, and the recommended next action. Write "None" if truly empty.
+        """
+        if !handoffPaths.isEmpty {
+            prompt += """
+            \n
+            The step-by-step journey is in these handoff files — read them to recall earlier steps' \
+            outcomes before writing (do not copy them verbatim):
+            \(handoffPaths.map { "- \($0)" }.joined(separator: "\n"))
+            """
+        }
+        return prompt
+    }
+
+    static func handoffPrompt(checkpoint: VibeLaneCheckpoint) -> String {
+        var prompt = """
+        The checkpoint "\(checkpoint.displayTitle)" is complete and its verification passed. Write the handoff \
+        the NEXT step will rely on — it may run in a fresh session with no memory of this conversation, so \
+        include everything it needs and nothing it doesn't.
+
+        Use exactly this structure, concrete and under ~15 lines total:
+
+        ## What changed
+        Files touched and the essence of the change.
+
+        ## What's verified
+        What was checked and how (commands, results).
+
+        ## Open risks
+        Anything unresolved the next step should know. Write "None" if empty.
+
+        ## What the next step needs
+        The specific context, paths, or decisions to carry forward.
+        """
+        let outputs = checkpoint.outputDeclarations
+        if !outputs.isEmpty {
+            prompt += "\n\nThis step declares outputs. After the sections above, end with exactly one line per output, in this exact machine-readable form:\n"
+            prompt += outputs.map { declaration in
+                let hint = declaration.detail?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let suffix = (hint?.isEmpty == false) ? " <\(hint!)>" : " <file path or one-line reference>"
+                return "OUTPUT \(declaration.key):\(suffix)"
+            }.joined(separator: "\n")
+        }
+        return prompt
+    }
+
+    // MARK: - Prompt
+
+    static func buildPrompt(
+        taskTitle: String,
+        checkpoint: VibeLaneCheckpoint,
+        kind: VibeLanePromptKind,
+        lastFeedback: String?,
+        skillsText: String? = nil,
+        inheritedHandoff: String? = nil,
+        inputsText: String? = nil,
+        handoffPathsText: String? = nil
+    ) -> String {
+        let task = taskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let goal = checkpoint.work.goal.trimmingCharacters(in: .whitespacesAndNewlines)
+        let instructions = checkpoint.work.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        let definition = checkpoint.verify.definition.trimmingCharacters(in: .whitespacesAndNewlines)
+        let feedback = lastFeedback?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var parts: [String] = []
+
+        // Opening frame differs per prompt kind; the context sections are shared.
+        switch kind {
+        case .goal:
+            parts.append("""
+            You are an autonomous engineer working ONE step of a larger task. Do this step fully and \
+            correctly. When you finish, an independent reviewer will verify your actual outcome against \
+            the Definition of done below before the work may advance — so produce real changes, not a plan.
+            """)
+        case .feedback:
+            parts.append("""
+            You are continuing the SAME step after an independent reviewer rejected the previous attempt. \
+            Do not restart from scratch — build on the current state and fix what the reviewer raised.
+            """)
+        case .steer:
+            parts.append("""
+            You are continuing the SAME step after it exhausted its bounds and the user provided steering guidance. \
+            Treat the guidance as feedback for this checkpoint only; it does not change the Definition of done.
+            """)
+        }
+
+        if !task.isEmpty {
+            parts.append("## Overall task\n\(task)")
+        }
+        parts.append("## This step — \(checkpoint.displayTitle)\n\(goal.isEmpty ? "(see overall task)" : goal)")
+        if let inheritedHandoff, !inheritedHandoff.isEmpty {
+            parts.append("""
+            ## Inherited handoff (advisory context from the previous step)
+            This is background only — it does not change this step's goal, instructions, or definition of done.
+            \(inheritedHandoff)
+            """)
+        }
+        if let handoffPathsText, !handoffPathsText.isEmpty {
+            parts.append("""
+            ## Earlier step handoffs (read on demand)
+            Each earlier step wrote a handoff file. Read the ones you need for context — they record \
+            what changed, what was verified, and open risks:
+            \(handoffPathsText)
+            """)
+        }
+        if let inputsText, !inputsText.isEmpty {
+            parts.append("""
+            ## Inputs (produced by earlier steps — use these)
+            \(inputsText)
+            """)
+        }
+        if !instructions.isEmpty {
+            parts.append("## How to do it\n\(instructions)")
+        }
+        if let skillsText, !skillsText.isEmpty {
+            parts.append("""
+            ## Skills available
+            Read each skill's SKILL.md (and any files it references) as needed before you work:
+            \(skillsText)
+            """)
+        }
+
+        switch kind {
+        case .goal:
+            if !definition.isEmpty {
+                parts.append("## Definition of done (the reviewer will check the outcome against this)\n\(definition)")
+            }
+            parts.append("""
+            ## What good looks like
+            - You actually achieved the goal and meet every part of the Definition of done — verifiable from the repository, not from your description.
+            - The change is the smallest one that does the job: no unrelated edits, no dead code, no debug leftovers.
+            - You followed the step's instructions and the skills you were given.
+            - The work is left in a clean, checkable state (build/tests green where applicable).
+            - When done, briefly state what you changed and how it satisfies the Definition of done.
+            """)
+        case .feedback:
+            if !feedback.isEmpty {
+                parts.append("## Reviewer feedback to address\n\(feedback)")
+            }
+            if !definition.isEmpty {
+                parts.append("## Definition of done\n\(definition)")
+            }
+            parts.append("Address the feedback specifically and bring the outcome up to the Definition of done.")
+        case .steer:
+            if !feedback.isEmpty {
+                parts.append("## User steering guidance\n\(feedback)")
+            }
+            if !definition.isEmpty {
+                parts.append("## Definition of done\n\(definition)")
+            }
+            parts.append("Use the steering guidance to make a focused next attempt that satisfies the Definition of done.")
+        }
+        return parts.joined(separator: "\n\n")
+    }
+
+    private static func outputSnippet(_ output: String) -> String? {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let lines = trimmed.split(separator: "\n", omittingEmptySubsequences: false)
+        return lines.suffix(12).joined(separator: "\n")
+    }
+
+    // MARK: - Mutation helpers
+
+    private func engineConfiguration(
+        for checkpoint: VibeLaneCheckpoint,
+        task: VibeLaneTask
+    ) -> VibeLaneEngineConfiguration {
+        var configuration = task.rerunRequest?.checkpointKey == checkpoint.key
+            ? task.rerunRequest?.engine ?? checkpoint.engine
+            : checkpoint.engine
+        if configuration.agentID == nil {
+            configuration.agentID = task.agentID
+        }
+        return configuration
+    }
+
+    private func recordActiveEngine(
+        _ engine: VibeLaneEngineSnapshot,
+        checkpointKey: String,
+        task: inout VibeLaneTask
+    ) async throws {
+        guard var run = task.currentRun,
+              run.checkpointKey == checkpointKey,
+              run.activeEngine != engine else { return }
+        run.activeEngine = engine
+        upsert(run: run, in: &task)
+        try await touch(&task)
+    }
+
+    private func ensureRunStarted(
+        _ task: inout VibeLaneTask,
+        checkpointKey: String,
+        visit: Int,
+        predecessor: VibeLaneCheckpointVisit?
+    ) {
+        if var existing = task.run(forKey: checkpointKey, visit: visit) {
+            if existing.status == .pending || existing.status == .needsInput || existing.status == .stopped {
+                existing.status = .running
+                existing.startedAt = existing.startedAt ?? clock.now
+                existing.activeWindowStartedAt = existing.activeWindowStartedAt ?? clock.now
+                existing.stopReason = nil
+                existing.endedAt = nil
+                upsert(run: existing, in: &task)
+            }
+            return
+        }
+        let runRecord = VibeLaneCheckpointRun(
+            checkpointKey: checkpointKey,
+            visit: visit,
+            predecessor: predecessor,
+            status: .running,
+            startedAt: clock.now,
+            activeWindowStartedAt: clock.now
+        )
+        task.checkpointRuns.append(runRecord)
+    }
+
+    private func attemptsUsed(in runRecord: VibeLaneCheckpointRun) -> Int {
+        runRecord.attempts.filter { $0.budgetEpoch == runRecord.budgetEpoch }.count
+    }
+
+    private func timedOut(_ runRecord: VibeLaneCheckpointRun, checkpoint: VibeLaneCheckpoint) -> Bool {
+        guard let startedAt = runRecord.activeWindowStartedAt ?? runRecord.startedAt else { return false }
+        return clock.now.timeIntervalSince(startedAt) > Double(checkpoint.bounds.timeoutSeconds)
+    }
+
+    private func needsSupply(
+        _ task: inout VibeLaneTask,
+        checkpoint: VibeLaneCheckpoint,
+        missing: [VibeLaneInputRequirement]
+    ) async throws -> VibeLaneTask {
+        let keys = missing.map(\.key)
+        let prompt = missing.compactMap { input -> String? in
+            let trimmed = input.prompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : "\(input.key): \(trimmed)"
+        }.joined(separator: "\n")
+        let fallback = AppStrings.VibeLanes.supplyRequestPrompt(keys: keys.joined(separator: ", "))
+        return try await needsInput(
+            &task,
+            checkpoint: checkpoint,
+            request: VibeLaneInputRequest(
+                kind: .supply,
+                checkpointKey: checkpoint.key,
+                visit: task.currentVisit,
+                createdAt: clock.now,
+                prompt: prompt.isEmpty ? fallback : prompt,
+                missingKeys: keys
+            ),
+            reason: nil
+        )
+    }
+
+    /// Pause for the user's verdict on a human-review checkpoint. The work is
+    /// done; the user inspects the outcome and approves or requests changes.
+    private func needsHumanReview(
+        _ task: inout VibeLaneTask,
+        checkpoint: VibeLaneCheckpoint
+    ) async throws -> VibeLaneTask {
+        let definition = checkpoint.verify.definition.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompt = definition.isEmpty
+            ? AppStrings.VibeLanes.reviewRequestPrompt(checkpoint: checkpoint.displayTitle)
+            : definition
+        return try await needsInput(
+            &task,
+            checkpoint: checkpoint,
+            request: VibeLaneInputRequest(
+                kind: .review,
+                checkpointKey: checkpoint.key,
+                visit: task.currentVisit,
+                createdAt: clock.now,
+                prompt: prompt
+            ),
+            reason: nil
+        )
+    }
+
+    private func handleExhaustedBound(
+        _ task: inout VibeLaneTask,
+        checkpoint: VibeLaneCheckpoint,
+        reason: VibeLaneStopReason
+    ) async throws -> VibeLaneTask {
+        guard checkpoint.bounds.onExhausted == .escalate else {
+            return try await stopAtCheckpoint(&task, checkpoint: checkpoint, reason: reason)
+        }
+        guard task.steerCount < lane.steerLimit else {
+            appendLog(&task, AppStrings.VibeLanes.reasonSteerLimitReached, kind: .system, detail: "limit \(lane.steerLimit)")
+            return try await stopAtCheckpoint(
+                &task,
+                checkpoint: checkpoint,
+                reason: .steerLimitReached
+            )
+        }
+        let feedback = task.currentRun?.attempts.last?.result?.feedback
+        let prompt = AppStrings.VibeLanes.steerRequestPrompt(
+            checkpoint: checkpoint.displayTitle,
+            reason: reasonLabel(reason)
+        )
+        return try await needsInput(
+            &task,
+            checkpoint: checkpoint,
+            request: VibeLaneInputRequest(
+                kind: .steer,
+                checkpointKey: checkpoint.key,
+                visit: task.currentVisit,
+                createdAt: clock.now,
+                prompt: prompt,
+                lastFeedback: feedback,
+                reason: reason
+            ),
+            reason: reason
+        )
+    }
+
+    private func needsInput(
+        _ task: inout VibeLaneTask,
+        checkpoint: VibeLaneCheckpoint,
+        request: VibeLaneInputRequest,
+        reason: VibeLaneStopReason?
+    ) async throws -> VibeLaneTask {
+        if var runRecord = task.currentRun, runRecord.checkpointKey == checkpoint.key {
+            runRecord.status = .needsInput
+            runRecord.stopReason = reason
+            runRecord.endedAt = clock.now
+            upsert(run: runRecord, in: &task)
+        }
+        task.state = .needsInput
+        task.stopReason = nil
+        task.openInputRequest = request
+        try await setActivity(&task, AppStrings.VibeLanes.needsYou, kind: .input)
+        return task
+    }
+
+    private func upsert(run: VibeLaneCheckpointRun, in task: inout VibeLaneTask) {
+        if let idx = task.checkpointRuns.firstIndex(where: {
+            $0.checkpointKey == run.checkpointKey && $0.visit == run.visit
+        }) {
+            task.checkpointRuns[idx] = run
+        } else {
+            task.checkpointRuns.append(run)
+        }
+    }
+
+    private func stopAtCheckpoint(
+        _ task: inout VibeLaneTask,
+        checkpoint: VibeLaneCheckpoint,
+        reason: VibeLaneStopReason
+    ) async throws -> VibeLaneTask {
+        if var runRecord = task.currentRun, runRecord.checkpointKey == checkpoint.key {
+            runRecord.status = .stopped
+            runRecord.stopReason = reason
+            runRecord.endedAt = clock.now
+            upsert(run: runRecord, in: &task)
+        }
+        return try await stopTask(&task, reason: reason)
+    }
+
+    private func stopTask(
+        _ task: inout VibeLaneTask,
+        reason: VibeLaneStopReason
+    ) async throws -> VibeLaneTask {
+        task.state = .stopped
+        task.stopReason = reason
+        task.openInputRequest = nil
+        task.pendingHumanEngine = nil
+        task.pendingLoopExhaustionAdvance = nil
+        task.rerunRequest = nil
+        try await setActivity(
+            &task,
+            AppStrings.VibeLanes.activityStopped(reasonLabel(reason)),
+            kind: reason == .error ? .error : .system
+        )
+        return task
+    }
+
+    private func setActivity(
+        _ task: inout VibeLaneTask,
+        _ activity: String,
+        kind: VibeLaneActivityKind
+    ) async throws {
+        let now = clock.now
+        task.currentActivity = activity
+        appendLog(&task, activity, kind: kind, at: now)
+        task.updatedAt = now
+        try await publish(task)
+    }
+
+    private func appendLog(
+        _ task: inout VibeLaneTask,
+        _ message: String,
+        kind: VibeLaneActivityKind,
+        detail: String? = nil,
+        at: Date? = nil
+    ) {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let now = at ?? clock.now
+        var log = task.activityLog ?? []
+        if let last = log.last, last.message == trimmed, last.kind == kind {
+            return
+        }
+        log.append(VibeLaneActivityLogEntry(at: now, kind: kind, message: trimmed, detail: detail))
+        if log.count > 120 {
+            log.removeFirst(log.count - 120)
+        }
+        task.activityLog = log
+    }
+
+    private func touch(_ task: inout VibeLaneTask) async throws {
+        task.updatedAt = clock.now
+        try await publish(task)
+    }
+
+    /// The single funnel for every transition. Any persistence failure becomes
+    /// `VibeLaneDurabilityLoss` carrying this exact state, so `run` can halt on
+    /// it instead of proceeding to the next agent turn.
+    private func publish(_ task: VibeLaneTask) async throws {
+        do {
+            try await onTransition(task)
+        } catch {
+            throw VibeLaneDurabilityLoss(task: task)
+        }
+    }
+
+    private func reasonLabel(_ reason: VibeLaneStopReason) -> String {
+        switch reason {
+        case .verificationFailed:
+            return AppStrings.VibeLanes.reasonVerificationFailed
+        case .timeout:
+            return AppStrings.VibeLanes.reasonTimedOut
+        case .error:
+            return AppStrings.VibeLanes.reasonError
+        case .stoppedByUser:
+            return AppStrings.VibeLanes.reasonStoppedByYou
+        case .missingInput:
+            return AppStrings.VibeLanes.reasonMissingInput
+        case .misAuthoredLane:
+            return AppStrings.VibeLanes.reasonMisAuthoredLane
+        case .steerLimitReached:
+            return AppStrings.VibeLanes.reasonSteerLimitReached
+        case .loopExhausted:
+            return AppStrings.VibeLanes.reasonLoopExhausted
+        case .done:
+            return AppStrings.VibeLanes.completed
+        }
+    }
+}

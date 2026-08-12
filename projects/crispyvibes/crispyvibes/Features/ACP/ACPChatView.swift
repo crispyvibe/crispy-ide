@@ -21,6 +21,10 @@ struct ACPChatView: View {
     var showsDebugSessionIdentity: Bool = false
     var displayMode: ACPDisplayMode = .detail
     var historyKey: UUID? = nil
+    var isExternallyManaged: Bool = false
+    /// The engine has finished with this managed session; the transcript is
+    /// history, not a session that is about to start.
+    var managedSessionEnded: Bool = false
     let isConnecting: Bool
     let connectionError: String?
     let onReconnect: (() -> Void)?
@@ -58,21 +62,25 @@ struct ACPChatView: View {
                         onRetry: onReconnect
                     )
                 }
-                ACPTimelineView(
-                    timeline: viewModel.timeline,
-                    agentName: viewModel.agentName,
-                    agentID: viewModel.agentID,
-                    onResend: viewModel.resend(from:),
-                    displayMode: displayMode,
-                    onLinkTargetActivated: onLinkTargetActivated,
-                    onFileSystemTargetActivated: onFileSystemTargetActivated,
-                    vibespaceRoot: viewModel.activeSession?.projectPath.path,
-                    onViewDiff: { rows, label in
-                        diffSpotlightRows = rows
-                        diffSpotlightLabel = label
-                        showDiffSpotlight = true
-                    }
-                )
+                if viewModel.timeline.isEmpty {
+                    connectedEmptyTimelineState
+                } else {
+                    ACPTimelineView(
+                        timeline: viewModel.timeline,
+                        agentName: viewModel.agentName,
+                        agentID: viewModel.agentID,
+                        onResend: viewModel.resend(from:),
+                        displayMode: displayMode,
+                        onLinkTargetActivated: onLinkTargetActivated,
+                        onFileSystemTargetActivated: onFileSystemTargetActivated,
+                        vibespaceRoot: viewModel.activeSession?.projectPath.path,
+                        onViewDiff: { rows, label in
+                            diffSpotlightRows = rows
+                            diffSpotlightLabel = label
+                            showDiffSpotlight = true
+                        }
+                    )
+                }
                 permissionCardOverlay
                 userInputRequestCard
                 Divider()
@@ -101,6 +109,9 @@ struct ACPChatView: View {
         .onChange(of: viewModel.isConnected) { _, _ in
             syncInlineTriggerConfiguration()
         }
+        // F060: relative paths in messages resolve against the session's
+        // project and become clickable when they exist on disk.
+        .environment(\.acpLinkBaseDirectory, viewModel.activeSession?.projectPath)
         .onChange(of: viewModel.activeSession?.projectPath.path) { _, _ in
             syncInlineTriggerConfiguration()
         }
@@ -190,6 +201,25 @@ struct ACPChatView: View {
         .padding(.vertical, 8)
     }
 
+    private var connectedEmptyTimelineState: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            VStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(uiScale.controlSize)
+                Text(AppStrings.ACP.connectedEmptyTimelineTitle)
+                    .font(AppTypographyTokens.headline)
+                Text(AppStrings.ACP.connectedEmptyTimelineDescription)
+                    .font(AppTypographyTokens.callout)
+                    .foregroundStyle(appThemePalette.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: 360)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private var disconnectedState: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -206,7 +236,22 @@ struct ACPChatView: View {
 
                 // Title + description
                 VStack(spacing: 8) {
-                    if subtitle == nil {
+                    if isExternallyManaged {
+                        Text(
+                            managedSessionEnded
+                                ? AppStrings.ACP.managedSessionEndedTitle
+                                : AppStrings.ACP.managedSessionPendingTitle
+                        )
+                            .font(AppTypographyTokens.headline)
+                        Text(
+                            managedSessionEnded
+                                ? AppStrings.ACP.managedSessionEndedDescription
+                                : AppStrings.ACP.managedSessionPendingDescription
+                        )
+                            .font(AppTypographyTokens.callout)
+                            .foregroundStyle(appThemePalette.secondaryTextColor)
+                            .multilineTextAlignment(.center)
+                    } else if subtitle == nil {
                         Text("No Project Selected")
                             .font(AppTypographyTokens.headline)
                         Text("Select a project above to start a conversation with an AI agent.")

@@ -3,6 +3,15 @@ import SwiftUI
 
 extension ContentView {
     func syncWindowTitleWithVibeSpace() {
+        if case .automation = activeSurface {
+            let title = "\(AppStrings.Brand.crispyvibes) / \(AppStrings.Automation.title)"
+            if let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first,
+               window.title != title {
+                window.title = title
+            }
+            return
+        }
+
         let canvasModeLabel: String
         switch selectedVibeSpaceCanvasMode {
         case .detailed:
@@ -36,6 +45,27 @@ extension ContentView {
 
     func showHomeCanvas() {
         homeShell.showHome()
+    }
+
+    func showAutomationFromAppMenu() {
+        homeShell.presentAutomation()
+    }
+
+    var loopProjectOptions: [VibeLoopProjectOption] {
+        var seen: Set<String> = []
+        return allVibeSpaceProjects().compactMap { entry in
+            let path = entry.project.rootURL.standardizedFileURL.path
+            guard seen.insert(path).inserted else { return nil }
+            return VibeLoopProjectOption(path: path, name: entry.project.title)
+        }
+        .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    func resolveLoopTaskACPSession(_ target: VibeLaneACPChatTarget) -> ACPStandaloneSessionStore? {
+        contentViewerStore.resolveVibeLaneACPStore(
+            target: target,
+            vibespaceID: activeVibeSpaceID
+        )
     }
 
     func showVibeSpaceSettingsFromAppMenu() {

@@ -66,6 +66,43 @@ final class ACPSessionRegistry: ObservableObject {
         return store
     }
 
+    /// Create or return a visible chat store for a Vibe Lane-owned ACP session.
+    /// The engine owns the session lifetime; the store owns the user-visible timeline.
+    func storeForVibeLaneSession(
+        id: UUID,
+        agentID: String,
+        projectPath: String,
+        modelID: String? = nil,
+        trustMode: CLITrustMode? = nil,
+        reasoningLevel: AgentReasoningLevel? = nil,
+        isEnded: Bool = false,
+        vibespaceID: UUID? = nil
+    ) -> ACPStandaloneSessionStore {
+        if let existing = store(forID: id) {
+            existing.prepareExternalVibeLaneSession(
+                agentID: agentID,
+                projectPath: projectPath,
+                modelID: modelID,
+                trustMode: trustMode,
+                reasoningLevel: reasoningLevel,
+                isEnded: isEnded
+            )
+            return existing
+        }
+        let store = storeFactory(id, vibespaceID)
+        store.prepareExternalVibeLaneSession(
+            agentID: agentID,
+            projectPath: projectPath,
+            modelID: modelID,
+            trustMode: trustMode,
+            reasoningLevel: reasoningLevel,
+            isEnded: isEnded
+        )
+        pendingStores[store.id] = store
+        observeForThreadCreation(store)
+        return store
+    }
+
     /// Restore a store from a persisted snapshot.
     func restoreStore(
         from snapshot: ACPStandalonePaneSnapshot,
@@ -86,6 +123,14 @@ final class ACPSessionRegistry: ObservableObject {
             observeForThreadCreation(store)
         }
         return store
+    }
+
+    /// Detaches an engine-owned process while retaining its registered transcript.
+    /// A replacement process can attach to the same store without losing history.
+    func detachVibeLaneSession(id: UUID, ended: Bool) {
+        guard let store = store(forID: id) else { return }
+        store.detachExternalVibeLaneSession(ended: ended)
+        objectWillChange.send()
     }
 
     /// Remove a store and tear it down.
@@ -125,10 +170,17 @@ final class ACPSessionRegistry: ObservableObject {
     // MARK: - Private
 
     private func register(_ store: ACPStandaloneSessionStore, threadID: String) {
+        pendingStores.removeValue(forKey: store.id)
+        observations.removeValue(forKey: "pending-\(store.id.uuidString)")
+        if let previousThreadID = storesByID[store.id], previousThreadID != threadID {
+            stores.removeValue(forKey: previousThreadID)
+            observations.removeValue(forKey: previousThreadID)
+        }
         stores[threadID] = store
         storesByID[store.id] = threadID
         observations[threadID] = store.chatViewModel.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+        objectWillChange.send()
     }
 
     /// For new conversations that don't have a threadID yet — watch for it to appear.
