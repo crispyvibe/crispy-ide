@@ -12,6 +12,7 @@ extension GhosttyTerminalEngine {
     ) {
         pendingExitCode = nil
         lastVisibleContents = ""
+        lastVisibleContentsDimensions = nil
         hasReportedRenderableOutput = false
         hasAttemptedInitialBannerCleanup = false
         clearPendingTextQueue()
@@ -38,6 +39,7 @@ extension GhosttyTerminalEngine {
         started = false
         stopOutputPolling()
         lastVisibleContents = ""
+        lastVisibleContentsDimensions = nil
         clearPendingTextQueue()
         terminalView.destroySurface()
         handleProcessExit(exitCode: pendingExitCode)

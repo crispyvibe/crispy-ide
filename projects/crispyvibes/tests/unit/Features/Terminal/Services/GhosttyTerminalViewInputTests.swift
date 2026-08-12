@@ -264,6 +264,166 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         XCTAssertEqual(openedURL, URL(string: "https://example.com/docs"))
     }
 
+    func testCommandClickActivatesCompleteWrappedGhosttyLinkAcrossLogicalLine() throws {
+        let urlString = "https://media.example.tv/watch/documentaries/science-and-nature/"
+            + "exploring-the-deepest-regions-of-the-pacific-ocean?episode=7&season=3"
+            + "&quality=ultra-high-definition"
+        let columns = 48
+        let wrappedRows = Int(ceil(Double(urlString.count) / Double(columns)))
+        let engine = GhosttyTerminalEngine(terminalServices: TerminalServices())
+        engine.currentDirectoryPath = FileManager.default.temporaryDirectory.path
+        engine.terminalView.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: CGFloat(columns * 10),
+            height: CGFloat(wrappedRows * 20)
+        )
+        engine.terminalView.visibleContentsProviderForTesting = { urlString }
+        engine.terminalView.dimensionsProviderForTesting = { (cols: columns, rows: wrappedRows) }
+
+        var openedURL: URL?
+        let observer = NotificationCenter.default.addObserver(
+            forName: .ghosttyOpenLinkTargetRequested,
+            object: nil,
+            queue: .main
+        ) { notification in
+            openedURL = notification.userInfo?[AppCommandUserInfoKey.url] as? URL
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let point = CGPoint(
+            x: 35,
+            y: engine.terminalView.bounds.height - 10
+        )
+        XCTAssertTrue(
+            engine.terminalView.beginInteractiveTargetClick(at: point, modifierFlags: [.command])
+        )
+        XCTAssertEqual(engine.terminalView.interactiveHoverOverlay.highlightRects.count, wrappedRows)
+        let target = try XCTUnwrap(
+            engine.terminalView.activatedInteractiveTargetOnMouseUp(
+                at: point,
+                modifierFlags: [.command]
+            )
+        )
+
+        engine.terminalView.activateInteractiveTarget(target)
+
+
+        XCTAssertEqual(target, .link(urlString))
+        XCTAssertEqual(openedURL, URL(string: urlString))
+    }
+
+    func testCommandClickActivatesCompleteIndentedTUIWrappedGhosttyLink() throws {
+        let urlString = "https://api.example.net/v1/organizations/engineering-"
+            + "department/projects/customer-analytics/reports/quarte"
+            + "rly-performance-summary"
+        let visibleText = [
+            "  https://api.example.net/v1/organizations/engineering-",
+            "  department/projects/customer-analytics/reports/quarte",
+            "  rly-performance-summary"
+        ].joined(separator: "\n")
+        let engine = GhosttyTerminalEngine(terminalServices: TerminalServices())
+        engine.currentDirectoryPath = FileManager.default.temporaryDirectory.path
+        engine.terminalView.frame = NSRect(x: 0, y: 0, width: 550, height: 60)
+        engine.terminalView.visibleContentsProviderForTesting = { visibleText }
+        engine.terminalView.dimensionsProviderForTesting = { (cols: 55, rows: 3) }
+
+        var openedURL: URL?
+        let observer = NotificationCenter.default.addObserver(
+            forName: .ghosttyOpenLinkTargetRequested,
+            object: nil,
+            queue: .main
+        ) { notification in
+            openedURL = notification.userInfo?[AppCommandUserInfoKey.url] as? URL
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let point = CGPoint(x: 50, y: 50)
+        XCTAssertTrue(
+            engine.terminalView.beginInteractiveTargetClick(at: point, modifierFlags: [.command])
+        )
+        XCTAssertEqual(engine.terminalView.interactiveHoverOverlay.highlightRects.count, 3)
+        let target = try XCTUnwrap(
+            engine.terminalView.activatedInteractiveTargetOnMouseUp(
+                at: point,
+                modifierFlags: [.command]
+            )
+        )
+
+        engine.terminalView.activateInteractiveTarget(target)
+
+        XCTAssertEqual(target, .link(urlString))
+        XCTAssertEqual(openedURL, URL(string: urlString))
+    }
+
+    func testCommandClickRefreshesStaleWidthCacheBeforeOpeningWrappedGhosttyLink() throws {
+        let urlString = "https://media.example.tv/watch/documentaries/science-and-nature/"
+            + "exploring-the-deepest-regions-of-the-pacific-ocean?episode=7&season=3"
+            + "&quality=ultra-high-definition"
+        let currentColumns = 53
+        let staleColumns = 60
+        let characters = Array(urlString)
+        let physicalText: (Int) -> String = { columns in
+            stride(from: 0, to: characters.count, by: columns).map { start in
+                String(characters[start..<min(start + columns, characters.count)])
+            }.joined(separator: "\n")
+        }
+        let currentText = physicalText(currentColumns)
+        let currentRows = currentText.split(separator: "\n").count
+        let staleText = physicalText(staleColumns)
+        let staleRows = staleText.split(separator: "\n").count
+
+        let engine = GhosttyTerminalEngine(terminalServices: TerminalServices())
+        engine.currentDirectoryPath = FileManager.default.temporaryDirectory.path
+        engine.lastVisibleContents = staleText
+        engine.lastVisibleContentsDimensions = (cols: staleColumns, rows: staleRows)
+        engine.terminalView.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: CGFloat(currentColumns * 10),
+            height: CGFloat(currentRows * 20)
+        )
+        var liveReadCount = 0
+        engine.terminalView.visibleContentsProviderForTesting = {
+            liveReadCount += 1
+            return currentText
+        }
+        engine.terminalView.dimensionsProviderForTesting = {
+            (cols: currentColumns, rows: currentRows)
+        }
+
+        var openedURL: URL?
+        let observer = NotificationCenter.default.addObserver(
+            forName: .ghosttyOpenLinkTargetRequested,
+            object: nil,
+            queue: .main
+        ) { notification in
+            openedURL = notification.userInfo?[AppCommandUserInfoKey.url] as? URL
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let point = CGPoint(x: 35, y: engine.terminalView.bounds.height - 10)
+        XCTAssertTrue(
+            engine.terminalView.beginInteractiveTargetClick(at: point, modifierFlags: [.command])
+        )
+        XCTAssertEqual(engine.terminalView.interactiveHoverOverlay.highlightRects.count, currentRows)
+        let target = try XCTUnwrap(
+            engine.terminalView.activatedInteractiveTargetOnMouseUp(
+                at: point,
+                modifierFlags: [.command]
+            )
+        )
+
+        engine.terminalView.activateInteractiveTarget(target)
+
+        XCTAssertEqual(target, .link(urlString))
+        XCTAssertEqual(openedURL, URL(string: urlString))
+        XCTAssertEqual(liveReadCount, 1, "A dimension mismatch should trigger exactly one live read.")
+        XCTAssertEqual(engine.lastVisibleContents, currentText)
+        XCTAssertEqual(engine.lastVisibleContentsDimensions?.cols, currentColumns)
+        XCTAssertEqual(engine.lastVisibleContentsDimensions?.rows, currentRows)
+    }
+
     func testCommandClickActivatesGhosttyFileTargetRouting() throws {
         let engine = GhosttyTerminalEngine(terminalServices: TerminalServices())
         let rootDirectory = FileManager.default.temporaryDirectory

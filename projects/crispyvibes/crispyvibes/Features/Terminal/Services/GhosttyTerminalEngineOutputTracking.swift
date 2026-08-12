@@ -29,8 +29,12 @@ extension GhosttyTerminalEngine {
     }
 
     func handleSurfaceSizeDidChange() {
+        lastVisibleContents = ""
+        lastVisibleContentsDimensions = nil
+        lastVisibleContentsHash = 0
         let dimensions = currentDimensions()
         delegate?.terminalEngine(self, didChangeSizeToCols: dimensions.cols, rows: dimensions.rows)
+        captureVisibleContentsIfNeeded()
     }
 
     func handleTitleChange(_ title: String) {
@@ -48,11 +52,16 @@ extension GhosttyTerminalEngine {
     func captureVisibleContentsIfNeeded() {
         guard started else { return }
         let snapshot = terminalView.visibleContents()
-        guard snapshot != lastVisibleContents else { return }
+        let dimensions = currentDimensions()
+        guard snapshot != lastVisibleContents || lastVisibleContentsDimensions == nil else {
+            lastVisibleContentsDimensions = dimensions
+            return
+        }
 
         let trimmed = snapshot.trimmingCharacters(in: .whitespacesAndNewlines)
         let sample = trimmed.split(separator: "\n").first.map(String.init)
         lastVisibleContents = snapshot
+        lastVisibleContentsDimensions = dimensions
 
         // Forward to insight observer if available
         if let session = delegate as? TerminalSession {
@@ -137,6 +146,7 @@ extension GhosttyTerminalEngine {
             guard hash != self.lastVisibleContentsHash else { return }
             self.lastVisibleContentsHash = hash
             self.lastVisibleContents = snapshot
+            self.lastVisibleContentsDimensions = self.currentDimensions()
             self.delegate?.terminalEngineDidReceiveSignificantOutput(self)
         }
     }

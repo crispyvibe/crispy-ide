@@ -21,26 +21,56 @@ struct GhosttyTerminalInteractiveGrid: TerminalInteractiveTextGrid {
     let cols: Int
     let rows: Int
     private let lines: [[TerminalInteractiveCell]]
+    private let wrappedContinuationUpperRows: Set<Int>
 
     init(visibleContents: String, cols: Int, rows: Int) {
-        self.cols = max(cols, 0)
-        self.rows = max(rows, 0)
+        let normalizedColumns = max(cols, 0)
+        let normalizedRows = max(rows, 0)
+        self.cols = normalizedColumns
+        self.rows = normalizedRows
 
         let rawLines = visibleContents
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
-        let boundedLines = Array(rawLines.prefix(self.rows))
-        let paddedLineCount = max(self.rows - boundedLines.count, 0)
-        let normalizedLines = boundedLines + Array(repeating: "", count: paddedLineCount)
-
-        self.lines = normalizedLines.map { line in
-            line.map { character in
-                TerminalInteractiveCell(
-                    text: String(character),
-                    width: 1,
-                    payload: nil
-                )
+        var physicalLines: [[TerminalInteractiveCell]] = []
+        var continuationUpperRows = Set<Int>()
+        for rawLine in rawLines {
+            let reflowedRows = Self.physicalRows(
+                from: rawLine,
+                columns: normalizedColumns
+            )
+            for (index, row) in reflowedRows.enumerated() {
+                if index > 0 {
+                    continuationUpperRows.insert(physicalLines.count - 1)
+                }
+                physicalLines.append(row)
             }
+        }
+
+        let boundedLines = Array(physicalLines.prefix(normalizedRows))
+        let paddedLineCount = max(normalizedRows - boundedLines.count, 0)
+        self.lines = boundedLines + Array(repeating: [], count: paddedLineCount)
+        self.wrappedContinuationUpperRows = Set(
+            continuationUpperRows.filter { $0 + 1 < normalizedRows }
+        )
+    }
+
+    private static func physicalRows(
+        from logicalLine: String,
+        columns: Int
+    ) -> [[TerminalInteractiveCell]] {
+        guard columns > 0 else { return [[]] }
+        let cells = logicalLine.map { character in
+            TerminalInteractiveCell(
+                text: String(character),
+                width: 1,
+                payload: nil
+            )
+        }
+        guard !cells.isEmpty else { return [[]] }
+
+        return stride(from: 0, to: cells.count, by: columns).map { start in
+            Array(cells[start..<min(start + columns, cells.count)])
         }
     }
 
@@ -57,5 +87,12 @@ struct GhosttyTerminalInteractiveGrid: TerminalInteractiveTextGrid {
         }
 
         return line[column]
+    }
+
+    func isWrappedContinuation(upperRow: Int, lowerRow: Int) -> Bool? {
+        guard lowerRow == upperRow + 1,
+              upperRow >= 0,
+              lowerRow < rows else { return nil }
+        return wrappedContinuationUpperRows.contains(upperRow) ? true : nil
     }
 }

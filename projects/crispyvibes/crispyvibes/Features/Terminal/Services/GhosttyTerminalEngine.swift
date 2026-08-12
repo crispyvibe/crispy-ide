@@ -18,6 +18,7 @@ final class GhosttyTerminalEngine: NSObject, TerminalSessionEngine {
     }
     var actionHandlers = TerminalSessionActionHandlers()
     var lastVisibleContents = ""
+    var lastVisibleContentsDimensions: (cols: Int, rows: Int)?
     var hasReportedRenderableOutput = false
     var pendingExitCode: Int32?
     var preferredColumns = 120

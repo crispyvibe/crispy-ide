@@ -204,14 +204,21 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
         return decodeUTF8(pointer, count: Int(text.text_len))
     }
 
-    func currentInteractiveVisibleContents() -> String {
-        if let visibleContentsProviderForTesting {
-            return visibleContentsProviderForTesting()
-        }
-        if let engine, !engine.lastVisibleContents.isEmpty {
+    func currentInteractiveVisibleContents(
+        for dimensions: (cols: Int, rows: Int)
+    ) -> String {
+        guard let engine else { return visibleContents() }
+        if let cachedDimensions = engine.lastVisibleContentsDimensions,
+           cachedDimensions.cols == dimensions.cols,
+           cachedDimensions.rows == dimensions.rows {
             return engine.lastVisibleContents
         }
-        return visibleContents()
+
+        let snapshot = visibleContents()
+        engine.lastVisibleContents = snapshot
+        engine.lastVisibleContentsDimensions = dimensions
+        engine.lastVisibleContentsHash = snapshot.hashValue
+        return snapshot
     }
 
     func copySelectionToPasteboard() {
@@ -475,8 +482,9 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
     func interactiveTargetHit(at point: CGPoint) -> TerminalInteractiveTargetHit? {
         guard let hit = visibleGridPosition(at: point) else { return nil }
         let dimensions = currentGridDimensions()
+        let visibleText = currentInteractiveVisibleContents(for: dimensions)
         let grid = GhosttyTerminalInteractiveGrid(
-            visibleContents: currentInteractiveVisibleContents(),
+            visibleContents: visibleText,
             cols: dimensions.cols,
             rows: dimensions.rows
         )
@@ -492,7 +500,9 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
     }
 
     func updateInteractiveHoverHighlight(_ hit: TerminalInteractiveTargetHit?) {
-        interactiveHoverOverlay.highlightRects = hit.flatMap { interactiveHighlightRect(for: $0) }.map { [$0] } ?? []
+        interactiveHoverOverlay.highlightRects = hit?.segments.compactMap {
+            interactiveHighlightRect(for: $0)
+        } ?? []
     }
 
     func openInteractiveTargetLink(_ url: URL) {
@@ -550,7 +560,7 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
         return (col: column, row: row)
     }
 
-    func interactiveHighlightRect(for hit: TerminalInteractiveTargetHit) -> CGRect? {
+    func interactiveHighlightRect(for segment: TerminalInteractiveTargetSegment) -> CGRect? {
         let dimensions = currentGridDimensions()
         guard dimensions.cols > 0, dimensions.rows > 0 else { return nil }
 
@@ -558,9 +568,9 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
         let cellHeight = bounds.height / CGFloat(dimensions.rows)
         guard cellWidth.isFinite, cellWidth > 0, cellHeight.isFinite, cellHeight > 0 else { return nil }
 
-        let minX = CGFloat(hit.columns.lowerBound) * cellWidth
-        let width = CGFloat(max(hit.columns.upperBound - hit.columns.lowerBound, 1)) * cellWidth
-        let minY = bounds.height - (CGFloat(hit.row + 1) * cellHeight)
+        let minX = CGFloat(segment.columns.lowerBound) * cellWidth
+        let width = CGFloat(max(segment.columns.upperBound - segment.columns.lowerBound, 1)) * cellWidth
+        let minY = bounds.height - (CGFloat(segment.row + 1) * cellHeight)
 
         let rect = CGRect(x: minX, y: minY, width: width, height: cellHeight)
         guard rect.width > 0, rect.height > 0 else { return nil }

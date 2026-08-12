@@ -24,7 +24,9 @@ extension MonitoredTerminalView {
     }
 
     func updateInteractiveHoverHighlight(_ hit: TerminalInteractiveTargetHit?) {
-        interactiveHoverOverlay.highlightRects = hit.flatMap { interactiveHighlightRect(for: $0) }.map { [$0] } ?? []
+        interactiveHoverOverlay.highlightRects = hit?.segments.compactMap {
+            interactiveHighlightRect(for: $0)
+        } ?? []
     }
 
     func visibleGridPosition(at point: CGPoint) -> (col: Int, row: Int)? {
@@ -55,14 +57,14 @@ extension MonitoredTerminalView {
         )
     }
 
-    func interactiveHighlightRect(for hit: TerminalInteractiveTargetHit) -> CGRect? {
+    func interactiveHighlightRect(for segment: TerminalInteractiveTargetSegment) -> CGRect? {
         guard let cellSize = resolvedTerminalCellSizeInPoints() else { return nil }
         let cellWidth = max(cellSize.width, 1)
         let cellHeight = max(cellSize.height, 1)
 
-        let minX = CGFloat(hit.columns.lowerBound) * cellWidth
-        let width = CGFloat(max(hit.columns.upperBound - hit.columns.lowerBound, 1)) * cellWidth
-        let minY = bounds.height - (CGFloat(hit.row + 1) * cellHeight)
+        let minX = CGFloat(segment.columns.lowerBound) * cellWidth
+        let width = CGFloat(max(segment.columns.upperBound - segment.columns.lowerBound, 1)) * cellWidth
+        let minY = bounds.height - (CGFloat(segment.row + 1) * cellHeight)
 
         let rect = CGRect(x: minX, y: minY, width: width, height: cellHeight)
         guard rect.width > 0, rect.height > 0 else { return nil }
