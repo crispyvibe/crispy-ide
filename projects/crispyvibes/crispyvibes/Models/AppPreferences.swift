@@ -49,6 +49,9 @@ enum AppPreferences {
     static let terminalToolDiagnosticsVersionKey = "crispyvibes.terminal.diagnosticsVersion"
     static let terminalToolDiagnosticsInstalledToolsKey = "crispyvibes.terminal.diagnosticsInstalledTools"
 
+    // MARK: Editor
+    static let markdownWebLinkPreferenceKey = "crispyvibes.editor.webLinkPreference"
+
     // MARK: Shortcuts
     static let appShortcutOverridesKey = "crispyvibes.shortcuts.overrides"
 
@@ -212,6 +215,7 @@ enum AppPreferences {
     static let defaultTerminalShellPreference = AppFirstRunExperience.AppSettings.terminalShellPreference.rawValue
     static let defaultAppThemePreset = AppFirstRunExperience.AppSettings.themePreset.rawValue
     static let defaultAppCustomThemePaletteJSON = AppFirstRunExperience.AppSettings.customThemePaletteJSON
+    static let defaultMarkdownWebLinkPreference = MarkdownWebLinkPreference.ask.rawValue
     static let defaultAppSideMenuDockPosition =
         AppFirstRunExperience.AppSettings.sideMenuDockPosition.rawValue
     static let defaultRailPositionRawValue =

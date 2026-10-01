@@ -120,7 +120,7 @@ Switch to **Source** for full control: the complete `.tex`, including the preamb
 
 ### Math in Markdown
 
-In a `.md` file, write `$inline$` or a `$$displayed$$` block. In the markdown rich view they typeset via KaTeX; when you save, they're written back as the same `$…$` / `$$…$$` you wrote.
+In a `.md` file, write symbolic inline math such as `$E = mc^2$`, numeric-leading inline math as `\\(2 + 3 = 5\\)`, or a `$$displayed$$` block. The doubled backslashes are the Markdown source form that preserves the `\(…\)` delimiters for KaTeX. Crispy retains that explicit source form when saving, so numeric-leading equations remain math after reopening. Ordinary numeric currency—including `$8M`, `$2M`, and `$16,655.00`—stays editable prose and does not need escaping.
 
 ## When LaTeX is installed vs not installed
 

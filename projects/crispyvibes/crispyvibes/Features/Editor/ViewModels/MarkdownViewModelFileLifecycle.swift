@@ -613,6 +613,143 @@ extension MarkdownViewModel {
         }
     }
 
+    func handleMarkdownLinkAction(_ request: MarkdownLinkActionRequest) {
+        switch request.targetKind {
+        case .web:
+            guard let url = validatedMarkdownWebURL(request.resolvedURL) else {
+                errorMessage = AppStrings.Editor.invalidLinkDestination
+                return
+            }
+            if request.action == .openInCrispy {
+                markdownLinkRouter.openInCrispyBrowser(
+                    url,
+                    currentOpenDocumentReference()?.projectIdentifier
+                )
+            } else {
+                markdownLinkRouter.openInDefaultBrowser(url)
+            }
+
+        case .external:
+            guard request.action == .openInDefaultBrowser,
+                  let url = validatedMarkdownExternalURL(request.resolvedURL) else {
+                errorMessage = AppStrings.Editor.invalidLinkDestination
+                return
+            }
+            markdownLinkRouter.openInDefaultBrowser(url)
+
+        case .localFile:
+            openMarkdownLocalLink(request)
+        }
+    }
+
+    func richNavigationRequest(for documentID: String?) -> MarkdownRichNavigationRequest? {
+        guard let request = pendingRichNavigationRequest,
+              request.documentID == documentID else { return nil }
+        return request
+    }
+
+    func consumeRichNavigationRequest(id: UUID) {
+        guard pendingRichNavigationRequest?.id == id else { return }
+        setPendingRichNavigationRequest(nil)
+    }
+
+    private func openMarkdownLocalLink(_ request: MarkdownLinkActionRequest) {
+        guard var components = URLComponents(string: request.resolvedURL) else {
+            errorMessage = AppStrings.Editor.invalidLinkDestination
+            return
+        }
+        let fragment = request.fragment ?? components.fragment
+        components.fragment = nil
+        guard let targetURL = components.url?.standardizedFileURL,
+              targetURL.isFileURL else {
+            errorMessage = AppStrings.Editor.invalidLinkDestination
+            return
+        }
+
+        let sourceReference = currentOpenDocumentReference()
+        if fileContentProvider != nil {
+            if request.action == .openInDefaultBrowser {
+                errorMessage = AppStrings.Editor.linkedFileUnavailable
+                return
+            }
+        } else {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(
+                atPath: targetURL.path,
+                isDirectory: &isDirectory
+            ), !isDirectory.boolValue,
+            Self.localLinkIsInsideOwningProject(
+                targetURL,
+                projectIdentifier: sourceReference?.projectIdentifier
+            ) else {
+                errorMessage = AppStrings.Editor.linkedFileUnavailable
+                return
+            }
+        }
+
+        if request.action == .openInDefaultBrowser {
+            markdownLinkRouter.openInDefaultBrowser(targetURL)
+            return
+        }
+
+        let reference = FileDocumentReference(
+            url: targetURL,
+            projectIdentifier: sourceReference?.projectIdentifier
+        )
+        if let fragment,
+           !fragment.isEmpty,
+           Self.supportsRichHeadingNavigation(targetURL) {
+            setPendingRichNavigationRequest(
+                MarkdownRichNavigationRequest(
+                    documentID: reference.documentIdentity,
+                    fragment: fragment
+                )
+            )
+        } else {
+            setPendingRichNavigationRequest(nil)
+        }
+        if let linkedFileOpenHandler {
+            linkedFileOpenHandler(targetURL, reference)
+        } else {
+            openFileInTab(at: targetURL, documentReference: reference)
+        }
+    }
+
+    private func validatedMarkdownWebURL(_ rawValue: String) -> URL? {
+        guard let components = URLComponents(string: rawValue),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              components.host?.isEmpty == false,
+              components.user == nil,
+              components.password == nil else { return nil }
+        return components.url
+    }
+
+    private func validatedMarkdownExternalURL(_ rawValue: String) -> URL? {
+        guard let components = URLComponents(string: rawValue),
+              components.scheme?.lowercased() == "mailto",
+              !components.path.isEmpty else { return nil }
+        return components.url
+    }
+
+    private static func localLinkIsInsideOwningProject(
+        _ targetURL: URL,
+        projectIdentifier: String?
+    ) -> Bool {
+        guard let projectIdentifier,
+              projectIdentifier.hasPrefix("/") else { return true }
+        let rootURL = URL(fileURLWithPath: projectIdentifier, isDirectory: true)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let resolvedTarget = targetURL.standardizedFileURL.resolvingSymlinksInPath()
+        let rootPath = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
+        return resolvedTarget.path.hasPrefix(rootPath)
+    }
+
+    private static func supportsRichHeadingNavigation(_ url: URL) -> Bool {
+        ["md", "markdown", "mdx"].contains(url.pathExtension.lowercased())
+    }
+
     private func currentOpenDocumentReference() -> FileDocumentReference? {
         if let activeEditorTabID,
            let tab = editorTabs.first(where: { $0.id == activeEditorTabID }) {

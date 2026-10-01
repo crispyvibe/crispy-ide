@@ -57,7 +57,7 @@ A round-trip MUST NOT demote display math (`\[…\]`, `$$…$$`, `equation`/`ali
 A LaTeX document is a real text file. Edits (from either mode) MUST be persisted through the standard document buffer + autosave path. No separate database.
 
 ### F057-R10: Inline KaTeX in markdown
-The markdown rich editor MUST typeset `$…$` (inline) and `$$…$$` (display) math via KaTeX, mark the rendered math non-editable, and round-trip it back to the original delimiters on save by recovering the embedded TeX (not by serializing rendered spans).
+The markdown rich editor MUST typeset symbolic `$…$` (inline), explicit `\\(…\\)` Markdown-source math (inline), and `$$…$$` (display) math via KaTeX and mark the rendered math non-editable. On save, rendered math MUST recover its embedded TeX rather than serialize presentation spans. Single/double-dollar math retains `$…$` / `$$…$$`; explicit `\\(…\\)` or `\\[…\\]` source retains that explicit form so numeric-leading math cannot be reclassified as currency on reopen. Numeric currency tokens beginning with `$`, including comma/decimal amounts and `K`/`M`/`B`/`T` suffixes, MUST remain editable prose.
 
 ### F057-R11: Navigation containment
 The Edit-mode web view MUST be confined to the bundled `file://` runtime. External links MUST open in the system browser; in-app navigation to remote, `data:`, or other origins MUST be denied.

@@ -26,6 +26,8 @@ struct MarkdownEditorView: View {
     @State var cachedFindQuery = ""
     @State var cachedFindRanges: [Range<String.Index>] = []
     @State private var commandRequest: EditorCommandRequest?
+    @AppStorage(AppPreferences.markdownWebLinkPreferenceKey)
+    private var markdownWebLinkPreferenceRaw = AppPreferences.defaultMarkdownWebLinkPreference
     @FocusState var isFindFieldFocused: Bool
 
     /// F049: per-editor-instance bridge to the underlying `NSTextView`.
@@ -475,7 +477,10 @@ struct MarkdownEditorView: View {
                 context: EditorPluginContext(
                     viewModel: viewModel,
                     commandRequest: $commandRequest,
-                    embeddedDropBridge: embeddedDropBridge
+                    embeddedDropBridge: embeddedDropBridge,
+                    markdownWebLinkPreference: MarkdownWebLinkPreference(
+                        rawValue: markdownWebLinkPreferenceRaw
+                    ) ?? .ask
                 )
             ) {
                 pluginView

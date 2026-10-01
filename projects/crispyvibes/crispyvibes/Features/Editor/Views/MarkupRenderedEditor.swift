@@ -15,6 +15,10 @@ struct MarkupRenderedEditor: NSViewRepresentable {
     let mode: Mode
     let baseDirectoryURL: URL?
     let commandRequest: EditorCommandRequest?
+    var webLinkPreference: MarkdownWebLinkPreference = .ask
+    var navigationRequest: MarkdownRichNavigationRequest? = nil
+    var onNavigationRequestConsumed: ((UUID) -> Void)? = nil
+    var onLinkAction: ((MarkdownLinkActionRequest) -> Void)? = nil
     var isBufferLoading: Bool = false
     var embeddedDropBridge: ContentViewerEmbeddedDropBridge? = nil
     @Binding var content: String
@@ -36,6 +40,8 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         var lastInjectedThemeTokens = ""
         var lastMode: Mode?
         var lastHandledCommandID: UUID?
+        var lastHandledNavigationID: UUID?
+        var lastWebLinkPreference: MarkdownWebLinkPreference?
         var lastImageCandidateRequestID = 0
         /// F049: Combine subscription that re-syncs decorations whenever
         /// the store reports changes. Replaces the prior NotificationCenter
@@ -126,13 +132,44 @@ struct MarkupRenderedEditor: NSViewRepresentable {
             lastHandledCommandID = request.id
         }
 
+        func syncWebLinkPreferenceIfNeeded(force: Bool = false) {
+            guard isEditorReady, let webView, parent.mode == .markdown else { return }
+            let preference = parent.webLinkPreference
+            guard force || preference != lastWebLinkPreference else { return }
+            let serializedPreference = Self.serializeForJavaScript(preference.rawValue)
+            webView.evaluateJavaScript(
+                "window.crispyvibesSetWebLinkPreference(\(serializedPreference));"
+            )
+            lastWebLinkPreference = preference
+        }
+
+        func applyNavigationRequestIfNeeded() {
+            guard isEditorReady,
+                  !parent.isBufferLoading,
+                  let webView,
+                  parent.mode == .markdown,
+                  let request = parent.navigationRequest,
+                  request.id != lastHandledNavigationID else { return }
+            lastHandledNavigationID = request.id
+            let serializedFragment = Self.serializeForJavaScript(request.fragment)
+            webView.evaluateJavaScript(
+                "window.crispyvibesNavigateToAnchor(\(serializedFragment));"
+            ) { [weak self] _, _ in
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.onNavigationRequestConsumed?(request.id)
+                }
+            }
+        }
+
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             switch message.name {
             case "editorReady":
                 isEditorReady = true
                 syncThemeTokensToEditor(force: true)
+                syncWebLinkPreferenceIfNeeded(force: true)
                 syncContentToEditor(force: true)
                 applyFormattingCommandIfNeeded()
+                applyNavigationRequestIfNeeded()
                 // F049: register the webview with the bridge as soon as the
                 // editor reports ready, so scrollToLine etc. work.
                 if let bridge = parent.commentBridge, let webView {
@@ -151,6 +188,9 @@ struct MarkupRenderedEditor: NSViewRepresentable {
 
             case "requestImageCandidates":
                 handleImageCandidateRequest(message.body)
+
+            case "markdownLinkAction":
+                handleMarkdownLinkAction(message.body)
 
             case "commentsRichSelectionChanged":
                 // Selection moved; we don't store it on the Swift side
@@ -214,13 +254,49 @@ struct MarkupRenderedEditor: NSViewRepresentable {
             )
         }
 
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            if navigationAction.navigationType == .linkActivated
+                || navigationAction.targetFrame == nil {
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
+
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             // Recover transparently when WKWebView's WebContent process is recycled.
             isEditorReady = false
             lastInjectedContent = ""
             lastInjectedThemeTokens = ""
             lastMode = nil
+            lastWebLinkPreference = nil
+            lastHandledNavigationID = nil
             MarkupRenderedEditor.loadLocalEditor(into: webView, readAccessURL: readAccessURL())
+        }
+
+        private func handleMarkdownLinkAction(_ body: Any) {
+            guard parent.mode == .markdown,
+                  let info = body as? [String: Any],
+                  let actionRaw = info["action"] as? String,
+                  let action = MarkdownLinkOpenAction(rawValue: actionRaw),
+                  let targetKindRaw = info["targetKind"] as? String,
+                  let targetKind = MarkdownLinkTargetKind(rawValue: targetKindRaw),
+                  let href = info["href"] as? String,
+                  let resolvedURL = info["resolvedURL"] as? String else { return }
+            let fragment = info["fragment"] as? String
+            parent.onLinkAction?(
+                MarkdownLinkActionRequest(
+                    action: action,
+                    targetKind: targetKind,
+                    href: href,
+                    resolvedURL: resolvedURL,
+                    fragment: fragment
+                )
+            )
         }
 
         private func handleImageCandidateRequest(_ body: Any) {
@@ -299,6 +375,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         contentController.add(context.coordinator, name: "editorReady")
         contentController.add(context.coordinator, name: "contentChanged")
         contentController.add(context.coordinator, name: "requestImageCandidates")
+        contentController.add(context.coordinator, name: "markdownLinkAction")
         contentController.add(context.coordinator, name: "commentsRichSelectionChanged")
         contentController.add(context.coordinator, name: "commentsRichRequestAdd")
         contentController.add(context.coordinator, name: "commentsRichGutterClick")
@@ -321,8 +398,10 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         context.coordinator.parent = self
         (nsView as? CrispyVibesNoContextMenuWebView)?.embeddedDropBridge = embeddedDropBridge
         context.coordinator.syncThemeTokensToEditor()
+        context.coordinator.syncWebLinkPreferenceIfNeeded()
         context.coordinator.syncContentToEditor()
         context.coordinator.applyFormattingCommandIfNeeded()
+        context.coordinator.applyNavigationRequestIfNeeded()
         // F049: ensure the bridge has the live webView reference and that
         // decorations reflect the latest threads + selection state.
         if let bridge = commentBridge {
@@ -349,6 +428,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         contentController.removeScriptMessageHandler(forName: "editorReady")
         contentController.removeScriptMessageHandler(forName: "contentChanged")
         contentController.removeScriptMessageHandler(forName: "requestImageCandidates")
+        contentController.removeScriptMessageHandler(forName: "markdownLinkAction")
         contentController.removeScriptMessageHandler(forName: "commentsRichSelectionChanged")
         contentController.removeScriptMessageHandler(forName: "commentsRichRequestAdd")
         contentController.removeScriptMessageHandler(forName: "commentsRichGutterClick")

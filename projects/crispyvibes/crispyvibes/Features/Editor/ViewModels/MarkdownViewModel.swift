@@ -1,6 +1,72 @@
 import Combine
 import Foundation
 
+/// Preferred destination for HTTP(S) links activated from rendered Markdown.
+enum MarkdownWebLinkPreference: String, CaseIterable, Identifiable, Sendable {
+    case ask
+    case crispy
+    case defaultBrowser
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .ask:
+            return AppStrings.Editor.webLinkPreferenceAsk
+        case .crispy:
+            return AppStrings.Editor.webLinkPreferenceCrispy
+        case .defaultBrowser:
+            return AppStrings.Editor.webLinkPreferenceDefaultBrowser
+        }
+    }
+}
+
+/// Target category produced by the rendered Markdown runtime.
+enum MarkdownLinkTargetKind: String, Equatable, Sendable {
+    case localFile
+    case web
+    case external
+}
+
+/// User action selected for a rendered Markdown link.
+enum MarkdownLinkOpenAction: String, Equatable, Sendable {
+    case openInCrispy
+    case openInDefaultBrowser
+}
+
+/// Typed action emitted by the rendered Markdown runtime.
+struct MarkdownLinkActionRequest: Equatable, Sendable {
+    let action: MarkdownLinkOpenAction
+    let targetKind: MarkdownLinkTargetKind
+    let href: String
+    let resolvedURL: String
+    let fragment: String?
+}
+
+/// One-shot request to scroll a newly opened rich Markdown document to a heading.
+struct MarkdownRichNavigationRequest: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let documentID: String
+    let fragment: String
+
+    init(id: UUID = UUID(), documentID: String, fragment: String) {
+        self.id = id
+        self.documentID = documentID
+        self.fragment = fragment
+    }
+}
+
+/// Injected native destinations for rendered Markdown link actions.
+struct MarkdownLinkRouter {
+    let openInCrispyBrowser: @MainActor (URL, String?) -> Void
+    let openInDefaultBrowser: @MainActor (URL) -> Void
+
+    static let disabled = MarkdownLinkRouter(
+        openInCrispyBrowser: { _, _ in },
+        openInDefaultBrowser: { _ in }
+    )
+}
+
 @MainActor
 final class MarkdownViewModel: ObservableObject {
     struct EditorTab: Identifiable, Equatable {
@@ -58,6 +124,7 @@ final class MarkdownViewModel: ObservableObject {
     @Published var codeLanguageKind: CodeLanguageKind?
     @Published var markupViewModeByDocumentID: [String: MarkupViewMode] = [:]
     @Published var pendingSourceSelection: PendingSourceSelection?
+    @Published private(set) var pendingRichNavigationRequest: MarkdownRichNavigationRequest?
     /// Pending LaTeX snippet to insert at the source editor's cursor (math palette).
     @Published var latexInsertionRequest: EditorInsertionRequest?
 
@@ -70,9 +137,13 @@ final class MarkdownViewModel: ObservableObject {
     var materializedPreviewURL: URL?
     let worker: any PaneWorkerExecuting
     let bufferStore: DocumentBufferStore
+    let markdownLinkRouter: MarkdownLinkRouter
     private(set) var autosave: AutosaveScheduler
     /// Optional remote file content provider. When set, file reads/writes use this instead of the local worker.
     var fileContentProvider: (any FileContentProviding)?
+    /// Installed by the owning editor group so linked files participate in its
+    /// visible tab list, provider registry, comments context, and persistence.
+    var linkedFileOpenHandler: ((URL, FileDocumentReference) -> Void)?
 
     enum DocumentType: Hashable {
         case none
@@ -136,9 +207,14 @@ final class MarkdownViewModel: ObservableObject {
     private var fileURLPollingCancellable: AnyCancellable?
     private let remoteReloadPollInterval: UInt64 = 4_000_000_000
 
-    init(worker: any PaneWorkerExecuting, bufferStore: DocumentBufferStore) {
+    init(
+        worker: any PaneWorkerExecuting,
+        bufferStore: DocumentBufferStore,
+        markdownLinkRouter: MarkdownLinkRouter = .disabled
+    ) {
         self.worker = worker
         self.bufferStore = bufferStore
+        self.markdownLinkRouter = markdownLinkRouter
         self.autosave = AutosaveScheduler { _, _ in }
         self.autosave = AutosaveScheduler { [weak self] url, token in
             guard let self else { return }
@@ -250,6 +326,10 @@ final class MarkdownViewModel: ObservableObject {
                     self?.syncPublishedState(from: state, for: buffer.id)
                 }
             }
+    }
+
+    func setPendingRichNavigationRequest(_ request: MarkdownRichNavigationRequest?) {
+        pendingRichNavigationRequest = request
     }
 
     private func syncPublishedState(from state: BufferState, for bufferID: String) {

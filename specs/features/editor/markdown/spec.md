@@ -43,6 +43,12 @@ Approximately 50 CSS custom properties are injected into the WKWebView to reflec
 ### F008-R12: Stable Rich-Editor Selection and Sync
 Rich-mode content synchronization MUST preserve the user's caret or selection. Native content echoes and comment-decoration refreshes MUST NOT trigger recursive view updates or replace the live editing DOM.
 
+### F008-R13: Currency-Safe Math Rendering
+Numeric currency tokens beginning with `$` (including comma/decimal amounts and `K`/`M`/`B`/`T` suffixes) MUST remain literal editable prose in the rich Markdown editor and MUST NOT be consumed as `$…$` inline math. Symbolic single-dollar equations and explicit `\\(…\\)` Markdown-source math remain supported.
+
+### F008-R14: Target-Aware Rich Markdown Links
+Rich-mode Markdown links MUST be classified without navigating the editor WebView. Same-document fragments navigate to stable duplicate-safe heading IDs with visual feedback and document-local back history. Relative and `file:` links open through the current Crispy editor context and apply a fragment after a linked Markdown document loads. HTTP(S) links offer Crispy Browser, default browser, edit, copy, and remove actions when the saved preference is `Ask Each Time`; saved Crispy/default choices route directly while the context menu retains all actions. Option-click MUST place the caret for editing rather than navigate. Unsupported schemes, embedded web credentials, missing files, and malformed destinations MUST be blocked.
+
 ---
 
 ## Scenarios
@@ -162,3 +168,60 @@ When edited content synchronizes to the native document buffer
 Or native content is rendered back into the rich editor
 Then the caret remains at the equivalent text offset
 And repeated bridge registration or unchanged decoration payloads do not publish another view update
+
+### F008-S15: Financial prose with multiple dollar amounts remains literal
+Given a markdown document contains `**Objective 3: Modernize AA's EDP** \[$8M ARR by 2028, 2027 in year $2M\]`
+When the document renders in rich mode
+Then the objective text and both currency amounts remain visible with their original spacing
+And no portion of the financial prose is rendered as KaTeX math
+And symbolic inline math such as `$E = mc^2$` continues to render through KaTeX
+
+### F008-S16: Same-document link navigates to a heading
+Given rich Markdown contains `[Install](#installation)` and an `Installation` heading
+When the link is clicked
+Then the editor scrolls to the generated `installation` heading ID
+And briefly highlights the heading
+And ⌘[ returns to the previous document position
+And no native URL navigation replaces the editor
+
+### F008-S17: Relative Markdown link opens in Crispy at its fragment
+Given `docs/index.md` contains `[Setup](../guide.md#setup)`
+And the linked file exists
+When the link is clicked in rich mode
+Then the path resolves relative to `docs/index.md`
+And `guide.md` opens in the current Crispy editor group
+And its `setup` heading is scrolled into view after rendering
+
+### F008-S18: Web link offers or applies the configured destination
+Given a valid HTTP(S) link
+When the saved preference is `Ask Each Time` and the link is clicked
+Then an anchored popover offers `Open in Crispy`, `Default Browser`, `Edit`, `Copy`, and `Remove`
+When the saved preference is `Crispy Browser` or `Default Browser`
+Then a normal click routes directly to that destination
+And a context-menu invocation still exposes all actions
+
+### F008-S19: Existing link can be edited without accidental navigation
+Given a rendered Markdown link
+When the user Option-clicks it
+Then the caret remains available for rich-text editing
+When the user selects `Edit` from its action popover
+Then the current destination is prefilled and can be updated
+And `Remove` unwraps the link while preserving its visible content
+And the canonical Markdown synchronizes through the normal Turndown bridge
+
+### F008-S20: Unsafe or unavailable link is blocked
+Given a link uses `javascript:`, `data:`, protocol-relative syntax, an unsupported scheme, embedded HTTP credentials, a malformed destination, or a missing local file
+When the user activates it
+Then the editor WebView does not navigate
+And no unsafe native open action is performed
+And a concise user-facing explanation is shown
+
+## Acceptance Criteria
+
+- Headings receive deterministic IDs; duplicate headings receive `-2`, `-3`, and subsequent suffixes.
+- Same-document navigation is immediate, highlighted, and reversible with ⌘[.
+- Relative links resolve against the current document directory and preserve fragments across file opening.
+- Web-link preference defaults to `Ask Each Time` and persists through `AppPreferences`.
+- Crispy Browser routing uses the existing mode-aware browser-open path; default-browser routing uses the injected interaction service.
+- Link editing, copying, removal, keyboard activation, context-menu activation, Escape dismissal, and Option-click caret placement work in rich mode.
+- Native and WebView layers independently reject unsafe targets, and `WKNavigationDelegate` blocks link-activated replacement navigation.

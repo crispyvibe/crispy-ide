@@ -223,6 +223,27 @@ extension AppSettingsSheetView {
                 }
             }
 
+            SettingsCard(
+                title: AppStrings.Editor.webLinkSettingsTitle,
+                description: AppStrings.Editor.webLinkSettingsDescription
+            ) {
+                SettingsFieldRow(
+                    title: AppStrings.Editor.webLinkSettingsField,
+                    detail: AppStrings.Editor.webLinkSettingsDetail
+                ) {
+                    Picker(
+                        AppStrings.Editor.webLinkSettingsField,
+                        selection: $markdownWebLinkPreferenceRaw
+                    ) {
+                        ForEach(MarkdownWebLinkPreference.allCases) { preference in
+                            Text(preference.title).tag(preference.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityIdentifier("app.settings.editor.web-link-preference")
+                }
+            }
+
             containerStyleCard
 
             layoutCategoryContent

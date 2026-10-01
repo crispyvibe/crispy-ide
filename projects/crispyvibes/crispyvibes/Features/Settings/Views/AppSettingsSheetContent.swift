@@ -20,6 +20,8 @@ struct AppSettingsSheetView: View {
     var codeFontFamilyRaw = AppPreferences.defaultCodeFontFamily
     @AppStorage(AppPreferences.codeFontSizeKey)
     var codeFontSize = AppPreferences.defaultCodeFontSize
+    @AppStorage(AppPreferences.markdownWebLinkPreferenceKey)
+    var markdownWebLinkPreferenceRaw = AppPreferences.defaultMarkdownWebLinkPreference
     @AppStorage(AppPreferences.textServiceCLIProfileKey)
     var serviceCLIProfile = AppPreferences.defaultTextServiceCLIProfile
     @AppStorage(AppPreferences.textServiceCLITrustModeKey)

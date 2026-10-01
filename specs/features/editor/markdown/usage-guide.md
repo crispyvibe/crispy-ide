@@ -39,14 +39,26 @@ The Markdown Editor provides a rich editing experience for `.md`, `.markdown`, a
 3. Edit the raw markdown directly.
 4. Toggle back to rich view — content state is preserved across toggles.
 
-### Inserting a Link
+### Inserting or Editing a Link
 
 1. Select the text you want to linkify.
 2. Click the **Link** button in the formatting toolbar.
-3. A URL input prompt appears anchored to the editing context.
-4. Enter the URL and confirm.
-5. The selected text is wrapped in markdown link syntax `[text](url)`.
-6. If no text is selected, a notification appears: "Select text first to add a link."
+3. Enter a section (`#installation`), relative file (`../guide.md#setup`), file URL, HTTP(S) URL, or email destination.
+4. Confirm to wrap the selection as Markdown link syntax.
+5. If no text is selected, a notification appears: "Select text first to add a link."
+6. To edit an existing link, right-click it (or open its web-link popover), choose **Edit**, update the prefilled destination, and confirm.
+
+### Navigating Links in Rich Mode
+
+- Click `#section` links to jump immediately to the matching heading. The destination briefly highlights; press **⌘[** to return to the previous document position.
+- Click a relative Markdown link such as `../guide.md#setup` to open that file in the current Crispy editor group and jump to its heading after rendering.
+- Click another local file link to open it in Crispy. Right-click to choose the system default app instead.
+- Click an HTTP(S) link to show an anchored action popover when your preference is **Ask Each Time**. Choose **Open in Crispy** or **Default Browser**.
+- Right-click any link for the complete action set. Web links offer open destinations plus **Edit**, **Copy**, and **Remove**; Remove keeps the visible link text.
+- **Option-click** a link when you want to place the caret and edit its visible text without navigating.
+- Focus a link with the keyboard and press **Enter** to activate it. Press **Escape** to dismiss the action popover.
+
+Crispy blocks executable/unknown schemes, protocol-relative links, web URLs with embedded credentials, malformed destinations, and unavailable local files. Source mode always treats links as editable Markdown text and does not activate them.
 
 ### Inserting an Image
 
@@ -84,12 +96,14 @@ The Markdown Editor provides a rich editing experience for `.md`, `.markdown`, a
 
 - **Theme**: The active application theme is injected into the markdown renderer as ~50 CSS custom properties. Changing themes updates the rendered appearance immediately.
 - **Font Size**: Controlled via the global font size shortcuts (⌘+, ⌘-, ⌘0).
+- **Markdown Web Links**: In General settings, choose **Ask Each Time**, **Crispy Browser**, or **Default Browser**. This affects normal HTTP(S) clicks; right-click always exposes both destinations.
 
 ## Tips
 
 - MDX files (`.mdx`) open in the same markdown editor with identical behavior.
 - Content sync uses Turndown to convert HTML back to markdown — formatting is preserved as canonical markdown syntax.
 - Tables remain GFM markdown pipe tables after rich-mode edits, including column alignment and escaped pipe characters.
+- Ordinary currency such as `$8M`, `$2M`, and `$16,655.00` remains editable text rather than math. For an equation that intentionally begins with a number, use `\\(…\\)` in Markdown source; Crispy preserves that explicit delimiter form when saving so it remains math when reopened.
 - The editor automatically recovers from WKWebView crashes by re-rendering content with no data loss.
 - Code blocks within markdown receive syntax highlighting based on the specified language fence.
 - The formatting toolbar provides: Bold, Italic, Headings (H1–H6), Ordered List, Unordered List, Blockquote, Code Block, and Horizontal Rule.
@@ -104,3 +118,7 @@ The Markdown Editor provides a rich editing experience for `.md`, `.markdown`, a
 | Table dimensions rejected | Ensure row and column values are valid positive integers. |
 | Table changed to HTML | Reopen the file after updating Crispy. Rich-mode table edits are stored as GFM markdown instead of HTML. |
 | Source view out of sync | Toggle back to rich view — content state is preserved. If issues persist, save and reopen. |
+| A section link says the section was not found | Ensure the fragment matches the generated lowercase heading slug; spaces become hyphens and duplicate headings use `-2`, `-3`, and later suffixes. |
+| A web link is blocked | Use a complete HTTP(S) address without embedded username/password credentials. Executable and unknown schemes are intentionally rejected. |
+| A relative file link does not open | Verify the target exists relative to the current Markdown file and points to a file rather than a directory. |
+| Clicking a link navigates when I want to edit | Hold Option while clicking, or right-click and choose **Edit**. |

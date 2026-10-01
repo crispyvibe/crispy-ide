@@ -93,6 +93,53 @@ final class EditorGroupStoreTests: XCTestCase {
         container = nil
     }
 
+    func testLinkedMarkdownFileOpensThroughOwningEditorGroup() async throws {
+        let sourceURL = URL(fileURLWithPath: "/remote/project/source.md")
+        let targetURL = URL(fileURLWithPath: "/remote/project/guide.md")
+        let projectIdentifier = "remote-project"
+        let provider = RecordingFileContentProvider(
+            contentByPath: [
+                sourceURL.path: Data("[Guide](guide.md#setup)".utf8),
+                targetURL.path: Data("# Setup".utf8)
+            ]
+        )
+
+        group.openFileInTab(
+            at: sourceURL,
+            projectIdentifier: projectIdentifier,
+            fileContentProvider: provider
+        )
+        let sourceOpened = await waitForCondition(timeout: 8) {
+            self.group.markdownViewModel.rawContent.contains("Guide")
+        }
+        XCTAssertTrue(sourceOpened)
+
+        group.markdownViewModel.handleMarkdownLinkAction(
+            MarkdownLinkActionRequest(
+                action: .openInCrispy,
+                targetKind: .localFile,
+                href: "guide.md#setup",
+                resolvedURL: targetURL.absoluteString + "#setup",
+                fragment: "setup"
+            )
+        )
+
+        let targetReference = FileDocumentReference(
+            url: targetURL,
+            projectIdentifier: projectIdentifier
+        )
+        let targetTab = ContentViewerTab.file(reference: targetReference)
+        XCTAssertEqual(group.activeTabID, targetTab.id)
+        XCTAssertTrue(group.tabs.contains { $0.id == targetTab.id })
+        XCTAssertNotNil(group.fileContentProvider(for: targetTab.id))
+        XCTAssertEqual(
+            group.markdownViewModel.richNavigationRequest(
+                for: targetReference.documentIdentity
+            )?.fragment,
+            "setup"
+        )
+    }
+
     func testActivateTabRestoresProviderForThatFile() async throws {
         let firstURL = URL(fileURLWithPath: "/tmp/provider-a.md")
         let secondURL = URL(fileURLWithPath: "/tmp/provider-b.md")

@@ -80,7 +80,13 @@ struct AppContainer {
 
     @MainActor
     func makeMarkdownViewModel(bufferStore: DocumentBufferStore) -> MarkdownViewModel {
-        MarkdownViewModel(worker: makePaneWorker(pane: .editor), bufferStore: bufferStore)
+        MarkdownViewModel(
+            worker: makePaneWorker(pane: .editor),
+            bufferStore: bufferStore,
+            markdownLinkRouter: makeMarkdownLinkRouter(
+                vibespaceInteraction: vibespaceInteraction
+            )
+        )
     }
 
     @MainActor
@@ -594,8 +600,15 @@ struct AppContainer {
             terminalServices: terminalServices,
             operationMetricsStore: operationMetricsStore
         )
+        let markdownLinkRouter = makeMarkdownLinkRouter(
+            vibespaceInteraction: vibespaceInteraction
+        )
         let makeMarkdownViewModel: @MainActor () -> MarkdownViewModel = {
-            MarkdownViewModel(worker: measuredPaneWorkerFactory(.editor), bufferStore: DocumentBufferStore())
+            MarkdownViewModel(
+                worker: measuredPaneWorkerFactory(.editor),
+                bufferStore: DocumentBufferStore(),
+                markdownLinkRouter: markdownLinkRouter
+            )
         }
         let makeTerminalViewModel: @MainActor () -> TerminalViewModel = {
             TerminalViewModel(
@@ -682,4 +695,26 @@ struct AppContainer {
         )
     }
 
+}
+
+@MainActor
+private func makeMarkdownLinkRouter(
+    vibespaceInteraction: VibeSpaceInteractionService
+) -> MarkdownLinkRouter {
+    MarkdownLinkRouter(
+        openInCrispyBrowser: { url, projectPath in
+            var userInfo: [String: Any] = [AppCommandUserInfoKey.url: url]
+            if let projectPath {
+                userInfo[AppCommandUserInfoKey.projectPath] = projectPath
+            }
+            NotificationCenter.default.post(
+                name: .openNewBrowserRequested,
+                object: nil,
+                userInfo: userInfo
+            )
+        },
+        openInDefaultBrowser: { url in
+            vibespaceInteraction.open(url)
+        }
+    )
 }

@@ -2640,6 +2640,42 @@ enum AppStrings {
         static let viewModeSource = String(localized: "editor.viewMode.source", defaultValue: "Source")
         static let viewModeCompiled = String(localized: "editor.viewMode.compiled", defaultValue: "PDF")
         static let viewModePreview = String(localized: "editor.viewMode.preview", defaultValue: "Preview")
+        static let webLinkPreferenceAsk = String(
+            localized: "editor.webLinkPreference.ask",
+            defaultValue: "Ask Each Time"
+        )
+        static let webLinkPreferenceCrispy = String(
+            localized: "editor.webLinkPreference.crispy",
+            defaultValue: "Crispy Browser"
+        )
+        static let webLinkPreferenceDefaultBrowser = String(
+            localized: "editor.webLinkPreference.defaultBrowser",
+            defaultValue: "Default Browser"
+        )
+        static let webLinkSettingsTitle = String(
+            localized: "editor.webLinkPreference.settings.title",
+            defaultValue: "Markdown Web Links"
+        )
+        static let webLinkSettingsDescription = String(
+            localized: "editor.webLinkPreference.settings.description",
+            defaultValue: "Choose where HTTP and HTTPS links open from rendered Markdown."
+        )
+        static let webLinkSettingsField = String(
+            localized: "editor.webLinkPreference.settings.field",
+            defaultValue: "Open web links in"
+        )
+        static let webLinkSettingsDetail = String(
+            localized: "editor.webLinkPreference.settings.detail",
+            defaultValue: "Internal headings and linked project files always stay inside Crispy."
+        )
+        static let invalidLinkDestination = String(
+            localized: "editor.link.invalidDestination",
+            defaultValue: "This link destination is invalid or unsupported."
+        )
+        static let linkedFileUnavailable = String(
+            localized: "editor.link.fileUnavailable",
+            defaultValue: "The linked file does not exist or cannot be opened."
+        )
     }
 
     // MARK: - Settings

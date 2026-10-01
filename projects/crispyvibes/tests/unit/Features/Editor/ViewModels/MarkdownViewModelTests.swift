@@ -86,6 +86,165 @@ final class MarkdownViewModelTests: XCTestCase {
         container = nil
     }
 
+    func testMarkdownWebLinksRouteToInjectedDestinations() throws {
+        var crispyRequest: (url: URL, projectPath: String?)?
+        var defaultBrowserURL: URL?
+        let router = MarkdownLinkRouter(
+            openInCrispyBrowser: { url, projectPath in
+                crispyRequest = (url, projectPath)
+            },
+            openInDefaultBrowser: { url in
+                defaultBrowserURL = url
+            }
+        )
+        let linkedViewModel = MarkdownViewModel(
+            worker: container.makePaneWorker(pane: .editor),
+            bufferStore: DocumentBufferStore(),
+            markdownLinkRouter: router
+        )
+        let sourceURL = tempRoot.appendingPathComponent("source.md")
+        try Data("# Source".utf8).write(to: sourceURL)
+        let reference = FileDocumentReference(
+            url: sourceURL,
+            projectIdentifier: tempRoot.path
+        )
+        linkedViewModel.openFileInTab(at: sourceURL, documentReference: reference)
+
+        linkedViewModel.handleMarkdownLinkAction(
+            MarkdownLinkActionRequest(
+                action: .openInCrispy,
+                targetKind: .web,
+                href: "https://example.com/report",
+                resolvedURL: "https://example.com/report",
+                fragment: nil
+            )
+        )
+        XCTAssertEqual(crispyRequest?.url.absoluteString, "https://example.com/report")
+        XCTAssertEqual(crispyRequest?.projectPath, tempRoot.path)
+
+        linkedViewModel.handleMarkdownLinkAction(
+            MarkdownLinkActionRequest(
+                action: .openInDefaultBrowser,
+                targetKind: .web,
+                href: "https://example.com/help",
+                resolvedURL: "https://example.com/help",
+                fragment: nil
+            )
+        )
+        XCTAssertEqual(defaultBrowserURL?.absoluteString, "https://example.com/help")
+    }
+
+    func testMarkdownWebLinkRejectsEmbeddedCredentials() {
+        var openedURL: URL?
+        let linkedViewModel = MarkdownViewModel(
+            worker: container.makePaneWorker(pane: .editor),
+            bufferStore: DocumentBufferStore(),
+            markdownLinkRouter: MarkdownLinkRouter(
+                openInCrispyBrowser: { url, _ in openedURL = url },
+                openInDefaultBrowser: { url in openedURL = url }
+            )
+        )
+
+        linkedViewModel.handleMarkdownLinkAction(
+            MarkdownLinkActionRequest(
+                action: .openInCrispy,
+                targetKind: .web,
+                href: "https://user:secret@example.com",
+                resolvedURL: "https://user:secret@example.com",
+                fragment: nil
+            )
+        )
+
+        XCTAssertNil(openedURL)
+        XCTAssertEqual(linkedViewModel.errorMessage, AppStrings.Editor.invalidLinkDestination)
+    }
+
+    func testRelativeMarkdownLinkOpensTabAndRegistersRichHeadingNavigation() throws {
+        let sourceURL = tempRoot.appendingPathComponent("source.md")
+        let targetURL = tempRoot.appendingPathComponent("guide.md")
+        try Data("[Guide](guide.md#installation)".utf8).write(to: sourceURL)
+        try Data("# Installation".utf8).write(to: targetURL)
+        let projectIdentifier = tempRoot.path
+        let sourceReference = FileDocumentReference(
+            url: sourceURL,
+            projectIdentifier: projectIdentifier
+        )
+        viewModel.openFileInTab(at: sourceURL, documentReference: sourceReference)
+
+        viewModel.handleMarkdownLinkAction(
+            MarkdownLinkActionRequest(
+                action: .openInCrispy,
+                targetKind: .localFile,
+                href: "guide.md#installation",
+                resolvedURL: targetURL.absoluteString + "#installation",
+                fragment: "installation"
+            )
+        )
+
+        let targetReference = FileDocumentReference(
+            url: targetURL,
+            projectIdentifier: projectIdentifier
+        )
+        XCTAssertEqual(viewModel.activeEditorTabID, targetReference.documentIdentity)
+        XCTAssertTrue(viewModel.editorTabs.contains { $0.id == targetReference.documentIdentity })
+        let navigation = viewModel.richNavigationRequest(for: targetReference.documentIdentity)
+        XCTAssertEqual(navigation?.fragment, "installation")
+        if let navigation {
+            viewModel.consumeRichNavigationRequest(id: navigation.id)
+        }
+        XCTAssertNil(viewModel.pendingRichNavigationRequest)
+    }
+
+    func testMissingLocalMarkdownLinkDoesNotOpenTab() throws {
+        let sourceURL = tempRoot.appendingPathComponent("source.md")
+        try Data("# Source".utf8).write(to: sourceURL)
+        viewModel.openFileInTab(at: sourceURL)
+        let originalTabCount = viewModel.editorTabs.count
+        let missingURL = tempRoot.appendingPathComponent("missing.md")
+
+        viewModel.handleMarkdownLinkAction(
+            MarkdownLinkActionRequest(
+                action: .openInCrispy,
+                targetKind: .localFile,
+                href: "missing.md",
+                resolvedURL: missingURL.absoluteString,
+                fragment: nil
+            )
+        )
+
+        XCTAssertEqual(viewModel.editorTabs.count, originalTabCount)
+        XCTAssertEqual(viewModel.errorMessage, AppStrings.Editor.linkedFileUnavailable)
+    }
+
+    func testMissingLocalMarkdownLinkIsBlockedForDefaultApp() throws {
+        var openedURL: URL?
+        let linkedViewModel = MarkdownViewModel(
+            worker: container.makePaneWorker(pane: .editor),
+            bufferStore: DocumentBufferStore(),
+            markdownLinkRouter: MarkdownLinkRouter(
+                openInCrispyBrowser: { _, _ in },
+                openInDefaultBrowser: { openedURL = $0 }
+            )
+        )
+        let sourceURL = tempRoot.appendingPathComponent("source.md")
+        try Data("# Source".utf8).write(to: sourceURL)
+        linkedViewModel.openFileInTab(at: sourceURL)
+        let missingURL = tempRoot.appendingPathComponent("missing.md")
+
+        linkedViewModel.handleMarkdownLinkAction(
+            MarkdownLinkActionRequest(
+                action: .openInDefaultBrowser,
+                targetKind: .localFile,
+                href: "missing.md",
+                resolvedURL: missingURL.absoluteString,
+                fragment: nil
+            )
+        )
+
+        XCTAssertNil(openedURL)
+        XCTAssertEqual(linkedViewModel.errorMessage, AppStrings.Editor.linkedFileUnavailable)
+    }
+
     func testOpenMarkdownEditAndSaveRoundTrip() async throws {
         let fileURL = tempRoot.appendingPathComponent("README.md")
         try Data("# Start\n".utf8).write(to: fileURL)

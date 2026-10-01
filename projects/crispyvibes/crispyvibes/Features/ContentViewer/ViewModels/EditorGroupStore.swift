@@ -39,6 +39,14 @@ final class EditorGroupStore: ObservableObject, Identifiable {
         self.id = id
         self.markdownViewModel = markdownViewModel
         self.commentsPanel = commentsPanel
+        markdownViewModel.linkedFileOpenHandler = { [weak self] url, reference in
+            guard let self else { return }
+            self.openFileInTab(
+                at: url,
+                documentReference: reference,
+                fileContentProvider: self.markdownViewModel.fileContentProvider
+            )
+        }
     }
 
     // MARK: - File Operations

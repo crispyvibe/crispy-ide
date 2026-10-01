@@ -4,6 +4,7 @@ struct EditorPluginContext {
     let viewModel: MarkdownViewModel
     let commandRequest: Binding<EditorCommandRequest?>
     let embeddedDropBridge: ContentViewerEmbeddedDropBridge?
+    let markdownWebLinkPreference: MarkdownWebLinkPreference
 }
 
 @MainActor
@@ -58,6 +59,16 @@ private struct MarkupEditorPlugin: EditorContentPlugin {
             mode: renderedMode,
             baseDirectoryURL: viewModel.fileURL?.deletingLastPathComponent(),
             commandRequest: context.commandRequest.wrappedValue,
+            webLinkPreference: context.markdownWebLinkPreference,
+            navigationRequest: viewModel.richNavigationRequest(
+                for: viewModel.currentDocumentID
+            ),
+            onNavigationRequestConsumed: { requestID in
+                viewModel.consumeRichNavigationRequest(id: requestID)
+            },
+            onLinkAction: { request in
+                viewModel.handleMarkdownLinkAction(request)
+            },
             isBufferLoading: viewModel.isBufferLoading,
             embeddedDropBridge: context.embeddedDropBridge,
             content: Binding(

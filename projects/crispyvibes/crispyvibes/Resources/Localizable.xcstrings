@@ -1016,6 +1016,96 @@
         }
       }
     },
+    "editor.link.fileUnavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The linked file does not exist or cannot be opened."
+          }
+        }
+      }
+    },
+    "editor.link.invalidDestination": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link destination is invalid or unsupported."
+          }
+        }
+      }
+    },
+    "editor.webLinkPreference.ask": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask Each Time"
+          }
+        }
+      }
+    },
+    "editor.webLinkPreference.crispy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crispy Browser"
+          }
+        }
+      }
+    },
+    "editor.webLinkPreference.defaultBrowser": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default Browser"
+          }
+        }
+      }
+    },
+    "editor.webLinkPreference.settings.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose where HTTP and HTTPS links open from rendered Markdown."
+          }
+        }
+      }
+    },
+    "editor.webLinkPreference.settings.detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Internal headings and linked project files always stay inside Crispy."
+          }
+        }
+      }
+    },
+    "editor.webLinkPreference.settings.field": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open web links in"
+          }
+        }
+      }
+    },
+    "editor.webLinkPreference.settings.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown Web Links"
+          }
+        }
+      }
+    },
     "editor.numberedList": {
       "extractionState": "stale",
       "localizations": {

@@ -204,6 +204,76 @@
       transform: translateY(0);
     }
 
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4,
+    .markdown-body h5,
+    .markdown-body h6,
+    .markdown-body [id] {
+      scroll-margin-top: 18px;
+    }
+    .crispyvibes-link-target-flash {
+      animation: crispyvibes-link-target-pulse 1200ms ease-out;
+      border-radius: 6px;
+    }
+    @keyframes crispyvibes-link-target-pulse {
+      0% { background: color-mix(in srgb, var(--accentColor, #2a90ff) 34%, transparent); }
+      100% { background: transparent; }
+    }
+    #crispyvibes-link-popover {
+      position: fixed;
+      z-index: 6100;
+      width: min(390px, calc(100vw - 24px));
+      box-sizing: border-box;
+      padding: 10px;
+      border: 1px solid var(--borderColor-default);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bgColor-default) 96%, transparent);
+      color: var(--fgColor-default);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+      font: 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .crispyvibes-link-popover-label {
+      font-weight: 600;
+      margin-bottom: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .crispyvibes-link-popover-destination {
+      color: var(--fgColor-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 9px;
+    }
+    .crispyvibes-link-popover-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .crispyvibes-link-popover-action {
+      border: 1px solid var(--borderColor-default);
+      border-radius: 6px;
+      background: var(--bgColor-muted);
+      color: var(--fgColor-default);
+      cursor: pointer;
+      font: 500 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 6px 8px;
+    }
+    .crispyvibes-link-popover-action:hover,
+    .crispyvibes-link-popover-action:focus-visible {
+      border-color: var(--accentColor, #2a90ff);
+      outline: none;
+    }
+    .crispyvibes-link-popover-action.primary {
+      background: var(--accentColor, #2a90ff);
+      border-color: transparent;
+      color: white;
+    }
+
     .crispyvibes-dialog-backdrop {
       position: fixed;
       inset: 0;
@@ -551,6 +621,14 @@
           tex = node.textContent || "";
         }
         if (!tex) return content;
+        const explicitHost = node.closest(".crispyvibes-explicit-math");
+        if (explicitHost) {
+          const delimiter = explicitHost.getAttribute("data-math-delimiter");
+          if (delimiter === "display") {
+            return "\n\n\\\\[" + tex + "\\\\]\n\n";
+          }
+          return "\\\\(" + tex + "\\\\)";
+        }
         return node.classList.contains("katex-display") ? ("\n\n$$" + tex + "$$\n\n") : ("$" + tex + "$");
       }
     });
@@ -568,6 +646,9 @@
     var activeDialog = null;
     var imageCandidateRequestCounter = 0;
     var markdownBaseHref = "";
+    var markdownWebLinkPreference = "ask";
+    var markdownLinkPopover = null;
+    var markdownNavigationHistory = [];
     var lastSynchronizedMarkdown = null;
     var lastSynchronizedHTML = null;
     const imageCandidateRequestHandlers = new Map();
@@ -584,6 +665,14 @@
 
     window.crispyvibesSetThemeTokens = function(tokens) {
       applyThemeTokens(tokens);
+    };
+
+    window.crispyvibesSetWebLinkPreference = function(preference) {
+      const normalized = String(preference || "ask");
+      markdownWebLinkPreference = ["ask", "crispy", "defaultBrowser"].includes(normalized)
+        ? normalized
+        : "ask";
+      dismissMarkdownLinkPopover();
     };
 
     window.crispyvibesReceiveImageCandidates = function(payload) {
@@ -607,10 +696,81 @@
     }
 
     // Typeset LaTeX math in the rendered markdown via KaTeX auto-render.
+    // Numeric currency tokens are wrapped before auto-render so ordinary prose
+    // such as "$8M ... $2M" cannot be mistaken for one large equation. The
+    // wrapper is editable and Turndown emits its text unchanged. Numeric-leading
+    // equations remain available through the explicit \(...\) delimiter.
     // Rendered math is marked non-editable so the contenteditable surface
     // can't corrupt the KaTeX DOM; save round-trips via the katexMath rule.
     function renderMathInArticle() {
       if (!window.renderMathInElement) return;
+
+      const explicitMathPattern = /\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]/g;
+      const explicitMathTextNodes = [];
+      const explicitWalker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+      while (explicitWalker.nextNode()) {
+        const node = explicitWalker.currentNode;
+        const parent = node.parentElement;
+        if (!parent || parent.closest("code, pre, script, style, .crispyvibes-explicit-math")) {
+          continue;
+        }
+        explicitMathPattern.lastIndex = 0;
+        if (explicitMathPattern.test(node.nodeValue || "")) {
+          explicitMathTextNodes.push(node);
+        }
+      }
+      explicitMathTextNodes.forEach((node) => {
+        const value = node.nodeValue || "";
+        const fragment = document.createDocumentFragment();
+        let sourceOffset = 0;
+        let match;
+        explicitMathPattern.lastIndex = 0;
+        while ((match = explicitMathPattern.exec(value)) !== null) {
+          fragment.append(document.createTextNode(value.slice(sourceOffset, match.index)));
+          const math = document.createElement("span");
+          math.className = "crispyvibes-explicit-math";
+          math.setAttribute("data-math-delimiter", match[1] !== undefined ? "inline" : "display");
+          math.textContent = match[0];
+          fragment.append(math);
+          sourceOffset = match.index + match[0].length;
+        }
+        fragment.append(document.createTextNode(value.slice(sourceOffset)));
+        node.replaceWith(fragment);
+      });
+
+      const currencyPattern = /(?<!\$)\$\d[\d,]*(?:\.\d+)?(?:[KMBT](?![A-Za-z])|(?=[^A-Za-z0-9]|$))/gi;
+      const currencyTextNodes = [];
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const parent = node.parentElement;
+        if (!parent || parent.closest("code, pre, script, style, .crispyvibes-literal-currency")) {
+          continue;
+        }
+        currencyPattern.lastIndex = 0;
+        if (currencyPattern.test(node.nodeValue || "")) {
+          currencyTextNodes.push(node);
+        }
+      }
+
+      currencyTextNodes.forEach((node) => {
+        const value = node.nodeValue || "";
+        const fragment = document.createDocumentFragment();
+        let sourceOffset = 0;
+        let match;
+        currencyPattern.lastIndex = 0;
+        while ((match = currencyPattern.exec(value)) !== null) {
+          fragment.append(document.createTextNode(value.slice(sourceOffset, match.index)));
+          const currency = document.createElement("span");
+          currency.className = "crispyvibes-literal-currency";
+          currency.textContent = match[0];
+          fragment.append(currency);
+          sourceOffset = match.index + match[0].length;
+        }
+        fragment.append(document.createTextNode(value.slice(sourceOffset)));
+        node.replaceWith(fragment);
+      });
+
       try {
         window.renderMathInElement(editor, {
           delimiters: [
@@ -620,7 +780,7 @@
             { left: "$", right: "$", display: false }
           ],
           throwOnError: false,
-          ignoredClasses: ["language-mermaid"]
+          ignoredClasses: ["language-mermaid", "crispyvibes-literal-currency"]
         });
         editor.querySelectorAll(".katex-display, .katex, .katex-error").forEach((el) => {
           el.contentEditable = "false";
@@ -706,6 +866,7 @@
       markdownBaseHref = baseHref || "";
       const html = window.marked ? marked.parse(markdown || "") : (markdown || "");
       editor.innerHTML = html;
+      annotateMarkdownHeadingAnchors();
       resolveMarkdownImageSources(markdownBaseHref);
       highlightCodeBlocks();
       renderMathInArticle();
@@ -1197,23 +1358,55 @@
       scheduleSync();
     }
 
-    function openMarkdownLinkDialog(doc) {
-      const selectionSnapshot = markdownSelectionSnapshot();
-      if (!selectionSnapshot) {
+    function markdownLinkValidationMessage(value) {
+      const destination = String(value || "").trim();
+      if (!destination) return "Enter a destination to apply the link.";
+      if (/[\u0000-\u001F\u007F]/.test(destination)) {
+        return "The destination contains unsupported control characters.";
+      }
+      if (destination.startsWith("#")) {
+        return destination.length > 1 ? "" : "Enter a section name after #.";
+      }
+
+      const schemeMatch = destination.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+      if (!schemeMatch) return "";
+      const scheme = schemeMatch[1].toLowerCase();
+      if (!["http", "https", "mailto", "file"].includes(scheme)) {
+        return "Only section, file, HTTP(S), and email links are supported.";
+      }
+      try {
+        const parsed = new URL(destination, normalizeBaseHref(markdownBaseHref) || window.location.href);
+        if ((scheme === "http" || scheme === "https") && !parsed.hostname) {
+          return "Enter a complete web address.";
+        }
+      } catch (_) {
+        return "Enter a valid destination.";
+      }
+      return "";
+    }
+
+    function openMarkdownLinkDialog(doc, existingAnchor) {
+      const editingAnchor = existingAnchor && editor.contains(existingAnchor)
+        ? existingAnchor
+        : null;
+      const selectionSnapshot = editingAnchor ? null : markdownSelectionSnapshot();
+      if (!editingAnchor && !selectionSnapshot) {
         showSubtleNotification("Select text first to add a link.");
         return;
       }
 
       const selectedTextNode = document.createElement("div");
       selectedTextNode.className = "crispyvibes-dialog-selected-text";
-      selectedTextNode.textContent = selectionSnapshot.selectedText;
+      selectedTextNode.textContent = editingAnchor
+        ? editingAnchor.textContent
+        : selectionSnapshot.selectedText;
       selectedTextNode.setAttribute("data-accessibility-id", "editor.markdown.link.selection");
 
       const urlInput = document.createElement("input");
       urlInput.type = "text";
       urlInput.className = "crispyvibes-dialog-input";
-      urlInput.placeholder = "https://example.com";
-      urlInput.value = "https://";
+      urlInput.placeholder = "https://example.com or #section";
+      urlInput.value = editingAnchor ? (editingAnchor.getAttribute("href") || "") : "https://";
       urlInput.id = "markdown-link-url-input";
       urlInput.setAttribute("data-accessibility-id", "editor.markdown.link.url");
 
@@ -1234,15 +1427,17 @@
       openDialog({
         id: "markdown-link-dialog",
         accessibilityID: "editor.markdown.link.dialog",
-        title: "Insert Link",
-        subtitle: "Enter a destination URL for the selected text.",
-        applyLabel: "Apply",
+        title: editingAnchor ? "Edit Link" : "Insert Link",
+        subtitle: editingAnchor
+          ? "Update the destination for this link."
+          : "Enter a section, file, web, or email destination.",
+        applyLabel: editingAnchor ? "Update" : "Apply",
         applyAccessibilityID: "editor.markdown.link.apply",
         cancelAccessibilityID: "editor.markdown.link.cancel",
         buildBody: (body) => {
           const selectionLabel = document.createElement("label");
           selectionLabel.className = "crispyvibes-dialog-label";
-          selectionLabel.textContent = "Selected Text";
+          selectionLabel.textContent = "Link Text";
           selectionLabel.htmlFor = "markdown-link-selected-text";
           selectionLabel.setAttribute("data-accessibility-id", "editor.markdown.link.selection.label");
           selectedTextNode.id = "markdown-link-selected-text";
@@ -1251,7 +1446,7 @@
 
           const urlLabel = document.createElement("label");
           urlLabel.className = "crispyvibes-dialog-label";
-          urlLabel.textContent = "URL";
+          urlLabel.textContent = "Destination";
           urlLabel.htmlFor = urlInput.id;
           urlLabel.setAttribute("data-accessibility-id", "editor.markdown.link.url.label");
           body.appendChild(urlLabel);
@@ -1260,12 +1455,19 @@
         },
         initialFocusElement: urlInput,
         onApply: () => {
-          setValidationMessage("");
           const url = urlInput.value.trim();
-          if (!url) {
-            setValidationMessage("Enter a URL to apply the link.");
+          const validationMessage = markdownLinkValidationMessage(url);
+          setValidationMessage(validationMessage);
+          if (validationMessage) {
             urlInput.focus();
             return false;
+          }
+
+          if (editingAnchor && editor.contains(editingAnchor)) {
+            editingAnchor.setAttribute("href", url);
+            focusEditingSurface(doc);
+            applyMarkdownMutation();
+            return true;
           }
 
           const restored = restoreMarkdownSelection(selectionSnapshot, { requireNonCollapsed: true });
@@ -1289,7 +1491,7 @@
       });
 
       urlInput.addEventListener("input", () => {
-        if (urlInput.value.trim()) {
+        if (!markdownLinkValidationMessage(urlInput.value)) {
           setValidationMessage("");
         }
       });
@@ -2077,6 +2279,369 @@
       }
     }
 
+    function markdownHeadingSlug(value) {
+      const normalized = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9\u00c0-\uffff\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+      return normalized || "section";
+    }
+
+    function annotateMarkdownHeadingAnchors() {
+      const used = new Set();
+      editor.querySelectorAll("[id]").forEach((element) => {
+        if (!element.matches("h1, h2, h3, h4, h5, h6")) {
+          used.add(element.id);
+        }
+      });
+      editor.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((heading) => {
+        if (heading.id) {
+          used.add(heading.id);
+          return;
+        }
+        const base = markdownHeadingSlug(heading.textContent);
+        let candidate = base;
+        let suffix = 2;
+        while (used.has(candidate)) {
+          candidate = `${base}-${suffix}`;
+          suffix += 1;
+        }
+        heading.id = candidate;
+        used.add(candidate);
+      });
+    }
+
+    function decodeMarkdownFragment(value) {
+      const fragment = String(value || "").replace(/^#/, "");
+      try {
+        return decodeURIComponent(fragment);
+      } catch (_) {
+        return fragment;
+      }
+    }
+
+    function markdownAnchorTarget(fragment) {
+      const decoded = decodeMarkdownFragment(fragment);
+      if (!decoded) return null;
+      const candidates = editor.querySelectorAll("[id], a[name]");
+      for (const candidate of candidates) {
+        if (candidate.id === decoded || candidate.getAttribute("name") === decoded) {
+          return candidate;
+        }
+      }
+      return null;
+    }
+
+    function navigateToMarkdownAnchor(fragment, recordHistory) {
+      const target = markdownAnchorTarget(fragment);
+      if (!target) {
+        showSubtleNotification(`Section not found: #${decodeMarkdownFragment(fragment)}`);
+        return false;
+      }
+      if (recordHistory !== false) {
+        markdownNavigationHistory.push({ x: window.scrollX, y: window.scrollY });
+      }
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      target.classList.remove("crispyvibes-link-target-flash");
+      void target.offsetWidth;
+      target.classList.add("crispyvibes-link-target-flash");
+      setTimeout(() => target.classList.remove("crispyvibes-link-target-flash"), 1300);
+      return true;
+    }
+
+    window.crispyvibesNavigateToAnchor = function(fragment) {
+      return navigateToMarkdownAnchor(fragment, true);
+    };
+
+    function navigateBackInMarkdownDocument() {
+      const previous = markdownNavigationHistory.pop();
+      if (!previous) return false;
+      window.scrollTo({ left: previous.x, top: previous.y, behavior: "smooth" });
+      return true;
+    }
+
+    function markdownLinkTargetInfo(anchor) {
+      const href = String(anchor && anchor.getAttribute("href") || "").trim();
+      const blocked = (reason) => ({
+        targetKind: "blocked",
+        href,
+        resolvedURL: "",
+        fragment: "",
+        reason
+      });
+      if (!href) return blocked("This link has no destination.");
+      if (href.startsWith("#")) {
+        const fragment = decodeMarkdownFragment(href);
+        return fragment
+          ? { targetKind: "internal", href, resolvedURL: href, fragment }
+          : blocked("This section link has no destination.");
+      }
+      if (href.startsWith("//")) {
+        return blocked("Protocol-relative links are not supported.");
+      }
+
+      const explicitScheme = href.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+      if (explicitScheme) {
+        const scheme = explicitScheme[1].toLowerCase();
+        if (!["http", "https", "file", "mailto"].includes(scheme)) {
+          return blocked(`The ${scheme}: link scheme is not supported.`);
+        }
+      } else if (!href.startsWith("/") && !normalizeBaseHref(markdownBaseHref)) {
+        return blocked("A document location is required to resolve this relative link.");
+      }
+
+      let resolved;
+      try {
+        const base = normalizeBaseHref(markdownBaseHref) || "file:///";
+        resolved = new URL(href, base);
+      } catch (_) {
+        return blocked("This link destination is invalid.");
+      }
+
+      const protocol = resolved.protocol.toLowerCase();
+      const fragment = decodeMarkdownFragment(resolved.hash);
+      if (protocol === "http:" || protocol === "https:") {
+        if (!resolved.hostname || resolved.username || resolved.password) {
+          return blocked("This web address is incomplete or contains embedded credentials.");
+        }
+        return { targetKind: "web", href, resolvedURL: resolved.toString(), fragment };
+      }
+      if (protocol === "file:") {
+        return { targetKind: "localFile", href, resolvedURL: resolved.toString(), fragment };
+      }
+      if (protocol === "mailto:") {
+        return { targetKind: "external", href, resolvedURL: resolved.toString(), fragment: "" };
+      }
+      return blocked(`The ${protocol} link scheme is not supported.`);
+    }
+
+    function postMarkdownLinkAction(info, action) {
+      const handler = window.webkit
+        && window.webkit.messageHandlers
+        && window.webkit.messageHandlers.markdownLinkAction;
+      if (!handler) {
+        showSubtleNotification("Link navigation is unavailable.");
+        return;
+      }
+      if (info.targetKind === "localFile") {
+        syncToNative();
+      }
+      handler.postMessage({
+        action,
+        targetKind: info.targetKind,
+        href: info.href,
+        resolvedURL: info.resolvedURL,
+        fragment: info.fragment || ""
+      });
+    }
+
+    function dismissMarkdownLinkPopover() {
+      if (markdownLinkPopover) {
+        markdownLinkPopover.remove();
+        markdownLinkPopover = null;
+      }
+    }
+
+    function copyMarkdownLink(href) {
+      const selection = window.getSelection();
+      const savedRanges = [];
+      if (selection) {
+        for (let index = 0; index < selection.rangeCount; index += 1) {
+          savedRanges.push(selection.getRangeAt(index).cloneRange());
+        }
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = href;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      if (selection) {
+        selection.removeAllRanges();
+        savedRanges.forEach((range) => selection.addRange(range));
+      }
+      showSubtleNotification(copied ? "Link copied." : "Unable to copy link.");
+    }
+
+    function unlinkMarkdownAnchor(anchor) {
+      if (!anchor || !anchor.parentNode) return;
+      const parent = anchor.parentNode;
+      while (anchor.firstChild) {
+        parent.insertBefore(anchor.firstChild, anchor);
+      }
+      anchor.remove();
+      applyMarkdownMutation();
+      showSubtleNotification("Link removed.");
+    }
+
+    function markdownLinkActionButton(label, options, handler) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "crispyvibes-link-popover-action" + (options.primary ? " primary" : "");
+      button.textContent = label;
+      button.setAttribute("data-link-action", options.action || "");
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        handler();
+      });
+      return button;
+    }
+
+    function showMarkdownLinkPopover(anchor, info, triggerEvent) {
+      dismissMarkdownLinkPopover();
+      const popover = document.createElement("div");
+      popover.id = "crispyvibes-link-popover";
+      popover.setAttribute("role", "dialog");
+      popover.setAttribute("aria-label", "Link actions");
+      popover.setAttribute("contenteditable", "false");
+      popover.addEventListener("mousedown", (event) => event.stopPropagation());
+
+      const label = document.createElement("div");
+      label.className = "crispyvibes-link-popover-label";
+      label.textContent = anchor.textContent.trim() || "Link";
+      popover.appendChild(label);
+
+      const destination = document.createElement("div");
+      destination.className = "crispyvibes-link-popover-destination";
+      destination.textContent = info.href;
+      destination.title = info.resolvedURL || info.href;
+      popover.appendChild(destination);
+
+      const actions = document.createElement("div");
+      actions.className = "crispyvibes-link-popover-actions";
+      if (info.targetKind === "internal") {
+        actions.appendChild(markdownLinkActionButton("Go to Section", {
+          primary: true,
+          action: "navigate"
+        }, () => {
+          dismissMarkdownLinkPopover();
+          navigateToMarkdownAnchor(info.fragment, true);
+        }));
+      } else if (info.targetKind === "localFile") {
+        actions.appendChild(markdownLinkActionButton("Open in Crispy", {
+          primary: true,
+          action: "openInCrispy"
+        }, () => {
+          dismissMarkdownLinkPopover();
+          postMarkdownLinkAction(info, "openInCrispy");
+        }));
+        actions.appendChild(markdownLinkActionButton("Default App", {
+          primary: false,
+          action: "openInDefaultBrowser"
+        }, () => {
+          dismissMarkdownLinkPopover();
+          postMarkdownLinkAction(info, "openInDefaultBrowser");
+        }));
+      } else if (info.targetKind === "web") {
+        actions.appendChild(markdownLinkActionButton("Open in Crispy", {
+          primary: true,
+          action: "openInCrispy"
+        }, () => {
+          dismissMarkdownLinkPopover();
+          postMarkdownLinkAction(info, "openInCrispy");
+        }));
+        actions.appendChild(markdownLinkActionButton("Default Browser", {
+          primary: false,
+          action: "openInDefaultBrowser"
+        }, () => {
+          dismissMarkdownLinkPopover();
+          postMarkdownLinkAction(info, "openInDefaultBrowser");
+        }));
+      } else if (info.targetKind === "external") {
+        actions.appendChild(markdownLinkActionButton("Open in Default App", {
+          primary: true,
+          action: "openInDefaultBrowser"
+        }, () => {
+          dismissMarkdownLinkPopover();
+          postMarkdownLinkAction(info, "openInDefaultBrowser");
+        }));
+      }
+
+      actions.appendChild(markdownLinkActionButton("Edit", {
+        primary: false,
+        action: "edit"
+      }, () => {
+        dismissMarkdownLinkPopover();
+        openMarkdownLinkDialog(document, anchor);
+      }));
+      actions.appendChild(markdownLinkActionButton("Copy", {
+        primary: false,
+        action: "copy"
+      }, () => copyMarkdownLink(info.href)));
+      actions.appendChild(markdownLinkActionButton("Remove", {
+        primary: false,
+        action: "remove"
+      }, () => {
+        dismissMarkdownLinkPopover();
+        unlinkMarkdownAnchor(anchor);
+      }));
+      popover.appendChild(actions);
+      document.body.appendChild(popover);
+      markdownLinkPopover = popover;
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const requestedX = triggerEvent && triggerEvent.clientX > 0
+        ? triggerEvent.clientX
+        : anchorRect.left;
+      const requestedY = triggerEvent && triggerEvent.clientY > 0
+        ? triggerEvent.clientY
+        : anchorRect.bottom + 6;
+      const left = Math.max(8, Math.min(requestedX, window.innerWidth - popover.offsetWidth - 8));
+      const top = Math.max(8, Math.min(requestedY, window.innerHeight - popover.offsetHeight - 8));
+      popover.style.left = `${left}px`;
+      popover.style.top = `${top}px`;
+      const firstAction = actions.querySelector("button");
+      if (firstAction) firstAction.focus();
+    }
+
+    function placeCaretAtMarkdownLink(event, anchor) {
+      const range = document.caretRangeFromPoint
+        ? document.caretRangeFromPoint(event.clientX, event.clientY)
+        : null;
+      const selection = window.getSelection();
+      if (range && selection && anchor.contains(range.startContainer)) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      focusEditingSurface(document);
+    }
+
+    function activateMarkdownLink(anchor, event, forcePopover) {
+      if (editorMode !== "markdown") return;
+      if (event && event.altKey && !forcePopover) {
+        placeCaretAtMarkdownLink(event, anchor);
+        return;
+      }
+      const info = markdownLinkTargetInfo(anchor);
+      if (info.targetKind === "blocked") {
+        showSubtleNotification(info.reason || "This link is not supported.");
+        return;
+      }
+      if (!forcePopover && info.targetKind === "internal") {
+        navigateToMarkdownAnchor(info.fragment, true);
+        return;
+      }
+      if (!forcePopover && info.targetKind === "localFile") {
+        postMarkdownLinkAction(info, "openInCrispy");
+        return;
+      }
+      if (!forcePopover && info.targetKind === "web" && markdownWebLinkPreference !== "ask") {
+        postMarkdownLinkAction(
+          info,
+          markdownWebLinkPreference === "crispy" ? "openInCrispy" : "openInDefaultBrowser"
+        );
+        return;
+      }
+      showMarkdownLinkPopover(anchor, info, event);
+    }
+
     function escapeHTMLAttribute(value) {
       return String(value)
         .replace(/&/g, "&amp;")
@@ -2093,11 +2658,59 @@
     }
 
     editor.addEventListener("input", scheduleSync);
+    editor.addEventListener("click", (event) => {
+      const target = event.target && event.target.closest
+        ? event.target.closest("a[href]")
+        : null;
+      if (!target || !editor.contains(target) || editorMode !== "markdown") return;
+      event.preventDefault();
+      event.stopPropagation();
+      activateMarkdownLink(target, event, false);
+    });
+    editor.addEventListener("contextmenu", (event) => {
+      const target = event.target && event.target.closest
+        ? event.target.closest("a[href]")
+        : null;
+      if (!target || !editor.contains(target) || editorMode !== "markdown") return;
+      event.preventDefault();
+      event.stopPropagation();
+      activateMarkdownLink(target, event, true);
+    });
     editor.addEventListener("keydown", (event) => {
+      if (event.metaKey && !event.shiftKey && !event.altKey && event.key === "[") {
+        if (navigateBackInMarkdownDocument()) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+      if (event.key === "Enter") {
+        const focused = document.activeElement && document.activeElement.closest
+          ? document.activeElement.closest("a[href]")
+          : null;
+        if (focused && editor.contains(focused)) {
+          event.preventDefault();
+          event.stopPropagation();
+          activateMarkdownLink(focused, event, false);
+          return;
+        }
+      }
       removeAdjacentTableForDeleteKey(event);
     });
     editor.addEventListener("paste", () => setTimeout(scheduleSync, 0));
     editor.addEventListener("blur", syncToNative, true);
+    document.addEventListener("mousedown", (event) => {
+      if (markdownLinkPopover && !markdownLinkPopover.contains(event.target)) {
+        dismissMarkdownLinkPopover();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && markdownLinkPopover) {
+        dismissMarkdownLinkPopover();
+        event.preventDefault();
+      }
+    });
+    window.addEventListener("scroll", dismissMarkdownLinkPopover, true);
     window.addEventListener("resize", resizeHTMLFrame);
 
     /// F049-v2: shared CSS-selector path helper. Bounded depth (≤6),
