@@ -4,7 +4,7 @@ Status: implemented
 
 ## Overview
 
-External Agent Sessions discovers and previews agent conversations from Codex CLI, Claude Code, Kiro CLI, OpenCode, and Pi that were created outside Crispy. Sessions are read-only and appear in the Conversations side panel under a "Terminal" tab (alongside the "ACP" tab for Crispy-owned threads). A Rust helper handles file scanning and parsing off the main thread — JSONL for file-based providers and a read-only SQLite snapshot for OpenCode. Discovered sessions can be resumed by copying the provider's native command or by opening a new terminal tab that runs it directly.
+External Agent Sessions discovers and previews agent conversations from Codex CLI, Claude Code, Kiro CLI, OpenCode, and Pi that were created outside Crispy. Sessions are read-only and appear in the Conversations side panel under a "Terminal" tab (alongside the "ACP" tab for Crispy-owned threads). A Rust helper handles discovery and parsing off the main thread — including Kiro 2.26 CLI-owned metadata, Kiro V2 JSONL, and read-only SQLite snapshots for Kiro classic and OpenCode. Discovered sessions can be resumed by copying the provider's native command or by opening a new terminal tab that runs it directly.
 
 ## Dependencies
 
@@ -15,7 +15,7 @@ External Agent Sessions discovers and previews agent conversations from Codex CL
 
 ### F047-R01: Provider discovery
 
-The system must discover external agent sessions from Codex CLI (`~/.codex/sessions/`), Claude Code (`~/.claude/projects/`), and Kiro CLI (`~/.kiro/sessions/cli/`) by scanning known local provider paths.
+The system must discover external agent sessions from Codex CLI (`~/.codex/sessions/`), Claude Code (`~/.claude/projects/`), and Kiro CLI. Kiro discovery must use the installed CLI's read-only `chat --list-sessions --all-cwds --format json` metadata command, with direct Kiro V2 file discovery as a fallback when that command is unavailable or invalid.
 
 ### F047-R02: Terminal tab in Conversations panel
 
@@ -27,7 +27,7 @@ The External tab must provide filter chips (All, Codex, Claude Code, Kiro) to na
 
 ### F047-R04: Session search
 
-The Terminal tab must support live free-text search without persisting an external index. Search must match the session **title** only for every provider, plus transcript **body/content** for file-based providers (Codex, Claude Code, Kiro, Pi). Search must **not** match the ambient working-directory path, so a query like `vibe` no longer matches every session that merely lives under a `/crispyvibe/` path. OpenCode sessions are matched by title only (no body grep). A title-only match must not echo the title as a snippet; only body/content matches produce a context snippet.
+The Terminal tab must support live free-text search without persisting an external index. Search must match the session **title** only for every provider, plus transcript **body/content** for file-based providers (Codex, Claude Code, Kiro V2, Pi) and Kiro classic sessions read from a single SQLite snapshot per search. Classic search must scan `conversations_v2` once for all candidate IDs, and a malformed row must emit its own diagnostic without suppressing valid matches from other rows. Search must **not** match the ambient working-directory path, so a query like `vibe` no longer matches every session that merely lives under a `/crispyvibe/` path. OpenCode sessions are matched by title only (no body grep). A title-only match must not echo the title as a snippet; only body/content matches produce a context snippet. When live search supersedes an in-flight helper invocation, cancellation must terminate and reap that helper process before the task finishes.
 
 ### F047-R05: Read-only preview
 
@@ -39,7 +39,7 @@ The preview panel must offer a "Copy Resume Command" action that copies the prov
 
 ### F047-R07: No mutation of provider files
 
-The system must never write to or modify provider-owned session files. For OpenCode's live SQLite database, the helper must make a read-only snapshot copy of the database and its `-wal`/`-shm` sidecars into a temp directory, open the copy read-only, and delete the snapshot when done — the original database is never opened for writing.
+The system must never write to or modify provider-owned session files. For live SQLite databases owned by OpenCode or Kiro classic, the helper must make a temporary snapshot copy of the database and its `-wal`/`-shm` sidecars, open only the copy read-only, and delete the snapshot when done — the originals are never opened by SQLite or written.
 
 ### F047-R08: Parse error visibility
 
@@ -51,7 +51,7 @@ All file scanning and JSONL parsing must execute off the main thread via the Rus
 
 ### F047-R10: Directory-grouped session list
 
-Discovered sessions in the Terminal tab must be grouped by working **directory** into collapsible disclosure sections, sorted alphabetically by directory. Within each section, sessions are sorted most-recently-active first. Tapping anywhere on a section header row (not only the chevron) must expand or collapse that section.
+Discovered sessions in the Terminal tab must be grouped by working **directory** into collapsible disclosure sections, sorted alphabetically by directory. Directory sections must load collapsed so large histories do not flood the sidebar. Within each section, sessions are sorted most-recently-active first. Tapping anywhere on a section header row (not only the chevron) must expand or collapse that section. While a nonempty search query is active, matching directory sections must expand automatically so result rows and snippets remain visible; clearing search restores the user's normal expansion state.
 
 ### F047-R11: OpenCode provider discovery
 
@@ -69,7 +69,13 @@ Terminal-tab session rows must be styled identically to ACP thread rows (brand i
 
 Each session must offer an "Open in Terminal" action (as an inline row action and in the context menu) that opens a new terminal tab at the session's working directory in the focused project's terminal, running the agent's resume command.
 
+### F047-R15: Kiro 2.26 source-aware discovery and classic transcripts
 
+Kiro metadata envelopes may be either an array or one `{complete,cwd,sessions}` object. Items provide `messageCount`, `sessionId`, `source`, `title`, `updatedAt`, and optional `status`. The helper must accept only observed `v2` and `classic` sources, keep source in session identity, and skip all unknown future sources with one diagnostic. CLI-provided V2 session IDs are untrusted: each must be one normal path component, and existing transcript files must remain canonically confined beneath the configured V2 root, be regular files, and not be symlinks. V2 paths honor nonempty `KIRO_HOME`; classic data honors nonempty `KIRO_DATA_DIR` and otherwise uses `~/Library/Application Support/kiro-cli/data.sqlite3`. Classic transcript loading/search must read only `conversations_v2` from a temporary read-only snapshot and support Prompt, Response, ToolUse, ToolUseResults, and CancelledToolUses history variants.
+
+### F047-R16: App-owned Kiro helper sessions are excluded
+
+Kiro sessions created by Crispy's one-shot thread-title generation must not appear in the external Conversations list. Filtering must inspect the stored first user prompt for the current internal marker or the legacy app-owned title-generation prelude; it must not deduplicate or suppress sessions based only on a repeated display title. Legitimate sessions with the same title but different prompt content must remain visible.
 
 ### Scenario F047-S01: Discover sessions on tab open
 
@@ -136,10 +142,12 @@ Each session must offer an "Open in Terminal" action (as an inline row action an
 
 ### Scenario F047-S10: Sessions grouped by directory
 
-**Given** the Terminal tab has discovered sessions across several working directories  
-**When** the list renders  
-**Then** sessions are grouped into collapsible sections by working directory, sorted alphabetically, with most-recently-active sessions first in each section  
+**Given** the Terminal tab has discovered sessions across several working directories
+**When** the normal list first renders
+**Then** sessions are grouped into collapsed disclosure sections by working directory, sorted alphabetically, with most-recently-active sessions first in each section
 **And** tapping anywhere on a section header expands or collapses that section
+**And** entering a search query automatically expands matching directory sections
+**And** clearing search restores the normal expansion state
 
 ### Scenario F047-S11: Open in Terminal
 
@@ -154,16 +162,35 @@ Each session must offer an "Open in Terminal" action (as an inline row action an
 **Then** only sessions whose title (or body, for file-based providers) contains `vibe` are returned  
 **And** sessions that merely live under a `/crispyvibe/` path are not matched
 
+### Scenario F047-S13: Discover and preview Kiro 2.26 sources
+
+**Given** Kiro CLI reports V2, classic, and an unknown future source
+**When** the Terminal tab scans and the user searches or previews a classic session
+**Then** V2 and classic summaries remain distinct even if their session IDs match
+**And** the unknown source is skipped with one diagnostic
+**And** classic content is read from one temporary read-only SQLite snapshot per operation without changing the original database
+
+### Scenario F047-S14: Hide Crispy-owned Kiro title helpers without title deduplication
+
+**Given** Kiro CLI lists one-shot sessions created by Crispy thread-title generation
+**And** a legitimate conversation has the same display title but different prompt content
+**When** the Terminal tab scans Kiro sessions
+**Then** sessions whose stored first prompt matches the current internal marker or a known legacy Crispy title-generation prelude are excluded
+**And** the legitimate same-title conversation remains visible
+**And** a title match alone never causes a session to be excluded
+
 ## Acceptance Criteria
 
 - Terminal tab lists sessions from all five providers (Codex, Claude Code, Kiro CLI, OpenCode, Pi).
 - Provider filter chips correctly narrow the displayed sessions.
 - Search matches session title (all providers) and body (file-based providers) but never the working-directory path; title-only matches show no duplicate snippet.
-- Sessions are grouped into collapsible directory sections, sorted alphabetically, most-recently-active first.
+- Sessions are grouped into directory sections sorted alphabetically, most-recently-active first; groups load collapsed and matching search groups expand automatically.
 - Preview panel renders transcript entries with role labels and timestamps.
 - Resume command is correctly formatted per provider.
 - "Open in Terminal" opens a new terminal tab at the session directory running the resume command.
-- Provider files are never modified; OpenCode's SQLite DB is read via a read-only snapshot copy.
+- Provider files are never modified; OpenCode and Kiro classic SQLite databases are read via temporary read-only snapshot copies.
+- Kiro metadata comes from the absolute `kiro-cli` executable without a shell; only `v2` and `classic` sources are accepted, and the V2 fallback honors `KIRO_HOME`.
+- Crispy-owned Kiro title-generation sessions are excluded by stored prompt fingerprint, never by title alone; legitimate same-title sessions remain visible.
 - Parse errors are surfaced in UI and Developer Tools without crashing.
 - Scanning runs off the main thread; UI remains responsive with thousands of session files.
 
@@ -177,3 +204,4 @@ None — feature is implemented.
 |------|--------|--------|
 | 2026-05-20 | Initial spec from implemented feature | Kiro |
 | 2026-07-07 | Added OpenCode + Pi providers; title-scoped search fix; Terminal/ACP tab relabel with directory grouping; Open in Terminal action | Kiro |
+| 2026-09-30 | Added Kiro CLI 2.26 source-aware discovery, V2 fallback, safe classic transcript snapshots, single-pass corrupt-row-isolated search, cancellation cleanup, prompt-fingerprint exclusion of Crispy title helpers, and collapsed directory loading | Kiro |

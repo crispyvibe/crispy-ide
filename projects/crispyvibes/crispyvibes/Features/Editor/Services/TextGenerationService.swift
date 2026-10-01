@@ -71,6 +71,7 @@ final class TextGenerationService: @unchecked Sendable {
     /// Generate a thread title from the user's first message.
     func generateThreadTitle(from userMessage: String) -> String? {
         let prompt = """
+        [Crispy internal request: thread-title generation]
         You write concise thread titles for coding conversations.
         Return ONLY a JSON object with key: title.
         Rules:

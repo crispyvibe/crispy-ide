@@ -166,6 +166,9 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
             // Toggle on the whole header row, not just the chevron.
             .contentShape(Rectangle())
             .onTapGesture {
+                guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return
+                }
                 withAnimation(.easeInOut(duration: 0.15)) {
                     if expandedGroups.contains(group.id) {
                         expandedGroups.remove(group.id)
@@ -178,13 +181,27 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
         .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .tint(palette.secondaryTextColor)
-        .onAppear { expandedGroups.insert(group.id) }
     }
 
     private func groupBinding(_ id: String) -> Binding<Bool> {
         Binding(
-            get: { expandedGroups.contains(id) },
-            set: { if $0 { expandedGroups.insert(id) } else { expandedGroups.remove(id) } }
+            get: {
+                ExternalSessionDirectoryDisclosureState.isExpanded(
+                    id: id,
+                    expandedGroups: expandedGroups,
+                    searchText: searchText
+                )
+            },
+            set: { isExpanded in
+                guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return
+                }
+                if isExpanded {
+                    expandedGroups.insert(id)
+                } else {
+                    expandedGroups.remove(id)
+                }
+            }
         )
     }
 
@@ -438,5 +455,17 @@ struct VibeSpaceSidebarExternalSessionsPane: View {
         case (nil, nil):
             return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
+    }
+}
+
+
+enum ExternalSessionDirectoryDisclosureState {
+    static func isExpanded(
+        id: String,
+        expandedGroups: Set<String>,
+        searchText: String
+    ) -> Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || expandedGroups.contains(id)
     }
 }

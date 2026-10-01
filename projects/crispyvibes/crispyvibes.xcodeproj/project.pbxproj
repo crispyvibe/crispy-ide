@@ -583,6 +583,7 @@
 		C2D00000000000000000002E /* ContentViewUnifiedSidebarActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */; };
 		C2D000000000000000000030 /* UnifiedSidebarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D00000000000000000002F /* UnifiedSidebarViewModel.swift */; };
 		C2D0000000000000000000F1 /* ContentSurfacePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */; };
+		F04700000000000000000002 /* ExternalAgentSessionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04700000000000000000001 /* ExternalAgentSessionServiceTests.swift */; };
 		C2D0000000000000000000F3 /* ContentPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D0000000000000000000F2 /* ContentPresentation.swift */; };
 		C33CEF4AAE6E999443C526C6 /* SettingsNavigationPrimitives.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE3899E41EA3ED6345C6BC8 /* SettingsNavigationPrimitives.swift */; };
 		C3F1A2B3C4D5E6F708091011 /* SpotlightComposePathSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3F1A2B3C4D5E6F708091012 /* SpotlightComposePathSearch.swift */; };
@@ -1321,6 +1322,7 @@
 		C2D00000000000000000002D /* ContentViewUnifiedSidebarActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewUnifiedSidebarActions.swift; sourceTree = "<group>"; };
 		C2D00000000000000000002F /* UnifiedSidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Canvas/State/UnifiedSidebarViewModel.swift; sourceTree = SOURCE_ROOT; };
 		C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/VibeSpace/Support/ContentSurfacePolicyTests.swift; sourceTree = SOURCE_ROOT; };
+		F04700000000000000000001 /* ExternalAgentSessionServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = tests/unit/Features/VibeSpace/Support/ExternalAgentSessionServiceTests.swift; sourceTree = SOURCE_ROOT; };
 		C2D0000000000000000000F2 /* ContentPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = crispyvibes/Features/VibeSpace/Canvas/Support/ContentPresentation.swift; sourceTree = SOURCE_ROOT; };
 		C399CBB30D80247DC28C1529 /* VibeSpaceIntegrityUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceIntegrityUITests.swift; sourceTree = "<group>"; };
 		C3F1A2B3C4D5E6F708091012 /* SpotlightComposePathSearch.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpotlightComposePathSearch.swift; sourceTree = "<group>"; };
@@ -1973,6 +1975,7 @@
 				B417895F43F15F951421FCE2 /* VibeSpaceStateParkingTests.swift */,
 				C2D00000000000000000002B /* WorktreeServiceTests.swift */,
 				C2D0000000000000000000F0 /* ContentSurfacePolicyTests.swift */,
+				F04700000000000000000001 /* ExternalAgentSessionServiceTests.swift */,
 				5C9C1F8E3A5A38C9C43E8859 /* CLICommandRouterBrowserOpenTests.swift */,
 				36F4AADDAD1837F4F0F7B8B1 /* CLICommandRouterBrowserListTests.swift */,
 				7D07D07D07D07D07D07D0002 /* CLICommandRouterTodoListTests.swift */,
@@ -4636,6 +4639,7 @@
 				18A7EBE079747898EC0BCA41 /* VibeSpaceStateParkingTests.swift in Sources */,
 				C2D00000000000000000002C /* WorktreeServiceTests.swift in Sources */,
 				C2D0000000000000000000F1 /* ContentSurfacePolicyTests.swift in Sources */,
+				F04700000000000000000002 /* ExternalAgentSessionServiceTests.swift in Sources */,
 				D2E735AB928E8D15CEA87462 /* CLICommandRouterBrowserOpenTests.swift in Sources */,
 				CCDC8997D1ABDB93ECD16E3E /* CLICommandRouterBrowserListTests.swift in Sources */,
 				7D07D07D07D07D07D07D0001 /* CLICommandRouterTodoListTests.swift in Sources */,

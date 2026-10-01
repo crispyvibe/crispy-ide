@@ -3,7 +3,7 @@ title: "External Agent Sessions"
 feature: "F047"
 domain: "ai-agents"
 audience: "user"
-version: "1.1"
+version: "1.2"
 sidebar:
   label: "External Sessions"
   order: 4
@@ -21,7 +21,7 @@ External Agent Sessions lets you discover and preview agent conversations from C
 2. Switch to the **Terminal** tab at the top of the panel (the other tab, **ACP**, holds your Crispy-owned conversations).
 3. Crispy automatically scans your local provider directories and displays discovered sessions, grouped by their working directory.
 
-No setup is needed. If you have used Codex CLI, Claude Code, Kiro CLI, OpenCode, or Pi on your machine, their sessions will appear automatically.
+No setup is needed. If you have used Codex CLI, Claude Code, Kiro CLI 2.26, OpenCode, or Pi on your machine, their sessions will appear automatically. Crispy asks the installed Kiro CLI for its read-only session list, so both current V2 and classic histories can appear.
 
 ## Workflows
 
@@ -36,6 +36,8 @@ The Terminal tab groups discovered sessions by their working directory. Each gro
 
 Rows use the same compact styling as the ACP thread list.
 
+Directory groups load collapsed. Select a folder row to expand its sessions. When you search, matching folder groups expand automatically so result rows and snippets are visible; clearing the query restores your normal expanded/collapsed choices.
+
 ### Filtering by provider
 
 Use the filter chips at the top of the Terminal tab to narrow results:
@@ -47,7 +49,7 @@ Use the filter chips at the top of the Terminal tab to narrow results:
 
 ### Searching sessions
 
-Type in the search field to search sessions. Search matches the session **title** for every provider, plus the transcript **body** for file-based providers (Codex, Claude Code, Kiro, Pi). It does **not** match the working-directory path — so searching for something like `vibe` no longer returns every session that merely lives under a `/crispyvibe/` path. When a match is found in the transcript body, a context snippet is shown; a match on the title alone shows no extra snippet.
+Type in the search field to search sessions. Search matches the session **title** for every provider, plus the transcript **body** for file-based providers (Codex, Claude Code, Kiro V2, Pi) and Kiro classic histories. It does **not** match the working-directory path — so searching for something like `vibe` no longer returns every session that merely lives under a `/crispyvibe/` path. When a match is found in the transcript body, a context snippet is shown; a match on the title alone shows no extra snippet. Classic histories are scanned once per search, and continuing to type cancels and cleans up the superseded helper search. If one classic conversation is malformed, its warning is shown without hiding valid results from other conversations.
 
 ### Previewing a session
 
@@ -102,16 +104,23 @@ No configuration is required. External Agent Sessions automatically scans the de
 
 - Codex CLI: `~/.codex/sessions/`
 - Claude Code: `~/.claude/projects/`
-- Kiro CLI: `~/.kiro/sessions/cli/`
+- Kiro CLI metadata: the installed `kiro-cli` executable
+- Kiro V2 fallback: `${KIRO_HOME:-~/.kiro}/sessions/cli/`
+- Kiro classic: `${KIRO_DATA_DIR}/data.sqlite3` when configured, otherwise `~/Library/Application Support/kiro-cli/data.sqlite3` (read through a temporary snapshot)
 - OpenCode: `~/.local/share/opencode/opencode.db` (SQLite database, read via a read-only snapshot copy)
 - Pi: `~/.pi/agent/sessions/`
+
+### Repeated Kiro title-helper sessions
+
+Crispy uses Kiro CLI for one-shot thread-title generation. Kiro persists those requests as ordinary sessions, which can otherwise produce hundreds or thousands of identical rows beginning with “You write concise thread titles…”. Crispy hides only sessions whose stored first prompt matches its explicit internal marker or a known legacy title-generation prelude. It does not deduplicate by title, so normal conversations with repeated titles remain visible.
 
 ## Troubleshooting
 
 ### No sessions appear
 
 - Verify that you have used one of the supported CLI agents on this machine.
-- Check that the provider directories exist (e.g., `~/.codex/sessions/`) or, for OpenCode, that `~/.local/share/opencode/opencode.db` exists.
+- Check that the provider directories exist (e.g., `~/.codex/sessions/`) or, for SQLite providers, that the OpenCode/Kiro classic database exists.
+- For Kiro, verify `kiro-cli` is executable from PATH or a standard GUI-safe binary directory. If you customize storage, ensure `KIRO_HOME` or `KIRO_DATA_DIR` is available to Crispy.
 - Click the refresh button (↻) in the search bar to re-scan.
 
 ### Sessions show a warning icon
@@ -125,6 +134,14 @@ The bundled helper binary could not be found. This may indicate a corrupted app 
 ## Known Limitations
 
 - Preview displays at most 200 transcript entries for performance.
-- No persistent search index — search re-parses files each time.
+- No persistent search index — search re-parses files and creates a fresh temporary classic-database snapshot each time.
+- Kiro sources other than the observed `v2` and `classic` formats are skipped with a diagnostic. Crispy does not currently claim Kiro V3 transcript support.
+- Malformed Kiro V2 session IDs and transcript paths that escape the configured session root or resolve through symlinks are skipped with a diagnostic.
 - Sessions cannot be imported into Crispy as native conversations; you can resume them via "Open in Terminal" or by copying the resume command.
 - Sessions are not scoped to the current vibespace — all local sessions are shown.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-09-30 | Added Kiro CLI 2.26 V2/classic discovery, storage overrides, single-pass resilient classic search with cancellation cleanup, content-based title-helper filtering, collapsed directory loading, and future-source limitation | Kiro |

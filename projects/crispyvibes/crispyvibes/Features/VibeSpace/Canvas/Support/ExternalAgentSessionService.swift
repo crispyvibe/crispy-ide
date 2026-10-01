@@ -25,6 +25,7 @@ struct ExternalAgentSessionSummary: Identifiable, Codable, Equatable {
     let provider: ExternalAgentSessionProvider
     let providerName: String
     let sessionId: String
+    let sessionSource: String?
     let title: String
     let projectPath: String
     let sourcePath: String
@@ -40,7 +41,9 @@ struct ExternalAgentSessionSummary: Identifiable, Codable, Equatable {
     let searchSnippets: [String]
     let matchCount: Int
 
-    var id: String { "\(provider.rawValue):\(sourcePath)" }
+    var id: String {
+        "\(provider.rawValue):\(sessionSource ?? ""):\(sourcePath):\(sessionId)"
+    }
 
     var projectDisplayName: String {
         projectPath.isEmpty ? "External" : URL(fileURLWithPath: projectPath).lastPathComponent
@@ -227,24 +230,41 @@ final class ExternalAgentSessionService: @unchecked Sendable {
     }
 
     func load(session: ExternalAgentSessionSummary) async throws -> ExternalAgentTranscript {
+        var arguments = [
+            "load",
+            "--provider", session.provider.rawValue,
+            "--source-path", session.sourcePath,
+            "--session-id", session.sessionId,
+        ]
+        if let sessionSource = session.sessionSource {
+            arguments += ["--session-source", sessionSource]
+        }
         let result = try await run(
-            arguments: [
-                "load",
-                "--provider", session.provider.rawValue,
-                "--source-path", session.sourcePath,
-            ],
+            arguments: arguments,
             decoding: ExternalAgentTranscript.self
         )
         recordDiagnostics(result.parseErrors, operation: "load")
-        return result
+        return ExternalAgentTranscript(
+            session: session,
+            entries: result.entries,
+            parseErrors: result.parseErrors
+        )
     }
 
-    private func run<T: Decodable>(arguments: [String], decoding type: T.Type) async throws -> T {
-        try await Task.detached(priority: .userInitiated) { [helperURL, logger] in
-            guard let helperURL else { throw ServiceError.helperUnavailable }
+    private final class ProcessExecution: @unchecked Sendable {
+        struct Output: Sendable {
+            let stdout: Data
+            let stderr: Data
+            let status: Int32
+        }
 
+        private let lock = NSLock()
+        private var process: Process?
+        private var isCancelled = false
+
+        func run(executableURL: URL, arguments: [String]) throws -> Output {
             let process = Process()
-            process.executableURL = helperURL
+            process.executableURL = executableURL
             process.arguments = arguments
 
             let stdout = Pipe()
@@ -252,31 +272,84 @@ final class ExternalAgentSessionService: @unchecked Sendable {
             process.standardOutput = stdout
             process.standardError = stderr
 
+            lock.lock()
+            guard !isCancelled else {
+                lock.unlock()
+                throw CancellationError()
+            }
+            self.process = process
             do {
                 try process.run()
+                lock.unlock()
             } catch {
-                throw ServiceError.helperFailed(error.localizedDescription)
+                self.process = nil
+                lock.unlock()
+                throw error
             }
 
             let output = stdout.fileHandleForReading.readDataToEndOfFile()
             let errorOutput = stderr.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
 
-            guard process.terminationStatus == 0 else {
-                let message = String(data: errorOutput, encoding: .utf8) ?? "status \(process.terminationStatus)"
-                logger.error("External session helper failed: \(message, privacy: .public)")
-                throw ServiceError.helperFailed(message)
-            }
+            lock.lock()
+            self.process = nil
+            let cancelled = isCancelled
+            lock.unlock()
+            if cancelled { throw CancellationError() }
 
-            do {
-                let decoder = JSONDecoder()
-                return try decoder.decode(type, from: output)
-            } catch {
-                let raw = String(data: output, encoding: .utf8) ?? ""
-                logger.error("External session helper decode failed: \(error.localizedDescription, privacy: .public)")
-                throw ServiceError.invalidResponse(raw)
+            return Output(
+                stdout: output,
+                stderr: errorOutput,
+                status: process.terminationStatus
+            )
+        }
+
+        func cancel() {
+            lock.lock()
+            isCancelled = true
+            if let process, process.isRunning {
+                process.terminate()
             }
-        }.value
+            lock.unlock()
+        }
+    }
+
+    private func run<T: Decodable>(arguments: [String], decoding type: T.Type) async throws -> T {
+        guard let helperURL else { throw ServiceError.helperUnavailable }
+        let execution = ProcessExecution()
+
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            let value = try await Task.detached(priority: .userInitiated) { [logger] in
+                let result: ProcessExecution.Output
+                do {
+                    result = try execution.run(executableURL: helperURL, arguments: arguments)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    throw ServiceError.helperFailed(error.localizedDescription)
+                }
+
+                guard result.status == 0 else {
+                    let message = String(data: result.stderr, encoding: .utf8) ?? "status \(result.status)"
+                    logger.error("External session helper failed: \(message, privacy: .public)")
+                    throw ServiceError.helperFailed(message)
+                }
+
+                do {
+                    let decoder = JSONDecoder()
+                    return try decoder.decode(type, from: result.stdout)
+                } catch {
+                    let raw = String(data: result.stdout, encoding: .utf8) ?? ""
+                    logger.error("External session helper decode failed: \(error.localizedDescription, privacy: .public)")
+                    throw ServiceError.invalidResponse(raw)
+                }
+            }.value
+            try Task.checkCancellation()
+            return value
+        } onCancel: {
+            execution.cancel()
+        }
     }
 
     private static func resolveHelperURL() -> URL? {
