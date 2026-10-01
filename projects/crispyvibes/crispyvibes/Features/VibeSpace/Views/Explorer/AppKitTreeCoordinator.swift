@@ -146,6 +146,15 @@ extension AppKitTreeView {
             return VibeSpaceDragPayload(url: node.item.url).makePasteboardItem()
         }
 
+        func outlineView(
+            _ outlineView: NSOutlineView,
+            draggingSession session: NSDraggingSession,
+            willBeginAt screenPoint: NSPoint,
+            forItems draggedItems: [Any]
+        ) {
+            (outlineView as? AppKitOutlineView)?.cancelPendingDirectoryClick()
+        }
+
         // MARK: Drop target
 
         func outlineView(_ outlineView: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {

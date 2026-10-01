@@ -91,12 +91,12 @@ Terminal Sessions & Tabs manages the full lifecycle of terminal sessions within 
    - Directories: "Open", "Open in System", "Copy Path"
 3. **Cmd-click**: Opens the target directly (web URL → in-app browser; file → spotlight preview; directory → Finder).
 
-### File Drops onto Terminal
+### File and Folder Drops onto Terminal
 
-1. Drag one or more files from Finder or the file explorer onto the terminal view.
+1. Drag one or more files or folders from Finder or the file explorer onto the terminal view.
 2. Shell-escaped paths are inserted at the cursor position.
 3. Paths within the terminal's current working directory use relative paths; others use absolute paths.
-4. Multiple files are space-separated with a trailing space appended.
+4. Multiple files and folders are space-separated with a trailing space appended.
 5. Keyboard focus remains on the terminal that accepted the drop.
 
 ### Session Restore

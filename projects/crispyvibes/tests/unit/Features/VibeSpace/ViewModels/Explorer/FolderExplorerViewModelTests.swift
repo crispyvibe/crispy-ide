@@ -841,7 +841,7 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
         XCTAssertTrue(outlineView.isItemExpanded(rootNode))
         XCTAssertTrue(outlineView.isItemExpanded(nestedNode))
 
-        let event = mouseEvent(forRow: nestedRow, in: outlineView)
+        let event = mouseEvent(forRow: nestedRow, in: outlineView, type: .leftMouseUp)
         XCTAssertEqual(outlineView.row(at: outlineView.convert(event.locationInWindow, from: nil)), nestedRow)
 
         withExtendedLifetime(window) {
@@ -852,6 +852,49 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.expandedIDs.contains(nestedDirectory.id))
         XCTAssertEqual(actions.count, 2)
         assertSelectThenToggleActionSequence(actions, expectedItem: nestedDirectory)
+    }
+
+    func testPendingDirectoryClickIsCancelledWhenDragBegins() {
+        let directory = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Sources"),
+            isDirectory: true
+        )
+        var actions: [FileTreeAction] = []
+        var renameText = ""
+        let treeView = AppKitTreeView(
+            rootItems: [directory],
+            expandedIDs: [],
+            loadingIDs: [],
+            selectedID: nil,
+            renamingID: nil,
+            searchQuery: "",
+            allowsScrolling: true,
+            renameText: Binding(
+                get: { renameText },
+                set: { renameText = $0 }
+            ),
+            onAction: { actions.append($0) },
+            onTransferDrop: { _ in false }
+        )
+        let coordinator = treeView.makeCoordinator()
+        let outlineView = AppKitOutlineView()
+        let directoryNode = coordinator.node(for: directory)
+        outlineView.primaryClickHandler = { node, event in
+            coordinator.handlePrimaryClick(on: node, event: event)
+        }
+        outlineView.deferDirectoryClick(directoryNode)
+
+        XCTAssertTrue(outlineView.hasPendingDirectoryClick)
+        coordinator.outlineView(
+            outlineView,
+            draggingSession: NSDraggingSession(),
+            willBeginAt: .zero,
+            forItems: [directoryNode]
+        )
+        XCTAssertFalse(outlineView.hasPendingDirectoryClick)
+
+        outlineView.mouseUp(with: keylessMouseEvent(type: .leftMouseUp))
+        XCTAssertTrue(actions.isEmpty)
     }
 
     func testDirectorySelectionPathSelectsWithoutCollapsingIt() {
@@ -1472,7 +1515,12 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
         coordinator.outlineView = outlineView
         coordinator.refreshNodeCache(with: [directory])
 
-        XCTAssertTrue(coordinator.handlePrimaryClick(on: coordinator.node(for: directory), event: keylessMouseEvent()))
+        XCTAssertTrue(
+            coordinator.handlePrimaryClick(
+                on: coordinator.node(for: directory),
+                event: keylessMouseEvent(type: .leftMouseUp)
+            )
+        )
         XCTAssertEqual(actions.count, 1)
         guard case .select(let item)? = actions.first else {
             return XCTFail("Expected select action, got \(String(describing: actions.first)).")
@@ -1886,12 +1934,13 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
     private func mouseEvent(
         at pointInOutline: NSPoint,
         in outlineView: AppKitOutlineView,
-        clickCount: Int = 1
+        clickCount: Int = 1,
+        type: NSEvent.EventType = .leftMouseDown
     ) -> NSEvent {
         let pointInWindow = outlineView.convert(pointInOutline, to: nil)
 
         return NSEvent.mouseEvent(
-            with: .leftMouseDown,
+            with: type,
             location: pointInWindow,
             modifierFlags: [],
             timestamp: 0,
@@ -1925,11 +1974,17 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
     private func mouseEvent(
         forRow row: Int,
         in outlineView: AppKitOutlineView,
-        clickCount: Int = 1
+        clickCount: Int = 1,
+        type: NSEvent.EventType = .leftMouseDown
     ) -> NSEvent {
         let rowRect = outlineView.rect(ofRow: row)
         let pointInOutline = NSPoint(x: rowRect.midX, y: rowRect.midY)
-        return mouseEvent(at: pointInOutline, in: outlineView, clickCount: clickCount)
+        return mouseEvent(
+            at: pointInOutline,
+            in: outlineView,
+            clickCount: clickCount,
+            type: type
+        )
     }
 
     private func disclosureButton(forRow row: Int, in outlineView: AppKitOutlineView) -> NSButton? {
@@ -1955,9 +2010,11 @@ final class AppKitTreeViewCoordinatorTests: XCTestCase {
         )!
     }
 
-    private func keylessMouseEvent() -> NSEvent {
+    private func keylessMouseEvent(
+        type: NSEvent.EventType = .leftMouseDown
+    ) -> NSEvent {
         NSEvent.mouseEvent(
-            with: .leftMouseDown,
+            with: type,
             location: .zero,
             modifierFlags: [],
             timestamp: 0,

@@ -93,7 +93,8 @@ final class TerminalInteractionUITests: CrispyVibesUIBaseTestCase {
 
     private func launchVibeSpaceApp(
         projectCount: Int = 1,
-        vibespaceShortcuts: [UITestShortcut] = []
+        vibespaceShortcuts: [UITestShortcut] = [],
+        extraLaunchEnvironment: [String: String] = [:]
     ) throws -> (UITestFixture, XCUIApplication) {
         let fixture = try makeFixture(
             projectCount: projectCount,
@@ -101,11 +102,63 @@ final class TerminalInteractionUITests: CrispyVibesUIBaseTestCase {
         )
         fixtureRoot = fixture.root
 
-        let app = makeApplication(fixture: fixture)
+        let app = makeApplication(
+            fixture: fixture,
+            extraLaunchEnvironment: extraLaunchEnvironment
+        )
         app.launch()
 
         XCTAssertTrue(waitForFocusedProjectShell(in: app, index: 1, timeout: 20))
         return (fixture, app)
+    }
+
+    func testDraggingExplorerFolderIntoTerminalInsertsPath() throws {
+        let fixture = try makeFixture(projectCount: 1)
+        fixtureRoot = fixture.root
+        let folderName = "folder-drop-target"
+        let nestedName = "nested-marker.txt"
+        let folderURL = fixture.projects[0].appendingPathComponent(folderName, isDirectory: true)
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        try Data("nested".utf8).write(to: folderURL.appendingPathComponent(nestedName))
+        let markerURL = fixture.root.appendingPathComponent("folder-drop.marker")
+
+        let app = makeApplication(fixture: fixture)
+        app.launch()
+        XCTAssertTrue(waitForFocusedProjectShell(in: app, index: 1, timeout: 20))
+
+        let folderRow = app.cells
+            .matching(NSPredicate(format: "label == %@", folderName))
+            .firstMatch
+        let nestedRow = app.cells
+            .matching(NSPredicate(format: "label == %@", nestedName))
+            .firstMatch
+        let terminalHost = identifiedElement(in: app, identifier: "terminal.focused.host")
+        XCTAssertTrue(folderRow.waitForExistence(timeout: 10))
+        XCTAssertTrue(terminalHost.waitForExistence(timeout: 10))
+
+        let terminalTarget = terminalHost.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        )
+        terminalTarget.tap()
+        app.typeText("test -d ")
+        folderRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.6, thenDragTo: terminalTarget)
+        app.typeText("&& /usr/bin/touch \(shellQuoted(markerURL.path))\n")
+
+        XCTAssertTrue(
+            waitForFile(at: markerURL),
+            "Dragging a side-panel folder should insert its path into the focused terminal"
+        )
+        XCTAssertFalse(
+            nestedRow.exists,
+            "Dragging a folder must not toggle its expansion"
+        )
+
+        folderRow.tap()
+        XCTAssertTrue(
+            nestedRow.waitForExistence(timeout: 5),
+            "A normal folder click should still expand it on mouse-up"
+        )
     }
 
     func testAddTabImmediateNoTerminalClick() throws {
@@ -215,5 +268,62 @@ final class TerminalInteractionUITests: CrispyVibesUIBaseTestCase {
             app.buttons[shortcutName].waitForExistence(timeout: 1.5),
             "Temporary-terminal launch should not create a dedicated persistent tab"
         )
+    }
+
+    func testSpotlightCommandsExposeAgentCLI() throws {
+        let (_, app) = try launchVibeSpaceApp(
+            projectCount: 1,
+            extraLaunchEnvironment: ["CRISPYVIBES_UI_TEST_TERMINAL_TOOLS": "kiro"]
+        )
+
+        let newTerminalButton = identifiedElement(in: app, identifier: "toolbar.new-terminal")
+        XCTAssertTrue(newTerminalButton.waitForExistence(timeout: 8), "New Terminal toolbar button should be visible")
+        tapElement(newTerminalButton)
+
+        let temporaryTerminalLabel = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Temporary Terminal")
+        ).firstMatch
+        guard let temporaryTerminal = firstAvailableElement(
+            [
+                app.buttons["Temporary Terminal"].firstMatch,
+                app.staticTexts["Temporary Terminal"].firstMatch,
+                temporaryTerminalLabel,
+            ],
+            timeout: 6
+        ) else {
+            XCTFail("New Terminal popover should expose Temporary Terminal")
+            return
+        }
+        tapElement(temporaryTerminal)
+
+        let spotlight = identifiedElement(in: app, identifier: "terminal.spotlight.overlay")
+        XCTAssertTrue(spotlight.waitForExistence(timeout: 10))
+
+        guard let commandsMenu = firstAvailableElement(
+            [
+                spotlight.descendants(matching: .any).matching(
+                    identifier: "terminal.spotlight.commands"
+                ).firstMatch,
+                spotlight.descendants(matching: .any).matching(
+                    identifier: "terminal.commands.menu"
+                ).firstMatch,
+                spotlight.descendants(matching: .menuButton).firstMatch,
+            ],
+            timeout: 8
+        ) else {
+            XCTFail("Spotlight commands menu should be visible")
+            return
+        }
+        tapElement(commandsMenu)
+
+        let agentCLI = firstAvailableElement(
+            [
+                app.menuItems["Agent CLI"].firstMatch,
+                app.menuButtons["Agent CLI"].firstMatch,
+                app.staticTexts["Agent CLI"].firstMatch,
+            ],
+            timeout: 6
+        )
+        XCTAssertNotNil(agentCLI, "Spotlight commands should expose the Agent CLI submenu")
     }
 }

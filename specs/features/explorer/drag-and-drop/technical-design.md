@@ -18,6 +18,10 @@ Every dragged explorer item encoded as `VibeSpaceDragPayload` with the file's st
 
 Decoding priority: custom type → file URL → plain string. `NSItemProvider`-based drops (SwiftUI) use async loading via `DispatchGroup`.
 
+#### Folder drag initiation
+
+File rows already delegate their initial mouse-down to `NSOutlineView`, allowing native drag recognition. Directory rows also need native mouse-down handling, but a click must still toggle expansion. `AppKitOutlineView` therefore records a pending directory click, passes mouse-down to AppKit, and invokes the existing directory action on mouse-up. `AppKitTreeView.Coordinator` cancels the pending click from `outlineView(_:draggingSession:willBeginAt:forItems:)`, so a real folder drag exports `VibeSpaceDragPayload` without also expanding or collapsing the source row. This applies to local explorers where `supportsFileTransfers` is true; remote explorers remain non-draggable.
+
 #### Operation Resolution
 
 `ExplorerItemDropPlanner.resolveOperation` determines move vs. copy per item:
@@ -110,9 +114,9 @@ Dock target resolution: center inset region (24–40% from each edge, min 20px) 
 
 ### Terminal File Drop
 
-`TerminalFileDropSupport` is registered on `GhosttyTerminalView` and `MonitoredTerminalView` (defined in `TerminalSessionSupportTypesInteractiveTargeting.swift`) as a centralized file drop handler. On drop:
+`TerminalFileDropSupport` is registered on `GhosttyTerminalView` and `MonitoredTerminalView` (defined in `TerminalSessionSupportTypesInteractiveTargeting.swift`) as a centralized file and folder drop handler. Local side-panel explorer rows export the same `VibeSpaceDragPayload` for files and directories. On drop:
 
-- File paths are shell-escaped via a quoting utility.
+- File and folder paths are shell-escaped via a quoting utility.
 - Paths within the terminal's current working directory are converted to relative paths; all others use absolute paths.
 - Multiple paths are joined with spaces and a trailing space is appended.
 - The resulting string is written to the terminal session as keyboard input.

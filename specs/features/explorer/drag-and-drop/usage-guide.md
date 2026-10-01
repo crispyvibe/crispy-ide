@@ -40,6 +40,15 @@ Drag & Drop enables file and folder reorganization within the explorer sidebar. 
 4. The original source item remains in place.
 5. Both project trees refresh to reflect the change.
 
+### Inserting a File or Folder Path into a Terminal
+
+1. In a local project's side-panel file explorer, click and hold a file or folder row, then begin dragging.
+2. Drop it on a Ghostty or SwiftTerm terminal surface.
+3. Crispy inserts the shell-escaped path at the terminal cursor, using a relative path when the item is inside the terminal's current directory.
+4. A normal folder click still expands or collapses the row; dragging does not toggle it.
+
+Remote explorer items cannot be dragged into a local terminal because their paths refer to the remote host, not the Mac filesystem.
+
 ## Keyboard Shortcuts
 
 No dedicated keyboard shortcuts. Drag & drop is a pointer-based interaction.
@@ -53,7 +62,7 @@ No specific settings affect drag & drop behavior.
 - Invalid drop targets provide visual feedback — you cannot drop an item onto itself or its own descendants.
 - Destination collisions (same-name file already exists at target) are validated and prevented.
 - Cross-project operations always copy (never move) to prevent accidental data loss across project boundaries.
-- The explorer uses NSOutlineView's native selection handling for drag recognition, so the initial mouse-down selects the row before drag begins.
+- The explorer delegates file and folder mouse-downs to `NSOutlineView` for native drag recognition. Folder expansion occurs on mouse-up only when no drag began.
 
 ## Troubleshooting
 

@@ -2,6 +2,16 @@ import AppKit
 import Foundation
 
 enum TerminalFileDropSupport {
+    private static let legacyFileNamesPasteboardType = NSPasteboard.PasteboardType(
+        "NSFilenamesPboardType"
+    )
+
+    static let readablePasteboardTypes: [NSPasteboard.PasteboardType] = [
+        .fileURL,
+        legacyFileNamesPasteboardType,
+        .string,
+    ]
+
     static func dragOperation(for pasteboard: NSPasteboard) -> NSDragOperation {
         fileURLs(from: pasteboard).isEmpty ? [] : .copy
     }
@@ -29,10 +39,37 @@ enum TerminalFileDropSupport {
     }
 
     static func fileURLs(from pasteboard: NSPasteboard) -> [URL] {
-        pasteboard.readObjects(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true]
-        ) as? [URL] ?? []
+        var decodedURLs: [URL] = []
+        var decodedPaths: Set<String> = []
+
+        func append(_ urls: [URL]) {
+            for url in urls where url.isFileURL {
+                let normalizedURL = url.standardizedFileURL
+                guard decodedPaths.insert(normalizedURL.path).inserted else {
+                    continue
+                }
+                decodedURLs.append(normalizedURL)
+            }
+        }
+
+        append(
+            pasteboard.readObjects(
+                forClasses: [NSURL.self],
+                options: [.urlReadingFileURLsOnly: true]
+            ) as? [URL] ?? []
+        )
+
+        let legacyPaths = pasteboard.propertyList(
+            forType: legacyFileNamesPasteboardType
+        ) as? [String] ?? []
+        append(legacyPaths.compactMap(fileURLFromExistingPath))
+
+        let plainPathURLs = pasteboard.pasteboardItems?.compactMap { item in
+            item.string(forType: .string).flatMap(fileURLFromExistingPath)
+        } ?? []
+        append(plainPathURLs)
+
+        return decodedURLs
     }
 
     static func droppedText(
@@ -58,6 +95,16 @@ enum TerminalFileDropSupport {
             insertablePath.append("/")
         }
         return ShellEscaping.singleQuote(insertablePath)
+    }
+
+    private static func fileURLFromExistingPath(_ path: String) -> URL? {
+        guard path.hasPrefix("/") else { return nil }
+
+        var isDirectory = ObjCBool(false)
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            return nil
+        }
+        return URL(fileURLWithPath: path, isDirectory: isDirectory.boolValue)
     }
 
     private static func escapedDroppedPath(for url: URL, currentDirectory: URL?) -> String? {

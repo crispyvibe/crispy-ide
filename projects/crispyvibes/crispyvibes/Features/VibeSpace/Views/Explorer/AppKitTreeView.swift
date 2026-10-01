@@ -105,6 +105,9 @@ struct AppKitTreeView: NSViewRepresentable {
         outline.primaryClickHandler = { [weak coordinator] node, event in
             coordinator?.handlePrimaryClick(on: node, event: event) ?? false
         }
+        outline.directoryClickHandler = { [weak coordinator] node in
+            _ = coordinator?.handleDeferredDirectoryClick(on: node)
+        }
         outline.keyDownHandler = { [weak coordinator] event in
             coordinator?.handleKeyDown(event) ?? false
         }

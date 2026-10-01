@@ -207,11 +207,12 @@ _Pending._
 
 - Terminal-specific support types and utilities.
 
-#### Terminal File Drop Support (`Features/Terminal/Support/`)
+#### Terminal File Drop Support (`Features/Terminal/Services/`)
 
 - `TerminalFileDropSupport`
-  - Centralized file drop handling extracted from `TerminalContainerView`.
-  - Multi-file support with relative/absolute path resolution.
+  - Centralized file and folder drop handling extracted from `TerminalContainerView`.
+  - Reads standard file URLs, legacy Finder filename lists, and plain absolute paths that resolve to existing filesystem items; arbitrary dragged text is rejected.
+  - Multi-item support with relative/absolute path resolution.
   - Shell escaping using single quotes, trailing space appended after paths.
   - Focus reclaim with retry (3 attempts).
   - Registered on both `GhosttyTerminalView` and `MonitoredTerminalView`.

@@ -110,7 +110,7 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
         wantsLayer = true
         layer = makeBackingLayer()
         applyBackgroundColor()
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes(TerminalFileDropSupport.readablePasteboardTypes)
         configureInteractiveHoverOverlay()
     }
 
@@ -119,7 +119,7 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
         wantsLayer = true
         layer = makeBackingLayer()
         applyBackgroundColor()
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes(TerminalFileDropSupport.readablePasteboardTypes)
         configureInteractiveHoverOverlay()
     }
 

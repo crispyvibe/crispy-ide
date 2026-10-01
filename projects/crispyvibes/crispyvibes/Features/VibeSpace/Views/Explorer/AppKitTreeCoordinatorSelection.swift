@@ -2,7 +2,7 @@ import AppKit
 
 extension AppKitTreeView.Coordinator {
     func handlePrimaryClick(on node: TreeNode, event: NSEvent) -> Bool {
-        guard event.type == .leftMouseDown else { return false }
+        guard event.type == .leftMouseDown || event.type == .leftMouseUp else { return false }
         guard event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty else { return false }
         guard renamingID != node.item.id else { return false }
 
@@ -15,17 +15,24 @@ extension AppKitTreeView.Coordinator {
 
         guard event.clickCount == 1 else { return false }
         if node.item.isDirectory {
-            if isSearchActive {
-                selectItem(node.item)
-            } else {
-                requestExpansionToggle(for: node.item)
-            }
-            return true
+            guard event.type == .leftMouseUp else { return false }
+            return handleDeferredDirectoryClick(on: node)
         }
 
         // Let NSOutlineView handle single-click file selection so native drag
         // recognition can begin from the initial mouse-down.
         return false
+    }
+
+    @discardableResult
+    func handleDeferredDirectoryClick(on node: TreeNode) -> Bool {
+        guard node.item.isDirectory else { return false }
+        if isSearchActive {
+            selectItem(node.item)
+        } else {
+            requestExpansionToggle(for: node.item)
+        }
+        return true
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {

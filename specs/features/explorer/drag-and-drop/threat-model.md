@@ -8,7 +8,7 @@ Drag & Drop enables file and folder reorganization within the explorer sidebar. 
 
 | Boundary | Description |
 |----------|-------------|
-| NSPasteboard / NSItemProvider ↔ Drop planner | Drag payloads arrive via macOS drag-and-drop APIs. Source URLs are decoded from the pasteboard. |
+| NSPasteboard / NSItemProvider ↔ Drop planner or terminal | Drag payloads arrive via macOS drag-and-drop APIs. Source URLs are decoded for explorer transfers or shell-escaped path insertion. Local explorer rows export standardized local paths; remote rows do not export drag payloads. |
 | Drop planner ↔ PaneWorkerExecutor | Validated transfer plans are executed by the worker, which performs `moveItem` or `copyItem` on the file system. |
 | File system ↔ Explorer tree | After move/copy, the tree is refreshed to reflect the new state. Selections are remapped. |
 
@@ -18,6 +18,7 @@ Drag & Drop enables file and folder reorganization within the explorer sidebar. 
 2. **Destination directory resolution** — the drop target directory is determined by the row the user drops onto. The target must be a valid existing directory.
 3. **Move/copy operation execution** — the worker performs file system operations using the source and destination paths from the transfer plan.
 4. **Cross-project boundary detection** — the operation type (move vs. copy) depends on whether source and target share a project root. Incorrect detection could cause unintended moves (data loss) instead of copies.
+5. **Terminal path insertion** — local explorer file/folder paths cross the pasteboard boundary and are inserted into a shell input buffer; shell escaping remains owned by `TerminalFileDropSupport`. Remote explorer paths are not exported.
 
 ## Threats
 
@@ -48,6 +49,13 @@ Drag & Drop enables file and folder reorganization within the explorer sidebar. 
 - **Impact:** UI unresponsiveness during the operation.
 - **Likelihood:** Low — move operations on the same volume are typically fast (metadata-only). Cross-volume moves (which become copy+delete) could be slow.
 - **Mitigation:** Transfer operations run asynchronously via `Task` with `[weak self]`. The worker status shows a progress indicator ("Moving" / "Copying"). The operation has a 20-second timeout per plan item. Linked NFR: PERF-Responsiveness.
+
+### F025-T05: Shell metacharacters in dragged explorer paths
+
+- **Vector:** A local file or folder name contains quotes, substitutions, whitespace, or shell metacharacters and is dropped into a terminal input buffer.
+- **Impact:** High if the path escapes quoting and becomes executable shell syntax.
+- **Likelihood:** Low — the user must intentionally drag the crafted item into a terminal.
+- **Mitigation:** Explorer rows export standardized file URLs and `TerminalFileDropSupport` applies the shared single-quote escaping routine before insertion. Arbitrary dragged text that does not resolve to a filesystem item is rejected. The drop inserts text only and does not submit Enter. Linked NFR: SEC-Input-Sanitization and F001-T03.
 
 ## Residual Risks
 

@@ -41,7 +41,22 @@ final class AppKitOutlineView: NSOutlineView {
     var contextMenuProvider: ((FileItem) -> NSMenu?)?
     var rootContextMenuProvider: (() -> NSMenu?)?
     var primaryClickHandler: ((TreeNode, NSEvent) -> Bool)?
+    var directoryClickHandler: ((TreeNode) -> Void)?
     var keyDownHandler: ((NSEvent) -> Bool)?
+
+    private var pendingDirectoryClickNode: TreeNode?
+
+    var hasPendingDirectoryClick: Bool {
+        pendingDirectoryClickNode != nil
+    }
+
+    func deferDirectoryClick(_ node: TreeNode) {
+        pendingDirectoryClickNode = node
+    }
+
+    func cancelPendingDirectoryClick() {
+        pendingDirectoryClickNode = nil
+    }
 
     private func finishInlineEditingIfNeeded() {
         window?.endEditing(for: nil)
@@ -87,22 +102,47 @@ final class AppKitOutlineView: NSOutlineView {
         if let firstResponder = window?.firstResponder as? NSTextView,
            let cellView = firstResponder.superview?.superview as? AppKitTreeCellView,
            cellView.isInRenameMode {
+            cancelPendingDirectoryClick()
             super.mouseDown(with: event)
             return
         }
 
         finishInlineEditingIfNeeded()
 
-        if row >= 0,
-           let node = item(atRow: row) as? TreeNode,
-           primaryClickHandler?(node, event) == true {
-            return
+        let node = row >= 0 ? item(atRow: row) as? TreeNode : nil
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        let shouldDeferDirectoryClick = event.type == .leftMouseDown
+            && event.clickCount == 1
+            && modifiers.isEmpty
+            && node?.item.isDirectory == true
+
+        if shouldDeferDirectoryClick, let node {
+            deferDirectoryClick(node)
+        } else {
+            cancelPendingDirectoryClick()
+            if let node,
+               primaryClickHandler?(node, event) == true {
+                return
+            }
         }
 
         super.mouseDown(with: event)
 
+        if shouldDeferDirectoryClick, let node {
+            schedulePendingDirectoryClickCommit(for: node)
+        }
+
         if row >= 0 {
             _ = window?.makeFirstResponder(self)
+        }
+    }
+
+    private func schedulePendingDirectoryClickCommit(for node: TreeNode) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.pendingDirectoryClickNode === node else { return }
+            self.cancelPendingDirectoryClick()
+            self.directoryClickHandler?(node)
         }
     }
 

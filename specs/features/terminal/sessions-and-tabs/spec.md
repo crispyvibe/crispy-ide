@@ -248,9 +248,9 @@ TerminalInteractiveTargetDetector MUST parse and identify actionable targets (UR
 
 When user changes `Rail terminal text size` in app settings, the terminal host MUST reapply compact density font size for the active rail preview. Density ownership rules MUST remain unchanged during host handoff.
 
-### F001-R54: Accepted File Drops Preserve Terminal Focus
+### F001-R54: Accepted File and Folder Drops Insert Paths and Preserve Terminal Focus
 
-When a terminal view accepts a file drop, that same terminal view MUST remain the keyboard focus target after the drop is processed. The drop MUST NOT move focus to Shelf, a file preview, or another surface.
+When a terminal view accepts one or more dropped files or folders, it MUST insert their shell-escaped paths into that terminal. The same terminal view MUST remain the keyboard focus target after the drop is processed. The drop MUST NOT move focus to Shelf, a file preview, or another surface.
 
 ### F001-R55: Detailed Bottom Tray Shows One Terminal Session At A Time
 
@@ -701,16 +701,17 @@ When the user docks the visible detailed-tray terminal into the main content vie
 **Then** terminal host reapplies compact density font size for the active rail preview
 **And** density ownership rules remain unchanged during host handoff
 
-### Scenario F001-S54: Dropping files onto terminal inserts shell-escaped paths
+### Scenario F001-S54: Dropping files and folders onto terminal inserts shell-escaped paths
 
-**Given** one or more files are dragged onto a terminal view
-**When** the drop is accepted
-**Then** file paths are shell-escaped before insertion
+**Given** one or more files or folders are dragged onto a terminal view
+**When** the drop is accepted from a standard file URL, legacy filename list, or existing absolute-path representation
+**Then** every file and folder path is shell-escaped before insertion
 **And** keyboard focus remains on the terminal view that accepted the drop
 **And** paths within the terminal's current working directory use relative paths
 **And** paths outside the current working directory use absolute paths
-**And** multiple files are joined with spaces
+**And** multiple paths are joined with spaces
 **And** a trailing space is appended after the last path
+**And** arbitrary dragged text that does not resolve to an existing filesystem item is rejected
 
 ### Scenario F001-S55: Detailed mode bottom tray shows only the active terminal session
 
@@ -765,4 +766,5 @@ When the user docks the visible detailed-tray terminal into the main content vie
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-09-30 | Expanded terminal path drops to accept folders from standard file URLs, legacy filename lists, and validated absolute-path drag representations | — |
 | 2026-04-15 | Migrated from docs/features/terminal/feature.md (TRM-001–076) | — |

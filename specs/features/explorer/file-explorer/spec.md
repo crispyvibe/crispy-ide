@@ -369,12 +369,13 @@ Note: This action exists in the view model but is not currently wired into any c
 **Then** the file's ancestor directories are expanded
 **And** the file row is selected and scrolled into view in the sidebar
 
-### Scenario F024-S41: Single click delegates to native outline view selection for drag recognition
+### Scenario F024-S41: File and folder rows preserve native drag recognition
 
-**Given** a file row is visible in the explorer
-**When** the user single-clicks the row
-**Then** the click is handled by NSOutlineView's native selection handling
-**So that** drag recognition can begin from the initial mouse-down event
+**Given** a local file or folder row is visible in the explorer
+**When** the user presses and drags from the row
+**Then** the initial mouse-down is handled by `NSOutlineView` so native drag recognition can begin
+**And** a folder click toggles expansion only on mouse-up
+**And** beginning a folder drag cancels the pending expansion action
 
 ### Scenario F024-S42: Watcher triggers targeted directory refresh
 
@@ -447,6 +448,7 @@ Note: This action exists in the view model but is not currently wired into any c
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-01 | Updated S41 so local folder rows preserve native drag recognition by deferring expansion until mouse-up and cancelling it when a drag begins | — |
 | 2026-04-15 | Migrated from docs/features/sidebar (SDB-001–SDB-006, SDB-009–SDB-011, SDB-014, SDB-016) and docs/features/sidebar/folder-explorer (SDF-001–SDF-019, SDF-021–SDF-023, SDF-025–SDF-031) | — |
 | 2026-04-16 | Added targeted watcher refresh (S42), silent subtree refresh (S43), disclosure toggle (S44), tree mutation tracking (S45) | — |
 | 2026-07-14 | Added serialized refreshes, deferred watcher replay, deterministic create/rename visibility, and incremental outline updates (S46-S49) | — |

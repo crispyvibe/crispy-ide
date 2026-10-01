@@ -11,7 +11,7 @@ Terminal Sessions & Tabs manages shell process lifecycle, environment constructi
 | Crispy app process ↔ Shell process | `TerminalSession.startProcess()` spawns a child process via `TerminalSessionEngine.startProcess(executable:args:environment:currentDirectory:)`. The executable path and arguments are passed as discrete array elements, not shell-interpreted strings. |
 | Crispy app process ↔ tmux CLI | When tmux is enabled, `TmuxService.launchArguments()` constructs the argument array. Session names are Crispy-generated UUIDs with a fixed prefix. |
 | Terminal output ↔ Interactive target detector | `TerminalInteractiveTargetDetector` parses raw terminal grid text to identify URLs and file paths. Detected targets are used to open files, reveal directories, or navigate to URLs. |
-| File drop pasteboard ↔ Terminal input | `TerminalFileDropSupport` reads file URLs from `NSPasteboard` and converts them to shell-escaped path strings injected into the terminal. |
+| Filesystem drop pasteboard ↔ Terminal input | `TerminalFileDropSupport` reads file and folder URLs, legacy filename lists, or plain absolute paths that resolve to existing filesystem items from `NSPasteboard`, then converts them to shell-escaped path strings injected into the terminal. Arbitrary dragged text is rejected. |
 | Compose history ↔ Terminal session | `ComposeHistoryStore` records finalized command text from `recordSentInput()`. The insight observer validates screen visibility before recording. |
 | Persistence JSON ↔ Session restore | `TerminalSessionEntry` is decoded from vibespace JSON to restore tabs. Fields include `tmuxSessionName` and working directory paths. |
 | Shell environment ↔ Child process | `buildTerminalEnvironment()` constructs environment variables including `PATH`, `CRISPY_SOCKET`, and `CRISPY_PROJECT_PATH`. These are inherited by the spawned shell. |
@@ -20,7 +20,7 @@ Terminal Sessions & Tabs manages shell process lifecycle, environment constructi
 
 1. **Command dispatch pipeline** — `enqueueCommand()` / `dispatchCommand()` sends text to the terminal via `engine.send(text:)`. Commands are newline-terminated strings injected into the running shell.
 2. **Interactive target detection** — Parses terminal grid output for URLs and file paths. Malicious terminal output could craft targets that resolve to sensitive paths or exploit URL scheme handlers.
-3. **File drop path injection** — Converts dropped file URLs to shell-escaped strings. Malformed filenames could escape the quoting.
+3. **Filesystem drop path injection** — Converts dropped file or folder URLs and validated path representations to shell-escaped strings. Malformed item names could escape the quoting, while an unvalidated plain-text fallback could inject arbitrary terminal input.
 4. **Shell resolution chain** — Resolves shell executable from multiple sources (project override, vibespace default, app default, `$SHELL`, `/bin/zsh`). A compromised preference could point to a malicious binary.
 5. **Environment variable construction** — `buildTerminalEnvironment()` prepends bundled CLI bin to PATH and injects `CRISPY_SOCKET` path. PATH manipulation could redirect command resolution.
 6. **Session persistence** — Working directory paths and tmux session names decoded from JSON. Path traversal or symlink attacks during restore.

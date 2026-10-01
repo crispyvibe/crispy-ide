@@ -388,14 +388,14 @@ final class MonitoredTerminalView: LocalProcessTerminalView, TerminalInteractive
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes(TerminalFileDropSupport.readablePasteboardTypes)
         configureInteractiveHoverOverlay()
         configureInlineTriggerEventMonitor()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes(TerminalFileDropSupport.readablePasteboardTypes)
         configureInteractiveHoverOverlay()
         configureInlineTriggerEventMonitor()
     }
