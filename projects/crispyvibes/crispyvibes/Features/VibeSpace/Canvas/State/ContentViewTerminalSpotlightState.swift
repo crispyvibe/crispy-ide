@@ -38,6 +38,8 @@ struct TerminalSpotlightState: Identifiable {
     let shortcutDefinitions: [TerminalShortcutDefinition]
     let onShortcutSelected: ((TerminalShortcutDefinition) -> Void)?
     let onManageShortcutsRequested: (() -> Void)?
+    let agentPresets: [TerminalPresetDefinition]
+    let onAgentPresetSelected: ((TerminalPresetDefinition, TerminalPresetLaunchMode) -> Void)?
     let isTemporary: Bool
     let owningProjectRootURL: URL?
     let surfaceID: UUID?
@@ -53,6 +55,8 @@ struct TerminalSpotlightState: Identifiable {
         shortcutDefinitions: [TerminalShortcutDefinition] = [],
         onShortcutSelected: ((TerminalShortcutDefinition) -> Void)? = nil,
         onManageShortcutsRequested: (() -> Void)? = nil,
+        agentPresets: [TerminalPresetDefinition] = [],
+        onAgentPresetSelected: ((TerminalPresetDefinition, TerminalPresetLaunchMode) -> Void)? = nil,
         isTemporary: Bool,
         owningProjectRootURL: URL?,
         surfaceID: UUID? = nil
@@ -67,6 +71,8 @@ struct TerminalSpotlightState: Identifiable {
         self.shortcutDefinitions = shortcutDefinitions
         self.onShortcutSelected = onShortcutSelected
         self.onManageShortcutsRequested = onManageShortcutsRequested
+        self.agentPresets = agentPresets
+        self.onAgentPresetSelected = onAgentPresetSelected
         self.isTemporary = isTemporary
         self.owningProjectRootURL = owningProjectRootURL
         self.surfaceID = surfaceID
@@ -510,6 +516,12 @@ extension ContentView {
                 )
             },
             onManageShortcutsRequested: spotlightManageShortcuts,
+            agentPresets: terminalViewModel.availablePresets,
+            onAgentPresetSelected: { [weak terminalViewModel] preset, mode in
+                guard let session = terminalViewModel?.session(for: tabID) else { return }
+                session.requestKeyboardFocus()
+                session.sendUICommand(preset.command(for: mode))
+            },
             isTemporary: false,
             owningProjectRootURL: owningProjectRootURL,
             surfaceID: surfaceID
@@ -605,6 +617,13 @@ extension ContentView {
                 }
             },
             onManageShortcutsRequested: spotlightManageShortcuts,
+            agentPresets: TerminalViewModel.availableBuiltInPresets(
+                using: appContainer.terminalViewModelDependencies
+            ),
+            onAgentPresetSelected: { preset, mode in
+                session.requestKeyboardFocus()
+                session.sendUICommand(preset.command(for: mode))
+            },
             isTemporary: true,
             owningProjectRootURL: owningProjectRootURL
         )

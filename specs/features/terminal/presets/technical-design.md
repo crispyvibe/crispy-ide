@@ -9,7 +9,7 @@ Terminal Presets provides an agent-CLI launcher surfaced through the **Agent CLI
 ### Component Hierarchy
 
 ```
-TerminalCommandsMenu  (shared: detailed-view toolbar + board tile)
+TerminalCommandsMenu  (shared: detailed-view toolbar + board tile + terminal Spotlight)
 └── Agent CLI submenu            (rendered when showsAgentCLIMenu == true)
     ├── "No agents on PATH"      (when availablePresets is empty)
     └── Per agent (filtered by availability):
@@ -61,6 +61,7 @@ Presets are defined in `CLIToolCatalog` for: Kiro, Claude, Codex, Gemini, OpenCo
 3. Dispatch by surface:
    - **Detailed view** (`TerminalView.launchAgentPreset(_:mode:)`): create a new terminal tab named with the preset `shortLabel`, set preset-based origin, and send the resolved command to the new session.
    - **Board tile** (`VibeSpaceTerminalBoardTileCard.launchAgentInTileSession(_:mode:)`): send the resolved command into the tile's existing session.
+   - **Terminal Spotlight** (`TerminalSpotlightState.onAgentPresetSelected`): send the resolved command into the exact persistent or temporary session represented by Spotlight.
 4. Move keyboard focus to the target session.
 
 ### Error Flow (Missing Executable)

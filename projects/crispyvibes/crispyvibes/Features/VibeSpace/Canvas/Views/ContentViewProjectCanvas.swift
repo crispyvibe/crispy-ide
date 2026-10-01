@@ -1673,6 +1673,12 @@ private struct DetachedTerminalBoardWindowContent: View {
                 )
             },
             onManageShortcutsRequested: onManageShortcutsRequested,
+            agentPresets: terminalViewModel.availablePresets,
+            onAgentPresetSelected: { [weak terminalViewModel] preset, mode in
+                guard let session = terminalViewModel?.session(for: tabID) else { return }
+                session.requestKeyboardFocus()
+                session.sendUICommand(preset.command(for: mode))
+            },
             isTemporary: false,
             owningProjectRootURL: owningProjectRootURL,
             surfaceID: targetSurfaceID ?? surfaceID
@@ -1710,6 +1716,12 @@ private struct DetachedTerminalBoardWindowContent: View {
             terminalServices: terminalServices,
             shellResolutionProvider: shellResolutionProvider
         )
+        let agentPresets = projects.first(where: { project in
+            guard let owningProjectRootURL else { return false }
+            return project.rootURL.standardizedFileURL == owningProjectRootURL.standardizedFileURL
+        })?.terminalViewModel.availablePresets
+            ?? projects.first?.terminalViewModel.availablePresets
+            ?? []
         let spotlight = TerminalSpotlightState(
             id: UUID(),
             source: .transient(session: session),
@@ -1730,6 +1742,11 @@ private struct DetachedTerminalBoardWindowContent: View {
             },
             shortcutDefinitions: shortcutDefinitionsForProjectPath(owningProjectRootURL?.standardizedFileURL.path),
             onManageShortcutsRequested: onManageShortcutsRequested,
+            agentPresets: agentPresets,
+            onAgentPresetSelected: { preset, mode in
+                session.requestKeyboardFocus()
+                session.sendUICommand(preset.command(for: mode))
+            },
             isTemporary: true,
             owningProjectRootURL: owningProjectRootURL,
             surfaceID: surfaceID

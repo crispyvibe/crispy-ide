@@ -13,7 +13,7 @@ sidebar:
 
 ## Overview
 
-Terminal Presets lets you launch AI coding-agent CLIs straight from the terminal. Agents live in the **Agent CLI** menu inside the terminal commands menu (the terminal-icon button, alongside Signals, tmux, and Shortcuts) — available both in the detailed view and on terminal board tiles. Crispy detects which agent CLIs are installed, shows them with their names, and launches them for you. Agents that support an elevated permission level offer both **Standard** and **Full Trust** when you launch them.
+Terminal Presets lets you launch AI coding-agent CLIs straight from the terminal. Agents live in the **Agent CLI** menu inside the terminal commands menu (the terminal-icon button, alongside Signals, tmux, and Shortcuts) — available in the detailed view, on terminal board tiles, and in terminal Spotlight. Crispy detects which agent CLIs are installed, shows them with their names, and launches them for you. Agents that support an elevated permission level offer both **Standard** and **Full Trust** when you launch them.
 
 ## Getting Started
 
@@ -38,6 +38,7 @@ Terminal Presets lets you launch AI coding-agent CLIs straight from the terminal
 4. Where it launches depends on the surface:
    - **Detailed view**: a new terminal tab is created, named after the agent, and the command runs there.
    - **Terminal board tile**: the command runs in that tile's own session.
+   - **Terminal Spotlight**: the command runs in the persistent or temporary terminal currently shown in Spotlight.
 5. Keyboard focus moves to the launched session.
 
 If no agents are detected, the menu shows **"No agents on PATH."**

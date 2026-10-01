@@ -77,11 +77,16 @@ struct TerminalSpotlightCardView<SpotlightContent: View, InputBarContent: View>:
                     TerminalCommandsMenu(
                         textColor: activeThemePalette.secondaryTextColor,
                         shortcuts: shortcutDefinitions,
+                        agentPresets: spotlight.agentPresets,
+                        showsAgentCLIMenu: spotlight.onAgentPresetSelected != nil,
                         onRunShortcut: { shortcut in
                             onShortcutSelected?(shortcut)
                         },
                         onManageShortcutsRequested: onManageShortcutsRequested,
-                        onSendSignal: onSendSignal
+                        onSendSignal: onSendSignal,
+                        onLaunchAgent: { preset, mode in
+                            spotlight.onAgentPresetSelected?(preset, mode)
+                        }
                     )
                     .accessibilityIdentifier("terminal.spotlight.commands")
                 }
@@ -134,6 +139,7 @@ struct TerminalSpotlightCardView<SpotlightContent: View, InputBarContent: View>:
                 .stroke(activeThemePalette.borderColorValue.opacity(0.72), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.30), radius: 26, x: 0, y: 15)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("terminal.spotlight.overlay")
         .onTapGesture(count: 2) {
             onDismiss()

@@ -4,9 +4,9 @@ Status: draft
 
 ## Overview
 
-Terminal Presets provides a launcher for AI coding-agent CLIs from the terminal. Presets are exposed through the **Agent CLI** submenu inside the terminal commands menu (alongside Signals, tmux, and Shortcuts), available both in the detailed-view terminal toolbar and on terminal board tiles. It manages per-agent launch mode selection (Standard / Full Trust), tool availability diagnostics, preset execution, and error handling for missing executables.
+Terminal Presets provides a launcher for AI coding-agent CLIs from the terminal. Presets are exposed through the **Agent CLI** submenu inside the terminal commands menu (alongside Signals, tmux, and Shortcuts), available in the detailed-view terminal toolbar, on terminal board tiles, and in terminal Spotlight. It manages per-agent launch mode selection (Standard / Full Trust), tool availability diagnostics, preset execution, and error handling for missing executables.
 
-Launch behavior differs by surface: the detailed-view launcher opens the agent in a new named terminal tab; a board tile launches the agent into that tile's own session.
+Launch behavior differs by surface: the detailed-view launcher opens the agent in a new named terminal tab, while a board tile or terminal Spotlight launches the agent into the exact existing session represented by that surface.
 
 ## Dependencies
 
@@ -23,6 +23,7 @@ Launch mode MUST be selected per agent at launch time, not via a global persiste
 Tool diagnostics MUST run against preset executables on PATH and standard fallback install directories. Only installed agent presets MUST be listed (Kiro, Claude, Codex, Gemini, OpenCode, Copilot). When no agents are detected, the menu MUST show a non-actionable "No agents on PATH" item rather than hiding the menu. Launching an agent MUST send the preset command to a terminal session and move keyboard focus to it:
 - In the detailed-view launcher, launching MUST create a new terminal tab named with the preset short label and dispatch the command there.
 - On a terminal board tile, launching MUST dispatch the command into that tile's existing session.
+- In terminal Spotlight, launching MUST dispatch the command into the exact persistent or temporary session shown there.
 
 ### F005-R03: Full-Trust Presented Only When Supported
 
@@ -48,6 +49,7 @@ When a preset executable is not present on PATH or fallback install directories,
 **Then** only installed agents are listed (Kiro, Claude, Codex, Gemini, OpenCode, Copilot), or "No agents on PATH" when none are detected
 **And** from the detailed-view launcher a new terminal tab is created with the preset short name and the command is dispatched there
 **And** from a terminal board tile the command is dispatched into that tile's existing session
+**And** from terminal Spotlight the command is dispatched into the exact persistent or temporary session shown there
 **And** keyboard focus moves to the launched session
 
 ### Scenario F005-S03: Full trust presented only when supported
@@ -82,3 +84,4 @@ When a preset executable is not present on PATH or fallback install directories,
 |------|--------|--------|
 | 2026-04-15 | Migrated from docs/features/terminal/feature.md (TRM-029–032) | — |
 | 2026-07-01 | Launcher moved into the terminal commands menu as the "Agent CLI" submenu (detailed view + board tiles); replaced the standalone Tools dropdown and global launch-mode selector with per-agent Standard/Full Trust nesting; board tiles launch into the tile session | — |
+| 2026-09-09 | Exposed Agent CLI in terminal Spotlight and routed launches into the exact persistent or temporary Spotlight session | — |
