@@ -49,6 +49,7 @@ final class FolderExplorerViewModel: ObservableObject {
     let observedFileSystemChanges = PassthroughSubject<Set<String>, Never>()
     var gitRefreshRequestID = UUID()
     var treeSessionID = UUID()
+    var renameOperationID = UUID()
     var loadedDirectoryIDs: Set<String> = []
     var pendingExternalRefreshWorkItem: DispatchWorkItem?
     var pendingExternalRefreshPaths: Set<String> = []

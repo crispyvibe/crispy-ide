@@ -362,6 +362,88 @@ final class FolderExplorerViewModelTests: XCTestCase {
         XCTAssertEqual(finalCount, 2)
     }
 
+    func testTreeMutationRetainsEveryChangedDirectoryUntilTheViewConsumesIt() {
+        let sourcesID = tempRoot.appendingPathComponent("Sources", isDirectory: true).path
+        let testsID = tempRoot.appendingPathComponent("Tests", isDirectory: true).path
+
+        viewModel.recordTreeMutation(changedDirectoryIDs: [sourcesID])
+        viewModel.recordTreeMutation(changedDirectoryIDs: [testsID])
+
+        XCTAssertEqual(
+            viewModel.changedDirectoryIDs,
+            [sourcesID, testsID],
+            "Back-to-back refreshes must not discard the first directory invalidation."
+        )
+    }
+
+    func testRecreatedDirectoryAtPreviouslyLoadedPathLoadsItsNewChildren() async throws {
+        let sources = tempRoot.appendingPathComponent("Sources", isDirectory: true)
+        let oldFile = sources.appendingPathComponent("old.swift")
+        let newFile = sources.appendingPathComponent("new.swift")
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        try Data("old\n".utf8).write(to: oldFile)
+
+        viewModel.setRootFolder(tempRoot)
+        let rootLoaded = await waitForCondition(timeout: 8) {
+            self.viewModel.findItem(withID: sources.path) != nil
+        }
+        XCTAssertTrue(rootLoaded)
+
+        let initialSources = try XCTUnwrap(viewModel.findItem(withID: sources.path))
+        viewModel.toggleExpansion(for: initialSources)
+        let oldChildLoaded = await waitForCondition(timeout: 8) {
+            self.viewModel.findItem(withID: oldFile.path) != nil
+        }
+        XCTAssertTrue(oldChildLoaded)
+
+        try FileManager.default.removeItem(at: sources)
+        let removedDirectoryRefreshSucceeded = await viewModel.refreshDirectoryContents(
+            at: tempRoot,
+            showLoadingState: false
+        )
+        XCTAssertTrue(removedDirectoryRefreshSucceeded)
+        XCTAssertNil(viewModel.findItem(withID: sources.path))
+
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        try Data("new\n".utf8).write(to: newFile)
+        let recreatedDirectoryRefreshSucceeded = await viewModel.refreshDirectoryContents(
+            at: tempRoot,
+            showLoadingState: false
+        )
+        XCTAssertTrue(recreatedDirectoryRefreshSucceeded)
+
+        let recreatedSources = try XCTUnwrap(viewModel.findItem(withID: sources.path))
+        viewModel.loadChildrenIfNeeded(of: recreatedSources)
+
+        let newChildLoaded = await waitForCondition(timeout: 1) {
+            self.viewModel.findItem(withID: newFile.path) != nil
+        }
+        XCTAssertTrue(
+            newChildLoaded,
+            "A directory recreated at a previously loaded path must not be blocked by a stale loaded-directory marker."
+        )
+    }
+
+    func testFailedRenameKeepsEditorOpenAndPreservesProposedName() async {
+        let failingViewModel = FolderExplorerViewModel(worker: FailingRenamePaneWorker())
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/original.txt"),
+            isDirectory: false
+        )
+        failingViewModel.replaceRootItems([item])
+        failingViewModel.startRenaming(item: item)
+        failingViewModel.renameText = "duplicate.txt"
+
+        failingViewModel.commitRename()
+
+        let failureSurfaced = await waitForCondition(timeout: 2) {
+            failingViewModel.userFacingError != nil
+        }
+        XCTAssertTrue(failureSurfaced)
+        XCTAssertEqual(failingViewModel.renamingItemID, item.id)
+        XCTAssertEqual(failingViewModel.renameText, "duplicate.txt")
+    }
+
     func testWatcherChangesDeferredOnGitTabRefreshWhenFilesTabReturns() async throws {
         viewModel.setRootFolder(tempRoot)
         let ready = await waitForCondition(timeout: 8) {
@@ -2105,6 +2187,18 @@ private actor BlockingDirectoryTreeWorker: PaneWorkerExecuting {
         }
 
         return response
+    }
+}
+
+private actor FailingRenamePaneWorker: PaneWorkerExecuting {
+    func restart() async {}
+
+    func execute(
+        _ method: PaneWorkerMethod,
+        arguments: [String: String],
+        timeout: TimeInterval
+    ) async throws -> String? {
+        throw PaneWorkerError.workerFailure("Destination already exists")
     }
 }
 

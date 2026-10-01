@@ -266,6 +266,22 @@ extension FolderExplorerViewModel {
         return descendantIDs
     }
 
+    private func directoryIDs(in items: [FileItem]) -> Set<String> {
+        var ids: Set<String> = []
+
+        func appendDirectoryIDs(from items: [FileItem]) {
+            for item in items where item.isDirectory {
+                ids.insert(item.id)
+                if let children = item.children {
+                    appendDirectoryIDs(from: children)
+                }
+            }
+        }
+
+        appendDirectoryIDs(from: items)
+        return ids
+    }
+
     func expandedDescendantDirectoryIDs(ofPath directoryPath: String) -> Set<String> {
         expandedDirectoryIDs.filter { candidatePath in
             isDescendantPath(candidatePath, ofDirectoryPath: directoryPath)
@@ -295,7 +311,7 @@ extension FolderExplorerViewModel {
     ) -> Bool {
         var updatedRootItems = rootItems
         guard replaceChildren(in: &updatedRootItems, targetPath: targetPath, with: children) else { return false }
-        rootItems = updatedRootItems
+        replaceRootItems(updatedRootItems)
         if shouldRecordMutation {
             recordTreeMutation(changedDirectoryIDs: [targetPath])
         }
@@ -303,6 +319,8 @@ extension FolderExplorerViewModel {
     }
 
     func replaceRootItems(_ items: [FileItem]) {
+        let removedDirectoryIDs = directoryIDs(in: rootItems).subtracting(directoryIDs(in: items))
+        loadedDirectoryIDs.subtract(removedDirectoryIDs)
         rootItems = items
     }
 
@@ -459,7 +477,7 @@ extension FolderExplorerViewModel {
     }
 
     func recordTreeMutation(changedDirectoryIDs: Set<String>) {
-        self.changedDirectoryIDs = changedDirectoryIDs
+        self.changedDirectoryIDs.formUnion(changedDirectoryIDs)
         treeMutationRevision += 1
     }
 

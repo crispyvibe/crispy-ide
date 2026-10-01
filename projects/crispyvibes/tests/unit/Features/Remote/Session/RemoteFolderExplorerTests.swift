@@ -470,6 +470,189 @@ final class RemoteFolderExplorerTests: XCTestCase {
         XCTAssertEqual(explorer.renamingItemID, "/remote/file.txt")
     }
 
+    func testLegacyCreateAtSelectionUsesSelectedRemoteFolder() async throws {
+        let fileSystem = InMemoryRemoteFileSystem(directories: [
+            "/remote": [descriptor("src", at: "/remote/src", isDirectory: true)],
+            "/remote/src": []
+        ])
+        let explorer = RemoteFolderExplorer(
+            remotePath: "/remote",
+            fileSystem: fileSystem,
+            watcher: TestDirectoryWatcher()
+        )
+
+        explorer.setRootFolder(URL(fileURLWithPath: "/remote"))
+        try await waitUntil { explorer.rootItems.count == 1 }
+        let src = try XCTUnwrap(explorer.rootItems.first)
+        explorer.select(src)
+
+        explorer.createNewFileAtSelection()
+
+        try await waitUntil { await fileSystem.createdPaths.count == 1 }
+        let createdPaths = await fileSystem.createdPaths
+        XCTAssertEqual(createdPaths, ["/remote/src/untitled"])
+    }
+
+    func testLegacyNestedCreateRefreshesTheExpandedRemoteDirectory() async throws {
+        let fileSystem = InMemoryRemoteFileSystem(directories: [
+            "/remote": [descriptor("src", at: "/remote/src", isDirectory: true)],
+            "/remote/src": [descriptor("old.txt", at: "/remote/src/old.txt")]
+        ])
+        let explorer = RemoteFolderExplorer(
+            remotePath: "/remote",
+            fileSystem: fileSystem,
+            watcher: TestDirectoryWatcher()
+        )
+
+        explorer.setRootFolder(URL(fileURLWithPath: "/remote"))
+        try await waitUntil { explorer.rootItems.count == 1 }
+        let src = try XCTUnwrap(explorer.rootItems.first)
+        explorer.toggleExpansion(for: src)
+        try await waitUntil {
+            explorer.rootItems.first?.children?.map(\.displayName) == ["old.txt"]
+        }
+        let rootRequestCountBeforeCreate = await fileSystem.contentsRequestPaths
+            .filter { $0 == "/remote" }
+            .count
+
+        explorer.createNewFile(in: src)
+
+        try await waitUntil { await fileSystem.createdPaths == ["/remote/src/untitled"] }
+        try await waitUntil {
+            await fileSystem.contentsRequestPaths.filter { $0 == "/remote" }.count
+                > rootRequestCountBeforeCreate
+        }
+        try await waitUntil {
+            explorer.rootItems.first?.children?.map(\.displayName)
+                == ["old.txt", "untitled"]
+        }
+        XCTAssertEqual(
+            explorer.rootItems.first?.children?.map(\.displayName),
+            ["old.txt", "untitled"],
+            "Refreshing only the remote root must not leave an expanded nested directory stale."
+        )
+    }
+
+    func testLegacyChildResponseAfterStopDoesNotMutateExplorerTree() async throws {
+        let fileSystem = ControlledFileSystemProvider()
+        let explorer = RemoteFolderExplorer(
+            remotePath: "/remote",
+            fileSystem: fileSystem,
+            watcher: TestDirectoryWatcher()
+        )
+
+        explorer.setRootFolder(URL(fileURLWithPath: "/remote"))
+        try await waitUntil { await fileSystem.requestCount == 1 }
+        await fileSystem.finishNext(
+            with: [descriptor("src", at: "/remote/src", isDirectory: true)]
+        )
+        try await waitUntil { explorer.rootItems.count == 1 }
+
+        explorer.toggleExpansion(for: try XCTUnwrap(explorer.rootItems.first))
+        try await waitUntil { await fileSystem.requestCount == 2 }
+        explorer.stopWatching()
+
+        await fileSystem.finishNext(
+            with: [descriptor("stale.txt", at: "/remote/src/stale.txt")]
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertNil(
+            explorer.rootItems.first?.children,
+            "A child listing started before stop/reconnect must not overwrite the current tree."
+        )
+    }
+
+    func testLegacyRenameRejectsPathTraversalAndKeepsRenameEditorOpen() async throws {
+        let fileSystem = InMemoryRemoteFileSystem(directories: [
+            "/remote": [descriptor("file.txt", at: "/remote/file.txt")]
+        ])
+        let explorer = RemoteFolderExplorer(
+            remotePath: "/remote",
+            fileSystem: fileSystem,
+            watcher: TestDirectoryWatcher()
+        )
+
+        explorer.setRootFolder(URL(fileURLWithPath: "/remote"))
+        try await waitUntil { explorer.rootItems.count == 1 }
+        explorer.startRenaming(item: try XCTUnwrap(explorer.rootItems.first))
+        explorer.renameText = "../outside.txt"
+
+        explorer.commitRename()
+
+        try await waitUntil {
+            if explorer.userFacingError != nil {
+                return true
+            }
+            return await !fileSystem.moves.isEmpty
+        }
+        let moves = await fileSystem.moves
+        XCTAssertTrue(moves.isEmpty)
+        XCTAssertNotNil(explorer.userFacingError)
+        XCTAssertEqual(explorer.renamingItemID, "/remote/file.txt")
+        XCTAssertEqual(explorer.renameText, "../outside.txt")
+    }
+
+    func testEnhancedRefreshRetainsInvalidationsForAllExpandedDirectories() async throws {
+        let fileSystem = InMemoryRemoteFileSystem(directories: [
+            "/remote": [
+                descriptor("Sources", at: "/remote/Sources", isDirectory: true),
+                descriptor("Tests", at: "/remote/Tests", isDirectory: true)
+            ],
+            "/remote/Sources": [descriptor("old.swift", at: "/remote/Sources/old.swift")],
+            "/remote/Tests": [descriptor("oldTests.swift", at: "/remote/Tests/oldTests.swift")]
+        ])
+        let explorer = RemoteFolderExplorer(
+            remotePath: "/remote",
+            fileSystem: fileSystem,
+            watcher: TestDirectoryWatcher(),
+            enhancedMode: true
+        )
+
+        explorer.setRootFolder(URL(fileURLWithPath: "/remote"))
+        try await waitUntil { explorer.rootItems.count == 2 }
+        let sources = try XCTUnwrap(explorer.rootItems.first(where: { $0.id == "/remote/Sources" }))
+        let tests = try XCTUnwrap(explorer.rootItems.first(where: { $0.id == "/remote/Tests" }))
+        explorer.toggleExpansion(for: sources)
+        explorer.toggleExpansion(for: tests)
+        try await waitUntil {
+            explorer.rootItems
+                .first(where: { $0.id == "/remote/Sources" })?
+                .children?
+                .contains(where: { $0.id == "/remote/Sources/old.swift" }) == true
+                && explorer.rootItems
+                    .first(where: { $0.id == "/remote/Tests" })?
+                    .children?
+                    .contains(where: { $0.id == "/remote/Tests/oldTests.swift" }) == true
+        }
+
+        await fileSystem.setDirectory(
+            "/remote/Sources",
+            descriptors: [descriptor("new.swift", at: "/remote/Sources/new.swift")]
+        )
+        await fileSystem.setDirectory(
+            "/remote/Tests",
+            descriptors: [descriptor("newTests.swift", at: "/remote/Tests/newTests.swift")]
+        )
+        explorer.refreshTree(trigger: .manual)
+
+        try await waitUntil {
+            explorer.rootItems
+                .first(where: { $0.id == "/remote/Sources" })?
+                .children?
+                .contains(where: { $0.id == "/remote/Sources/new.swift" }) == true
+                && explorer.rootItems
+                    .first(where: { $0.id == "/remote/Tests" })?
+                    .children?
+                    .contains(where: { $0.id == "/remote/Tests/newTests.swift" }) == true
+        }
+        XCTAssertEqual(
+            explorer.changedDirectoryIDs,
+            ["/remote/Sources", "/remote/Tests"],
+            "One refresh cycle must retain every subtree invalidation needed by the AppKit outline."
+        )
+    }
+
     private static func descriptor(
         _ name: String,
         at path: String,
@@ -544,13 +727,15 @@ private actor InMemoryRemoteFileSystem: FileSystemProviding {
     private var directories: [String: [FileItemDescriptor]]
     private(set) var createdPaths: [String] = []
     private(set) var moves: [(source: String, destination: String)] = []
+    private(set) var contentsRequestPaths: [String] = []
 
     init(directories: [String: [FileItemDescriptor]]) {
         self.directories = directories
     }
 
     func contentsOfDirectory(at path: String) async throws -> [FileItemDescriptor] {
-        directories[path] ?? []
+        contentsRequestPaths.append(path)
+        return directories[path] ?? []
     }
 
     func createDirectory(at path: String) async throws {

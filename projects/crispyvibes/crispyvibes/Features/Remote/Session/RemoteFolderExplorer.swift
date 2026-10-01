@@ -62,6 +62,7 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
     private var treeGeneration = UUID()
     private var directoryRefreshOperations: [String: DirectoryRefreshOperation] = [:]
     private var queuedDirectoryRefreshPaths: Set<String> = []
+    private var legacyDirectoryRefreshRequestIDs: [String: UUID] = [:]
 
     init(
         remotePath: String,
@@ -97,6 +98,7 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
         )
         treeGeneration = UUID()
         cancelDirectoryRefreshes()
+        loadingDirectoryIDs.removeAll()
         rootURL = url.standardizedFileURL
         if enhancedMode {
             synchronizeWatchedPaths()
@@ -156,27 +158,19 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
     }
 
     func createNewFileAtSelection() {
-        if enhancedMode {
-            createItem(
-                proposedName: "untitled",
-                isFolder: false,
-                inDirectory: creationDirectoryAtSelection()
-            )
-        } else {
-            createNewFile(in: nil)
-        }
+        createItem(
+            proposedName: "untitled",
+            isFolder: false,
+            inDirectory: creationDirectoryAtSelection()
+        )
     }
 
     func createNewFolderAtSelection() {
-        if enhancedMode {
-            createItem(
-                proposedName: "New Folder",
-                isFolder: true,
-                inDirectory: creationDirectoryAtSelection()
-            )
-        } else {
-            createNewFolder(in: nil)
-        }
+        createItem(
+            proposedName: "New Folder",
+            isFolder: true,
+            inDirectory: creationDirectoryAtSelection()
+        )
     }
 
     func deleteItem(_ item: FileItem) {
@@ -187,7 +181,10 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
                 do {
                     try await self.fileSystem.removeItem(at: item.url.path)
                     guard self.treeGeneration == mutationGeneration else { return }
-                    self.refreshLegacyRoot()
+                    await self.refreshLegacyMutation(
+                        in: item.url.deletingLastPathComponent(),
+                        generation: mutationGeneration
+                    )
                 } catch {
                     guard self.treeGeneration == mutationGeneration else { return }
                     self.userFacingError = error.localizedDescription
@@ -247,23 +244,36 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
         guard let renamingID = renamingItemID else { return }
         let proposedName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        guard Self.isValidPathComponent(proposedName) else {
+            userFacingError = "Rename failed: enter a name without path separators."
+            return
+        }
+
         if !enhancedMode {
-            cancelRename()
-            guard !proposedName.isEmpty else { return }
-            let newPath = (renamingID as NSString).deletingLastPathComponent + "/" + proposedName
+            let oldURL = URL(fileURLWithPath: renamingID).standardizedFileURL
+            let newURL = oldURL.deletingLastPathComponent()
+                .appendingPathComponent(proposedName)
+                .standardizedFileURL
+            guard oldURL.path != newURL.path else {
+                cancelRename()
+                return
+            }
             let mutationGeneration = treeGeneration
             Task { [weak self] in
                 guard let self else { return }
                 do {
-                    try await self.fileSystem.moveItem(from: renamingID, to: newPath)
+                    try await self.fileSystem.moveItem(from: oldURL.path, to: newURL.path)
                     guard self.treeGeneration == mutationGeneration else { return }
+                    if self.renamingItemID == renamingID, self.renameText == proposedName {
+                        self.cancelRename()
+                    }
                     self.renameEvents.send(
-                        ExplorerRenameEvent(
-                            oldURL: URL(fileURLWithPath: renamingID),
-                            newURL: URL(fileURLWithPath: newPath)
-                        )
+                        ExplorerRenameEvent(oldURL: oldURL, newURL: newURL)
                     )
-                    self.refreshLegacyRoot()
+                    await self.refreshLegacyMutation(
+                        in: oldURL.deletingLastPathComponent(),
+                        generation: mutationGeneration
+                    )
                 } catch {
                     guard self.treeGeneration == mutationGeneration else { return }
                     self.userFacingError = error.localizedDescription
@@ -272,15 +282,12 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
             return
         }
 
-        guard Self.isValidPathComponent(proposedName) else {
-            userFacingError = "Rename failed: enter a name without path separators."
-            return
-        }
-
         let oldURL = URL(fileURLWithPath: renamingID).standardizedFileURL
         let newURL = oldURL.deletingLastPathComponent().appendingPathComponent(proposedName).standardizedFileURL
-        cancelRename()
-        guard oldURL.path != newURL.path else { return }
+        guard oldURL.path != newURL.path else {
+            cancelRename()
+            return
+        }
         let renamedItem = findItem(withID: oldURL.path)
         let renamedItemWasDirectory = renamedItem?.isDirectory == true
         let mutationGeneration = treeGeneration
@@ -291,6 +298,10 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
             do {
                 try await self.fileSystem.moveItem(from: oldURL.path, to: newURL.path)
                 guard self.treeGeneration == mutationGeneration else { return }
+                if self.renamingItemID == renamingID,
+                   self.renameText.trimmingCharacters(in: .whitespacesAndNewlines) == proposedName {
+                    self.cancelRename()
+                }
                 if renamedItemWasDirectory {
                     self.rootItems = self.rootItems.map {
                         Self.remapItemTree($0, from: oldURL.path, to: newURL.path)
@@ -416,6 +427,7 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
 
     private func refreshEnhancedTree() {
         let rootPath = normalizedRootPath
+        let refreshGeneration = treeGeneration
         let expandedPaths = expandedDirectoryIDs
             .filter { Self.isPath($0, within: rootPath) }
             .sorted { Self.pathDepth($0) < Self.pathDepth($1) }
@@ -423,11 +435,23 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
         refreshTask?.cancel()
         refreshTask = Task { [weak self] in
             guard let self else { return }
-            _ = await self.refreshDirectoryContents(at: rootPath)
-            guard !Task.isCancelled else { return }
+            var refreshedPaths = Set<String>()
+            let rootRefreshed = await self.refreshDirectoryContents(
+                at: rootPath,
+                recordTreeMutation: false
+            )
+            guard !Task.isCancelled, self.treeGeneration == refreshGeneration else { return }
             for path in expandedPaths where self.findItem(withID: path)?.isDirectory == true {
-                _ = await self.refreshDirectoryContents(at: path)
-                guard !Task.isCancelled else { return }
+                if await self.refreshDirectoryContents(at: path, recordTreeMutation: false) {
+                    refreshedPaths.insert(path)
+                }
+                guard !Task.isCancelled, self.treeGeneration == refreshGeneration else { return }
+            }
+            let mutationPaths = refreshedPaths.isEmpty && rootRefreshed
+                ? Set([rootPath])
+                : refreshedPaths
+            if !mutationPaths.isEmpty {
+                self.recordTreeMutation(changedDirectoryIDs: mutationPaths)
             }
             self.synchronizeWatchedPaths()
             self.refreshTask = nil
@@ -435,17 +459,31 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
     }
 
     private func refreshChangedDirectories(_ changedPaths: Set<String>) {
+        let refreshGeneration = treeGeneration
         Task { [weak self] in
             guard let self else { return }
-            for path in changedPaths.map(Self.normalizePath).sorted() {
-                guard Self.isPath(path, within: self.normalizedRootPath) else { continue }
+            let targetPaths = Set(changedPaths.compactMap { rawPath -> String? in
+                let path = Self.normalizePath(rawPath)
+                guard Self.isPath(path, within: self.normalizedRootPath) else { return nil }
                 if path == self.normalizedRootPath || self.findItem(withID: path)?.isDirectory == true {
-                    _ = await self.refreshDirectoryContents(at: path)
-                } else {
-                    _ = await self.refreshDirectoryContents(
-                        at: URL(fileURLWithPath: path).deletingLastPathComponent().path
-                    )
+                    return path
                 }
+                return Self.normalizePath(
+                    URL(fileURLWithPath: path).deletingLastPathComponent().path
+                )
+            })
+            var refreshedPaths = Set<String>()
+            for path in targetPaths.sorted(by: { Self.pathDepth($0) < Self.pathDepth($1) }) {
+                if await self.refreshDirectoryContents(at: path, recordTreeMutation: false) {
+                    refreshedPaths.insert(path)
+                }
+                guard self.treeGeneration == refreshGeneration, !Task.isCancelled else { return }
+            }
+            if !refreshedPaths.isEmpty {
+                self.recordTreeMutation(
+                    changedDirectoryIDs: refreshedPaths,
+                    mergingWithPending: true
+                )
             }
         }
     }
@@ -456,15 +494,31 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
         }
     }
 
-    private func refreshDirectoryContents(at rawPath: String) async -> Bool {
+    private func refreshDirectoryContents(
+        at rawPath: String,
+        recordTreeMutation: Bool = true
+    ) async -> Bool {
         let path = Self.normalizePath(rawPath)
+        let refreshGeneration = treeGeneration
+        let refreshed = await refreshDirectoryContentsCoalesced(at: path)
+        guard refreshed, treeGeneration == refreshGeneration else { return false }
+        if recordTreeMutation {
+            self.recordTreeMutation(
+                changedDirectoryIDs: [path],
+                mergingWithPending: true
+            )
+        }
+        return true
+    }
+
+    private func refreshDirectoryContentsCoalesced(at path: String) async -> Bool {
         queuedDirectoryRefreshPaths.insert(path)
 
         if let operation = directoryRefreshOperations[path] {
             let result = await operation.task.value
             if queuedDirectoryRefreshPaths.remove(path) != nil {
                 directoryRefreshOperations.removeValue(forKey: path)
-                return await refreshDirectoryContents(at: path)
+                return await refreshDirectoryContentsCoalesced(at: path)
             }
             return result
         }
@@ -491,7 +545,7 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
             directoryRefreshOperations.removeValue(forKey: path)
         }
         if queuedDirectoryRefreshPaths.remove(path) != nil {
-            return await refreshDirectoryContents(at: path)
+            return await refreshDirectoryContentsCoalesced(at: path)
         }
         return result
     }
@@ -505,10 +559,12 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
             loadingDirectoryIDs.insert(path)
         }
         defer {
-            if isRoot {
-                workerStatus = .ready
-            } else {
-                loadingDirectoryIDs.remove(path)
+            if generation == treeGeneration {
+                if isRoot {
+                    workerStatus = .ready
+                } else {
+                    loadingDirectoryIDs.remove(path)
+                }
             }
         }
 
@@ -522,7 +578,6 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
                 guard let directory = findItem(withID: path), directory.isDirectory else { return false }
                 let children = makeItems(from: descriptors, preserving: directory.children ?? [])
                 rootItems = rootItems.map { updateItem($0, parentID: path, children: children) }
-                recordTreeMutation(changedDirectoryIDs: [path])
             }
             reconcileTreeState(afterRefreshing: path)
             refreshDisplayedItems()
@@ -574,17 +629,19 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
         }
         directoryRefreshOperations.removeAll()
         queuedDirectoryRefreshPaths.removeAll()
+        legacyDirectoryRefreshRequestIDs.removeAll()
     }
 
     // MARK: - Legacy Refresh
 
-    private func refreshLegacyRoot() {
+    @discardableResult
+    private func refreshLegacyRoot() -> Task<Void, Never> {
         let path = rootURL?.path ?? remotePath
         let requestID = UUID()
         refreshRequestID = requestID
         workerStatus = .busy("Loading")
         refreshTask?.cancel()
-        refreshTask = Task { [weak self] in
+        let task = Task { [weak self] in
             defer {
                 Task { @MainActor [weak self] in
                     guard let self, self.refreshRequestID == requestID else { return }
@@ -623,34 +680,90 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
                 self.workerStatus = .ready
             }
         }
+        refreshTask = task
+        return task
     }
 
     private func loadChildrenLegacy(for item: FileItem) {
-        loadingDirectoryIDs.insert(item.id)
+        let loadGeneration = treeGeneration
         Task { [weak self] in
-            guard let self else { return }
-            defer { self.loadingDirectoryIDs.remove(item.id) }
-            do {
-                let descriptors = try await self.fileSystem.contentsOfDirectory(at: item.url.path)
-                let children = descriptors.map {
-                    FileItem(
-                        url: URL(fileURLWithPath: $0.path),
-                        isDirectory: $0.isDirectory,
-                        isHidden: $0.isHidden
-                    )
-                }.sorted {
-                    $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent)
-                        == .orderedAscending
-                }
-                self.rootItems = self.rootItems.map {
-                    self.updateItem($0, parentID: item.id, children: children)
-                }
-                self.refreshDisplayedItems()
-                self.recordTreeMutation(changedDirectoryIDs: [item.id])
-            } catch {
-                self.userFacingError = "Failed to load directory: \(error.localizedDescription)"
+            _ = await self?.refreshLegacyDirectoryContents(
+                at: item.url.path,
+                generation: loadGeneration
+            )
+        }
+    }
+
+    private func refreshLegacyDirectoryContents(
+        at rawPath: String,
+        generation: UUID
+    ) async -> Bool {
+        guard generation == treeGeneration else { return false }
+        let path = Self.normalizePath(rawPath)
+        let requestID = UUID()
+        legacyDirectoryRefreshRequestIDs[path] = requestID
+        loadingDirectoryIDs.insert(path)
+        defer {
+            if generation == treeGeneration,
+               legacyDirectoryRefreshRequestIDs[path] == requestID {
+                legacyDirectoryRefreshRequestIDs[path] = nil
+                loadingDirectoryIDs.remove(path)
             }
         }
+
+        do {
+            let descriptors = try await fileSystem.contentsOfDirectory(at: path)
+            guard generation == treeGeneration,
+                  legacyDirectoryRefreshRequestIDs[path] == requestID,
+                  !Task.isCancelled else { return false }
+            guard let directory = findItem(withID: path), directory.isDirectory else { return false }
+            let existingByID = Dictionary(
+                uniqueKeysWithValues: (directory.children ?? []).map { ($0.id, $0) }
+            )
+            let children = descriptors.map { descriptor in
+                let url = URL(fileURLWithPath: descriptor.path).standardizedFileURL
+                return FileItem(
+                    url: url,
+                    isDirectory: descriptor.isDirectory,
+                    isHidden: descriptor.isHidden,
+                    children: existingByID[url.path]?.children
+                )
+            }.sorted {
+                $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent)
+                    == .orderedAscending
+            }
+            rootItems = rootItems.map {
+                updateItem($0, parentID: path, children: children)
+            }
+            refreshDisplayedItems()
+            recordTreeMutation(
+                changedDirectoryIDs: [path],
+                mergingWithPending: true
+            )
+            return true
+        } catch {
+            guard generation == treeGeneration,
+                  legacyDirectoryRefreshRequestIDs[path] == requestID,
+                  !Task.isCancelled else { return false }
+            userFacingError = "Failed to load directory: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func refreshLegacyMutation(
+        in directory: URL,
+        generation: UUID
+    ) async {
+        let rootRefreshTask = refreshLegacyRoot()
+        await rootRefreshTask.value
+        guard treeGeneration == generation else { return }
+
+        let directoryPath = directory.standardizedFileURL.path
+        guard directoryPath != normalizedRootPath else { return }
+        _ = await refreshLegacyDirectoryContents(
+            at: directoryPath,
+            generation: generation
+        )
     }
 
     // MARK: - Mutation Helpers
@@ -678,7 +791,10 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
                         try await self.fileSystem.createFile(at: path, contents: nil)
                     }
                     guard self.treeGeneration == mutationGeneration else { return }
-                    self.refreshLegacyRoot()
+                    await self.refreshLegacyMutation(
+                        in: directory,
+                        generation: mutationGeneration
+                    )
                 } catch {
                     guard self.treeGeneration == mutationGeneration else { return }
                     self.userFacingError = error.localizedDescription
@@ -859,8 +975,15 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
         return updated
     }
 
-    private func recordTreeMutation(changedDirectoryIDs: Set<String>) {
-        self.changedDirectoryIDs = changedDirectoryIDs
+    private func recordTreeMutation(
+        changedDirectoryIDs: Set<String>,
+        mergingWithPending: Bool = false
+    ) {
+        if mergingWithPending {
+            self.changedDirectoryIDs.formUnion(changedDirectoryIDs)
+        } else {
+            self.changedDirectoryIDs = changedDirectoryIDs
+        }
         treeMutationRevision += 1
     }
 

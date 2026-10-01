@@ -102,6 +102,7 @@ extension FolderExplorerViewModel {
     }
 
     func startRenaming(item: FileItem) {
+        renameOperationID = UUID()
         renamingItemID = item.id
         renameText = item.displayName
         selectedItemID = item.id
@@ -114,6 +115,7 @@ extension FolderExplorerViewModel {
     }
 
     func cancelRename() {
+        renameOperationID = UUID()
         renamingItemID = nil
         renameText = ""
     }
@@ -123,10 +125,14 @@ extension FolderExplorerViewModel {
         let oldURL = URL(fileURLWithPath: renamingItemID)
         let trimmedName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        cancelRename()
+        guard !trimmedName.isEmpty else {
+            cancelRename()
+            return
+        }
 
-        guard !trimmedName.isEmpty else { return }
-
+        let renameSessionID = treeSessionID
+        let renameAttemptID = UUID()
+        renameOperationID = renameAttemptID
         workerStatus = .busy("Renaming")
 
         Task { [weak self] in
@@ -144,8 +150,14 @@ extension FolderExplorerViewModel {
                 guard let renamedPath, !renamedPath.isEmpty else {
                     throw PaneWorkerError.invalidResponse
                 }
+                guard self.treeSessionID == renameSessionID,
+                      self.renameOperationID == renameAttemptID else { return }
 
                 let destinationURL = URL(fileURLWithPath: renamedPath)
+                if self.renamingItemID == renamingItemID,
+                   self.renameText.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedName {
+                    self.cancelRename()
+                }
                 self.updateSelections(afterMoving: oldURL, to: destinationURL)
                 self.renameEvents.send(
                     ExplorerRenameEvent(
@@ -158,6 +170,8 @@ extension FolderExplorerViewModel {
                     showLoadingState: false
                 )
             } catch {
+                guard self.treeSessionID == renameSessionID,
+                      self.renameOperationID == renameAttemptID else { return }
                 self.userFacingError = "Rename failed: \(error.localizedDescription)"
                 self.workerStatus = .unavailable("Explorer worker unavailable")
             }
