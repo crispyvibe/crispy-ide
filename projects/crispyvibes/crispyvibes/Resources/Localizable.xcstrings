@@ -961,6 +961,36 @@
         }
       }
     },
+    "editor.fontSize.decrease": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decrease Text Size"
+          }
+        }
+      }
+    },
+    "editor.fontSize.increase": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Increase Text Size"
+          }
+        }
+      }
+    },
+    "editor.fontSize.reset": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset Text Size"
+          }
+        }
+      }
+    },
     "editor.h1": {
       "extractionState": "stale",
       "localizations": {

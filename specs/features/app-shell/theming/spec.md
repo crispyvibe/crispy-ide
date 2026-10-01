@@ -122,6 +122,16 @@ Then all theme preferences are restored from app-level storage
 And the app renders with the persisted theme on startup
 ```
 
+### F015-S13 · Global text size scales authored document WebViews
+
+```gherkin
+Given the user changes the global code and document text size
+When a Markdown/HTML rich editor, LaTeX Edit view, AsciiDoc preview, or SVG preview is visible
+Then its existing WKWebView updates pageZoom to the clamped current/default size ratio
+And content, selection, scroll state, and unsaved edits remain intact because the page is not reloaded
+And browser, notebook, whiteboard, PDF, and raster-image zoom remain independent
+```
+
 ---
 
 ## Requirements
@@ -139,3 +149,4 @@ And the app renders with the persisted theme on startup
 | F015-R09 | Border shape, visibility, and color apply reactively to all container views without restart |
 | F015-R10 | Font family updates all text immediately; font size is independent |
 | F015-R11 | All theme preferences (border shape, visibility, color, font family) persist and restore on launch |
+| F015-R12 | Global text size updates native text/UI scale and app-authored Markdown/HTML, LaTeX, AsciiDoc, and SVG WebView presentation scale live, without overriding domain-owned browser/canvas/viewer zoom |

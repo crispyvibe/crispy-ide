@@ -314,10 +314,61 @@ enum AppShortcutRegistry {
     }
 
     static func action(matching event: NSEvent, userDefaults: UserDefaults = .standard) -> AppShortcutAction? {
-        descriptors.first(where: { descriptor in
+        if let customizedAction = descriptors.first(where: { descriptor in
+            guard let preference = preferenceValue(
+                for: descriptor.action,
+                userDefaults: userDefaults
+            ),
+            preference.isEnabled,
+            let binding = preference.binding else { return false }
+            return binding.matches(event)
+        })?.action {
+            return customizedAction
+        }
+
+        for action in [
+            AppShortcutAction.increaseFontSize,
+            .decreaseFontSize,
+            .resetFontSize
+        ] {
+            guard preferenceValue(for: action, userDefaults: userDefaults) == nil,
+                  binding(for: action, userDefaults: userDefaults) != nil else { continue }
+            if matchesDefaultTextSizeAlias(action, event: event) {
+                return action
+            }
+        }
+
+        return descriptors.first(where: { descriptor in
             guard let binding = binding(for: descriptor.action, userDefaults: userDefaults) else { return false }
             return binding.matches(event)
         })?.action
+    }
+
+    private static func matchesDefaultTextSizeAlias(
+        _ action: AppShortcutAction,
+        event: NSEvent
+    ) -> Bool {
+        let modifiers = AppShortcutBinding.normalizedModifierFlags(event.modifierFlags)
+        guard modifiers.contains(.command),
+              !modifiers.contains(.option),
+              !modifiers.contains(.control) else { return false }
+        let characters = [event.characters, event.charactersIgnoringModifiers]
+            .compactMap { $0 }
+
+        switch action {
+        case .increaseFontSize:
+            guard modifiers == [.command] || modifiers == [.command, .shift] else { return false }
+            return characters.contains("+")
+                || (event.keyCode == AppShortcutKeyCode.equal && modifiers.contains(.shift))
+        case .decreaseFontSize:
+            guard modifiers == [.command] || modifiers == [.command, .shift] else { return false }
+            return characters.contains("-")
+        case .resetFontSize:
+            guard modifiers == [.command] else { return false }
+            return characters.contains("0")
+        default:
+            return false
+        }
     }
 
     static func conflict(

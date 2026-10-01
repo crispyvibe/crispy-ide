@@ -163,6 +163,7 @@ Standard editor shortcuts (undo/redo, find/replace, selection) work as usual in 
 - **TeX engine (PDF tab):** install BasicTeX or MacTeX locally; nothing to configure in Crispy beyond having it on your Mac. Crispy auto-detects engines in `/Library/TeX/texbin`, the TeX Live binary directories, `/opt/homebrew/bin`, and `/usr/local/bin`.
 - **Extra packages:** install per-user with `tlmgr --usermode install <package>` (into `~/Library/texmf`) — no admin password.
 - **Appearance:** the rendered surfaces follow the app's light/dark theme automatically — nothing to configure.
+- **Edit-mode text size:** use **⌘+** or **⌘=**, **⌘-**, and **⌘0** (or the View menu). Prose, equations, and editor controls resize immediately without recompilation. The PDF tab keeps its own PDFKit page scaling.
 - There are no other LaTeX-specific settings.
 
 ## Troubleshooting

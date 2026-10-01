@@ -120,6 +120,19 @@ Five swatches in a row: Window → Canvas → Canvas Secondary → Border → Ac
 | Rail terminal font scale | Segmented picker | 1/4 (0.25×), 1/2 (0.50×), 1:1 (1.00×) | 1/2 |
 | Code + terminal text color | Color picker + hex field | Edits `terminalForeground` role | — |
 
+### Global Text and Document Scale
+
+`AppPreferences.codeFontSizeKey` is the single persisted base. Native code/plain editors and terminal engines use the clamped point size directly. `ContentView` converts it to `CrispyVibesUIScale` for progressive SwiftUI text/icon/chrome/spacing scaling.
+
+`WebViewPresentationScale` provides the app-authored document boundary. It computes `codeFontSize / 13 pt`, clamps the result to 0.25×–5.0×, and idempotently assigns `WKWebView.pageZoom`. Wrappers apply it in both `makeNSView` and `updateNSView`, so changing the preference updates the live WebView without content reload or state loss. Opted-in wrappers are:
+
+- `MarkupRenderedEditor` — Markdown rich mode and authored HTML iframe mode, including Mermaid/KaTeX and editor dialogs.
+- `LaTeXPreviewView` — offline KaTeX Edit mode.
+- `HTMLDocPreviewView` — compiled AsciiDoc HTML.
+- `SVGFilePreview` — JavaScript-disabled SVG preview.
+
+The embedded browser does not use this adapter because `BrowserPanelViewModel` owns and persists per-tab page zoom. Notebook/Jupyter and whiteboard/Excalidraw retain application/canvas semantics; PDFKit and raster images retain native viewer magnification.
+
 Font family candidates:
 
 | Option | Font Candidates |

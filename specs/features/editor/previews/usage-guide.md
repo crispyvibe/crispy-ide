@@ -83,6 +83,7 @@ File Previews provides viewing and basic editing for images, PDFs, and HTML file
 ## Tips
 
 - Image preview preserves your pan and zoom context during normal preview updates and when the source file changes on disk.
+- Authored HTML, compiled AsciiDoc HTML, and SVG previews follow global text size via **⌘+** or **⌘=**, **⌘-**, and **⌘0** without reloading. Raster images and PDFs keep their own magnification behavior.
 - Image thumbnails load progressively — a low-resolution placeholder appears first, then the full-resolution version.
 - Each editing mode (crop, draw, annotate) shows a contextual hint in the toolbar.
 - Image edit dirty state is tracked independently from text document dirty state.

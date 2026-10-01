@@ -68,9 +68,15 @@ Shortcuts are registered via SwiftUI `.keyboardShortcut()` modifiers and AppKit 
 
 | Shortcut | Action | Context |
 |----------|--------|---------|
-| ⌘ + | Increase Font Size | +1 pt code/terminal font |
-| ⌘ - | Decrease Font Size | −1 pt code/terminal font |
-| ⌘ 0 | Reset Font Size | Reset to default |
+| ⌘ + or ⌘ = | Increase Text Size | +1 pt global code/document base size |
+| ⌘ - | Decrease Text Size | −1 pt global code/document base size |
+| ⌘ 0 | Reset Text Size | Reset to 13 pt default |
+
+`AppShortcutRegistry.action(matching:)` resolves explicit custom bindings first, then evaluates semantic `+`, `-`, and `0` characters before remaining physical default bindings. This accepts shifted `+` and alternate keyboard-layout positions without stealing an explicitly customized command or allowing semantic aliases to bypass a disabled/customized text-size action. Exact custom bindings retain normal key-code/modifier matching.
+
+`AppPreferences.setCodeFontSize`, `adjustCodeFontSize`, and `resetCodeFontSize` are the only mutation path used by `AppDelegate` and `TextSizeCommands`. Values clamp to the configured 1–100 pt range. The menu commands remain available even when no document surface has focus.
+
+Native code/plain editors and terminal engines consume the stored font directly; SwiftUI chrome consumes `CrispyVibesUIScale`. App-authored document WebViews use `WebViewPresentationScale`, a 0.25×–5.0× clamped ratio of current/default code size applied through `WKWebView.pageZoom` during both creation and update. Browser page zoom, PDF/raster magnification, notebook UI, and whiteboard canvas zoom are intentionally independent.
 
 ### VibeSpace Management
 

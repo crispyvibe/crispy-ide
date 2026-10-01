@@ -308,14 +308,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .boardRecallProjectFromWindow:
             postBoardBulkMoveShortcut(.boardRecallProjectFromWindowRequested)
         case .increaseFontSize:
-            adjustCodeFontSize(by: 1)
+            AppPreferences.adjustCodeFontSize(by: 1)
         case .decreaseFontSize:
-            adjustCodeFontSize(by: -1)
+            AppPreferences.adjustCodeFontSize(by: -1)
         case .resetFontSize:
-            UserDefaults.standard.set(
-                AppPreferences.defaultCodeFontSize,
-                forKey: AppPreferences.codeFontSizeKey
-            )
+            AppPreferences.resetCodeFontSize()
         case .openSettings:
             NotificationCenter.default.post(name: .openAppSettings, object: nil)
         case .openDeveloperTools:
@@ -351,13 +348,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             userInfo: [AppCommandUserInfoKey.sourceSurfaceID: sourceSurfaceID]
         )
-    }
-
-    private func adjustCodeFontSize(by delta: Double) {
-        let defaults = UserDefaults.standard
-        let current = Double(AppPreferences.codeFontSize(userDefaults: defaults))
-        let updated = AppPreferences.clampedCodeFontSize(current + delta)
-        defaults.set(updated, forKey: AppPreferences.codeFontSizeKey)
     }
 
     private func submitExternalOpenLocally(urls: [URL]) {

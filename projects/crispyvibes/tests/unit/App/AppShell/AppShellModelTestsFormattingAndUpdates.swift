@@ -1,10 +1,49 @@
 import AppKit
 import Foundation
+import WebKit
 import XCTest
 @testable import CrispyVibes
 
 @MainActor
 extension AppShellModelTests {
+    func testWebViewPresentationScaleTracksGlobalDocumentSize() {
+        XCTAssertEqual(
+            WebViewPresentationScale.pageZoom(for: .default),
+            1.0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WebViewPresentationScale.pageZoom(
+                for: CrispyVibesUIScale(codeFontSize: 26)
+            ),
+            2.0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WebViewPresentationScale.pageZoom(
+                for: CrispyVibesUIScale(codeFontSize: 1)
+            ),
+            WebViewPresentationScale.minimumPageZoom,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WebViewPresentationScale.pageZoom(
+                for: CrispyVibesUIScale(codeFontSize: 100)
+            ),
+            WebViewPresentationScale.maximumPageZoom,
+            accuracy: 0.0001
+        )
+
+        let webView = WKWebView(frame: .zero)
+        WebViewPresentationScale.apply(
+            CrispyVibesUIScale(codeFontSize: 19.5),
+            to: webView
+        )
+        XCTAssertEqual(webView.pageZoom, 1.5, accuracy: 0.0001)
+        WebViewPresentationScale.apply(.default, to: webView)
+        XCTAssertEqual(webView.pageZoom, 1.0, accuracy: 0.0001)
+    }
+
     func testMarkupEditorThemeTokenBuilderProducesExpectedTokenFamilies() {
         let darkTokens = MarkupEditorThemeTokenBuilder(
             palette: .midnightMono,

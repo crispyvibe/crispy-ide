@@ -247,6 +247,7 @@ struct HTMLDocPreviewView: NSViewRepresentable {
     var documentURL: URL? = nil
     /// Format-specific render step: source → (html, log).
     let render: (String, URL?) async -> (String?, String)
+    @Environment(\.crispyvibesUIScale) private var uiScale
 
     static let debounce: TimeInterval = 0.5
 
@@ -256,6 +257,7 @@ struct HTMLDocPreviewView: NSViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        WebViewPresentationScale.apply(uiScale, to: webView)
         webView.setValue(false, forKey: "drawsBackground")
         context.coordinator.attach(webView: webView)
         context.coordinator.scheduleRender(force: true)
@@ -264,6 +266,7 @@ struct HTMLDocPreviewView: NSViewRepresentable {
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
+        WebViewPresentationScale.apply(uiScale, to: webView)
         context.coordinator.scheduleRender(force: false)
     }
 

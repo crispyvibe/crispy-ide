@@ -61,11 +61,14 @@ When VibeCast is open:
 - **⌘R** rephrases the composed text with AI (requires non-empty input).
 - **⌥↑** / **⌥↓** cycles the target terminal up or down.
 
-### Font size
+### Text size
 
-- **⌘+** increases font size by 1pt.
-- **⌘-** decreases font size by 1pt.
-- **⌘0** resets to the default size.
+- **⌘+** or **⌘=** increases the global text/document size by 1 pt.
+- **⌘-** decreases it by 1 pt.
+- **⌘0** resets it to 13 pt.
+- The same actions are available from the app's View menu.
+
+These shortcuts update code/plain editors, terminals, app chrome, rendered Markdown/HTML, LaTeX Edit, AsciiDoc preview, and SVG preview. Browser page zoom, PDF/image magnification, notebooks, and whiteboards keep their own zoom controls. If you customize a text-size shortcut in Settings, the custom binding replaces the default aliases.
 
 ## Keyboard Shortcuts
 
@@ -121,13 +124,13 @@ When VibeCast is open:
 | ⌘R | Rephrase with AI |
 | ⌥↑ / ⌥↓ | Cycle target terminal |
 
-#### Font Size
+#### Text Size
 
 | Shortcut | Action |
 |----------|--------|
-| ⌘+ | Increase font size |
-| ⌘- | Decrease font size |
-| ⌘0 | Reset font size |
+| ⌘+ or ⌘= | Increase global text/document size |
+| ⌘- | Decrease global text/document size |
+| ⌘0 | Reset global text/document size |
 
 #### Dismiss / Cancel
 

@@ -112,7 +112,8 @@ The preference is stored as `AppPreferences.markdownWebLinkPreferenceKey` with e
 ## Platform Considerations
 
 - `WKWebView` crash recovery: editor detects web process crash and re-renders content automatically with no data loss.
-- ~50 CSS custom properties injected into `WKWebView` to reflect the active theme.
+- ~50 CSS custom properties are injected into `WKWebView` to reflect the active theme.
+- `MarkupRenderedEditor` reads `crispyvibesUIScale` and applies `WebViewPresentationScale` in both `makeNSView` and `updateNSView`. The adapter sets `pageZoom` from the 0.25×–5.0× clamped current/default code-size ratio, scaling Markdown runtime UI and nested authored HTML without DOM reconstruction.
 - JavaScript disabled for SVG rendering but enabled for markdown editing.
 
 ## Performance Constraints

@@ -3,6 +3,7 @@ import WebKit
 
 struct SVGFilePreview: NSViewRepresentable {
     let fileURL: URL
+    @Environment(\.crispyvibesUIScale) private var uiScale
 
     final class Coordinator: NSObject {
         var lastLoadedPath: String?
@@ -16,12 +17,14 @@ struct SVGFilePreview: NSViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
         let webView = CrispyVibesNoContextMenuWebView(frame: .zero, configuration: configuration)
+        WebViewPresentationScale.apply(uiScale, to: webView)
         webView.setAccessibilityIdentifier("editor.preview.image.svg")
         loadSVGIfNeeded(into: webView, coordinator: context.coordinator)
         return webView
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
+        WebViewPresentationScale.apply(uiScale, to: nsView)
         loadSVGIfNeeded(into: nsView, coordinator: context.coordinator)
     }
 

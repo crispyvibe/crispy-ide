@@ -23,7 +23,13 @@ Mode buttons (Crop, Draw, Annotate), Apply Crop, Save, Clear. Status line shows 
 
 ### SVG Preview
 
-SVG files rendered read-only in `WKWebView` with JavaScript disabled. No editing canvas.
+SVG files rendered read-only in `WKWebView` with JavaScript disabled. No editing canvas. `SVGFilePreview` applies `WebViewPresentationScale` during creation and update so the global document-size ratio changes the existing page zoom without reloading the SVG.
+
+### Authored HTML Presentation Scale
+
+HTML rich editing uses `MarkupRenderedEditor`, while compiler-produced AsciiDoc HTML uses `HTMLDocPreviewView`. Both read `crispyvibesUIScale` and idempotently apply the shared 0.25×–5.0× current/default code-size ratio through `WKWebView.pageZoom`. This is presentation-only and does not rewrite authored CSS or rebuild the document.
+
+Raster image and PDF previews do not use the adapter: `NSScrollView.magnification` and `PDFView.autoScales` remain domain-owned.
 
 ### PDF Preview
 

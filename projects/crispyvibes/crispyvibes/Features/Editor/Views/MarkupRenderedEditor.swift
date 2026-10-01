@@ -23,6 +23,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
     var embeddedDropBridge: ContentViewerEmbeddedDropBridge? = nil
     @Binding var content: String
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.crispyvibesUIScale) private var uiScale
     @Environment(\.appThemePalette) private var appThemePalette
     /// F049: rich-mode bridge — when non-nil, comments are surfaced in the
     /// rendered markdown/HTML via JS-injected decorations and a floating
@@ -385,6 +386,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
 
         let webView = CrispyVibesNoContextMenuWebView(frame: .zero, configuration: configuration)
+        WebViewPresentationScale.apply(uiScale, to: webView)
         webView.embeddedDropBridge = embeddedDropBridge
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
@@ -396,6 +398,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
         context.coordinator.parent = self
+        WebViewPresentationScale.apply(uiScale, to: nsView)
         (nsView as? CrispyVibesNoContextMenuWebView)?.embeddedDropBridge = embeddedDropBridge
         context.coordinator.syncThemeTokensToEditor()
         context.coordinator.syncWebLinkPreferenceIfNeeded()

@@ -144,6 +144,23 @@ private struct SecondaryMenuPruningCommands: Commands {
     }
 }
 
+private struct TextSizeCommands: Commands {
+    var body: some Commands {
+        CommandGroup(after: .toolbar) {
+            Divider()
+            Button(AppStrings.Editor.increaseFontSize) {
+                AppPreferences.adjustCodeFontSize(by: 1)
+            }
+            Button(AppStrings.Editor.decreaseFontSize) {
+                AppPreferences.adjustCodeFontSize(by: -1)
+            }
+            Button(AppStrings.Editor.resetFontSize) {
+                AppPreferences.resetCodeFontSize()
+            }
+        }
+    }
+}
+
 private struct OptionsMenuCommands: Commands {
     let appName: String
 
@@ -267,6 +284,7 @@ struct CrispyVibesApp: App {
         .commands {
             CoreMenuPruningCommands()
             SecondaryMenuPruningCommands()
+            TextSizeCommands()
             OptionsMenuCommands(appName: appName)
             HelpLinksCommands()
         }

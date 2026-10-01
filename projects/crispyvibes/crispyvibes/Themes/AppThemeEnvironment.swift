@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 struct CrispyVibesUIScale: Equatable {
     let codeFontSize: Double
@@ -58,6 +59,26 @@ struct CrispyVibesUIScale: Equatable {
     private func progressiveScale(exponent: Double, minimum: CGFloat) -> CGFloat {
         let ratio = max(codeFontSize, 1) / max(AppPreferences.defaultCodeFontSize, 1)
         return max(minimum, CGFloat(pow(ratio, exponent)))
+    }
+}
+
+/// Applies the global document text-size ratio to app-authored WebView surfaces.
+/// Browser, notebook, whiteboard, PDF, and raster-image zoom remain domain-owned.
+@MainActor
+enum WebViewPresentationScale {
+    static let minimumPageZoom: CGFloat = 0.25
+    static let maximumPageZoom: CGFloat = 5.0
+
+    static func pageZoom(for uiScale: CrispyVibesUIScale) -> CGFloat {
+        let defaultSize = max(AppPreferences.defaultCodeFontSize, 1)
+        let ratio = CGFloat(uiScale.codeFontSize / defaultSize)
+        return min(maximumPageZoom, max(minimumPageZoom, ratio))
+    }
+
+    static func apply(_ uiScale: CrispyVibesUIScale, to webView: WKWebView) {
+        let resolvedZoom = pageZoom(for: uiScale)
+        guard abs(webView.pageZoom - resolvedZoom) > 0.0001 else { return }
+        webView.pageZoom = resolvedZoom
     }
 }
 

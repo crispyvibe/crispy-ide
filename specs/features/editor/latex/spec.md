@@ -103,6 +103,9 @@ The Edit mode MUST additionally:
 - expand common text-mode constructs in prose (`\%`, `\&`, `\#`, `\_`, `` `` ``/`''` quotes, `--`/`---` dashes, `\,` thin space, `\TeX`/`\LaTeX`, the `{,}` digit-group idiom, `\$`) and apply a **reversible re-escape** on serialize so editing prose can never corrupt LaTeX specials;
 - be hardened so that an error rendering one block falls back to a read-only raw atom rather than aborting the render or leaving the surface non-editable.
 
+### F057-R24: Live Edit-Mode Presentation Scale
+The LaTeX Edit-mode WKWebView MUST apply the shared global document-size ratio through `pageZoom` during creation and update, scaling prose, KaTeX, raw atoms, equation UI, and comment controls without reloading source. PDF mode retains PDFKit-owned scaling.
+
 ## Scenarios
 
 ### Scenario F057-S01: Open a LaTeX file (Given / When / Then)
@@ -173,6 +176,9 @@ The Edit mode MUST additionally:
 
 ### Scenario F057-S23: Editing prose can't corrupt specials
 - **Given** a paragraph rendered in Edit mode containing `&`, `%`, an em-dash, and curly quotes, **when** the user edits and saves it, **then** they serialize back to valid LaTeX (`\&`, `\%`, `---`, `` `` ``/`''`) rather than raw characters that would break compilation.
+
+### Scenario F057-S24: Global text size scales Edit mode without recompilation
+- **Given** a LaTeX document is open in Edit mode, **when** global text size changes via Cmd+/Cmd=/Cmd-/Cmd0 or the View menu, **then** the existing WKWebView page zoom updates immediately, prose and KaTeX scale together, source/selection state is preserved, and no TeX compilation is triggered. PDF mode keeps its independent PDFKit scaling.
 
 ## Acceptance Criteria
 

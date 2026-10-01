@@ -49,6 +49,9 @@ Numeric currency tokens beginning with `$` (including comma/decimal amounts and 
 ### F008-R14: Target-Aware Rich Markdown Links
 Rich-mode Markdown links MUST be classified without navigating the editor WebView. Same-document fragments navigate to stable duplicate-safe heading IDs with visual feedback and document-local back history. Relative and `file:` links open through the current Crispy editor context and apply a fragment after a linked Markdown document loads. HTTP(S) links offer Crispy Browser, default browser, edit, copy, and remove actions when the saved preference is `Ask Each Time`; saved Crispy/default choices route directly while the context menu retains all actions. Option-click MUST place the caret for editing rather than navigate. Unsupported schemes, embedded web credentials, missing files, and malformed destinations MUST be blocked.
 
+### F008-R15: Live Global Text Scale
+Markdown and HTML rich-mode WKWebViews MUST apply the global current/default code-size ratio through shared, clamped presentation scaling during creation and update. Text, tables, Mermaid, KaTeX, dialogs, and authored HTML iframe content scale without reloading or replacing the live editing DOM.
+
 ---
 
 ## Scenarios
@@ -215,6 +218,13 @@ When the user activates it
 Then the editor WebView does not navigate
 And no unsafe native open action is performed
 And a concise user-facing explanation is shown
+
+### F008-S21: Global text size updates rich Markdown without reload
+Given a Markdown or HTML document is open in rich mode
+When the user invokes Cmd+, Cmd=, Cmd-, Cmd0, or a text-size menu action
+Then the existing WKWebView page zoom updates to the clamped global document-size ratio
+And rendered prose, tables, code, Mermaid/KaTeX, link UI, and HTML iframe content scale together
+And content, caret/selection, scroll state, and unsaved edits remain intact
 
 ## Acceptance Criteria
 

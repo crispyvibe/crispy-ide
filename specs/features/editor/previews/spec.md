@@ -79,6 +79,9 @@ The HTML renderer has read access scoped to the project root for resolving local
 ### F009-R24: HTML WKWebView Crash Recovery
 The HTML editor detects WKWebView crashes and re-renders content automatically with no data loss.
 
+### F009-R25: Web Preview Presentation Scale
+Authored HTML rich mode and SVG WKWebView previews MUST apply the shared global document-size ratio live through `pageZoom`. Raster image magnification and PDFKit scaling remain independent viewer state.
+
 ---
 
 ## Scenarios
@@ -273,3 +276,10 @@ Given an HTML document is rendered in WKWebView
 When the web process crashes
 Then the editor detects the crash and re-renders content automatically
 And no user data is lost
+
+### F009-S29: Global text size scales HTML and SVG WebViews
+Given an authored HTML document or SVG preview is visible
+When global text size changes via Cmd+/Cmd=/Cmd-/Cmd0 or the View menu
+Then the existing WKWebView applies the clamped global document-size ratio without reloading
+And HTML editing state or SVG file state remains intact
+And raster-image and PDF zoom remain controlled by their native viewers

@@ -91,13 +91,13 @@ In **App Settings → General**, the typography section offers:
 | Rail terminal font scale (the stacked project cards on the side) | 1/4×, 1/2×, 1:1× | 1/2× |
 | Text color | Color picker + hex field | Follows theme |
 
-Font family changes apply to all text across the app immediately. Font size and rail scale are independent — adjusting one doesn't affect the other.
+Font family changes apply to supported text surfaces immediately. Global text size updates native editors, terminals, app chrome, rendered Markdown/HTML, LaTeX Edit, AsciiDoc preview, and SVG preview. Rail scale remains an additional compact-terminal multiplier. Browser page zoom, PDF/image magnification, notebook UI, and whiteboard canvas zoom remain independent so document-specific state is not overwritten.
 
-You can also use keyboard shortcuts for quick font size changes:
+You can also use keyboard shortcuts or the View menu for quick text-size changes:
 
-- **⌘+** to increase
+- **⌘+** or **⌘=** to increase
 - **⌘-** to decrease
-- **⌘0** to reset to default
+- **⌘0** to reset
 
 ### Adjusting border style
 
@@ -127,9 +127,9 @@ When you add new folders to a vibespace, CrispyVibes auto-assigns an initial col
 | Shortcut | Action |
 |----------|--------|
 | ⌘, | Open App Settings (theme controls are in General) |
-| ⌘+ | Increase font size |
-| ⌘- | Decrease font size |
-| ⌘0 | Reset font size |
+| ⌘+ or ⌘= | Increase global text/document size |
+| ⌘- | Decrease global text/document size |
+| ⌘0 | Reset global text/document size |
 
 ## Settings / Configuration
 

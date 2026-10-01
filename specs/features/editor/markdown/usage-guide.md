@@ -95,7 +95,7 @@ Crispy blocks executable/unknown schemes, protocol-relative links, web URLs with
 ## Settings
 
 - **Theme**: The active application theme is injected into the markdown renderer as ~50 CSS custom properties. Changing themes updates the rendered appearance immediately.
-- **Font Size**: Controlled via the global font size shortcuts (⌘+, ⌘-, ⌘0).
+- **Font Size**: Controlled via **⌘+** or **⌘=** to increase, **⌘-** to decrease, **⌘0** to reset, or the View menu. Rich Markdown/HTML content and its tables, diagrams, math, dialogs, and iframe content resize immediately without reloading the document.
 - **Markdown Web Links**: In General settings, choose **Ask Each Time**, **Crispy Browser**, or **Default Browser**. This affects normal HTTP(S) clicks; right-click always exposes both destinations.
 
 ## Tips

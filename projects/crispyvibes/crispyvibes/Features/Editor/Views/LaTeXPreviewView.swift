@@ -27,6 +27,7 @@ struct LaTeXPreviewView: NSViewRepresentable {
     var insertionRequest: EditorInsertionRequest? = nil
     var onInsertionConsumed: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.crispyvibesUIScale) private var uiScale
     /// F049: rich-mode comment surface — bridge + store + panel + file path.
     /// When present, comments are surfaced in the WYSIWYG canvas (block
     /// decorations + a floating composer) the same way as the markdown rich view.
@@ -51,6 +52,7 @@ struct LaTeXPreviewView: NSViewRepresentable {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        WebViewPresentationScale.apply(uiScale, to: webView)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         webView.setAccessibilityLabel(AppStrings.LaTeX.previewAccessibilityLabel)
@@ -71,6 +73,7 @@ struct LaTeXPreviewView: NSViewRepresentable {
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
+        WebViewPresentationScale.apply(uiScale, to: webView)
         context.coordinator.syncContentIfNeeded()
         context.coordinator.syncThemeIfNeeded()
         context.coordinator.applyCommandIfNeeded()

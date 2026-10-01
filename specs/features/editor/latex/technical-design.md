@@ -143,6 +143,7 @@ PDF mode (MarkupViewMode.compiled)
 ## Platform Considerations
 
 - macOS only; the Edit-mode surface is an AppKit-hosted `WKWebView` with `drawsBackground = false` for theme-transparent rendering.
+- `LaTeXPreviewView` reads `crispyvibesUIScale` and calls `WebViewPresentationScale.apply` in both `makeNSView` and `updateNSView`. This changes `pageZoom` on the existing WebView and does not rebuild the DOM, reparse LaTeX, or trigger PDF compilation. Compiled PDF mode remains `PDFView.autoScales`-owned.
 - Unlike the F052 whiteboard (which needed a custom URL scheme because WebKit blocks `fetch()` of `file://`), KaTeX here loads its assets via plain `<link>`/`<script>` and font `@font-face` over `file://`, so `loadFileURL(_:allowingReadAccessTo:)` with read access scoped to the runtime directory is sufficient — no custom scheme handler.
 - Web inspector enabled in DEBUG builds only.
 - PDF mode launches external processes via `Process`. This is only possible because the app is **not sandboxed** (`crispyvibesDebug.entitlements` carries only `get-task-allow`); a sandboxed build could not exec the toolchain. SyncTeX coordinate conventions differ from PDFKit (top-left vs bottom-left origin), reconciled in `ClickablePDFView`/`showHighlight` using each page's media-box height.

@@ -2640,6 +2640,18 @@ enum AppStrings {
         static let viewModeSource = String(localized: "editor.viewMode.source", defaultValue: "Source")
         static let viewModeCompiled = String(localized: "editor.viewMode.compiled", defaultValue: "PDF")
         static let viewModePreview = String(localized: "editor.viewMode.preview", defaultValue: "Preview")
+        static let increaseFontSize = String(
+            localized: "editor.fontSize.increase",
+            defaultValue: "Increase Text Size"
+        )
+        static let decreaseFontSize = String(
+            localized: "editor.fontSize.decrease",
+            defaultValue: "Decrease Text Size"
+        )
+        static let resetFontSize = String(
+            localized: "editor.fontSize.reset",
+            defaultValue: "Reset Text Size"
+        )
         static let webLinkPreferenceAsk = String(
             localized: "editor.webLinkPreference.ask",
             defaultValue: "Ask Each Time"

@@ -132,6 +132,20 @@ Then the user can manage SSH connection profiles
 And this feature is marked as experimental
 ```
 
+### F016-S14 · Layout-safe global text size applies across document surfaces
+
+```gherkin
+Given Crispy is focused on any native editor, terminal, app chrome, or app-authored document WebView
+When the user invokes increase with Cmd+ or Cmd=
+Or decrease with Cmd-
+Or reset with Cmd0
+Then the centralized code-font preference is clamped and updated
+And native text surfaces react through their existing font/UI-scale observers
+And Markdown/HTML, LaTeX Edit, AsciiDoc preview, and SVG preview apply the same document-size ratio without reloading
+And custom shortcut overrides replace the default semantic aliases
+And browser page zoom, PDF/image magnification, Jupyter, and Excalidraw zoom remain independently owned
+```
+
 ---
 
 ## Requirements
@@ -148,3 +162,4 @@ And this feature is marked as experimental
 | F016-R08 | Cmd+Option+[/] navigates adjacent projects; Cmd+Option+Up/Down cycles terminal tabs |
 | F016-R09 | App-wide keyboard shortcuts are customizable in the Shortcuts settings category |
 | F016-R10 | SSH profile management is available in App Settings → Connections |
+| F016-R11 | Default text-size actions accept layout-safe Cmd+/Cmd=, Cmd-, and Cmd0 aliases; use centralized clamped mutations and menu commands; and scale native plus app-authored WebView text surfaces while preserving domain-owned zoom |

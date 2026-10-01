@@ -248,6 +248,30 @@ enum AppPreferences {
         Swift.max(minimumCodeFontSize, Swift.min(value, maximumCodeFontSize))
     }
 
+    @discardableResult
+    static func setCodeFontSize(
+        _ value: Double,
+        userDefaults: UserDefaults = .standard
+    ) -> Double {
+        let clamped = clampedCodeFontSize(value)
+        userDefaults.set(clamped, forKey: codeFontSizeKey)
+        return clamped
+    }
+
+    @discardableResult
+    static func adjustCodeFontSize(
+        by delta: Double,
+        userDefaults: UserDefaults = .standard
+    ) -> Double {
+        let current = Double(codeFontSize(userDefaults: userDefaults))
+        return setCodeFontSize(current + delta, userDefaults: userDefaults)
+    }
+
+    @discardableResult
+    static func resetCodeFontSize(userDefaults: UserDefaults = .standard) -> Double {
+        setCodeFontSize(defaultCodeFontSize, userDefaults: userDefaults)
+    }
+
     static func railTerminalFontScale(userDefaults: UserDefaults = .standard) -> TerminalRailFontScale {
         let raw = userDefaults.string(forKey: railTerminalFontScaleKey) ?? defaultRailTerminalFontScale
         return TerminalRailFontScale(rawValue: raw) ?? AppFirstRunExperience.AppSettings.railTerminalFontScale
