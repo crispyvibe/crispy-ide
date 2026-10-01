@@ -228,10 +228,10 @@ extension ContentView {
 
     func addProjectsToVibeSpaceFromSettings(_ vibespaceID: UUID) {
         let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = true
-        panel.prompt = "Add Project Folder(s)"
+        LocalFolderPickerConfiguration.apply(
+            to: panel,
+            prompt: "Add Project Folder(s)"
+        )
 
         guard panel.runModal() == .OK else { return }
 

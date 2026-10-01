@@ -499,10 +499,10 @@ struct VibeSpaceCreationSheet: View {
         }
 
         let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = true
-        panel.prompt = "Add VibeSpace Folder(s)"
+        LocalFolderPickerConfiguration.apply(
+            to: panel,
+            prompt: "Add VibeSpace Folder(s)"
+        )
         guard panel.runModal() == .OK else { return }
         appendSelectedFolders(panel.urls)
     }

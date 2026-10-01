@@ -339,6 +339,15 @@ And navigation actions (Open in Terminal, Reveal in Finder, New File, New Folder
     behave identically to the equivalent actions on file/folder nodes
 ```
 
+### F021-S32 · Add Project can create and select a new folder (R22)
+
+```gherkin
+Given the user opens the local folder picker from `Add Project`
+When the desired project directory does not exist yet
+Then the picker offers New Folder creation
+And the newly created directory can be selected and added as a project
+```
+
 ---
 
 ## Requirements
@@ -366,6 +375,7 @@ And navigation actions (Open in Terminal, Reveal in Finder, New File, New Folder
 | F021-R19 | Remove Parked Project — parked projects expose a "Remove Project" context-menu action (alongside "Activate Project") that drops the parked entry and clears its associated state without activating it; no confirmation prompt | implemented |
 | F021-R20 | Project Node Context Menu — an active project-root node exposes a full right-click menu via the shared `ProjectNodeContextMenu` component: Make Current Project, Open in Terminal (new terminal at project root), Reveal in Finder (hidden for remote/SSH), New File, New Folder, Copy Path, Park Project, Remove Project. Make Current Project is dispatched via `.makeCurrentProjectRequested` → `VibeSpaceCanvasActionsCoordinator.focusProject(id:)` | implemented |
 | F021-R21 | Cross-Surface Menu Parity — the project-node menu MUST be identical across the classic Files pane and the unified/combined sidebar (same shared component), and its navigation actions (Open in Terminal, Reveal in Finder, New File, New Folder, Copy Path) MUST route through the same FileTreeAction handlers as file/folder nodes so behavior and wording match | implemented |
+| F021-R22 | Local Project Folder Creation — Add Project folder pickers MUST allow creating a new directory and selecting it immediately as a project | implemented |
 
 ---
 
@@ -411,3 +421,4 @@ And navigation actions (Open in Terminal, Reveal in Finder, New File, New Folder
 | 2026-05-22 | Closed F021-R17 cross-surface coverage: board-tile click-to-select wired via `.boardTileActivated`; terminal-tray and exclusion behaviors documented as inherent in scenarios S23–S24 | — |
 | 2026-06-03 | Added project removal via context menu for active (F021-R18) and parked (F021-R19) projects, with scenarios S25–S26; no confirmation prompt (resolves the prior open question) | — |
 | 2026-07-07 | Expanded the project-node right-click menu into a full shared `ProjectNodeContextMenu` (Make Current Project, Open in Terminal, Reveal in Finder, New File, New Folder, Copy Path, Park/Remove) used across both explorer surfaces (F021-R20, R21), with scenarios S27–S31 | — |
+| 2026-09-09 | Enabled creating and immediately selecting a new directory in local Add Project pickers (F021-R22, S32) | — |

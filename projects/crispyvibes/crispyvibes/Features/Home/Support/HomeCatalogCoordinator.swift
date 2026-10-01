@@ -1,5 +1,21 @@
 import AppKit
+import AppKit
 import Foundation
+
+@MainActor
+enum LocalFolderPickerConfiguration {
+    static func apply(
+        to panel: NSOpenPanel,
+        prompt: String,
+        allowsMultipleSelection: Bool = true
+    ) {
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = allowsMultipleSelection
+        panel.prompt = prompt
+    }
+}
 
 @MainActor
 final class HomeCatalogCoordinator {
@@ -354,10 +370,7 @@ final class HomeCatalogCoordinator {
 
     private func chooseDirectoryURLs(prompt: String) -> [URL] {
         let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = true
-        panel.prompt = prompt
+        LocalFolderPickerConfiguration.apply(to: panel, prompt: prompt)
 
         guard panel.runModal() == .OK else { return [] }
         return importUseCase.normalizedUniqueDirectoryURLs(from: panel.urls)

@@ -28,7 +28,7 @@ VibeSpace Projects covers project creation, focus management, add/remove operati
 ### Adding Projects
 
 1. Click **Add Project** from the toolbar, Dashboard, or project rail CTA.
-2. The folder picker supports multi-select — choose one or more directories.
+2. The folder picker supports multi-select — choose one or more existing directories, or use **New Folder** to create a directory and select it immediately.
 3. One project is created per selected folder.
 4. Duplicates are ignored (matched by normalized path).
 5. If a selected folder is already open, it becomes focused instead of duplicated.

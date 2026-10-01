@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import CrispyVibes
 
@@ -142,5 +143,21 @@ final class VibeSpaceCreationResultTests: XCTestCase {
         let instructions = vibespace.startupSettings.activeProfiles.filter { $0.hasInstruction }
         XCTAssertTrue(instructions.isEmpty,
             "No startup instructions should exist for vibespace with no CLI selected")
+    }
+
+    @MainActor
+    func testLocalFolderPickerAllowsCreatingAndSelectingDirectories() {
+        let panel = NSOpenPanel()
+
+        LocalFolderPickerConfiguration.apply(
+            to: panel,
+            prompt: "Add Project Folder(s)"
+        )
+
+        XCTAssertTrue(panel.canChooseDirectories)
+        XCTAssertFalse(panel.canChooseFiles)
+        XCTAssertTrue(panel.canCreateDirectories)
+        XCTAssertTrue(panel.allowsMultipleSelection)
+        XCTAssertEqual(panel.prompt, "Add Project Folder(s)")
     }
 }
