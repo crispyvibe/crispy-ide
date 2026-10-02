@@ -27,23 +27,53 @@ extension CLICommandRouter {
         }
     }
 
-    // MARK: - lane.create / lane.update / lane.delete / lane.restoreStarters
+    // MARK: - lane.validate / lane.create / lane.update / lane.delete / lane.restoreStarters
+
+    func handleLaneValidate(_ request: CLIRequest) async -> CLIResponse {
+        guard let manager = vibeLaneTaskManager else { return laneNotConnected(request) }
+        guard case .object(let document)? = request.params?["document"] else {
+            return laneInvalidParams(request, "`document` must be an object")
+        }
+        do {
+            let lane = try Self.decodeLaneDocument(
+                document,
+                manager: manager,
+                allowUnresolvedVibes: true
+            )
+            return .ok(
+                id: request.id,
+                result: Self.validationResult(Self.laneIssueMessages(lane.validationIssues))
+            )
+        } catch {
+            return laneInvalidParams(request, error.localizedDescription)
+        }
+    }
 
     func handleLaneCreate(_ request: CLIRequest) async -> CLIResponse {
         guard let manager = vibeLaneTaskManager else { return laneNotConnected(request) }
-        guard let name = request.params?["name"]?.stringValue?
+        let params: [String: CLIJSONValue]
+        do {
+            params = try Self.laneAuthoringParams(request)
+        } catch {
+            return laneInvalidParams(request, error.localizedDescription)
+        }
+        guard let name = params["name"]?.stringValue?
             .trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else {
             return laneInvalidParams(request, "`name` is required")
         }
-        var checkpoints: [VibeLaneCheckpoint]?
-        if let raw = request.params?["checkpoints"] {
-            guard let decoded = Self.decodeCheckpoints(raw) else {
-                return laneInvalidParams(request, "`checkpoints` does not match the lane checkpoint schema")
-            }
-            checkpoints = decoded
+        let hasCanonicalSteps = params["steps"] != nil
+        let checkpoints: [VibeLaneCheckpoint]?
+        do {
+            checkpoints = try Self.decodeLaneCheckpoints(
+                from: params,
+                manager: manager,
+                allowUnresolvedVibes: false
+            )
+        } catch {
+            return laneInvalidParams(request, error.localizedDescription)
         }
         var loopGroups: [VibeLaneLoopGroup]?
-        if let raw = request.params?["loopGroups"] {
+        if let raw = params["loopGroups"] {
             guard let decoded = Self.decodeLoopGroups(raw) else {
                 return laneInvalidParams(request, "`loopGroups` does not match the lane loop-group schema")
             }
@@ -52,11 +82,24 @@ extension CLICommandRouter {
         // Validate EVERY field before the first write. Creating the lane and then
         // rejecting a later parameter would leave a persisted lane behind after
         // an error response.
-        let detail = request.params?["description"]?.stringValue?
+        let detail = params["description"]?.stringValue?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let steerLimit = request.params?["steerLimit"]?.intValue
+        let steerLimit = params["steerLimit"]?.intValue
         if let steerLimit, steerLimit < 0 {
             return laneInvalidParams(request, "`steerLimit` must be >= 0")
+        }
+        if hasCanonicalSteps {
+            let proposed = VibeLaneDefinition(
+                name: name,
+                detail: detail?.isEmpty == false ? detail : nil,
+                steerLimit: steerLimit ?? 1,
+                checkpoints: checkpoints ?? [],
+                loopGroups: loopGroups ?? []
+            )
+            let issues = Self.laneIssueMessages(proposed.validationIssues)
+            guard issues.isEmpty else {
+                return laneInvalidParams(request, issues.joined(separator: "; "))
+            }
         }
         guard var lane = await manager.createLane(name: name) else {
             return lanePersistenceFailed(request, manager: manager)
@@ -81,39 +124,67 @@ extension CLICommandRouter {
         case .success(let resolved): lane = resolved
         case .failure(let response): return response
         }
+        if let failure = expectedVersionFailure(
+            request,
+            currentVersion: lane.version,
+            resource: "lane `\(lane.id.uuidString)`"
+        ) {
+            return failure
+        }
+        let params: [String: CLIJSONValue]
+        do {
+            params = try Self.laneAuthoringParams(request)
+        } catch {
+            return laneInvalidParams(request, error.localizedDescription)
+        }
+        let hasCanonicalSteps = params["steps"] != nil
         var changed = false
-        if let name = request.params?["name"]?.stringValue?
+        if let name = params["name"]?.stringValue?
             .trimmingCharacters(in: .whitespacesAndNewlines) {
             guard !name.isEmpty else { return laneInvalidParams(request, "`name` cannot be empty") }
             lane.name = name
             changed = true
         }
-        if let detail = request.params?["description"]?.stringValue {
+        if let detail = params["description"]?.stringValue {
             let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
             lane.detail = trimmed.isEmpty ? nil : trimmed
             changed = true
         }
-        if let steerLimit = request.params?["steerLimit"]?.intValue {
+        if let steerLimit = params["steerLimit"]?.intValue {
             guard steerLimit >= 0 else { return laneInvalidParams(request, "`steerLimit` must be >= 0") }
             lane.steerLimit = steerLimit
             changed = true
         }
-        if let raw = request.params?["checkpoints"] {
-            guard let decoded = Self.decodeCheckpoints(raw), !decoded.isEmpty else {
-                return laneInvalidParams(request, "`checkpoints` does not match the lane checkpoint schema")
+        if params["steps"] != nil || params["checkpoints"] != nil {
+            do {
+                guard let decoded = try Self.decodeLaneCheckpoints(
+                    from: params,
+                    manager: manager,
+                    allowUnresolvedVibes: false
+                ), !decoded.isEmpty else {
+                    return laneInvalidParams(request, "lane steps cannot be empty")
+                }
+                lane.checkpoints = decoded
+                changed = true
+            } catch {
+                return laneInvalidParams(request, error.localizedDescription)
             }
-            lane.checkpoints = decoded
-            changed = true
         }
-        if let raw = request.params?["loopGroups"] {
+        if let raw = params["loopGroups"] {
             guard let decoded = Self.decodeLoopGroups(raw) else {
                 return laneInvalidParams(request, "`loopGroups` does not match the lane loop-group schema")
             }
             lane.loopGroups = decoded
             changed = true
         }
+        if hasCanonicalSteps {
+            let issues = Self.laneIssueMessages(lane.validationIssues)
+            guard issues.isEmpty else {
+                return laneInvalidParams(request, issues.joined(separator: "; "))
+            }
+        }
         guard changed else {
-            return laneInvalidParams(request, "nothing to update: provide `name`, `description`, `steerLimit`, `checkpoints`, or `loopGroups`")
+            return laneInvalidParams(request, "nothing to update: provide `name`, `description`, `steerLimit`, `steps`, compatibility `checkpoints`, or `loopGroups`")
         }
         guard let updated = await manager.updateLane(lane) else {
             return lanePersistenceFailed(request, manager: manager)
@@ -125,6 +196,13 @@ extension CLICommandRouter {
         guard let manager = vibeLaneTaskManager else { return laneNotConnected(request) }
         switch resolvedLane(from: request, manager: manager) {
         case .success(let lane):
+            if let failure = expectedVersionFailure(
+                request,
+                currentVersion: lane.version,
+                resource: "lane `\(lane.id.uuidString)`"
+            ) {
+                return failure
+            }
             await manager.deleteLane(id: lane.id)
             if manager.lane(withID: lane.id) != nil {
                 return lanePersistenceFailed(request, manager: manager)
@@ -411,9 +489,277 @@ extension CLICommandRouter {
         return .success(task)
     }
 
-    /// Decode a `checkpoints` param (CLI JSON) into lane checkpoints by
-    /// round-tripping through the Codable lane schema, then normalizing keys
-    /// exactly like the UI editor save path (F059-R01).
+    /// Extract authoring fields from a document while preserving the original
+    /// flattened RPC compatibility shape.
+    static func laneAuthoringParams(_ request: CLIRequest) throws -> [String: CLIJSONValue] {
+        guard let document = request.params?["document"] else {
+            return request.params ?? [:]
+        }
+        guard case .object(var fields) = document else {
+            throw AutomationCLIInputError("`document` must be an object")
+        }
+        // Preserve the original flattened RPC: explicitly supplied top-level
+        // authoring fields override their document equivalents.
+        for key in ["name", "description", "steerLimit", "steps", "checkpoints", "loopGroups"] {
+            if let value = request.params?[key] { fields[key] = value }
+        }
+        return fields
+    }
+
+    /// Decode a complete Lane document for pure validation. Canonical steps are
+    /// hydrated from exact manager-owned Vibe revisions; compatibility
+    /// checkpoints continue to use their embedded expectation definitions.
+    static func decodeLaneDocument(
+        _ document: [String: CLIJSONValue],
+        manager: VibeLaneTaskManager,
+        allowUnresolvedVibes: Bool
+    ) throws -> VibeLaneDefinition {
+        let name: String
+        if let raw = document["name"] {
+            guard let value = raw.stringValue else {
+                throw AutomationCLIInputError("`document.name` must be a string")
+            }
+            name = value
+        } else {
+            name = ""
+        }
+        let detail: String?
+        if let raw = document["description"] {
+            guard let value = raw.stringValue else {
+                throw AutomationCLIInputError("`document.description` must be a string")
+            }
+            detail = value.trimmingCharacters(in: .whitespacesAndNewlines).automationNonEmpty
+        } else {
+            detail = nil
+        }
+        let steerLimit: Int
+        if let raw = document["steerLimit"] {
+            guard let value = raw.intValue else {
+                throw AutomationCLIInputError("`document.steerLimit` must be an integer")
+            }
+            steerLimit = value
+        } else {
+            steerLimit = 1
+        }
+        let id: UUID
+        if let raw = document["id"] {
+            guard let value = raw.stringValue, let parsed = UUID(uuidString: value) else {
+                throw AutomationCLIInputError("`document.id` must be a UUID")
+            }
+            id = parsed
+        } else {
+            id = UUID()
+        }
+        let version: Int
+        if let raw = document["version"] {
+            guard let value = raw.intValue, value > 0 else {
+                throw AutomationCLIInputError("`document.version` must be a positive integer")
+            }
+            version = value
+        } else {
+            version = 1
+        }
+        let checkpoints = try decodeLaneCheckpoints(
+            from: document,
+            manager: manager,
+            allowUnresolvedVibes: allowUnresolvedVibes
+        ) ?? []
+        let loopGroups: [VibeLaneLoopGroup]
+        if let raw = document["loopGroups"] {
+            guard let decoded = decodeLoopGroups(raw) else {
+                throw AutomationCLIInputError("`document.loopGroups` does not match the lane loop-group schema")
+            }
+            loopGroups = decoded
+        } else {
+            loopGroups = []
+        }
+        return VibeLaneDefinition(
+            id: id,
+            version: version,
+            name: name,
+            detail: detail,
+            steerLimit: steerLimit,
+            checkpoints: checkpoints,
+            loopGroups: loopGroups
+        )
+    }
+
+    static func decodeLaneCheckpoints(
+        from fields: [String: CLIJSONValue],
+        manager: VibeLaneTaskManager,
+        allowUnresolvedVibes: Bool
+    ) throws -> [VibeLaneCheckpoint]? {
+        if fields["steps"] != nil, fields["checkpoints"] != nil {
+            throw AutomationCLIInputError("provide canonical `steps` or compatibility `checkpoints`, not both")
+        }
+        if let raw = fields["steps"] {
+            return try decodeCanonicalSteps(
+                raw,
+                manager: manager,
+                allowUnresolvedVibes: allowUnresolvedVibes
+            )
+        }
+        if let raw = fields["checkpoints"] {
+            guard let decoded = decodeCheckpoints(raw) else {
+                throw AutomationCLIInputError("`checkpoints` does not match the compatibility lane checkpoint schema")
+            }
+            return decoded
+        }
+        return nil
+    }
+
+    static func decodeCanonicalSteps(
+        _ raw: CLIJSONValue,
+        manager: VibeLaneTaskManager,
+        allowUnresolvedVibes: Bool
+    ) throws -> [VibeLaneCheckpoint] {
+        guard let values = raw.arrayValue else {
+            throw AutomationCLIInputError("`steps` must be an array")
+        }
+        var seenKeys = Set<String>()
+        return try values.enumerated().map { index, value in
+            let path = "steps[\(index)]"
+            guard let object = value.objectValue else {
+                throw AutomationCLIInputError("`\(path)` must be an object")
+            }
+            guard let rawKey = object["key"]?.stringValue else {
+                throw AutomationCLIInputError("`\(path).key` is required")
+            }
+            let key = VibeLaneTaskManager.normalizedKey(rawKey)
+            guard !key.isEmpty else {
+                throw AutomationCLIInputError("`\(path).key` cannot be empty")
+            }
+            guard seenKeys.insert(key).inserted else {
+                throw AutomationCLIInputError("`\(path).key` duplicates `\(key)`")
+            }
+            guard let vibeObject = object["vibe"]?.objectValue else {
+                throw AutomationCLIInputError("`\(path).vibe` is required and must be an object")
+            }
+            guard let rawID = vibeObject["id"]?.stringValue, !rawID.isEmpty else {
+                throw AutomationCLIInputError("`\(path).vibe.id` is required")
+            }
+            guard let vibeID = UUID(uuidString: rawID) else {
+                throw AutomationCLIInputError("`\(path).vibe.id` must be a UUID")
+            }
+            guard let vibeVersion = vibeObject["version"]?.intValue, vibeVersion > 0 else {
+                throw AutomationCLIInputError("`\(path).vibe.version` must be a positive integer")
+            }
+            let requires = try decodeInputRequirements(object["requires"], path: "\(path).requires")
+            let produces = try decodeOutputDeclarations(object["produces"], path: "\(path).produces")
+            guard let vibe = manager.vibe(withID: vibeID, version: vibeVersion) else {
+                guard allowUnresolvedVibes else {
+                    throw AutomationCLIInputError(
+                        "`\(path).vibe` revision was not found: \(vibeID.uuidString) v\(vibeVersion)"
+                    )
+                }
+                var unresolved = VibeLaneCheckpoint(
+                    key: key,
+                    order: index,
+                    vibeID: vibeID,
+                    vibeVersion: vibeVersion,
+                    work: VibeLaneWorkDefinition(goal: ""),
+                    verify: VibeLaneVerificationDefinition(""),
+                    requires: requires,
+                    produces: produces
+                )
+                unresolved.unresolvedVibeReference = true
+                return unresolved
+            }
+            return vibe.checkpoint(
+                key: key,
+                order: index,
+                requires: requires,
+                produces: produces
+            )
+        }
+    }
+
+    static func decodeInputRequirements(
+        _ raw: CLIJSONValue?,
+        path: String
+    ) throws -> [VibeLaneInputRequirement]? {
+        guard let raw else { return nil }
+        guard let values = raw.arrayValue else {
+            throw AutomationCLIInputError("`\(path)` must be an array")
+        }
+        return try values.enumerated().map { index, value in
+            let itemPath = "\(path)[\(index)]"
+            if let key = value.stringValue {
+                let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    throw AutomationCLIInputError("`\(itemPath)` cannot be empty")
+                }
+                return VibeLaneInputRequirement(key: trimmed)
+            }
+            guard let object = value.objectValue,
+                  let rawKey = object["key"]?.stringValue else {
+                throw AutomationCLIInputError("`\(itemPath)` must be a string or an object with `key`")
+            }
+            let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty else {
+                throw AutomationCLIInputError("`\(itemPath).key` cannot be empty")
+            }
+            let askUser: Bool
+            if let rawAskUser = object["askUser"] {
+                guard let value = rawAskUser.boolValue else {
+                    throw AutomationCLIInputError("`\(itemPath).askUser` must be a boolean")
+                }
+                askUser = value
+            } else {
+                askUser = false
+            }
+            let prompt: String?
+            if let rawPrompt = object["prompt"] {
+                guard let value = rawPrompt.stringValue else {
+                    throw AutomationCLIInputError("`\(itemPath).prompt` must be a string")
+                }
+                prompt = value.trimmingCharacters(in: .whitespacesAndNewlines).automationNonEmpty
+            } else {
+                prompt = nil
+            }
+            return VibeLaneInputRequirement(key: key, askUser: askUser, prompt: prompt)
+        }
+    }
+
+    static func decodeOutputDeclarations(
+        _ raw: CLIJSONValue?,
+        path: String
+    ) throws -> [VibeLaneOutputDeclaration]? {
+        guard let raw else { return nil }
+        guard let values = raw.arrayValue else {
+            throw AutomationCLIInputError("`\(path)` must be an array")
+        }
+        return try values.enumerated().map { index, value in
+            let itemPath = "\(path)[\(index)]"
+            if let key = value.stringValue {
+                let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    throw AutomationCLIInputError("`\(itemPath)` cannot be empty")
+                }
+                return VibeLaneOutputDeclaration(key: trimmed)
+            }
+            guard let object = value.objectValue,
+                  let rawKey = object["key"]?.stringValue else {
+                throw AutomationCLIInputError("`\(itemPath)` must be a string or an object with `key`")
+            }
+            let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty else {
+                throw AutomationCLIInputError("`\(itemPath).key` cannot be empty")
+            }
+            let detailValue = object["description"] ?? object["detail"]
+            let detail: String?
+            if let detailValue {
+                guard let value = detailValue.stringValue else {
+                    throw AutomationCLIInputError("`\(itemPath).description` must be a string")
+                }
+                detail = value.trimmingCharacters(in: .whitespacesAndNewlines).automationNonEmpty
+            } else {
+                detail = nil
+            }
+            return VibeLaneOutputDeclaration(key: key, detail: detail)
+        }
+    }
+
     static func decodeCheckpoints(_ raw: CLIJSONValue) -> [VibeLaneCheckpoint]? {
         guard case .array = raw else { return nil }
         guard let data = try? JSONEncoder().encode(raw),
@@ -437,9 +783,9 @@ extension CLICommandRouter {
         .string(laneDateFormatter.string(from: date))
     }
 
-    /// Machine-readable reason a lane is not runnable, for CLI error messages.
-    static func laneIssueSummary(_ lane: VibeLaneDefinition) -> String {
-        let issues = lane.validationIssues.map { issue -> String in
+    /// Machine-readable descriptions of shared Lane validation issues.
+    static func laneIssueMessages(_ laneIssues: [VibeLaneDefinitionIssue]) -> [String] {
+        laneIssues.map { issue -> String in
             switch issue {
             case .missingLaneName: "missing name"
             case .missingCheckpoints: "no steps"
@@ -466,6 +812,11 @@ extension CLICommandRouter {
                 "step \(index + 1) points at missing Vibe \(vibeID.uuidString) v\(version)"
             }
         }
+    }
+
+    /// Machine-readable reason a lane is not runnable, for CLI error messages.
+    static func laneIssueSummary(_ lane: VibeLaneDefinition) -> String {
+        let issues = laneIssueMessages(lane.validationIssues)
         return issues.isEmpty ? "unknown" : issues.joined(separator: "; ")
     }
 
@@ -485,9 +836,38 @@ extension CLICommandRouter {
 
     static func laneDetailJSON(_ lane: VibeLaneDefinition) -> CLIJSONValue {
         guard case .object(var obj) = laneSummaryJSON(lane) else { return .null }
+        obj["steps"] = .array(lane.orderedCheckpoints.map { laneStepJSON($0) })
         obj["checkpoints"] = .array(lane.orderedCheckpoints.map { checkpointJSON($0) })
         obj["loopGroups"] = .array(lane.loopGroups.map { loopGroupJSON($0) })
         return .object(obj)
+    }
+
+    private static func laneStepJSON(_ checkpoint: VibeLaneCheckpoint) -> CLIJSONValue {
+        var object: [String: CLIJSONValue] = ["key": .string(checkpoint.key)]
+        if let vibeID = checkpoint.vibeID, let vibeVersion = checkpoint.vibeVersion {
+            object["vibe"] = .object([
+                "id": .string(vibeID.uuidString),
+                "version": .int(vibeVersion),
+            ])
+        }
+        if !checkpoint.inputRequirements.isEmpty {
+            object["requires"] = .array(checkpoint.inputRequirements.map { requirement in
+                var value: [String: CLIJSONValue] = [
+                    "key": .string(requirement.key),
+                    "askUser": .bool(requirement.askUser),
+                ]
+                if let prompt = requirement.prompt { value["prompt"] = .string(prompt) }
+                return .object(value)
+            })
+        }
+        if !checkpoint.outputDeclarations.isEmpty {
+            object["produces"] = .array(checkpoint.outputDeclarations.map { declaration in
+                var value: [String: CLIJSONValue] = ["key": .string(declaration.key)]
+                if let detail = declaration.detail { value["description"] = .string(detail) }
+                return .object(value)
+            })
+        }
+        return .object(object)
     }
 
     private static func loopGroupJSON(_ group: VibeLaneLoopGroup) -> CLIJSONValue {
@@ -539,6 +919,12 @@ extension CLICommandRouter {
             ]),
         ]
         if let title = checkpoint.title { obj["title"] = .string(title) }
+        if let vibeID = checkpoint.vibeID, let vibeVersion = checkpoint.vibeVersion {
+            obj["vibe"] = .object([
+                "id": .string(vibeID.uuidString),
+                "version": .int(vibeVersion),
+            ])
+        }
         if !checkpoint.instructions.isEmpty { obj["instructions"] = .string(checkpoint.instructions) }
         if !checkpoint.skills.isEmpty { obj["skills"] = .array(checkpoint.skills.map { .string($0) }) }
         if !checkpoint.inputRequirements.isEmpty {

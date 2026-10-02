@@ -23,6 +23,9 @@ This document enumerates trust boundaries, attack surfaces, and mitigations.
 3. **Environment variables** (`CRISPY_SOCKET`, `CRISPY_CONTEXT`, `CRISPY_VIBESPACE`, `CRISPY_PROJECT_PATH`)
 4. **JSON-RPC parameters** — `file.*` paths, `terminal.send` text, `browser.eval` JS, etc.
 5. **Surface IDs** — UUIDs leaked by `terminal.list` / `pane.list` to the calling agent
+6. **Global Automation mutations** — `lane.*`, `vibe.*`, `skill.*`, and `schedule.*` affect app-wide definitions, not only the caller's project
+7. **Linked Skill packages** — external package directories remain mutable outside Crispy after import
+8. **Enabled Schedules** — recurring unattended runs execute with Full Trust
 
 ## Threats
 
@@ -103,11 +106,35 @@ This document enumerates trust boundaries, attack surfaces, and mitigations.
 - **Likelihood**: Low–Medium — requires the agent to opt into `scope=vibespace`; the default (`scope=project`) never crosses the project boundary.
 - **Mitigation**: `scope=vibespace` is bounded to the *active* vibespace only — it cannot reach todos in other vibespaces or other app instances. The default scope is `project`, which requires a resolvable project and does not widen silently (F044-R90, F044-R91). Cross-project visibility within a vibespace is accepted under the same-user, in-vibespace trust model (see F044-T04): the app's own Todos Project/All toggle already exposes the same data to the user. No secrets are stored in todos by design; users should not paste credentials into todo bodies.
 
+### F044-T12: Same-user process mutates global Automation state
+
+- **Vector**: Any same-user process that can reach the owner-only socket creates, updates, or deletes app-wide Lanes, Vibes, Skills, or Schedules, regardless of its current project.
+- **Impact**: Persistent Automation changes affect later runs in other projects and vibespaces.
+- **Likelihood**: Medium under the intentional same-user authorization model.
+- **Mitigation**: Mutations route through existing managers and validation. Lane/Vibe update and delete require current `expectedVersion`; Skill removal is blocked while referenced; command help and usage docs state that Automation definitions are global. This is not prevented by project scoping and remains accepted same-user authority.
+
+### F044-T13: Linked Skill changes after validation
+
+- **Vector**: A linked Skill package is modified outside Crispy after import/validation, changing instructions, scripts, or resources consumed by future Vibes.
+- **Impact**: Unexpected or malicious agent instructions can enter a later run without a Crispy-side edit.
+- **Likelihood**: Medium for shared or repository-owned links.
+- **Mitigation**: Copy is the default import mode and copies the complete validated package into the managed root. Link mode is explicit and human output marks linked packages as externally mutable. Existing scan/parse limits and availability checks remain in force. Users should use copy for a stable trust boundary.
+
+### F044-T14: Schedule enables unattended Full Trust execution
+
+- **Vector**: A channel client creates, updates, enables, or adopts a Lane into an enabled Schedule, causing recurring unattended execution.
+- **Impact**: Repeated Full Trust actions against the configured project.
+- **Likelihood**: Medium if an agent is allowed to author Automation.
+- **Mitigation**: Every mutation whose resulting Schedule is enabled requires explicit `confirmFullTrust: true` before the manager is called. Human output marks enabled Schedules. Preview is pure and uses the schedule calculator without persistence. The acknowledgement is a safety interlock, not an authorization boundary against same-user malware.
+
 ## Residual Risks
 
 - **R1: In-vibespace agent isolation.** Multiple agents in the same vibespace can affect each other's terminals (F044-T04). v1 mitigation is documentation only. Future: per-terminal ACLs.
 - **R2: Scrollback secrets.** `terminal.read` returns whatever is on screen, including secrets typed historically. Mitigation is user awareness.
 - **R3: Browser panel cookie exposure.** Agents with browser access can read any state in panels in their vibespace.
+- **R4: Global Automation authority.** Project context does not scope Lane, Vibe, Skill, or Schedule definitions; any authorized same-user channel client can mutate them.
+- **R5: Linked Skill mutability.** Explicit links can change outside Crispy after validation; copy import is the stable default.
+- **R6: Full Trust acknowledgement limits.** Confirmation prevents accidental enablement but cannot constrain a malicious same-user process that knowingly supplies it.
 
 ## NFR Compliance
 

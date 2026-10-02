@@ -134,6 +134,10 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
         XCTAssertEqual(detail["id"]?.stringValue, lane.id.uuidString)
         let checkpoints = try XCTUnwrap(detail["checkpoints"]?.arrayValue)
         XCTAssertEqual(checkpoints.map { $0.objectValue?["key"]?.stringValue }, ["repro", "patch"])
+        let steps = try XCTUnwrap(detail["steps"]?.arrayValue)
+        XCTAssertEqual(steps.count, 2)
+        XCTAssertNotNil(steps[0].objectValue?["vibe"]?.objectValue?["id"]?.stringValue)
+        XCTAssertNotNil(steps[0].objectValue?["vibe"]?.objectValue?["version"]?.intValue)
         XCTAssertEqual(
             checkpoints[1].objectValue?["requires"]?.arrayValue?.first?.objectValue?["key"]?.stringValue,
             "repro"
@@ -198,6 +202,70 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
         ]))
         XCTAssertEqual(errorCode(response), CLIErrorCode.invalidParams)
         XCTAssertEqual(manager.lanes.count, 1, "no lane is left behind on invalid checkpoints")
+    }
+
+    func test_canonicalLaneDocumentsRejectAmbiguousOrMalformedStepsBeforeWriting() async throws {
+        let vibe = try XCTUnwrap(manager.vibes.first)
+        let count = manager.lanes.count
+        let validStep: CLIJSONValue = .object([
+            "key": .string("work"),
+            "vibe": .object([
+                "id": .string(vibe.id.uuidString),
+                "version": .int(vibe.version),
+            ]),
+        ])
+        let compatibilityCheckpoint: CLIJSONValue = .object([
+            "key": .string("legacy"),
+            "order": .int(0),
+            "work": .object(["goal": .string("work")]),
+            "verify": .object(["definition": .string("done")]),
+        ])
+        let documents: [CLIJSONValue] = [
+            .object([
+                "name": .string("Both"),
+                "steps": .array([validStep]),
+                "checkpoints": .array([compatibilityCheckpoint]),
+            ]),
+            .object([
+                "name": .string("Missing id"),
+                "steps": .array([.object([
+                    "key": .string("work"),
+                    "vibe": .object(["version": .int(vibe.version)]),
+                ])]),
+            ]),
+            .object([
+                "name": .string("Invalid version"),
+                "steps": .array([.object([
+                    "key": .string("work"),
+                    "vibe": .object([
+                        "id": .string(vibe.id.uuidString),
+                        "version": .int(0),
+                    ]),
+                ])]),
+            ]),
+            .object([
+                "name": .string("Malformed handoff"),
+                "steps": .array([.object([
+                    "key": .string("work"),
+                    "vibe": .object([
+                        "id": .string(vibe.id.uuidString),
+                        "version": .int(vibe.version),
+                    ]),
+                    "requires": .array([.object([
+                        "key": .string("input"),
+                        "askUser": .string("yes"),
+                    ])]),
+                ])]),
+            ]),
+        ]
+
+        for document in documents {
+            let response = await router.dispatch(request("lane.create", params: [
+                "document": document,
+            ]))
+            XCTAssertEqual(errorCode(response), CLIErrorCode.invalidParams)
+            XCTAssertEqual(manager.lanes.count, count, "rejected documents must not write")
+        }
     }
 
     /// Regression: `steerLimit` was validated only AFTER the lane had already been
@@ -273,6 +341,7 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
     func test_laneUpdateBumpsVersion() async throws {
         let result = try ok(await router.dispatch(request("lane.update", params: [
             "lane": .string(lane.id.uuidString),
+            "expectedVersion": .int(lane.version),
             "name": .string("Fix a bug v2"),
             "steerLimit": .int(3),
         ])))
@@ -282,9 +351,42 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
         XCTAssertEqual(updated["version"]?.intValue, lane.version + 1)
     }
 
+    func test_laneDocumentRPCShapeCreatesAndUpdatesWithVersionChecks() async throws {
+        let createdResult = try ok(await router.dispatch(request("lane.create", params: [
+            "document": .object([
+                "name": .string("Document Lane"),
+                "description": .string("Created by crispy lane create --file"),
+                "steerLimit": .int(2),
+            ]),
+        ])))
+        let created = try XCTUnwrap(createdResult["lane"]?.objectValue)
+        let id = try XCTUnwrap(created["id"]?.stringValue)
+        let version = try XCTUnwrap(created["version"]?.intValue)
+        XCTAssertEqual(created["name"]?.stringValue, "Document Lane")
+        XCTAssertEqual(created["description"]?.stringValue, "Created by crispy lane create --file")
+
+        let stale = await router.dispatch(request("lane.update", params: [
+            "lane": .string(id),
+            "document": .object(["name": .string("Must not win")]),
+            "expectedVersion": .int(version - 1),
+        ]))
+        XCTAssertEqual(errorCode(stale), CLIErrorCode.conflict)
+        let laneID = try XCTUnwrap(UUID(uuidString: id))
+        XCTAssertEqual(manager.lane(withID: laneID)?.name, "Document Lane")
+
+        let updatedResult = try ok(await router.dispatch(request("lane.update", params: [
+            "lane": .string(id),
+            "document": .object(["name": .string("Document Lane v2")]),
+            "expectedVersion": .int(version),
+        ])))
+        XCTAssertEqual(updatedResult["lane"]?.objectValue?["name"]?.stringValue, "Document Lane v2")
+        XCTAssertEqual(updatedResult["lane"]?.objectValue?["version"]?.intValue, version + 1)
+    }
+
     func test_laneUpdateWithNothingToChangeIsInvalidParams() async {
         let response = await router.dispatch(request("lane.update", params: [
             "lane": .string(lane.id.uuidString),
+            "expectedVersion": .int(lane.version),
         ]))
         XCTAssertEqual(errorCode(response), CLIErrorCode.invalidParams)
     }
@@ -292,6 +394,7 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
     func test_laneDelete() async throws {
         let result = try ok(await router.dispatch(request("lane.delete", params: [
             "lane": .string("Fix a bug"),
+            "expectedVersion": .int(lane.version),
         ])))
         XCTAssertEqual(result["deleted"]?.boolValue, true)
         XCTAssertTrue(manager.lanes.isEmpty)
@@ -464,7 +567,8 @@ final class CLICommandRouterLaneHandlersTests: XCTestCase {
         XCTAssertFalse(lane["description"]?.stringValue?.isEmpty ?? true)
         let methods = try XCTUnwrap(lane["commands"]?.arrayValue)
             .compactMap { $0.objectValue?["method"]?.stringValue }
-        XCTAssertEqual(methods.count, 12)
+        XCTAssertEqual(methods.count, 13)
+        XCTAssertTrue(methods.contains("lane.validate"))
         XCTAssertTrue(methods.allSatisfy { $0.hasPrefix("lane.") })
         // A single-category response carries no app header, so the CLI renders
         // just the category.

@@ -25,6 +25,10 @@ The CLI ships in stages. Foundation (transport, authorization, env injection, PA
 | VibeSpace | `vibespace.addProject`, `vibespace.removeProject`, `vibespace.parkProject`, `vibespace.activateProject`, `vibespace.listProjects` | shipped |
 | VibeSpace | `vibespace.list`, `vibespace.current`, `pane.list` | deferred |
 | Todo | `todo.add`, `todo.list`, `todo.complete`, `todo.reopen`, `todo.update`, `todo.remove`, `todo.show`, `todo.message.add` | shipped — surface owned by [F053 Quick Todos](../../vibespace/todos/spec.md), exposed over this transport |
+| Vibe Lanes | `lane.*`, `lane.task.*` authoring and execution commands | shipped |
+| Vibes | `vibe.list`, `vibe.show`, `vibe.validate`, `vibe.create`, `vibe.update`, `vibe.delete` | shipped |
+| Skills | `skill.list`, `skill.show`, `skill.validate`, `skill.import`, `skill.duplicate`, `skill.remove` | shipped |
+| Schedules | `schedule.list`, `schedule.show`, `schedule.create`, `schedule.update`, `schedule.pause`, `schedule.enable`, `schedule.adoptLane`, `schedule.runNow`, `schedule.runs`, `schedule.delete`, `schedule.preview` | shipped |
 
 ## Dependencies
 
@@ -33,6 +37,7 @@ The CLI ships in stages. Foundation (transport, authorization, env injection, PA
 - **F012 (Browser)** — browser commands route to the embedded browser panel
 - **F020 (VibeSpace Lifecycle)** — vibespace and pane commands route to `VibeSpaceCatalogStore`
 - **F033 (Shelf)** — shelf commands route to `ShelfStore`
+- **F059 (Vibe Lanes and Automation)** — Lane/Vibe mutations route to `VibeLaneTaskManager`, Skill package operations to `VibeLaneSkillStore`, and recurring automation to `VibeLoopManager`
 - **SEC-1, SEC-3** — socket access control, command authorization
 
 ## Glossary
@@ -99,7 +104,37 @@ File commands (currently just `file.open`) MUST resolve the target path relative
 
 #### F044-R11: Persistence Parity
 
-CLI-initiated mutations (terminal create/close, shelf add/remove, browser open) MUST go through the same service methods used by user interactions. CLI-created artifacts MUST persist across app restarts identically to user-created ones.
+CLI-initiated mutations MUST go through the same service or manager methods used
+by user interactions. Lane and Vibe update/delete MUST compare required
+`expectedVersion` against manager-owned current state and return `conflict`
+before mutation when stale. Because the current Skill and Schedule models have
+no digest/revision fields, their CLI mutations MUST NOT advertise fake
+`expectedDigest` or `expectedRevision` safeguards.
+
+Skill copy import MUST copy complete discovered packages through
+`VibeLaneSkillStore`; link import MUST reuse `linkCollection`. Skill removal MUST
+be refused while a current Vibe references it. Schedule create, update, enable,
+and lane adoption MUST require explicit Full Trust confirmation whenever the
+resulting definition is enabled.
+
+#### F044-R11A: Pure Automation Inspection
+
+`vibe.validate`, `lane.validate`, `skill.validate`, and `schedule.preview` MUST
+NOT persist. Schedule preview MUST use `VibeLoopScheduleCalculator`. Vibe
+readiness returned by list/show MUST use the same Skill-aware validation as
+`vibe.validate`. `lane.validate` MUST resolve exact manager-owned Vibe revisions
+and use `VibeLaneDefinition.validationIssues`.
+
+#### F044-R11B: Canonical Lane authoring
+
+Lane create, update, and validate documents MUST treat `steps` as canonical.
+Each step MUST contain a stable `key` and exact `vibe: {id, version}` reference;
+only `requires` and `produces` are Lane-owned. Work, Verification, Bounds,
+engine configuration, and role Skills MUST come from the pinned central Vibe.
+Legacy flattened and embedded `checkpoints` input remains deprecated
+compatibility. A request containing both `steps` and `checkpoints`, or containing
+an invalid/unresolved Vibe identity or malformed handoff field, MUST fail before
+any mutation.
 
 ### Behavior
 
@@ -147,7 +182,8 @@ Detailed per-command requirements and scenarios live in category-specific docs:
 | Browser | [commands-browser.md](commands-browser.md) | `browser.open`, `browser.snapshot`, `browser.navigate`, `browser.back`, `browser.forward`, `browser.reload`, `browser.eval`, `browser.click`, `browser.type`, `browser.wait`, `browser.screenshot`, `browser.console`, `browser.dialog` |
 | Shortcuts | [commands-shortcuts.md](commands-shortcuts.md) | `shortcut.list`, `shortcut.add` |
 | VibeSpace | [commands-vibespace.md](commands-vibespace.md) | `vibespace.list`, `vibespace.current`, `pane.list`, `vibespace.addProject`, `vibespace.removeProject`, `vibespace.parkProject`, `vibespace.activateProject`, `vibespace.listProjects` |
-| Vibe Lanes | [commands-lanes.md](commands-lanes.md) | `lane.list`, `lane.show`, `lane.create`, `lane.update`, `lane.delete`, `lane.restoreStarters`, `lane.task.create`, `lane.task.list`, `lane.task.show`, `lane.task.answer`, `lane.task.stop`, `lane.task.delete` |
+| Vibe Lanes | [commands-lanes.md](commands-lanes.md) | `lane.list`, `lane.show`, `lane.validate`, `lane.create`, `lane.update`, `lane.delete`, `lane.restoreStarters`, `lane.task.create`, `lane.task.list`, `lane.task.show`, `lane.task.answer`, `lane.task.stop`, `lane.task.delete` |
+| Automation | [commands-automation.md](commands-automation.md) | `vibe.*`, `skill.*`, `schedule.*` authoring, validation, lifecycle, preview, and run history |
 | Todo | [F053 Quick Todos](../../vibespace/todos/spec.md) | `todo.add`, `todo.list`, `todo.complete`, `todo.reopen`, `todo.update`, `todo.remove`, `todo.show`, `todo.message.add` |
 
 ## Error Codes
@@ -156,6 +192,7 @@ Detailed per-command requirements and scenarios live in category-specific docs:
 |---|---|
 | `unknown_method` | The method name is not recognized |
 | `invalid_params` | Required parameter missing or malformed |
+| `conflict` | Lane or Vibe `expectedVersion` is stale; no mutation occurred |
 | `terminal_not_found` | Referenced terminal ID does not exist |
 | `vibespace_not_found` | Referenced vibespace ID does not exist |
 | `pane_not_found` | Referenced pane ID does not exist |

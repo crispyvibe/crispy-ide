@@ -228,6 +228,61 @@ final class VibeLaneSkillStore: ObservableObject {
         return skills.filter { imported.contains($0.reference) }
     }
 
+    /// Parse an external Skill package or collection without linking or copying it.
+    func validateCollection(at selectedURL: URL) throws -> [VibeLaneSkillDefinition] {
+        let files = try Self.discoverSkillFiles(at: selectedURL, fileManager: fileManager)
+        guard !files.isEmpty else { throw StoreError.noSkillsFound }
+        return try files.map {
+            try Self.parse(
+                fileURL: $0,
+                reference: $0.path,
+                source: .linked,
+                fileManager: fileManager
+            )
+        }
+    }
+
+    /// Copy every discovered complete Skill package into the managed root.
+    /// Discovery and parsing use the same bounds as linked imports.
+    @discardableResult
+    func copyCollection(_ selectedURL: URL) throws -> [VibeLaneSkillDefinition] {
+        let discovered = try validateCollection(at: selectedURL)
+        let packages = try discovered.map { skill -> (source: URL, destination: URL) in
+            let destination = rootURL.appendingPathComponent(
+                Self.slug(for: skill.name),
+                isDirectory: true
+            )
+            guard destination.standardizedFileURL != skill.rootURL.standardizedFileURL,
+                  !fileManager.fileExists(atPath: destination.path) else {
+                throw StoreError.duplicateName
+            }
+            return (skill.rootURL, destination)
+        }
+        guard Set(packages.map(\.destination.path)).count == packages.count else {
+            throw StoreError.duplicateName
+        }
+
+        var copied: [URL] = []
+        do {
+            try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+            for package in packages {
+                copied.append(package.destination)
+                try fileManager.copyItem(at: package.source, to: package.destination)
+                _ = try Self.parse(
+                    fileURL: package.destination.appendingPathComponent("SKILL.md"),
+                    reference: package.destination.lastPathComponent,
+                    source: .personal,
+                    fileManager: fileManager
+                )
+            }
+        } catch {
+            for destination in copied { try? fileManager.removeItem(at: destination) }
+            throw error
+        }
+        reload()
+        return try packages.map { try skill(withReference: $0.destination.lastPathComponent) }
+    }
+
     func remove(_ skill: VibeLaneSkillDefinition) async throws {
         switch skill.source {
         case .bundled:

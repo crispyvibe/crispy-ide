@@ -3,7 +3,7 @@ title: "Agent CLI"
 feature: "F044"
 domain: "platform"
 audience: "agent-author"
-version: "1.2"
+version: "1.3"
 sidebar:
   label: "Agent CLI"
   order: 4
@@ -150,6 +150,80 @@ crispy vibespace remove-project /Users/manu/projects/api
 
 All five commands target the focused vibespace and go through the same orchestration as the UI, so terminals/browsers are torn down or restored identically.
 
+### Author Automation
+
+Automation definitions are global to the connected Crispy app instance, not
+scoped to the caller's project. Discover the running app's surface instead of
+hardcoding it:
+
+```bash
+crispy help
+crispy help lane.validate
+```
+
+Author the graph directly, always using `--json` and each command's returned
+identity:
+
+```bash
+# 1. Validate and copy-import a real package (copy is the default).
+crispy skill validate ./skills/release-review --json
+SKILL_REF=$(crispy skill import ./skills/release-review --json | jq -r '.skills[0].reference')
+
+# 2. Put $SKILL_REF in vibe.json, validate, create, and capture its exact pin.
+crispy vibe validate --file ./vibe.json --json
+VIBE=$(crispy vibe create --file ./vibe.json --json)
+VIBE_ID=$(printf '%s' "$VIBE" | jq -r '.vibe.id')
+VIBE_VERSION=$(printf '%s' "$VIBE" | jq -r '.vibe.version')
+
+# 3. Put those values in lane.json steps[].vibe, then validate and create.
+crispy lane validate --file ./lane.json --json
+LANE=$(crispy lane create --file ./lane.json --json)
+LANE_ID=$(printf '%s' "$LANE" | jq -r '.lane.id')
+LANE_VERSION=$(printf '%s' "$LANE" | jq -r '.lane.version')
+
+# 4. Put those Lane values in a paused schedule.json; preview before create.
+crispy schedule preview --file ./recurrence.json --count 5 --json
+crispy schedule create --file ./schedule.json --json
+```
+
+The canonical Lane document uses exact Vibe pins and Lane-owned handoffs:
+
+```json
+{
+  "name": "Release lane",
+  "steps": [{
+    "key": "release-review",
+    "vibe": {"id": "<returned-vibe-id>", "version": 1},
+    "requires": [{"key": "release-request", "askUser": true}],
+    "produces": [{"key": "release-evidence"}]
+  }]
+}
+```
+
+`steps` is canonical. Embedded `checkpoints` remain deprecated compatibility
+for existing direct RPC clients and cannot be sent together with `steps`. Skill
+copy import creates a managed complete package; use `--link` only when you
+intentionally want external edits reflected, and warn the user about that
+mutability.
+
+Validation and recurrence preview are pure. Updating a Skill does not update a
+Vibe, updating a Vibe does not repin a Lane, and updating a Lane does not replace
+a Schedule's frozen snapshot. Inspect and update each downstream pin explicitly.
+A stale Lane/Vibe version returns `conflict` without writing.
+
+Create `schedule.json` with `enabled: false` and
+`lane: {"id":"<returned-lane-id>","version":1}`. A paused Schedule does not
+require Full Trust acknowledgement. Only after the user explicitly chooses to
+enable the reviewed unattended run should an agent call:
+
+```bash
+crispy schedule enable <schedule-id> --confirm-full-trust --json
+```
+
+Pausing prevents future occurrences but does not stop an active run. Schedule
+models currently have no revision token; unlike Lane/Vibe commands, Schedule
+mutations do not accept an expected-revision flag.
+
 ## Discovery
 
 Don't hardcode command lists in your agent. Ask the running app what's available:
@@ -178,6 +252,7 @@ Every error response has a stable `code` field. Match on the code, not the messa
 |---|---|
 | `unknown_method` | Method not registered in this build |
 | `invalid_params` | A required parameter is missing or malformed |
+| `conflict` | Lane/Vibe expected version is stale; refresh with list/show and retry |
 | `terminal_not_found` | The referenced terminal UUID does not exist |
 | `vibespace_not_found` | The referenced vibespace UUID does not exist |
 | `file_not_found` | Path does not exist (or parent dir missing for write) |
@@ -202,9 +277,13 @@ The CLI is powerful — agents can do anything a user could do in the IDE. Read 
 
 ### What the CLI cannot do
 
-- **Connect from outside Crispy.** Only processes descended from the running Crispy app can connect. The socket is `0600` and we verify peer process ancestry on every connection.
-- **Read or write files outside the project.** All `file.*` commands enforce the project root boundary, including symlink resolution. Attempts to escape return `permission_denied` and are logged.
-- **Reach across app instances.** `Crispy.app` and `CrispyLocal.app` use different sockets. An agent in one cannot affect the other.
+- **Reach other OS users or app instances.** The socket is owner-only (`0600`) and bundle-scoped, so other users and a different Crispy build cannot use this instance's channel.
+
+The CLI is intentionally available to **any process running as the same OS
+user**, including tmux/ssh shells, detached tools, and ACP agents. Process
+ancestry is not checked; possession of the same-user socket path carries the
+user's authority. `file.*` commands still enforce the caller's project root,
+including symlink resolution; attempts to escape return `permission_denied`.
 
 ### What the CLI can do — and what to do about it
 
@@ -215,6 +294,12 @@ The CLI is powerful — agents can do anything a user could do in the IDE. Read 
 - **Read browser cookies and storage via `eval`.** A browser panel an agent has touched should be considered compromised — do not sign into sensitive accounts in panels you intend to share with agents.
 
 - **Spawn arbitrary commands in shells.** `terminal.send` with `submit: true` runs whatever string you pass. The agent is responsible for not pasting untrusted input from its model into a shell.
+
+- **Mutate global Automation definitions.** Lane, Vibe, Skill, and Schedule changes affect the whole connected app instance, not only the caller's project. Read current state first; use returned Lane/Vibe versions for updates and deletes.
+
+- **Observe externally changed linked Skills.** Link mode intentionally follows an external package directory. Prefer the default copy import for stable package contents.
+
+- **Enable recurring Full Trust execution.** Enabled Schedules run unattended. Only send `--confirm-full-trust` after reviewing the project, Lane snapshot, instruction, and recurrence. Validation and preview are safe read-only alternatives.
 
 ### What you should log
 
@@ -227,6 +312,11 @@ Everything you create through the CLI persists across app restarts:
 - Terminals you spawn reappear in the same vibespace after relaunch.
 - Files added to the shelf stay there.
 - Browser panels you open are restored to their last URL.
+- Lanes, Vibes, managed Skill copies, linked Skill references, Schedules, and Schedule run history use the same persistence as the Automation UI.
+
+`vibe.validate`, `lane.validate`, `skill.validate`, and `schedule.preview` are
+exceptions: they are pure and do not persist. Linked Skill package files stay at their external
+location; only the link reference is persisted.
 
 This is by design — CLI actions are first-class, not ephemeral. If you don't want persistence, don't create persistent things.
 
@@ -239,5 +329,7 @@ This is by design — CLI actions are first-class, not ephemeral. If you don't w
 - Shelf commands: [commands-shelf.md](commands-shelf.md)
 - Browser commands: [commands-browser.md](commands-browser.md)
 - VibeSpace and pane commands: [commands-vibespace.md](commands-vibespace.md)
+- Vibe Lane commands: [commands-lanes.md](commands-lanes.md)
+- Vibe, Skill, and Schedule commands: [commands-automation.md](commands-automation.md)
 - Threat model: [threat-model.md](threat-model.md)
 - Implementation: [technical-design.md](technical-design.md)

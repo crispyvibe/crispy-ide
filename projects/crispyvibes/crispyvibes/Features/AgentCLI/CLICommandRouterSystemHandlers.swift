@@ -146,6 +146,22 @@ extension CLICommandRouter {
             definition: "A persistent collection of pinned files and folders shown in the vibespace sidebar. Entries survive app restart; removing an entry never deletes the file on disk."
         ),
         ConceptDefinition(
+            term: "Skill",
+            definition: "A discovered package rooted at SKILL.md, including its referenced scripts, assets, and guidance. Vibes reference Skills by canonical reference."
+        ),
+        ConceptDefinition(
+            term: "Vibe",
+            definition: "A reusable, versioned Work and Verification expectation. A Vibe Lane step pins one exact Vibe version."
+        ),
+        ConceptDefinition(
+            term: "Vibe Lane",
+            definition: "An ordered checkpoint process. Each step applies a pinned Vibe and carries declared outputs into later steps."
+        ),
+        ConceptDefinition(
+            term: "Schedule",
+            definition: "A recurring Automation trigger that freezes a Vibe Lane snapshot for one project. Enabled Schedules run unattended with Full Trust."
+        ),
+        ConceptDefinition(
             term: "channel client",
             definition: "Any process — typically an agent — invoking the `crispy` CLI. Each invocation inherits a tagged context ID (e.g. `terminal.<uuid>` or `acpchat.<uuid>`) and the focused vibespace and project from CRISPY_* environment variables Crispy injects when spawning the process."
         ),
@@ -168,7 +184,10 @@ extension CLICommandRouter {
     static let domains: [DomainInfo] = [
         DomainInfo(name: "core", description: "Universal meta commands: connectivity, identity, introspection."),
         DomainInfo(name: "todo", description: "Quick todos / sticky notes scoped to a vibespace or project. Agents can add, list, complete, reopen, update, and remove todos; data persists in the encrypted store and surfaces in the Todos panel."),
+        DomainInfo(name: "skill", description: "Agent Skill packages discovered from bundled, managed, or linked SKILL.md roots. Agents can validate, import, inspect, duplicate, and safely remove unreferenced Skills."),
+        DomainInfo(name: "vibe", description: "Central reusable Work and Verification expectations. Vibes are versioned, validated against installed Skills, and pinned by Vibe Lane steps."),
         DomainInfo(name: "lane", description: "Vibe Lanes: reusable checkpointed processes (lanes) and their runs (tasks). Agents can author lanes, start a task that runs an input through a lane on a project, watch its state, answer Supply/Steer/Review requests, and stop or delete tasks. Each checkpoint is worker-attempted and independently verified before the task advances."),
+        DomainInfo(name: "schedule", description: "Recurring Automation over a frozen Vibe Lane snapshot and project. Agents can preview recurrence without saving, create paused definitions, explicitly enable Full Trust execution, run now, and inspect history."),
         DomainInfo(name: "shelf", description: "The shelf is a persistent collection of files and folders pinned by the user, surviving app restarts and visible in the vibespace sidebar. Agents can add or remove entries; Crispy never deletes the underlying files when an entry is removed."),
         DomainInfo(name: "terminal", description: "Terminal sessions inside vibespaces. Each terminal has a UUID and runs a shell process; agents can read screen contents, send text, send key sequences, spawn new terminals, and wait for completion."),
         DomainInfo(name: "browser", description: "Embedded WebKit browser panels scoped to a vibespace. Agents drive navigation, capture DOM snapshots, click and type into elements, evaluate JavaScript, and handle page dialogs."),

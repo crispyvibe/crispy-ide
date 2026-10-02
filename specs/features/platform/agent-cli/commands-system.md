@@ -31,7 +31,7 @@ None.
 
 #### F044-R20: Ping always succeeds
 
-`ping` MUST succeed for any connection that passes the ancestry check, even when no other subsystem is initialized.
+`ping` MUST succeed for any connection admitted by the owner-only socket permissions, even when no other subsystem is initialized.
 
 ### Scenarios
 

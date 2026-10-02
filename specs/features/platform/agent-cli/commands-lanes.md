@@ -17,8 +17,9 @@ For dispatching a **todo** to a lane, use `todo.dispatch`
 Lane authoring (F059-R01):
 
 - `lane.list` — list all authored lanes
-- `lane.show` — one lane's full definition
-- `lane.create` — create a lane (optionally with full checkpoints)
+- `lane.show` — one lane's definition with canonical pinned-Vibe steps
+- `lane.validate` — validate a lane document without writing
+- `lane.create` — create a lane from canonical steps
 - `lane.update` — edit a lane; bumps its version
 - `lane.delete` — delete a lane
 - `lane.restoreStarters` — restore deleted / refresh pristine starter lanes
@@ -50,30 +51,82 @@ case-insensitive lane name. A name matching several lanes is refused with
 `{id, name, version, description?, steerLimit, checkpointCount, route, starter}`.
 `starter` is true for pristine shipped starter lanes (never user-edited).
 
-`lane.show` takes `lane` and returns the summary plus `checkpoints`: ordered
-`{key, order, goal, instructions?, skills?, verify: {definition, humanReview},
-bounds: {maxAttempts, timeoutSeconds, onExhausted}, requires?, produces?}`.
+`lane.show` takes `lane` and returns the summary plus canonical `steps`:
+ordered `{key, vibe: {id, version}, requires?, produces?}` values. It also
+returns full embedded `checkpoints` for deprecated compatibility. Each serialized
+step and compatibility checkpoint includes the exact pinned Vibe identity.
 
-## `lane.create` / `lane.update`
+## `lane.validate` / `lane.create` / `lane.update`
+
+The bundled Rust CLI reads JSON from `--file` and sends it in `params.document`:
+
+```bash
+crispy lane validate --file lane.json --json
+crispy lane create --file lane.json --json
+crispy lane update <lane-id> --file lane.json --expected-version 3 --json
+```
+
+`steps` is the canonical writable schema. The Lane owns only the stable step key
+and carry-forward handoff fields; Work, Verification, Bounds, engine settings,
+and Work/Review Skills are copied from the exact central Vibe revision pinned by
+`vibe.id` and `vibe.version`:
+
+```json
+{
+  "name": "Release",
+  "description": "Produce and verify release evidence.",
+  "steerLimit": 1,
+  "steps": [
+    {
+      "key": "verify-release",
+      "vibe": {"id": "<returned-vibe-id>", "version": 1},
+      "requires": [{"key": "release-request", "askUser": true}],
+      "produces": [
+        {"key": "release-evidence", "description": "Verified release evidence"}
+      ]
+    }
+  ]
+}
+```
+
+`requires` and `produces` may also use concise string entries. Structured
+requirements accept `key`, optional `askUser`, and optional `prompt`; structured
+outputs accept `key` and optional `description`.
+
+For compatibility, direct JSON-RPC clients may continue sending authoring fields
+flattened at the top level, and may send legacy embedded `checkpoints`. Embedded
+checkpoints are deprecated compatibility, not the canonical authoring format.
+A request containing both `steps` and `checkpoints` is rejected.
 
 | Name | Type | Required | Description |
 |---|---|---|---|
 | `lane` | string | update only | Lane name or UUID. |
-| `name` | string | create only | Lane name (optional on update). |
+| `document` | object | validate/create/update | Complete create/validate or partial update fields. |
+| `expectedVersion` | integer | update only | Version returned by `lane.list`/`lane.show`; stale values return `conflict`. |
+| `name` | string | create/validate | Lane name. |
 | `description` | string | no | What the lane is for. Empty string clears it on update. |
 | `steerLimit` | integer | no | Steer escalations the lane allows (default 1 on create). |
-| `checkpoints` | array | no | Checkpoint definitions in the lane schema (see `lane.show` shape with `work: {goal, instructions?, skills?}`). Full replacement on update. |
+| `steps` | array | canonical | Exact Vibe references plus lane-owned handoff fields. Full replacement on update. |
+| `checkpoints` | array | deprecated | Embedded compatibility definitions. Full replacement on update; cannot accompany `steps`. |
+| `loopGroups` | array | no | Full bounded loop-group definitions. Full replacement on update. |
 
-Both return the resulting `lane` detail. Checkpoint keys are normalized exactly
-like the UI editor save path (F059-R01: stable, unique, non-empty keys), and
-`lane.update` bumps the lane version — running tasks keep the version they
-pinned (F059-S07 semantics). Malformed `checkpoints` fail with `invalid_params`
-before any lane is persisted. `lane.update` with no editable field provided is
-refused.
+`lane.validate` resolves against the current manager's Vibes and retained Vibe
+revisions, then runs `VibeLaneDefinition.validationIssues`; it never persists.
+Missing/malformed Vibe IDs, non-positive versions, unresolved exact revisions,
+malformed handoff fields, and simultaneous `steps`/`checkpoints` are rejected
+before a create or update write. Validation returns `{valid, issues}`.
+
+Create and update return the resulting `lane` detail. Canonical step keys are
+normalized exactly like the UI editor save path and duplicate normalized keys
+are refused. `lane.update` bumps the lane version; running tasks retain their
+pinned revision, and Schedules retain their frozen Lane snapshot until explicitly
+adopted. A stale `expectedVersion` fails with `conflict` and performs no write.
+`lane.update` with no editable field is refused.
 
 ## `lane.delete` / `lane.restoreStarters`
 
-`lane.delete` takes `lane`. In-flight and finished tasks keep resolving the
+`lane.delete` takes `lane` and required `expectedVersion`; stale versions return
+`conflict` without deletion. In-flight and finished tasks keep resolving the
 revision they pinned. Deleted starter lanes persist as tombstones;
 `lane.restoreStarters` re-adds them and refreshes pristine starters to the
 latest shipped content, returning the resulting lane summaries.

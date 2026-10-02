@@ -285,6 +285,32 @@ final class VibeLaneSkillStoreTests: XCTestCase {
         }
     }
 
+    func test_crispyAutomationCLIStarterIsReadyAndTeachesCanonicalLaneSteps() throws {
+        let root = temporaryDirectory("automation-cli-starter")
+        defer { try? FileManager.default.removeItem(at: root) }
+        VibeLaneSkillLibrary.install(into: root)
+        let store = VibeLaneSkillStore(rootURL: root)
+
+        let skill = try store.skill(withReference: "crispy-automation-cli")
+
+        XCTAssertEqual(skill.source, .bundled)
+        XCTAssertEqual(skill.category, "Automation")
+        XCTAssertEqual(skill.roles, [.work])
+        XCTAssertEqual(skill.interaction, .unattended)
+        XCTAssertTrue(skill.requiredCommands.isEmpty)
+        XCTAssertEqual(skill.validationState, .ready)
+        XCTAssertTrue(skill.isAssignable(to: .work))
+        XCTAssertTrue(skill.body.contains("lane.validate --file"))
+        XCTAssertTrue(skill.body.contains("canonical `steps`"))
+        let reference = try XCTUnwrap(
+            skill.resources.first { $0.relativePath == "references/direct-authoring-flow.md" }
+        )
+        let workflow = try String(contentsOf: reference.fileURL, encoding: .utf8)
+        XCTAssertTrue(workflow.contains("\"steps\""))
+        XCTAssertTrue(workflow.contains("\"vibe\": {\"id\""))
+        XCTAssertTrue(workflow.contains("\"enabled\": false"))
+    }
+
     // MARK: - Assignment eligibility
 
     /// Regression: eligibility used to live only in the installed-skill menu's

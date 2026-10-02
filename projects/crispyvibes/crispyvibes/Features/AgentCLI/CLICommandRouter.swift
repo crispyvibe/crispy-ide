@@ -45,6 +45,12 @@ final class CLICommandRouter {
     /// nil = Vibe Lanes is unavailable and the commands report that.
     weak var vibeLaneTaskManager: VibeLaneTaskManager?
 
+    /// Central Skill package store used by `skill.*` and Vibe validation.
+    weak var vibeLaneSkillStore: VibeLaneSkillStore?
+
+    /// Existing Schedule manager used by every `schedule.*` mutation.
+    weak var vibeLoopManager: VibeLoopManager?
+
     init(
         appBundleName: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Crispy",
         appVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0",
@@ -144,6 +150,24 @@ final class CLICommandRouter {
         }
         self.vibeLaneTaskManager = manager
         agentCLILogger.notice("vibe lane task manager attached")
+    }
+
+    func attachVibeLaneSkillStore(_ store: VibeLaneSkillStore) {
+        if vibeLaneSkillStore != nil {
+            agentCLILogger.notice("vibe lane skill store attach skipped (already attached)")
+            return
+        }
+        vibeLaneSkillStore = store
+        agentCLILogger.notice("vibe lane skill store attached")
+    }
+
+    func attachVibeLoopManager(_ manager: VibeLoopManager) {
+        if vibeLoopManager != nil {
+            agentCLILogger.notice("vibe loop manager attach skipped (already attached)")
+            return
+        }
+        vibeLoopManager = manager
+        agentCLILogger.notice("vibe loop manager attached")
     }
 
     func dispatch(_ request: CLIRequest) async -> CLIResponse {
@@ -263,7 +287,7 @@ final class CLICommandRouter {
             descriptor: CommandDescriptor(
                 summary: "Browse commands by category. No argument lists every category; a category name (e.g. `lane`) lists just that category's commands; a method name returns that method's full schema.",
                 params: [
-                    .init(name: "topic", type: "string", required: false, description: "A category name (`lane`, `todo`, `terminal`, `browser`, `comments`, `shelf`, `shortcut`, `vibespace`, `file`, `core`) or an exact method name."),
+                    .init(name: "topic", type: "string", required: false, description: "A category name (`skill`, `vibe`, `lane`, `schedule`, `todo`, `terminal`, `browser`, `comments`, `shelf`, `shortcut`, `vibespace`, `file`, `core`) or an exact method name."),
                     .init(name: "method", type: "string", required: false, description: "Deprecated alias for `topic`, kept for existing callers."),
                 ],
                 result: [
@@ -865,22 +889,39 @@ final class CLICommandRouter {
         CommandRegistration(
             method: "lane.show",
             descriptor: CommandDescriptor(
-                summary: "Show one lane's full definition, including every checkpoint's work, verification, bounds, and carry-forward contract.",
+                summary: "Show one lane, including canonical steps with pinned Vibe id/version and deprecated embedded-checkpoint compatibility output.",
                 params: [.init(name: "lane", type: "string", required: true, description: "Lane name or UUID.")],
-                result: [.init(name: "lane", type: "object", description: "Full lane definition.")],
+                result: [.init(name: "lane", type: "object", description: "Full lane definition with canonical steps and compatibility checkpoints.")],
                 errors: ["invalid_params", "not_connected"]
             ),
             handler: { [unowned self] req in await self.handleLaneShow(req) }
         ),
         CommandRegistration(
+            method: "lane.validate",
+            descriptor: CommandDescriptor(
+                summary: "Validate a Lane document against exact current or retained Vibe revisions and the shared Lane contract without saving.",
+                params: [
+                    .init(name: "document", type: "object", required: true, description: "Lane document. Canonical steps are [{key, vibe:{id, version}, requires?, produces?}]."),
+                ],
+                result: [
+                    .init(name: "valid", type: "boolean", description: "Whether the Lane document is valid."),
+                    .init(name: "issues", type: "array", description: "Shared Lane validation diagnostics."),
+                ],
+                errors: ["invalid_params", "not_connected"]
+            ),
+            handler: { [unowned self] req in await self.handleLaneValidate(req) }
+        ),
+        CommandRegistration(
             method: "lane.create",
             descriptor: CommandDescriptor(
-                summary: "Create a lane (F059-R01). Without `checkpoints` it gets one empty starter checkpoint to edit.",
+                summary: "Create a lane from canonical `document.steps` pinned to exact central Vibe revisions. Deprecated flattened/embedded checkpoints remain compatible.",
                 params: [
-                    .init(name: "name", type: "string", required: true, description: "Lane name."),
+                    .init(name: "document", type: "object", required: false, description: "Lane fields as one JSON object; used by `crispy lane create --file`."),
+                    .init(name: "name", type: "string", required: false, description: "Lane name. Required either here or in document."),
                     .init(name: "description", type: "string", required: false, description: "What the lane is for."),
                     .init(name: "steerLimit", type: "integer", required: false, description: "How many Steer escalations the lane allows.", defaultValue: .int(1)),
-                    .init(name: "checkpoints", type: "array", required: false, description: "Checkpoint definitions in the lane schema: [{key, order, work:{goal, instructions?, skills?}, verify:{definition, reviewSkills?, humanReview?}, bounds?:{maxAttempts, timeoutSeconds, onExhausted}, requires?, produces?}]."),
+                    .init(name: "steps", type: "array", required: false, description: "Canonical steps: [{key, vibe:{id, version}, requires?:[{key, askUser?, prompt?}], produces?:[{key, description?}]}]. Work, Verification, Bounds, engine, and role Skills come from the pinned Vibe."),
+                    .init(name: "checkpoints", type: "array", required: false, description: "Deprecated compatibility: embedded checkpoint definitions. Cannot be combined with steps."),
                     .init(name: "loopGroups", type: "array", required: false, description: "Bounded contiguous groups: [{key, members, maxIterations, exitWhen:{kind, variable?, value?, conditions?, condition?}, onExhausted:stop|escalate|advance}]."),
                 ],
                 result: [.init(name: "lane", type: "object", description: "The created lane definition.")],
@@ -891,17 +932,20 @@ final class CLICommandRouter {
         CommandRegistration(
             method: "lane.update",
             descriptor: CommandDescriptor(
-                summary: "Edit a lane (F059-R01). Bumps the lane version; running tasks keep the version they pinned. Only provided fields change.",
+                summary: "Edit a lane from canonical `document.steps` pinned to exact central Vibe revisions. Bumps the version without repinning downstream Schedules.",
                 params: [
                     .init(name: "lane", type: "string", required: true, description: "Lane name or UUID."),
+                    .init(name: "document", type: "object", required: false, description: "Partial lane fields as one JSON object; used by `crispy lane update --file`."),
+                    .init(name: "expectedVersion", type: "integer", required: true, description: "Current lane version; stale values return conflict."),
                     .init(name: "name", type: "string", required: false, description: "New lane name."),
                     .init(name: "description", type: "string", required: false, description: "New description (empty string clears it)."),
                     .init(name: "steerLimit", type: "integer", required: false, description: "New steer limit."),
-                    .init(name: "checkpoints", type: "array", required: false, description: "Full replacement checkpoint list (same schema as lane.create)."),
+                    .init(name: "steps", type: "array", required: false, description: "Canonical full replacement steps using {key, vibe:{id, version}, requires?, produces?}."),
+                    .init(name: "checkpoints", type: "array", required: false, description: "Deprecated compatibility full replacement embedded checkpoints; cannot be combined with steps."),
                     .init(name: "loopGroups", type: "array", required: false, description: "Full replacement authored loop-group list (same schema as lane.create)."),
                 ],
                 result: [.init(name: "lane", type: "object", description: "The updated lane definition.")],
-                errors: ["invalid_params", "not_connected"]
+                errors: ["invalid_params", "conflict", "not_connected"]
             ),
             handler: { [unowned self] req in await self.handleLaneUpdate(req) }
         ),
@@ -909,9 +953,12 @@ final class CLICommandRouter {
             method: "lane.delete",
             descriptor: CommandDescriptor(
                 summary: "Delete a lane. In-flight and finished tasks keep resolving the revision they pinned.",
-                params: [.init(name: "lane", type: "string", required: true, description: "Lane name or UUID.")],
+                params: [
+                    .init(name: "lane", type: "string", required: true, description: "Lane name or UUID."),
+                    .init(name: "expectedVersion", type: "integer", required: true, description: "Current lane version; stale values return conflict."),
+                ],
                 result: [.init(name: "deleted", type: "boolean", description: "True if the lane was deleted.")],
-                errors: ["invalid_params", "not_connected"]
+                errors: ["invalid_params", "conflict", "not_connected"]
             ),
             handler: { [unowned self] req in await self.handleLaneDelete(req) }
         ),
@@ -1004,7 +1051,7 @@ final class CLICommandRouter {
             ),
             handler: { [unowned self] req in await self.handleLaneTaskDelete(req) }
         ),
-    ] + Self.browserForwardedRegistrations
+    ] + automationCommandRegistrations() + Self.browserForwardedRegistrations
 
     /// Bulk registrations for the 48 per-tab browser commands forwarded to BrowserAgentAPI.
     private static var browserForwardedRegistrations: [CommandRegistration] {

@@ -99,6 +99,7 @@ enum CLIResponse {
 enum CLIErrorCode {
     static let unknownMethod = "unknown_method"
     static let invalidParams = "invalid_params"
+    static let conflict = "conflict"
     static let terminalNotFound = "terminal_not_found"
     static let vibespaceNotFound = "vibespace_not_found"
     static let paneNotFound = "pane_not_found"

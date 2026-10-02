@@ -3,11 +3,23 @@ import Foundation
 extension VibeLaneTaskManager {
     @discardableResult
     func createVibe(name: String = AppStrings.VibeLanes.newVibe) async -> VibeDefinition? {
-        let vibe = VibeDefinition(
+        await createVibe(VibeDefinition(
             name: name,
             goal: "",
             verify: VibeLaneVerificationDefinition("")
-        )
+        ))
+    }
+
+    /// Persist a complete new Vibe in one manager-owned mutation.
+    @discardableResult
+    func createVibe(_ proposed: VibeDefinition) async -> VibeDefinition? {
+        guard vibe(withID: proposed.id) == nil else { return nil }
+        var vibe = proposed
+        vibe.version = 1
+        vibe.name = vibe.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        vibe.detail = vibe.detail?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty
         do {
             try await store.persistCurrentVibe(vibe)
         } catch {

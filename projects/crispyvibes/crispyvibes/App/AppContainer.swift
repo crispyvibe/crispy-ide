@@ -646,6 +646,8 @@ struct AppContainer {
         // F059 — lane.* / lane.task.* CLI commands drive the same task manager
         // the UI observes (F059-R10; one code path, two callers).
         cliCommandRouter.attachVibeLaneTaskManager(vibeLaneTaskManager)
+        cliCommandRouter.attachVibeLaneSkillStore(vibeLaneSkillStore)
+        cliCommandRouter.attachVibeLoopManager(vibeLoopManager)
         let todoTriageCoordinator = TodoTriageCoordinator(
             todoStore: vibespaceTodoStore,
             laneManager: vibeLaneTaskManager,

@@ -1584,6 +1584,125 @@ enum VibeLaneSkillLibrary {
                 """
             ]
         ),
+        Skill(
+            name: "crispy-automation-cli",
+            description: "Author a direct Skill to Vibe to Lane to paused Schedule chain through Crispy's live CLI using explicit returned identities and pure validation first.",
+            body: """
+            # Crispy Automation CLI
+
+            Author Automation through the running app's direct commands. Start with
+            `crispy help` and focused help such as `crispy help lane.validate`; live help
+            is authoritative. Pass `--json` on every command whose output feeds another
+            command, and parse returned fields rather than guessing names, IDs, or versions.
+
+            Read [the direct authoring flow](references/direct-authoring-flow.md) before
+            mutating anything.
+
+            ## Required chain
+            1. Purely validate a real Skill package, then import it. `skill.import` copies
+               by default; use `--link` only after warning that later external edits are
+               reflected in Crispy. Capture the returned canonical Skill `reference`.
+            2. Put that exact reference in the Vibe document's `work.skills` or
+               `verify.reviewSkills`. Run `vibe.validate --file ... --json`, then create
+               and capture the returned Vibe `id` and numeric `version`.
+            3. Author the Lane with canonical `steps`, where every step has `key` and
+               `vibe: {"id": "<returned-vibe-id>", "version": <returned-version>}`.
+               Lane-owned `requires` and `produces` are the only handoff fields; Work,
+               Verification, Bounds, engine configuration, and role Skills come from the
+               pinned Vibe. Run `lane.validate --file ... --json`, then create and capture
+               the returned Lane `id` and numeric `version`.
+            4. Purely preview the recurrence with `schedule preview --file ... --json`.
+               Create the Schedule with `enabled: false` and
+               `lane: {"id": "<returned-lane-id>", "version": <returned-version>}`.
+               Confirm from the returned Schedule that it froze that exact Lane revision.
+
+            ## Pinning and trust rules
+            - Updating a Skill does not update a Vibe; updating a Vibe does not repin a
+              Lane; updating a Lane does not update a Schedule snapshot. Inspect current
+              state and perform each downstream update explicitly.
+            - Validation and schedule preview are pure. Prefer them before every mutation.
+            - A paused Schedule requires no Full Trust acknowledgement. Only enable after
+              the user explicitly chooses unattended execution and the project, instruction,
+              Lane snapshot, and recurrence have been reviewed; then pass
+              `--confirm-full-trust` on the explicit enable command.
+            - Do not claim or generate a declarative Automation bundle. This flow uses
+              direct Skill, Vibe, Lane, and Schedule commands.
+            """,
+            metadata: .init(
+                category: "Automation",
+                roles: [.work],
+                interaction: .unattended
+            ),
+            resources: [
+                "references/direct-authoring-flow.md": """
+                # Direct authoring flow
+
+                Discover first:
+
+                ```bash
+                crispy help
+                crispy help skill.import
+                crispy help vibe.create
+                crispy help lane.validate
+                crispy help schedule.create
+                ```
+
+                Use machine-readable output and carry identities forward explicitly:
+
+                ```bash
+                crispy skill validate ./skills/example --json
+                crispy skill import ./skills/example --json > skill-result.json
+
+                crispy vibe validate --file vibe.json --json
+                crispy vibe create --file vibe.json --json > vibe-result.json
+
+                crispy lane validate --file lane.json --json
+                crispy lane create --file lane.json --json > lane-result.json
+
+                crispy schedule preview --file recurrence.json --json
+                crispy schedule create --file schedule.json --json > schedule-result.json
+                ```
+
+                Canonical `lane.json` shape:
+
+                ```json
+                {
+                  "name": "Example lane",
+                  "steps": [
+                    {
+                      "key": "perform-work",
+                      "vibe": {"id": "<returned-vibe-id>", "version": 1},
+                      "requires": [{"key": "request", "askUser": true}],
+                      "produces": [{"key": "result", "description": "Verified result"}]
+                    }
+                  ]
+                }
+                ```
+
+                Canonical paused `schedule.json` shape:
+
+                ```json
+                {
+                  "name": "Example schedule",
+                  "enabled": false,
+                  "projectPath": "/absolute/project/path",
+                  "taskInstruction": "Perform the scheduled work.",
+                  "lane": {"id": "<returned-lane-id>", "version": 1},
+                  "recurrence": {
+                    "kind": "daily", "hour": 9, "minute": 0,
+                    "timeZone": "America/Chicago"
+                  }
+                }
+                ```
+
+                If and only if the user explicitly enables unattended Full Trust execution:
+
+                ```bash
+                crispy schedule enable <returned-schedule-id> --confirm-full-trust --json
+                ```
+                """
+            ]
+        ),
     ]
 
     /// Names of the shipped skills (for reference / resolution).

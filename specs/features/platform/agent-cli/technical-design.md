@@ -21,7 +21,7 @@ No new persistence, no new UI surface — every CLI operation routes through ser
 │  │  CLISocketServer (background DispatchQueue)                    │ │
 │  │  • Unix socket bind, listen, accept loop                       │ │
 │  │  • Per-connection: read JSON line → CLIRequest                 │ │
-│  │  • Process-ancestry check via LOCAL_PEERPID                    │ │
+│  │  • Owner-only socket permissions (`0600`)                      │ │
 │  │  • Dispatch hop to @MainActor                                  │ │
 │  │  • Serialize response → write JSON line → close                │ │
 │  └────────────────────────────────────────────────────────────────┘ │
@@ -69,7 +69,7 @@ acceptQueue (DispatchQueue, serial)         connectionQueue (concurrent)        
 ─────────────────────────────────           ─────────────────────────────       ──────────────
 accept() loop                               read JSON line
                                             parse CLIRequest
-                                            ancestry check
+                                            decode owner-authorized request
                                             ──── Task { @MainActor in ──────►   router.dispatch(request)
                                                                                  service call (e.g. shelfStore.addFiles)
                                             ◄──── await result ──────────────    return CLIResponse
@@ -99,9 +99,9 @@ All service calls happen on `@MainActor` (matching the rest of the app). Socket 
      }
    }
    ```
-4. **Server accept**: `CLISocketServer.acceptLoop` accepts the connection and verifies the peer is a descendant of Crispy via `LOCAL_PEERPID` + `proc_pidpath` ancestry walk.
+4. **Server accept**: `CLISocketServer.acceptLoop` accepts a connection to the bundle-scoped owner-only (`0600`) socket. Any same-user process may connect; other users are blocked by filesystem permissions.
 5. **Dispatch**: `CLICommandRouter.dispatch(_:)` resolves implicit context (`terminal_id` from params or `_env`), looks up the method handler, and calls it on `@MainActor`.
-6. **Service call**: Handler calls existing services (e.g. `terminalProvider.session(for:)?.sendRawText(text)`).
+6. **Service call**: The handler calls existing services or Automation managers. `lane.*`/`vibe.*` use `VibeLaneTaskManager`, `skill.*` uses `VibeLaneSkillStore`, and `schedule.*` uses `VibeLoopManager`.
 7. **Response**: Handler returns a `CLIResponse.ok(...)` or `.error(code:message:)`. The server serializes it as one JSON line, writes it to the socket, and closes the connection.
 8. **CLI output**: The Rust binary prints the response (JSON if `--json`, otherwise human-readable) and exits.
 
@@ -137,7 +137,18 @@ The new `.agentCLI(callerSurfaceID:)` origin is added to the existing `TerminalO
 
 ### Method Namespace
 
-Methods are dotted: `<category>.<action>`. Categories: `system`, `terminal`, `file`, `shelf`, `browser`, `vibespace`, `pane`, `todo`. Each category has its own spec doc — see [spec.md](spec.md) for the full index. The `todo.*` handlers (`CLICommandRouterTodoHandlers`) surface the [F053 Quick Todos](../../vibespace/todos/spec.md) store over this transport.
+Methods are dotted: `<category>.<action>`. Categories include `system`, `terminal`, `file`, `shelf`, `browser`, `vibespace`, `pane`, `todo`, `lane`, `vibe`, `skill`, and `schedule`. Each category has a spec doc — see [spec.md](spec.md) for the full index.
+
+Automation command registrations are attached to the same router in
+`AppContainer`. Complex Lane/Vibe/Schedule JSON is carried as a
+`CLIJSONValue.object` under `params.document` and decoded by focused adapters.
+Handlers do not own persistence: all mutations call the existing managers.
+Lane/Vibe update and delete validate manager-owned versions before mutation;
+Skill and Schedule expose no synthetic digest/revision fields. Validation and
+Schedule preview are pure, and preview delegates to
+`VibeLoopScheduleCalculator`. See [commands-automation.md](commands-automation.md).
+
+The `todo.*` handlers (`CLICommandRouterTodoHandlers`) surface the [F053 Quick Todos](../../vibespace/todos/spec.md) store over this transport.
 
 #### Todo scope routing
 
@@ -205,8 +216,8 @@ None persisted. Each connection's request lives only in the dispatch task's stac
 
 ### Swift side
 - `Foundation` — `JSONDecoder`/`JSONEncoder`, `DispatchQueue`, `Task`
-- `Darwin` — `socket(2)`, `bind(2)`, `listen(2)`, `accept(2)`, `getsockopt(SOL_LOCAL, LOCAL_PEERPID)`, `proc_pidpath`
-- Existing services through `AppContainer`: `TerminalProviding`, `ShelfStore`, `FileContentProviding`, `VibeSpaceCatalogStore`, `BrowserPanelViewModel`
+- `Darwin` — `socket(2)`, `bind(2)`, `listen(2)`, `accept(2)`
+- Existing services through `AppContainer`: `TerminalProviding`, `ShelfStore`, `FileContentProviding`, `VibeSpaceCatalogStore`, `BrowserPanelViewModel`, `VibeLaneTaskManager`, `VibeLaneSkillStore`, `VibeLoopManager`
 
 No new SwiftPM packages.
 
@@ -242,9 +253,13 @@ This ensures `Crispy.app` and `CrispyLocal.app` running on the same machine each
 
 The macOS App Sandbox does NOT block Unix domain sockets created in the app's container directory (which `~/Library/Application Support/<bundle-id>/` is). No additional entitlements needed.
 
-### Process Ancestry
+### Same-user authorization
 
-`getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, ...)` returns the connecting process's PID. We then walk up the parent chain via `proc_pidinfo(...)` until we find Crispy's own PID or hit PID 1. If Crispy's PID never appears, the connection is rejected and the socket closed before any request is read.
+The socket file is created with mode `0600`, so only the OS user running Crispy
+can connect. No process-ancestry gate is applied: same-user tmux/ssh shells,
+detached tools, and ACP agents are supported. This is not a sandbox boundary;
+Automation mutations are global to the connected app instance and must be
+treated as carrying the user's authority.
 
 ### Ghostty Engine Bridge
 
@@ -254,7 +269,7 @@ The macOS App Sandbox does NOT block Unix domain sockets created in the app's co
 
 | Path | Budget | Notes |
 |---|---|---|
-| `ping` round-trip | < 5ms | Includes connect, ancestry check, dispatch, response. Validated by an integration test. |
+| `ping` round-trip | < 5ms | Includes connect, dispatch, and response. Validated by an integration test. |
 | `terminal.read` (visible only) | < 20ms | Ghostty buffer read is cheap; bottleneck is JSON serialization for large screens. |
 | `terminal.read` (full scrollback) | < 100ms for 4000 lines | Within existing scrollback persistence target. |
 | `pane.list` | < 10ms | Snapshots of in-memory state. |
