@@ -115,3 +115,7 @@ Renaming or moving a file (or a directory containing open files) automatically u
 - [Editing](../editing/usage-guide.md)
 - [Markdown](../markdown/usage-guide.md)
 - [Previews](../previews/usage-guide.md)
+
+### Git Diff Line Numbers
+
+Git Changes shows old and new line columns with **Source Editors** (the default) and **All Text Views**. Choose **Off** in App Settings → General to hide both columns; additions, deletions, and hunk parsing are unchanged.

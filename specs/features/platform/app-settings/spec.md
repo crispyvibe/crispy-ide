@@ -125,3 +125,17 @@ _None._
 | 2026-04-15 | Extracted from docs/features/app-shell/feature.md (APP-044, APP-077, APP-078) | — |
 | 2026-04-27 | Re-scoped App Settings to app-level categories and moved visual/chrome settings under Appearance | — |
 | 2026-05-26 | Added F036-R07 + F036-S06 covering the VibeSpaces management category (multi-select bulk delete, search, project-folder Finder links, async batched load) | — |
+
+## Line Number Preference
+
+### F036-R08: Global Line Number Mode
+
+App Settings MUST expose one persisted line-number mode with `Off`, `Source Editors`, and `All Text Views` choices. The default MUST be `Source Editors`; invalid persisted values MUST fall back to that default. `Off` hides source-editor and Git diff numbers, `Source Editors` shows native source/plain-text and Git diff numbers, and `All Text Views` additionally labels logical source blocks in rich Markdown and LaTeX Edit mode.
+
+### Scenario F036-S07: Change line-number coverage
+
+**Given** App Settings is open
+**When** the user changes **Show line numbers**
+**Then** open text surfaces update without reopening the document
+**And** the choice persists across launches
+**And** browser, image, PDF, notebook, whiteboard, terminal, and Office preview surfaces remain unaffected.

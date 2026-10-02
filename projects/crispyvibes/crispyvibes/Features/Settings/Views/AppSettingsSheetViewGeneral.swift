@@ -224,6 +224,27 @@ extension AppSettingsSheetView {
             }
 
             SettingsCard(
+                title: AppStrings.Editor.lineNumbersSettingsTitle,
+                description: AppStrings.Editor.lineNumbersSettingsDescription
+            ) {
+                SettingsFieldRow(
+                    title: AppStrings.Editor.lineNumbersSettingsField,
+                    detail: AppStrings.Editor.lineNumbersSettingsDetail
+                ) {
+                    Picker(
+                        AppStrings.Editor.lineNumbersSettingsField,
+                        selection: $editorLineNumberModeRaw
+                    ) {
+                        ForEach(EditorLineNumberMode.allCases) { mode in
+                            Text(mode.title).tag(mode.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityIdentifier("app.settings.editor.line-number-mode")
+                }
+            }
+
+            SettingsCard(
                 title: AppStrings.Editor.webLinkSettingsTitle,
                 description: AppStrings.Editor.webLinkSettingsDescription
             ) {

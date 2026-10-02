@@ -24,6 +24,14 @@
       font: 15px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
     }
     body.dark { color: #e6e6e6; }
+    body {
+      --crispyvibes-line-number-fg: rgba(29, 29, 31, 0.52);
+      --crispyvibes-line-number-divider: rgba(29, 29, 31, 0.18);
+    }
+    body.dark {
+      --crispyvibes-line-number-fg: rgba(230, 230, 230, 0.52);
+      --crispyvibes-line-number-divider: rgba(230, 230, 230, 0.18);
+    }
     #content {
       box-sizing: border-box;
       max-width: 820px;
@@ -31,6 +39,31 @@
       padding: 28px 32px 160px;
       outline: none;
       min-height: 100%;
+      --crispyvibes-line-number-width: 6ch;
+      --crispyvibes-line-number-gap: 10px;
+    }
+    #content.crispyvibes-line-numbers-visible {
+      max-width: calc(820px + 12ch + 20px);
+      padding-left: calc(32px + 6ch + 10px);
+      padding-right: calc(32px + 6ch + 10px);
+    }
+    #content.crispyvibes-line-numbers-visible > [data-comment-source-line] {
+      position: relative;
+    }
+    #content.crispyvibes-line-numbers-visible > [data-comment-source-line]::after {
+      content: attr(data-comment-source-line);
+      position: absolute;
+      box-sizing: content-box;
+      left: calc(0px - var(--crispyvibes-line-number-width) - var(--crispyvibes-line-number-gap));
+      top: 0;
+      width: var(--crispyvibes-line-number-width);
+      padding-right: var(--crispyvibes-line-number-gap);
+      border-right: 1px solid var(--crispyvibes-line-number-divider);
+      color: var(--crispyvibes-line-number-fg);
+      font: 500 0.78em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-align: right;
+      pointer-events: none;
+      user-select: none;
     }
     #content:focus { outline: none; }
     #content p { margin: 0 0 0.9em; }

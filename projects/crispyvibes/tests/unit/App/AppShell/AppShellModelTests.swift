@@ -35,6 +35,38 @@ final class AppShellModelTests: XCTestCase {
         XCTAssertTrue(CrispyVibesTheme.default.borderVisible)
     }
 
+    func testLineNumberModesDefaultFallbackAndSurfacePolicy() {
+        XCTAssertEqual(EditorLineNumberMode.allCases.map(\.rawValue), ["off", "source", "allText"])
+        XCTAssertEqual(AppPreferences.defaultEditorLineNumberMode, EditorLineNumberMode.source.rawValue)
+        XCTAssertFalse(EditorLineNumberMode.off.showsSourceEditors)
+        XCTAssertFalse(EditorLineNumberMode.off.showsRichText)
+        XCTAssertFalse(EditorLineNumberMode.off.showsGitDiff)
+        XCTAssertTrue(EditorLineNumberMode.source.showsSourceEditors)
+        XCTAssertFalse(EditorLineNumberMode.source.showsRichText)
+        XCTAssertTrue(EditorLineNumberMode.source.showsGitDiff)
+        XCTAssertTrue(EditorLineNumberMode.allText.showsSourceEditors)
+        XCTAssertTrue(EditorLineNumberMode.allText.showsRichText)
+        XCTAssertTrue(EditorLineNumberMode.allText.showsGitDiff)
+        XCTAssertFalse(EditorLineNumberMode.allCases.contains { $0.title.isEmpty })
+        XCTAssertFalse(AppStrings.Editor.lineNumbersSettingsTitle.isEmpty)
+        XCTAssertFalse(AppStrings.Editor.lineNumbersSettingsDescription.isEmpty)
+        XCTAssertFalse(AppStrings.Editor.lineNumbersSettingsField.isEmpty)
+        XCTAssertFalse(AppStrings.Editor.lineNumbersSettingsDetail.isEmpty)
+
+        let suiteName = "line-number-pref-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        XCTAssertEqual(AppPreferences.editorLineNumberMode(userDefaults: defaults), .source)
+        defaults.set(EditorLineNumberMode.allText.rawValue, forKey: AppPreferences.editorLineNumberModeKey)
+        XCTAssertEqual(AppPreferences.editorLineNumberMode(userDefaults: defaults), .allText)
+        defaults.set("unexpected", forKey: AppPreferences.editorLineNumberModeKey)
+        XCTAssertEqual(AppPreferences.editorLineNumberMode(userDefaults: defaults), .source)
+        XCTAssertFalse(GitDiffPreview.showsLineNumbers(modeRawValue: EditorLineNumberMode.off.rawValue))
+        XCTAssertTrue(GitDiffPreview.showsLineNumbers(modeRawValue: EditorLineNumberMode.source.rawValue))
+        XCTAssertTrue(GitDiffPreview.showsLineNumbers(modeRawValue: EditorLineNumberMode.allText.rawValue))
+        XCTAssertTrue(GitDiffPreview.showsLineNumbers(modeRawValue: "unexpected"))
+    }
+
     func testTerminalShellPreferenceMetadataAndResolver() {
         XCTAssertEqual(TerminalShellPreference.zsh.title, "zsh")
         XCTAssertEqual(TerminalShellPreference.bash.title, "bash")

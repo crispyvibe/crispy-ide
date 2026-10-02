@@ -100,3 +100,7 @@ Markdown and HTML documents support switching between a rendered rich view and a
 - [Content Viewer](../content-viewer/usage-guide.md)
 - [Markdown](../markdown/usage-guide.md)
 - [Previews](../previews/usage-guide.md)
+
+## Line Numbers
+
+The default **Source Editors** setting shows logical line numbers in code, source, and plain-text files. A long line that wraps keeps one source number; continuation rows are not new file lines. The active line uses the app accent, other numbers use a muted syntax-theme color, and the gutter grows or shrinks with **Increase/Decrease/Reset Text Size**. Choose **Off** or **All Text Views** in App Settings → General to change coverage.

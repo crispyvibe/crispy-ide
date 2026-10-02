@@ -81,6 +81,31 @@ final class CodeEditorCommentBridge: ObservableObject, CommentSurfaceBridge {
         return rects
     }
 
+    func viewportRects(
+        startLine: Int,
+        startColumn: Int,
+        endLine: Int,
+        endColumn: Int
+    ) -> [CGRect] {
+        let textRects = rects(
+            startLine: startLine,
+            startColumn: startColumn,
+            endLine: endLine,
+            endColumn: endColumn
+        )
+        guard let clipView = enclosingScroll?.contentView else { return textRects }
+        let offsetX = clipView.frame.minX - clipView.bounds.minX
+        let offsetY = clipView.frame.minY - clipView.bounds.minY
+        return textRects.map { $0.offsetBy(dx: offsetX, dy: offsetY) }
+    }
+
+    var commentGutterCenterX: CGFloat {
+        guard let scrollView = enclosingScroll,
+              scrollView.rulersVisible,
+              scrollView.hasVerticalRuler else { return 8 }
+        return CodeEditorLineNumberRulerView.commentLaneWidth / 2
+    }
+
     /// Convert (line, col)-pair → NSRange in the current text. Returns nil
     /// if out-of-bounds.
     func nsRange(

@@ -2652,6 +2652,34 @@ enum AppStrings {
             localized: "editor.fontSize.reset",
             defaultValue: "Reset Text Size"
         )
+        static let lineNumbersModeOff = String(
+            localized: "editor.lineNumbers.mode.off",
+            defaultValue: "Off"
+        )
+        static let lineNumbersModeSource = String(
+            localized: "editor.lineNumbers.mode.source",
+            defaultValue: "Source Editors"
+        )
+        static let lineNumbersModeAllText = String(
+            localized: "editor.lineNumbers.mode.allText",
+            defaultValue: "All Text Views"
+        )
+        static let lineNumbersSettingsTitle = String(
+            localized: "editor.lineNumbers.settings.title",
+            defaultValue: "Line Numbers"
+        )
+        static let lineNumbersSettingsDescription = String(
+            localized: "editor.lineNumbers.settings.description",
+            defaultValue: "Show logical source positions in text-based editors."
+        )
+        static let lineNumbersSettingsField = String(
+            localized: "editor.lineNumbers.settings.field",
+            defaultValue: "Show line numbers"
+        )
+        static let lineNumbersSettingsDetail = String(
+            localized: "editor.lineNumbers.settings.detail",
+            defaultValue: "All Text Views also labels logical source blocks in rich Markdown and LaTeX."
+        )
         static let webLinkPreferenceAsk = String(
             localized: "editor.webLinkPreference.ask",
             defaultValue: "Ask Each Time"

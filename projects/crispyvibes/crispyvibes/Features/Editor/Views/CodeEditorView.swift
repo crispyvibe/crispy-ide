@@ -31,6 +31,8 @@ struct CodeEditorView: NSViewRepresentable {
     private var codeFontFamily = AppPreferences.defaultCodeFontFamily
     @AppStorage(AppPreferences.codeFontSizeKey)
     private var codeFontSize = AppPreferences.defaultCodeFontSize
+    @AppStorage(AppPreferences.editorLineNumberModeKey)
+    private var lineNumberModeRaw = AppPreferences.defaultEditorLineNumberMode
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appThemePalette) private var appThemePalette
     /// F049: optional bridge from the editor's NSTextView to the SwiftUI
@@ -62,6 +64,7 @@ struct CodeEditorView: NSViewRepresentable {
             let theme = resolvedTheme(for: colorScheme)
             applyConfiguredFont(to: textView)
             applyTheme(theme, to: textView)
+            updateLineNumberRuler(in: scrollView, theme: theme)
             language.applySyntaxHighlighting(
                 to: textView,
                 theme: theme,
@@ -76,6 +79,8 @@ struct CodeEditorView: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? ContentViewerDropAwareTextView else { return }
+        let theme = resolvedTheme(for: colorScheme)
+        updateLineNumberRuler(in: nsView, theme: theme)
         guard !isBufferLoading else {
             textView.isEditable = false
             return
@@ -87,7 +92,6 @@ struct CodeEditorView: NSViewRepresentable {
         let isDocumentSwitch = context.coordinator.lastFileURL != activeFileURL
         context.coordinator.lastFileURL = activeFileURL
 
-        let theme = resolvedTheme(for: colorScheme)
         applyConfiguredFont(to: textView)
         applyTheme(theme, to: textView)
 
@@ -227,6 +231,27 @@ struct CodeEditorView: NSViewRepresentable {
 
     private func resolvedTheme(for colorScheme: ColorScheme) -> SyntaxTheme {
         SyntaxTheme.fromPalette(appThemePalette, colorScheme: colorScheme)
+    }
+
+    private var lineNumberMode: EditorLineNumberMode {
+        EditorLineNumberMode(rawValue: lineNumberModeRaw) ?? .source
+    }
+
+    private func updateLineNumberRuler(
+        in scrollView: NSScrollView,
+        theme: SyntaxTheme
+    ) {
+        guard let ruler = scrollView.verticalRulerView as? CodeEditorLineNumberRulerView else {
+            return
+        }
+        ruler.update(
+            isVisible: lineNumberMode.showsSourceEditors,
+            editorFont: resolvedEditorFont,
+            backgroundColor: theme.background,
+            numberColor: theme.text.withAlphaComponent(0.52),
+            activeNumberColor: NSColor(appThemePalette.accentColor),
+            dividerColor: NSColor(appThemePalette.borderColorValue)
+        )
     }
 
     private var resolvedEditorFont: NSFont {
@@ -371,6 +396,247 @@ func sourceSelectionRange(
     return NSRange(location: location + clampedColumn, length: 0)
 }
 
+final class CodeEditorLineNumberRulerView: NSRulerView {
+    static let commentLaneWidth: CGFloat = 22
+    static let minimumNumberDigits = 3
+
+    private weak var textView: NSTextView?
+    private var lineStarts: [Int] = [0]
+    private var numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    private var backgroundColor = NSColor.clear
+    private var numberColor = NSColor.secondaryLabelColor
+    private var activeNumberColor = NSColor.labelColor
+    private var dividerColor = NSColor.separatorColor
+    private var textStorageObservation: NSObjectProtocol?
+    private var selectionObservation: NSObjectProtocol?
+    private var scrollObservation: NSObjectProtocol?
+
+    override var isFlipped: Bool { true }
+
+    init(scrollView: NSScrollView, textView: NSTextView) {
+        self.textView = textView
+        super.init(scrollView: scrollView, orientation: .verticalRuler)
+        clientView = textView
+        refreshLineStarts()
+        observe(textView: textView, scrollView: scrollView)
+    }
+
+    @available(*, unavailable)
+    required init(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        if let textStorageObservation {
+            NotificationCenter.default.removeObserver(textStorageObservation)
+        }
+        if let selectionObservation {
+            NotificationCenter.default.removeObserver(selectionObservation)
+        }
+        if let scrollObservation {
+            NotificationCenter.default.removeObserver(scrollObservation)
+        }
+    }
+
+    func update(
+        isVisible: Bool,
+        editorFont: NSFont,
+        backgroundColor: NSColor,
+        numberColor: NSColor,
+        activeNumberColor: NSColor,
+        dividerColor: NSColor
+    ) {
+        numberFont = NSFont.monospacedDigitSystemFont(
+            ofSize: max(8, editorFont.pointSize * 0.82),
+            weight: .regular
+        )
+        self.backgroundColor = backgroundColor
+        self.numberColor = numberColor
+        self.activeNumberColor = activeNumberColor
+        self.dividerColor = dividerColor
+        refreshLineStarts()
+
+        guard let scrollView else { return }
+        scrollView.hasVerticalRuler = isVisible
+        scrollView.rulersVisible = isVisible
+        let thickness = Self.requiredThickness(
+            lineCount: lineStarts.count,
+            font: numberFont
+        )
+        if abs(ruleThickness - thickness) > 0.5 {
+            ruleThickness = thickness
+            scrollView.tile()
+        }
+        needsDisplay = true
+    }
+
+    override func drawHashMarksAndLabels(in rect: NSRect) {
+        backgroundColor.setFill()
+        bounds.fill()
+        dividerColor.setFill()
+        NSRect(x: bounds.maxX - 1, y: bounds.minY, width: 1, height: bounds.height).fill()
+
+        guard let textView,
+              let layoutManager = textView.layoutManager,
+              let textContainer = textView.textContainer else { return }
+
+        let origin = textView.textContainerOrigin
+        let visibleTextRect = textView.visibleRect
+        let visibleContainerRect = visibleTextRect.offsetBy(dx: -origin.x, dy: -origin.y)
+        layoutManager.ensureLayout(forBoundingRect: visibleContainerRect, in: textContainer)
+        let glyphRange = layoutManager.glyphRange(
+            forBoundingRect: visibleContainerRect,
+            in: textContainer
+        )
+        let characterRange = layoutManager.characterRange(
+            forGlyphRange: glyphRange,
+            actualGlyphRange: nil
+        )
+        let selectedLineIndex = lineIndex(containing: textView.selectedRange().location)
+        var index = max(0, lowerBound(for: characterRange.location) - 1)
+        let visibleUpperBound = NSMaxRange(characterRange)
+
+        while index < lineStarts.count {
+            let characterLocation = lineStarts[index]
+            if characterLocation > visibleUpperBound && index > 0 { break }
+            guard let lineRect = lineFragmentRect(
+                at: characterLocation,
+                textView: textView,
+                layoutManager: layoutManager
+            ) else {
+                index += 1
+                continue
+            }
+            let point = convert(
+                NSPoint(x: 0, y: origin.y + lineRect.minY),
+                from: textView
+            )
+            let lineHeight = max(lineRect.height, numberFont.ascender - numberFont.descender)
+            let label = "\(index + 1)" as NSString
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.alignment = .right
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: numberFont,
+                .paragraphStyle: paragraphStyle,
+                .foregroundColor: index == selectedLineIndex
+                    ? activeNumberColor
+                    : numberColor
+            ]
+            let size = label.size(withAttributes: attributes)
+            let labelRect = NSRect(
+                x: Self.commentLaneWidth + 4,
+                y: point.y + max(0, (lineHeight - size.height) / 2),
+                width: max(0, ruleThickness - Self.commentLaneWidth - 10),
+                height: size.height
+            )
+            label.draw(in: labelRect, withAttributes: attributes)
+            index += 1
+        }
+    }
+
+    static func logicalLineStarts(in text: String) -> [Int] {
+        let value = text as NSString
+        var starts = [0]
+        guard value.length > 0 else { return starts }
+        for index in 0..<value.length where value.character(at: index) == 0x0A {
+            starts.append(index + 1)
+        }
+        return starts
+    }
+
+    static func requiredThickness(lineCount: Int, font: NSFont) -> CGFloat {
+        let digitCount = max(minimumNumberDigits, String(max(1, lineCount)).count)
+        let sample = String(repeating: "8", count: digitCount) as NSString
+        let width = sample.size(withAttributes: [.font: font]).width
+        return ceil(commentLaneWidth + width + 14)
+    }
+
+    private func observe(textView: NSTextView, scrollView: NSScrollView) {
+        if let storage = textView.textStorage {
+            textStorageObservation = NotificationCenter.default.addObserver(
+                forName: NSTextStorage.didProcessEditingNotification,
+                object: storage,
+                queue: .main
+            ) { [weak self, weak storage] _ in
+                guard let self else { return }
+                if storage?.editedMask.contains(.editedCharacters) == true {
+                    self.refreshLineStarts()
+                }
+                self.needsDisplay = true
+            }
+        }
+        selectionObservation = NotificationCenter.default.addObserver(
+            forName: NSTextView.didChangeSelectionNotification,
+            object: textView,
+            queue: .main
+        ) { [weak self] _ in
+            self?.needsDisplay = true
+        }
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        scrollObservation = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak self] _ in
+            self?.needsDisplay = true
+        }
+    }
+
+    private func refreshLineStarts() {
+        lineStarts = Self.logicalLineStarts(in: textView?.string ?? "")
+    }
+
+    private func lowerBound(for characterLocation: Int) -> Int {
+        var lower = 0
+        var upper = lineStarts.count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if lineStarts[middle] < characterLocation {
+                lower = middle + 1
+            } else {
+                upper = middle
+            }
+        }
+        return lower
+    }
+
+    private func lineIndex(containing characterLocation: Int) -> Int {
+        max(0, min(lineStarts.count - 1, lowerBound(for: characterLocation + 1) - 1))
+    }
+
+    private func lineFragmentRect(
+        at characterLocation: Int,
+        textView: NSTextView,
+        layoutManager: NSLayoutManager
+    ) -> NSRect? {
+        let length = (textView.string as NSString).length
+        if length == 0 {
+            return NSRect(
+                x: 0,
+                y: 0,
+                width: 0,
+                height: numberFont.ascender - numberFont.descender + numberFont.leading
+            )
+        }
+        if characterLocation == length {
+            guard length > 0 else { return nil }
+            let previousGlyph = layoutManager.glyphIndexForCharacter(at: length - 1)
+            let previousRect = layoutManager.lineFragmentRect(
+                forGlyphAt: previousGlyph,
+                effectiveRange: nil
+            )
+            return NSRect(
+                x: previousRect.minX,
+                y: previousRect.maxY,
+                width: previousRect.width,
+                height: previousRect.height
+            )
+        }
+        let glyphIndex = layoutManager.glyphIndexForCharacter(at: characterLocation)
+        return layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+    }
+}
+
 final class ContentViewerDropAwareTextView: NSTextView {
     private static let contextualEditingSelectors: Set<Selector> = [
         #selector(NSText.cut(_:)),
@@ -485,6 +751,13 @@ final class ContentViewerDropAwareTextView: NSTextView {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.documentView = textView
+        let lineNumberRuler = CodeEditorLineNumberRulerView(
+            scrollView: scrollView,
+            textView: textView
+        )
+        scrollView.verticalRulerView = lineNumberRuler
+        scrollView.hasVerticalRuler = false
+        scrollView.rulersVisible = false
 
         return scrollView
     }

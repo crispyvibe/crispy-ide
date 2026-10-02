@@ -256,3 +256,7 @@ Resolved baseline:
 - [TextKit 2 WWDC](https://developer.apple.com/videos/play/wwdc2021/10061/)
 - Terminal rendering research: (archived — Ghostty replaced SwiftTerm)
 - Performance findings: (archived — all PERF items resolved)
+
+## 2026-10-01 Supersession Note
+
+The historical statements above that CrispyVibes has “No line numbers” are superseded. The code/source/plain-text editors now use a shared TextKit-aware `NSRulerView`; rich Markdown and LaTeX can show logical source-block starts; and existing Git diff columns follow the same persisted `Off` / `Source Editors` / `All Text Views` preference. Theme and global text zoom update the gutters live. The remaining observations about TextKit 1, full-document highlighting, virtualization, and Tree-sitter remain historical architecture findings.

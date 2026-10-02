@@ -175,3 +175,7 @@ _None._
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-05-26 | Added VibeSpaces management category architecture (panel, view model, context) | — |
+
+## Line Number Preference
+
+`AppPreferences.editorLineNumberModeKey` stores `EditorLineNumberMode` as `off`, `source`, or `allText`; `source` is the compiled and invalid-value fallback. `AppSettingsSheetViewGeneral` binds the menu picker through `@AppStorage`, so existing editor wrappers react live. Policy helpers on the enum are the single mapping authority: source editors and Git diff are visible for `source`/`allText`, while rich Markdown and LaTeX are visible only for `allText`. Non-text viewers do not observe this key.

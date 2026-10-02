@@ -280,3 +280,7 @@ Copy format differentiates by `surfaceKind`:
 - File: `## #N L{line}` + blockquoted anchor text
 - Browser: `## #N {url}` + `Selector: \`{css}\`` + blockquoted text
 
+
+## Line-Number Gutter Integration
+
+The native editor ruler reserves a 22-point comment lane before the number lane. `CodeEditorCommentBridge.viewportRects(...)` converts TextKit rects into outer scroll-view coordinates using the clip view's frame minus bounds origin, so enabling an AppKit vertical ruler and scrolling are each applied exactly once. `CommentsCodeEditorOverlay` consumes those viewport rects directly and positions indicators at `commentGutterCenterX` (legacy x=8 with no ruler; reserved-lane center when visible). Rich Markdown keeps its comment button lane separate from CSS source-line pseudo-content; neither lane is serialized.

@@ -22,14 +22,12 @@ struct CommentsCodeEditorOverlay: View {
         // the identity of any subview. On scroll/frame changes, only the
         // computed rect math reruns; child views diff in place.
         let _ = bridge.geometryTick
-        let scrollOrigin = bridge.enclosingScroll?.contentView.bounds.origin ?? .zero
         let threads = commentStore.threads(forFile: filePath)
 
         return ZStack(alignment: .topLeading) {
             ForEach(threads) { thread in
                 decoration(
                     for: thread,
-                    scrollOrigin: scrollOrigin,
                     isActive: panel.selectedThreadID == thread.id
                 )
             }
@@ -42,10 +40,9 @@ struct CommentsCodeEditorOverlay: View {
     @ViewBuilder
     private func decoration(
         for thread: CommentThread,
-        scrollOrigin: CGPoint,
         isActive: Bool
     ) -> some View {
-        let rects = bridge.rects(
+        let rects = bridge.viewportRects(
             startLine: thread.root.anchor.startLine,
             startColumn: thread.root.anchor.startColumn,
             endLine: thread.root.anchor.endLine,
@@ -62,7 +59,7 @@ struct CommentsCodeEditorOverlay: View {
         }
 
         ForEach(identifiedRects, id: \.id) { entry in
-            let display = entry.rect.offsetBy(dx: -scrollOrigin.x, dy: -scrollOrigin.y)
+            let display = entry.rect
             highlightShape(isActive: isActive, isStale: isStale, isResolved: isResolved)
                 .frame(width: max(2, display.width), height: max(2, display.height))
                 .position(x: display.midX, y: display.midY)
@@ -75,14 +72,13 @@ struct CommentsCodeEditorOverlay: View {
         // Gutter button at the start line — placed at the left edge of
         // the first rect.
         if let first = rects.first {
-            let display = first.offsetBy(dx: -scrollOrigin.x, dy: -scrollOrigin.y)
             CommentGutterIndicator(
                 status: thread.status,
                 isAgentAuthored: thread.root.authorKind == .agent,
                 isSelected: isActive,
                 onTap: { panel.revealForReply(threadID: thread.id) }
             )
-            .position(x: 8, y: display.midY)
+            .position(x: bridge.commentGutterCenterX, y: first.midY)
         }
     }
 

@@ -423,3 +423,7 @@ And tapping any pane activates it via the simultaneousGesture tap handler
 **When** the user closes that terminal tab from the content viewer
 **Then** only the content-viewer presentation is removed
 **And** the underlying terminal session continues running
+
+### Git Diff Line-Number Policy (F006-R05)
+
+Structured Git diff previews retain their existing old/new logical line-number columns when the global mode is `Source Editors` or `All Text Views`. Both columns are omitted in `Off`; diff parsing and hunk row content are unchanged.

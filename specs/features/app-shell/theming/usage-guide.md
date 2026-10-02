@@ -168,3 +168,7 @@ All theme preferences are stored in app-level storage and persist across launche
 
 - [Navigation](../navigation/usage-guide.md)
 - [Keyboard Shortcuts](../shortcuts/usage-guide.md)
+
+## Line-Number Appearance
+
+When enabled, editor line numbers automatically follow your active theme: inactive labels are muted, dividers use the theme border, and the current native source line uses the accent color. They also scale with the global text-size controls; no separate gutter color or size setting is required.

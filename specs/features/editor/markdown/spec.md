@@ -235,3 +235,16 @@ And content, caret/selection, scroll state, and unsaved edits remain intact
 - Crispy Browser routing uses the existing mode-aware browser-open path; default-browser routing uses the injected interaction service.
 - Link editing, copying, removal, keyboard activation, context-menu activation, Escape dismissal, and Option-click caret placement work in rich mode.
 - Native and WebView layers independently reject unsafe targets, and `WKNavigationDelegate` blocks link-activated replacement navigation.
+
+### F008-R16: Optional Rich Logical Source Lines
+
+When the global line-number mode is `All Text Views`, Markdown rich mode MUST label each annotated top-level logical block with its 1-based starting source line. Labels MUST use theme tokens and WebView presentation scaling, coexist with the independent comment gutter, add no serializable child nodes, and leave Turndown output unchanged. Source annotations MUST be cleared and recomputed after rich edits. Arbitrary HTML iframe mode MUST NOT display Markdown source-line labels.
+
+### F008-S22: Rich line labels preserve Markdown
+
+Given a Markdown document is open in rich mode and `All Text Views` is selected
+When labels are toggled or rich blocks are edited
+Then labels show current logical source-block starting lines
+And wrapped visual rows receive no additional labels
+And Turndown produces the same Markdown it would produce without labels
+And switching to HTML mode removes the Markdown line-number presentation class.

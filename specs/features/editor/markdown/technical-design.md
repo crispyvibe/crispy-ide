@@ -122,3 +122,7 @@ The preference is stored as `AppPreferences.markdownWebLinkPreferenceKey` with e
 - Content injection deferred until `editorReady` to avoid race conditions.
 - Rich-editor synchronization is debounced and deduplicated.
 - Markdown serialization operates on a cloned DOM node instead of an `innerHTML` string parse, reducing peak memory for table-heavy documents.
+
+## Rich Logical Source-Line Gutter
+
+`MarkupRenderedEditor` observes `EditorLineNumberMode` and calls `window.crispyvibesSetLineNumbersVisible(...)` after readiness, updates, and recovery. The runtime applies `crispyvibes-line-numbers-visible` only when `editorMode === "markdown"`. Existing top-level `data-comment-source-line` attributes supply CSS `::before` content; no line-number elements enter the editable DOM. Gutter colors use `--fgColor-muted` and `--borderColor-muted`, and `pageZoom` scales labels with content. The line-number and comment lanes are independently reserved. `syncToNative()` reannotates the post-Turndown Markdown after clearing stale attributes, preserving canonical serialization.

@@ -88,3 +88,13 @@ If a setting seems missing, check whether it is vibespace-scoped. Project shortc
 ## Known Limitations
 
 None.
+
+### Line Numbers
+
+In **App Settings → General**, use **Show line numbers**:
+
+- **Off** — hide file line numbers, including Git diff number columns.
+- **Source Editors** (default) — show logical lines in code, source, and plain-text editors plus Git diffs.
+- **All Text Views** — also show the starting source line of each logical block in rich Markdown and LaTeX Edit mode.
+
+The gutter follows the active theme and changes size with the global text-size controls. Wrapped visual rows do not receive extra numbers. Browser, image, PDF, notebook, whiteboard, terminal, and Office surfaces keep their own presentation and never receive file line numbers.

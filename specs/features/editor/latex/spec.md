@@ -207,3 +207,16 @@ The LaTeX Edit-mode WKWebView MUST apply the shared global document-size ratio t
 |------|--------|--------|
 | 2026-06-17 | Initial implementation: `.tex/.latex/.ltx` document type, Source/Edit split editor, offline KaTeX WYSIWYG with verbatim-preserving round-trip, math palette + popup equation editor, and inline KaTeX in the markdown editor. Vendored KaTeX 0.16.11 via `web/latex-runtime/build.sh` with a SHA256 manifest. | — |
 | 2026-06-20 | Added the **PDF (compiled)** mode: full-TeX, fully offline preview via the local toolchain (`LaTeXNativeCompiler`, `pdflatex -synctex=1`), rendered in a `PDFView` with SyncTeX double-click on-page block editing, mapped-region highlight, select-to-comment, non-destructive compile errors, scroll preservation, and a "TeX engine not installed" empty-state. Smart default (PDF when a toolchain is detected, else Edit). Edit-mode fidelity: editable `abstract`/`IEEEkeywords`, read-only `tabular`/`thebibliography` atoms, IEEE author-block unwrapping, expanded inline escapes with a reversible re-escape on serialize, and render hardening. Replaces the abandoned SwiftLaTeX WASM/remote-server approach (offline-incompatible). (R15–R23, S14–S23, T10–T14.) | — |
+
+### F057-R25: Optional Edit-Mode Logical Source Lines
+
+When the global line-number mode is `All Text Views`, LaTeX Edit mode MUST label each serializable top-level rich block with its 1-based starting `.tex` source line. Labels MUST follow light/dark theme colors and shared WebView presentation scale, use pseudo-content rather than DOM children, preserve pristine block HTML and source serialization, and refresh after editing. Source mode uses the native F007 gutter; PDF mode MUST remain independent.
+
+### Scenario F057-S25: Edit-mode line labels preserve LaTeX source
+
+Given a LaTeX document is open in Edit mode and `All Text Views` is selected
+When labels are toggled and a block is added or edited
+Then each serializable logical block shows its refreshed starting source line
+And no line-number child nodes are added
+And preamble, postamble, comments, and untouched source serialize exactly as before
+And global text size scales labels without recompiling the PDF.

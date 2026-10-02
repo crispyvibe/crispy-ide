@@ -281,3 +281,9 @@ Refreshes on a 2-second timer. Dependencies: `OperationMetricsStore`, `TerminalD
 | 2026-04-20 | Initial comprehensive settings inventory — all 12 sections documented | — |
 | 2026-04-27 | Consolidated visual/chrome controls under Appearance and moved terminal engine into Terminal | — |
 | 2026-05-26 | Added VibeSpaces management category (section 3); renumbered subsequent sections accordingly | — |
+
+### Line Numbers card
+
+| Setting | Control | Storage Key | Default | Description |
+|---------|---------|-------------|---------|-------------|
+| Show line numbers | Picker (Off / Source Editors / All Text Views) | `crispyvibes.editor.lineNumberMode` | Source Editors | Controls native source/plain-text gutters and Git diff columns; All Text Views also labels logical Markdown and LaTeX rich blocks. Non-text surfaces are excluded. |

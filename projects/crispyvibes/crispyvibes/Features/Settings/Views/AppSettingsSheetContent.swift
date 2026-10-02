@@ -22,6 +22,8 @@ struct AppSettingsSheetView: View {
     var codeFontSize = AppPreferences.defaultCodeFontSize
     @AppStorage(AppPreferences.markdownWebLinkPreferenceKey)
     var markdownWebLinkPreferenceRaw = AppPreferences.defaultMarkdownWebLinkPreference
+    @AppStorage(AppPreferences.editorLineNumberModeKey)
+    var editorLineNumberModeRaw = AppPreferences.defaultEditorLineNumberMode
     @AppStorage(AppPreferences.textServiceCLIProfileKey)
     var serviceCLIProfile = AppPreferences.defaultTextServiceCLIProfile
     @AppStorage(AppPreferences.textServiceCLITrustModeKey)

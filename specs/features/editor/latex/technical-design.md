@@ -181,3 +181,7 @@ Two runtimes, two CSPs (both enforce **no network**):
 - The markdown editor references the LaTeX runtime's KaTeX across directories (`../LaTeXRuntime/`) rather than a co-located copy; decoupling the two runtimes is an open question (see spec).
 - No `latex.*` agent CLI yet.
 - The inline LaTeX→HTML subset for prose is intentionally small; uncommon inline macros fall through as literal text and are preserved on round-trip but not styled.
+
+## Edit-Mode Logical Source-Line Gutter
+
+`LaTeXPreviewView` observes `EditorLineNumberMode` and sends `crispyvibesSetLineNumbersVisible` at runtime readiness and on live setting changes. `latex-bridge.js` toggles a class on `#content`; CSS renders the existing `data-comment-source-line` attribute through `::after` so block children and pristine `innerHTML` remain unchanged (and existing semantic `::before` labels such as Abstract remain available). `annotateLatexSourceLines()` clears stale ranges before walking serializable top-level blocks after render/edit. Light/dark variables provide muted foreground/divider colors, and the existing shared `pageZoom` scales the gutter. Source mode is owned by the native ruler; compiled PDF remains independent.

@@ -26,6 +26,29 @@ enum TerminalShellPreference: String, CaseIterable, Codable, Identifiable, Senda
     }
 }
 
+enum EditorLineNumberMode: String, CaseIterable, Identifiable, Sendable {
+    case off
+    case source
+    case allText
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .off:
+            return AppStrings.Editor.lineNumbersModeOff
+        case .source:
+            return AppStrings.Editor.lineNumbersModeSource
+        case .allText:
+            return AppStrings.Editor.lineNumbersModeAllText
+        }
+    }
+
+    var showsSourceEditors: Bool { self != .off }
+    var showsRichText: Bool { self == .allText }
+    var showsGitDiff: Bool { self != .off }
+}
+
 enum AppPreferences {
 
     // MARK: - Key Convention: crispyvibes.{domain}.{setting}
@@ -51,6 +74,7 @@ enum AppPreferences {
 
     // MARK: Editor
     static let markdownWebLinkPreferenceKey = "crispyvibes.editor.webLinkPreference"
+    static let editorLineNumberModeKey = "crispyvibes.editor.lineNumberMode"
 
     // MARK: Shortcuts
     static let appShortcutOverridesKey = "crispyvibes.shortcuts.overrides"
@@ -216,6 +240,7 @@ enum AppPreferences {
     static let defaultAppThemePreset = AppFirstRunExperience.AppSettings.themePreset.rawValue
     static let defaultAppCustomThemePaletteJSON = AppFirstRunExperience.AppSettings.customThemePaletteJSON
     static let defaultMarkdownWebLinkPreference = MarkdownWebLinkPreference.ask.rawValue
+    static let defaultEditorLineNumberMode = EditorLineNumberMode.source.rawValue
     static let defaultAppSideMenuDockPosition =
         AppFirstRunExperience.AppSettings.sideMenuDockPosition.rawValue
     static let defaultRailPositionRawValue =
@@ -270,6 +295,14 @@ enum AppPreferences {
     @discardableResult
     static func resetCodeFontSize(userDefaults: UserDefaults = .standard) -> Double {
         setCodeFontSize(defaultCodeFontSize, userDefaults: userDefaults)
+    }
+
+    static func editorLineNumberMode(
+        userDefaults: UserDefaults = .standard
+    ) -> EditorLineNumberMode {
+        let rawValue = userDefaults.string(forKey: editorLineNumberModeKey)
+            ?? defaultEditorLineNumberMode
+        return EditorLineNumberMode(rawValue: rawValue) ?? .source
     }
 
     static func railTerminalFontScale(userDefaults: UserDefaults = .standard) -> TerminalRailFontScale {

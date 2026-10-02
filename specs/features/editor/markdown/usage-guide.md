@@ -122,3 +122,7 @@ Crispy blocks executable/unknown schemes, protocol-relative links, web URLs with
 | A web link is blocked | Use a complete HTTP(S) address without embedded username/password credentials. Executable and unknown schemes are intentionally rejected. |
 | A relative file link does not open | Verify the target exists relative to the current Markdown file and points to a file rather than a directory. |
 | Clicking a link navigates when I want to edit | Hold Option while clicking, or right-click and choose **Edit**. |
+
+### Rich-Mode Line Numbers
+
+Choose **All Text Views** in App Settings → General to show the starting source line beside each logical rich Markdown block. Paragraphs, headings, list/table wrappers, and raw blocks receive one source position; wrapped display rows are not separate Markdown lines. Labels follow the theme and global text size, coexist with comment indicators, and are presentation-only—saving produces no line-number markup. HTML documents do not receive Markdown source labels.

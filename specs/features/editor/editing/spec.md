@@ -184,3 +184,16 @@ When the file changes outside CrispyVibes and the current document reloads
 Then the editor keeps the same document active
 And the existing content remains visible until replacement text is ready
 And selection and scroll position are restored after the reload unless an explicit source-selection jump is pending
+
+### F007-R14: Configurable Native Line Numbers
+
+Code, source, and plain-text editors MUST support a shared optional logical-line gutter. It MUST number newline-delimited source lines rather than wrapped visual fragments, track the active syntax/app theme, emphasize the selected logical line, resize for document digit count, and scale from the global editor font size. The gutter MUST reserve a separate file-comment lane and MUST update live when the global preference, theme, or text size changes.
+
+### F007-S24: Native gutters remain logical, themed, and zoom-aware
+
+Given line numbers are enabled for source editors
+When a long source line wraps, the theme changes, or global text size changes
+Then the source line receives exactly one number at its first visual fragment
+And gutter colors follow the resolved theme
+And gutter metrics follow the zoomed editor font
+And existing file-comment indicators remain in their reserved lane.

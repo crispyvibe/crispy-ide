@@ -150,3 +150,7 @@ And browser, notebook, whiteboard, PDF, and raster-image zoom remain independent
 | F015-R10 | Font family updates all text immediately; font size is independent |
 | F015-R11 | All theme preferences (border shape, visibility, color, font family) persist and restore on launch |
 | F015-R12 | Global text size updates native text/UI scale and app-authored Markdown/HTML, LaTeX, AsciiDoc, and SVG WebView presentation scale live, without overriding domain-owned browser/canvas/viewer zoom |
+
+## Editor Gutter Theme Contract
+
+Editor line-number gutters MUST update with the resolved app/syntax theme. Inactive labels use a muted foreground, the native active logical line uses the app accent, and lane dividers use the palette border role. Rich labels use equivalent injected CSS tokens. Theme switching MUST NOT recreate or serialize editor content.

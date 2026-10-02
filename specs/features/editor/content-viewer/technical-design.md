@@ -179,3 +179,7 @@ The detailed bottom terminal tray is a source of terminal-session drags into the
 - Session save debounced at 0.5 seconds to avoid excessive writes.
 - Autosave debounced at 0.45 seconds.
 - Git operations have 12-second timeouts; stale responses discarded via request IDs.
+
+## Git Diff Line Numbers
+
+`GitDiffPreview` observes `AppPreferences.editorLineNumberModeKey`. It conditionally emits the existing fixed-width old/new number views from `ParsedGitDiffRow` when `EditorLineNumberMode.showsGitDiff` is true; it does not alter `ParsedGitDiffDocument` parsing. Invalid stored values use the source-mode fallback and retain columns.

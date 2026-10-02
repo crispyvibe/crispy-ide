@@ -32,6 +32,15 @@
   var suppressSync = false;
   var pendingTimer = null;
   var activeEditor = null;
+  var lineNumbersVisible = false;
+
+  window.crispyvibesSetLineNumbersVisible = function (visible) {
+    lineNumbersVisible = visible === true;
+    var content = document.getElementById("content");
+    if (content) {
+      content.classList.toggle("crispyvibes-line-numbers-visible", lineNumbersVisible);
+    }
+  };
 
   // ---- utilities --------------------------------------------------------
 
@@ -845,6 +854,10 @@
   function annotateLatexSourceLines() {
     var content = document.getElementById("content");
     if (!content) return;
+    content.querySelectorAll(":scope > [data-comment-source-line]").forEach(function (node) {
+      node.removeAttribute("data-comment-source-line");
+      node.removeAttribute("data-comment-source-line-end");
+    });
     var line = model.pre ? (model.pre.split("\n").length + 1) : 1;
     var first = true;
     content.childNodes.forEach(function (node) {

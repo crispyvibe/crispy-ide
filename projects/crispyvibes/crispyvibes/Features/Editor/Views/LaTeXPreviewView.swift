@@ -16,6 +16,8 @@ import WebKit
 /// source we can't represent. Mirrors the markdown rich editor's pattern.
 struct LaTeXPreviewView: NSViewRepresentable {
     let content: String
+    @AppStorage(AppPreferences.editorLineNumberModeKey)
+    private var lineNumberModeRaw = AppPreferences.defaultEditorLineNumberMode
     var isBufferLoading: Bool = false
     /// Carries the full updated document source back to the buffer whenever the
     /// rendered surface is edited (typing, formatting, or in-place math edits).
@@ -35,6 +37,10 @@ struct LaTeXPreviewView: NSViewRepresentable {
     @Environment(\.vibespaceCommentStoreEnvironment) private var commentStoreEnv: VibeSpaceCommentStore?
     @Environment(\.commentsPanelEnvironment) private var commentsPanelEnv: CommentsPanelStore?
     @Environment(\.commentsFilePathEnvironment) private var commentsFilePath: String?
+
+    private var showsRichLineNumbers: Bool {
+        (EditorLineNumberMode(rawValue: lineNumberModeRaw) ?? .source).showsRichText
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -76,6 +82,7 @@ struct LaTeXPreviewView: NSViewRepresentable {
         WebViewPresentationScale.apply(uiScale, to: webView)
         context.coordinator.syncContentIfNeeded()
         context.coordinator.syncThemeIfNeeded()
+        context.coordinator.syncLineNumberVisibilityIfNeeded()
         context.coordinator.applyCommandIfNeeded()
         context.coordinator.applyInsertionIfNeeded()
         // F049: keep the bridge pointed at the live webView and re-attempt the
@@ -126,6 +133,7 @@ struct LaTeXPreviewView: NSViewRepresentable {
         private var isReady = false
         private var lastInjectedContent: String?
         private var lastInjectedTheme = ""
+        private var lastLineNumbersVisible: Bool?
         private var lastHandledCommandID: UUID?
         private var lastInsertionID: UUID?
         var commentStoreSubscription: AnyCancellable?
@@ -172,6 +180,16 @@ struct LaTeXPreviewView: NSViewRepresentable {
             webView.evaluateJavaScript("window.crispyvibesSetTheme(\(Self.jsString(theme)));")
         }
 
+        func syncLineNumberVisibilityIfNeeded(force: Bool = false) {
+            guard isReady, let webView else { return }
+            let isVisible = parent.showsRichLineNumbers
+            guard force || isVisible != lastLineNumbersVisible else { return }
+            lastLineNumbersVisible = isVisible
+            webView.evaluateJavaScript(
+                "window.crispyvibesSetLineNumbersVisible(\(isVisible ? "true" : "false"));"
+            )
+        }
+
         /// Apply a toolbar formatting command to the current selection once.
         func applyCommandIfNeeded() {
             guard isReady, let webView, let request = parent.commandRequest else { return }
@@ -196,6 +214,7 @@ struct LaTeXPreviewView: NSViewRepresentable {
             case "latexReady":
                 isReady = true
                 syncThemeIfNeeded(force: true)
+                syncLineNumberVisibilityIfNeeded(force: true)
                 syncContentIfNeeded(force: true)
                 applyCommandIfNeeded()
                 applyInsertionIfNeeded()

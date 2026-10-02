@@ -441,6 +441,82 @@ final class MarkdownRuntimeTests: XCTestCase {
         XCTAssertEqual(offsets[1], offsets[0])
     }
 
+    func testMarkdownLineNumbersToggleWithoutChangingSerializationOrChildren() async throws {
+        let (webView, _) = try await loadEditor()
+        let markdown = "# One\nParagraph"
+        let script = """
+        (() => {
+        window.crispyvibesSetMarkdown(\(javascriptString(markdown)), "");
+        const editorRoot = document.getElementById('editor');
+        const beforeHTML = editorRoot.innerHTML;
+        const beforeMarkdown = turndownService.turndown(editorRoot);
+        const beforeChildCount = editorRoot.childElementCount;
+        window.crispyvibesSetLineNumbersVisible(true);
+        const initialLines = Array.from(editorRoot.children)
+          .map((element) => element.getAttribute('data-comment-source-line'));
+        const pseudoContent = getComputedStyle(editorRoot.children[0], '::before').content;
+        const visibleInMarkdown = editorRoot.classList.contains('crispyvibes-line-numbers-visible');
+        const noLineNumberChildren = editorRoot.querySelectorAll('.crispyvibes-line-number').length === 0;
+        const unchangedAfterToggle = beforeHTML === editorRoot.innerHTML
+          && beforeMarkdown === turndownService.turndown(editorRoot)
+          && beforeChildCount === editorRoot.childElementCount;
+
+        editorRoot.children[1].insertAdjacentHTML('beforebegin', '<p>Inserted</p>');
+        syncToNative();
+        const refreshedLines = Array.from(editorRoot.children)
+          .map((element) => element.getAttribute('data-comment-source-line'));
+        const priorMode = editorMode;
+        editorMode = 'html';
+        applyMarkdownLineNumberVisibility();
+        const hiddenInHTML = !editorRoot.classList.contains('crispyvibes-line-numbers-visible');
+        editorMode = priorMode;
+        applyMarkdownLineNumberVisibility();
+        return [
+          initialLines,
+          pseudoContent,
+          visibleInMarkdown,
+          noLineNumberChildren,
+          unchangedAfterToggle,
+          refreshedLines,
+          hiddenInHTML
+        ];
+        })();
+        """
+
+        let result = try await evaluate(script, in: webView) as? [Any]
+        let values = try XCTUnwrap(result)
+        XCTAssertEqual(values[0] as? [String], ["1", "2"])
+        XCTAssertTrue((values[1] as? String)?.contains("1") == true)
+        XCTAssertEqual(values[2] as? Bool, true)
+        XCTAssertEqual(values[3] as? Bool, true)
+        XCTAssertEqual(values[4] as? Bool, true)
+        XCTAssertEqual(values[5] as? [String], ["1", "3", "5"])
+        XCTAssertEqual(values[6] as? Bool, true)
+    }
+
+    func testMarkdownLineNumbersKeepFollowingBlockAlignedAfterFencedBlankLine() async throws {
+        let (webView, _) = try await loadEditor()
+        let markdown = """
+        ```text
+        first
+
+        second
+        ```
+        After
+        """
+        let script = """
+        window.crispyvibesSetMarkdown(\(javascriptString(markdown)), "");
+        Array.from(document.getElementById('editor').children).map((element) => [
+          element.tagName,
+          element.getAttribute('data-comment-source-line'),
+          element.getAttribute('data-comment-source-line-end')
+        ]);
+        """
+
+        let result = try await evaluate(script, in: webView) as? [[String]]
+        XCTAssertEqual(result, [["PRE", "1", "5"], ["P", "6", "6"]])
+    }
+
     private func loadEditor() async throws -> (WKWebView, MessageHandler) {
         let readyExpectation = expectation(description: "Markdown editor ready")
         let handler = MessageHandler(readyExpectation: readyExpectation)

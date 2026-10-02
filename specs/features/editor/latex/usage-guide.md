@@ -190,3 +190,7 @@ Standard editor shortcuts (undo/redo, find/replace, selection) work as usual in 
 
 - **1.2** — Documented the three tabs explicitly (Edit / Source / PDF), the installed-vs-not-installed experience, BasicTeX/MacTeX install (location, auto-detect, Recheck), per-user package installs via `tlmgr --usermode`, validated TeX Live 2026 / pdfTeX 1.40.29, and the offline multi-pass + BibTeX compile model.
 - **1.1** — Initial PDF (full-TeX) tab, on-page editing, and comments.
+
+## Line Numbers
+
+With the default **Source Editors** preference, the LaTeX **Source** tab shows file line numbers. Select **All Text Views** to also show each logical `.tex` block's starting source line in **Edit**. Long rendered blocks receive one label, labels follow light/dark appearance and global text size, and they never become part of your `.tex` file. The **PDF** tab keeps PDFKit zoom and does not show editor line numbers.

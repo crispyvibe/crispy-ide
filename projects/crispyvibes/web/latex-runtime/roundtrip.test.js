@@ -390,6 +390,35 @@ async function run() {
   check("edited block re-escapes & % # _ (no corruption)",
     out.includes("99.4\\% and A \\& B and x\\_y \\#1"), out);
 
+  // ---- Test 20: logical line labels do not mutate source DOM ----------
+  console.log("Test 20: logical line labels toggle without DOM/source mutation");
+  env = makeEnv();
+  env.window.crispyvibesSetLatex("\\begin{document}\n\\section{One}\nParagraph.\n\\end{document}\n");
+  const c20 = env.window.document.getElementById("content");
+  const inner20 = c20.innerHTML;
+  const children20 = c20.childElementCount;
+  const lines20 = [...c20.children].map((el) => el.getAttribute("data-comment-source-line"));
+  env.window.crispyvibesSetLineNumbersVisible(true);
+  check("line-number visibility API adds root class",
+    c20.classList.contains("crispyvibes-line-numbers-visible"));
+  check("line labels add no child nodes",
+    c20.innerHTML === inner20 && c20.childElementCount === children20,
+    { before: children20, after: c20.childElementCount });
+  check("logical source-line attributes are retained",
+    lines20.length > 0 && lines20.every((line) => !!line), lines20);
+  out = await fireInputAndCapture(env.window, env.state);
+  check("visibility toggle leaves serialization unchanged",
+    out.includes("\\section{One}") && out.includes("Paragraph."), out);
+  const added20 = env.window.document.createElement("p");
+  added20.textContent = "Added.";
+  c20.appendChild(added20);
+  out = await fireInputAndCapture(env.window, env.state);
+  check("new rich block receives refreshed source annotation",
+    !!added20.getAttribute("data-comment-source-line"), added20.outerHTML);
+  env.window.crispyvibesSetLineNumbersVisible(false);
+  check("line-number visibility API removes root class",
+    !c20.classList.contains("crispyvibes-line-numbers-visible"));
+
   console.log(failures === 0 ? "\nALL PASSED" : `\n${failures} FAILED`);
   process.exit(failures === 0 ? 0 : 1);
 }

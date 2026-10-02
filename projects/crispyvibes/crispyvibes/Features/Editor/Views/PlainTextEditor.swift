@@ -13,6 +13,8 @@ struct PlainTextEditor: NSViewRepresentable {
     private var codeFontFamily = AppPreferences.defaultCodeFontFamily
     @AppStorage(AppPreferences.codeFontSizeKey)
     private var codeFontSize = AppPreferences.defaultCodeFontSize
+    @AppStorage(AppPreferences.editorLineNumberModeKey)
+    private var lineNumberModeRaw = AppPreferences.defaultEditorLineNumberMode
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appThemePalette) private var appThemePalette
     
@@ -51,6 +53,7 @@ struct PlainTextEditor: NSViewRepresentable {
             textView.string = content
             context.coordinator.lastFileURL = fileURL.standardizedFileURL
             applyTheme(to: textView, colorScheme: colorScheme)
+            updateLineNumberRuler(in: scrollView)
             applyPendingSourceSelectionIfNeeded(in: textView)
         }
 
@@ -59,6 +62,7 @@ struct PlainTextEditor: NSViewRepresentable {
     
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? ContentViewerDropAwareTextView else { return }
+        updateLineNumberRuler(in: nsView)
         guard !isBufferLoading else {
             textView.isEditable = false
             return
@@ -114,6 +118,25 @@ struct PlainTextEditor: NSViewRepresentable {
             .backgroundColor: selectedBackground,
             .foregroundColor: theme.text
         ]
+    }
+
+    private var lineNumberMode: EditorLineNumberMode {
+        EditorLineNumberMode(rawValue: lineNumberModeRaw) ?? .source
+    }
+
+    private func updateLineNumberRuler(in scrollView: NSScrollView) {
+        guard let ruler = scrollView.verticalRulerView as? CodeEditorLineNumberRulerView else {
+            return
+        }
+        let theme = SyntaxTheme.fromPalette(appThemePalette, colorScheme: colorScheme)
+        ruler.update(
+            isVisible: lineNumberMode.showsSourceEditors,
+            editorFont: resolvedEditorFont,
+            backgroundColor: theme.background,
+            numberColor: theme.text.withAlphaComponent(0.52),
+            activeNumberColor: NSColor(appThemePalette.accentColor),
+            dividerColor: NSColor(appThemePalette.borderColorValue)
+        )
     }
 
     private var resolvedEditorFont: NSFont {

@@ -991,6 +991,76 @@
         }
       }
     },
+    "editor.lineNumbers.mode.allText": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Text Views"
+          }
+        }
+      }
+    },
+    "editor.lineNumbers.mode.off": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        }
+      }
+    },
+    "editor.lineNumbers.mode.source": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source Editors"
+          }
+        }
+      }
+    },
+    "editor.lineNumbers.settings.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show logical source positions in text-based editors."
+          }
+        }
+      }
+    },
+    "editor.lineNumbers.settings.detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Text Views also labels logical source blocks in rich Markdown and LaTeX."
+          }
+        }
+      }
+    },
+    "editor.lineNumbers.settings.field": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show line numbers"
+          }
+        }
+      }
+    },
+    "editor.lineNumbers.settings.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line Numbers"
+          }
+        }
+      }
+    },
     "editor.h1": {
       "extractionState": "stale",
       "localizations": {

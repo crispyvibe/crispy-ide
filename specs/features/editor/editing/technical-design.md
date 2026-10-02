@@ -84,3 +84,7 @@ Combined `hasUnsavedChanges` = logical OR of both. "Unsaved" badge displayed in 
 
 - Autosave debounce: 0.45 seconds.
 - Pane worker write timeout: 10 seconds.
+
+## Native Line-Number Ruler
+
+`ContentViewerDropAwareTextView.scrollableTextView()` installs one initially hidden `CodeEditorLineNumberRulerView` as the vertical `NSRulerView`, shared by `CodeEditorView` and `PlainTextEditor`. The ruler indexes UTF-16 newline starts, asks TextKit for the first line fragment of each visible logical line, and never numbers continuation fragments. Its monospaced-digit font is derived from the resolved editor font, width grows with digit count, and update calls replace theme background/muted/accent/divider colors without replacing the ruler. A 22-point leading lane is reserved for file comments. Preference changes toggle `hasVerticalRuler` and `rulersVisible`, causing AppKit to retile the clip view.

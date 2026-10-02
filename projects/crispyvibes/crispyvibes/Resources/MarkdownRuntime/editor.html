@@ -27,6 +27,40 @@
       padding: 16px;
       background: transparent !important;
       color: var(--fgColor-default);
+      --crispyvibes-comment-gutter-width: 22px;
+      --crispyvibes-line-number-width: 6ch;
+      --crispyvibes-line-number-gap: 8px;
+      --crispyvibes-line-number-fg: var(--fgColor-muted);
+      --crispyvibes-line-number-divider: var(--borderColor-muted);
+    }
+    #editor.crispyvibes-line-numbers-visible {
+      padding-left: calc(
+        16px + var(--crispyvibes-comment-gutter-width)
+        + var(--crispyvibes-line-number-width)
+        + var(--crispyvibes-line-number-gap)
+      );
+    }
+    #editor.crispyvibes-line-numbers-visible > [data-comment-source-line] {
+      position: relative;
+    }
+    #editor.crispyvibes-line-numbers-visible > [data-comment-source-line]::before {
+      content: attr(data-comment-source-line);
+      position: absolute;
+      box-sizing: content-box;
+      left: calc(
+        0px - var(--crispyvibes-comment-gutter-width)
+        - var(--crispyvibes-line-number-width)
+        - var(--crispyvibes-line-number-gap)
+      );
+      top: 0;
+      width: var(--crispyvibes-line-number-width);
+      padding-right: var(--crispyvibes-line-number-gap);
+      border-right: 1px solid var(--crispyvibes-line-number-divider);
+      color: var(--crispyvibes-line-number-fg);
+      font: 500 0.78em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-align: right;
+      pointer-events: none;
+      user-select: none;
     }
     .markdown-body {
       max-width: none;
@@ -647,6 +681,7 @@
     var imageCandidateRequestCounter = 0;
     var markdownBaseHref = "";
     var markdownWebLinkPreference = "ask";
+    var markdownLineNumbersVisible = false;
     var markdownLinkPopover = null;
     var markdownNavigationHistory = [];
     var lastSynchronizedMarkdown = null;
@@ -665,6 +700,18 @@
 
     window.crispyvibesSetThemeTokens = function(tokens) {
       applyThemeTokens(tokens);
+    };
+
+    function applyMarkdownLineNumberVisibility() {
+      editor.classList.toggle(
+        "crispyvibes-line-numbers-visible",
+        editorMode === "markdown" && markdownLineNumbersVisible
+      );
+    }
+
+    window.crispyvibesSetLineNumbersVisible = function(visible) {
+      markdownLineNumbersVisible = visible === true;
+      applyMarkdownLineNumberVisibility();
     };
 
     window.crispyvibesSetWebLinkPreference = function(preference) {
@@ -918,6 +965,12 @@
         } else {
           const markdown = turndownService.turndown(editor);
           if (markdown === lastSynchronizedMarkdown) return;
+          try {
+            annotateMarkdownSourceLines(markdown);
+            applyMarkdownLineNumberVisibility();
+          } catch (_) {
+            // Source-line labels are best-effort and never block saving.
+          }
           window.webkit.messageHandlers.contentChanged.postMessage(markdown);
           lastSynchronizedMarkdown = markdown;
         }
@@ -948,6 +1001,7 @@
       editorMode = "markdown";
       lastSynchronizedMarkdown = source;
       renderMarkdown(source, baseHref || "");
+      applyMarkdownLineNumberVisibility();
       restoreMarkdownTextSelection(selectionSnapshot);
     };
 
@@ -959,6 +1013,7 @@
       editorMode = "html";
       lastSynchronizedHTML = source;
       renderHTML(source, baseHref || "");
+      applyMarkdownLineNumberVisibility();
     };
 
     window.crispyvibesApplyFormattingCommand = function(command) {
@@ -2866,38 +2921,44 @@
     /// element. Inline-only changes within a paragraph share the same line.
     function annotateMarkdownSourceLines(markdownSource) {
       if (!editor) return;
-      // Split source by blank-line block separators while keeping line numbers.
-      var lines = (markdownSource || "").split("\n");
-      var blocks = []; // [{ startLine, endLine }]
-      var blockStart = null;
-      for (var i = 0; i < lines.length; i++) {
-        var trimmed = lines[i].trim();
-        if (trimmed === "") {
-          if (blockStart != null) {
-            blocks.push({ startLine: blockStart + 1, endLine: i });
-            blockStart = null;
-          }
-        } else if (blockStart == null) {
-          blockStart = i;
-        }
-      }
-      if (blockStart != null) {
-        blocks.push({ startLine: blockStart + 1, endLine: lines.length });
-      }
+      editor.querySelectorAll(
+        ":scope > [data-comment-source-line], :scope > [data-comment-source-line-end]"
+      ).forEach((element) => {
+        element.removeAttribute("data-comment-source-line");
+        element.removeAttribute("data-comment-source-line-end");
+      });
+      if (!window.marked || typeof marked.lexer !== "function") return;
 
-      // Walk top-level rendered blocks and assign source lines in order.
-      var children = editor.children;
-      var blockIdx = 0;
-      for (var c = 0; c < children.length; c++) {
-        var el = children[c];
-        if (!el || el.nodeType !== 1) continue;
-        if (el.id === "crispyvibes-comments-overlay") continue;
-        if (blockIdx < blocks.length) {
-          el.setAttribute("data-comment-source-line", String(blocks[blockIdx].startLine));
-          el.setAttribute("data-comment-source-line-end", String(blocks[blockIdx].endLine));
+      var children = Array.from(editor.children).filter((element) => {
+        return element.id !== "crispyvibes-comments-overlay";
+      });
+      var tokens = marked.lexer(markdownSource || "");
+      var childIndex = 0;
+      var sourceLine = 1;
+
+      tokens.forEach((token) => {
+        var raw = typeof token.raw === "string" ? token.raw : "";
+        var trimmedRaw = raw.replace(/\n+$/, "");
+        var endLine = sourceLine + Math.max(0, trimmedRaw.split("\n").length - 1);
+        var renderedCount = 1;
+
+        if (token.type === "space" || token.type === "def") {
+          renderedCount = 0;
+        } else if (token.type === "html") {
+          // One raw HTML token can emit several top-level elements. Count its
+          // rendered roots so subsequent Markdown tokens retain exact mapping.
+          var probe = document.createElement("div");
+          probe.innerHTML = marked.parse(raw || "");
+          renderedCount = probe.children.length;
         }
-        blockIdx++;
-      }
+
+        for (var index = 0; index < renderedCount && childIndex < children.length; index++) {
+          children[childIndex].setAttribute("data-comment-source-line", String(sourceLine));
+          children[childIndex].setAttribute("data-comment-source-line-end", String(endLine));
+          childIndex++;
+        }
+        sourceLine += (raw.match(/\n/g) || []).length;
+      });
     }
 
     /// Find the rendered block whose source-line range contains `line`.

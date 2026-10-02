@@ -179,3 +179,7 @@ Font family candidates:
 
 - Legacy named project-color token decoding removed; color tokens are hex-only
 - Custom theme JSON schema must remain backward-compatible across versions
+
+## Editor Line-Number Colors
+
+Native source gutters derive background/muted text from the resolved `SyntaxTheme` and active-line/divider colors from `AppThemePalette`. Rich Markdown uses injected muted/border CSS tokens; LaTeX defines matching light/dark muted tokens. Theme changes update open gutters without replacing editor content, and contrast is intentionally secondary except for the accent-highlighted active native line.

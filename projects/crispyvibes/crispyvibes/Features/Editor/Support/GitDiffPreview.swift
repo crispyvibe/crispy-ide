@@ -3,7 +3,17 @@ import SwiftUI
 struct GitDiffPreview: View {
     @Environment(\.appThemePalette) private var appThemePalette
     @Environment(\.crispyvibesTheme) private var crispyvibesTheme
+    @AppStorage(AppPreferences.editorLineNumberModeKey)
+    private var lineNumberModeRaw = AppPreferences.defaultEditorLineNumberMode
     let content: String
+
+    private var showsLineNumbers: Bool {
+        Self.showsLineNumbers(modeRawValue: lineNumberModeRaw)
+    }
+
+    static func showsLineNumbers(modeRawValue: String) -> Bool {
+        (EditorLineNumberMode(rawValue: modeRawValue) ?? .source).showsGitDiff
+    }
 
     private var document: ParsedGitDiffDocument {
         ParsedGitDiffDocument.parse(content)
@@ -104,14 +114,16 @@ struct GitDiffPreview: View {
 
     private func hunkRowView(_ row: ParsedGitDiffRow) -> some View {
         HStack(spacing: 8) {
-            Text(lineNumberText(row.oldLineNumber))
-                .font(AppTypographyTokens.monospacedCaption2)
-                .foregroundStyle(appThemePalette.secondaryTextColor)
-                .frame(width: 44, alignment: .trailing)
-            Text(lineNumberText(row.newLineNumber))
-                .font(AppTypographyTokens.monospacedCaption2)
-                .foregroundStyle(appThemePalette.secondaryTextColor)
-                .frame(width: 44, alignment: .trailing)
+            if showsLineNumbers {
+                Text(lineNumberText(row.oldLineNumber))
+                    .font(AppTypographyTokens.monospacedCaption2)
+                    .foregroundStyle(appThemePalette.secondaryTextColor)
+                    .frame(width: 44, alignment: .trailing)
+                Text(lineNumberText(row.newLineNumber))
+                    .font(AppTypographyTokens.monospacedCaption2)
+                    .foregroundStyle(appThemePalette.secondaryTextColor)
+                    .frame(width: 44, alignment: .trailing)
+            }
 
             Text(row.text)
                 .font(AppTypographyTokens.monospacedCaption)

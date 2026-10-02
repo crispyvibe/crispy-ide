@@ -22,6 +22,8 @@ struct MarkupRenderedEditor: NSViewRepresentable {
     var isBufferLoading: Bool = false
     var embeddedDropBridge: ContentViewerEmbeddedDropBridge? = nil
     @Binding var content: String
+    @AppStorage(AppPreferences.editorLineNumberModeKey)
+    private var lineNumberModeRaw = AppPreferences.defaultEditorLineNumberMode
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.crispyvibesUIScale) private var uiScale
     @Environment(\.appThemePalette) private var appThemePalette
@@ -43,6 +45,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         var lastHandledCommandID: UUID?
         var lastHandledNavigationID: UUID?
         var lastWebLinkPreference: MarkdownWebLinkPreference?
+        var lastLineNumbersVisible: Bool?
         var lastImageCandidateRequestID = 0
         /// F049: Combine subscription that re-syncs decorations whenever
         /// the store reports changes. Replaces the prior NotificationCenter
@@ -144,6 +147,16 @@ struct MarkupRenderedEditor: NSViewRepresentable {
             lastWebLinkPreference = preference
         }
 
+        func syncLineNumberVisibilityIfNeeded(force: Bool = false) {
+            guard isEditorReady, let webView else { return }
+            let isVisible = parent.showsRichLineNumbers
+            guard force || isVisible != lastLineNumbersVisible else { return }
+            webView.evaluateJavaScript(
+                "window.crispyvibesSetLineNumbersVisible(\(isVisible ? "true" : "false"));"
+            )
+            lastLineNumbersVisible = isVisible
+        }
+
         func applyNavigationRequestIfNeeded() {
             guard isEditorReady,
                   !parent.isBufferLoading,
@@ -168,6 +181,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
                 isEditorReady = true
                 syncThemeTokensToEditor(force: true)
                 syncWebLinkPreferenceIfNeeded(force: true)
+                syncLineNumberVisibilityIfNeeded(force: true)
                 syncContentToEditor(force: true)
                 applyFormattingCommandIfNeeded()
                 applyNavigationRequestIfNeeded()
@@ -275,6 +289,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
             lastInjectedThemeTokens = ""
             lastMode = nil
             lastWebLinkPreference = nil
+            lastLineNumbersVisible = nil
             lastHandledNavigationID = nil
             MarkupRenderedEditor.loadLocalEditor(into: webView, readAccessURL: readAccessURL())
         }
@@ -402,6 +417,7 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         (nsView as? CrispyVibesNoContextMenuWebView)?.embeddedDropBridge = embeddedDropBridge
         context.coordinator.syncThemeTokensToEditor()
         context.coordinator.syncWebLinkPreferenceIfNeeded()
+        context.coordinator.syncLineNumberVisibilityIfNeeded()
         context.coordinator.syncContentToEditor()
         context.coordinator.applyFormattingCommandIfNeeded()
         context.coordinator.applyNavigationRequestIfNeeded()
@@ -443,6 +459,11 @@ struct MarkupRenderedEditor: NSViewRepresentable {
             return
         }
         webView.loadFileURL(htmlURL, allowingReadAccessTo: readAccessURL)
+    }
+
+    private var showsRichLineNumbers: Bool {
+        mode == .markdown
+            && (EditorLineNumberMode(rawValue: lineNumberModeRaw) ?? .source).showsRichText
     }
 
     private var themeTokensForWebEditor: [String: String] {
