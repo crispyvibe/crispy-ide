@@ -1,137 +1,80 @@
 import AppKit
 
+/// On-screen drawing for the raster canvas. Overlays use the same painter as export.
 extension EditableRasterImageCanvasView {
-    func drawCompositeContent(in imageRect: CGRect, includeActiveStroke: Bool) {
-        workingImage?.draw(in: imageRect)
-        drawStrokes(in: imageRect, includeActiveStroke: includeActiveStroke)
-        drawAnnotations(in: imageRect)
-    }
+    func drawCanvasContent() {
+        guard let session, let workingImage else { return }
+        let canvasSize = session.canvasSize
+        let canvasRect = CGRect(origin: .zero, size: canvasSize)
+        NSGraphicsContext.current?.imageInterpolation = .high
 
-    func drawStrokes(in imageRect: CGRect, includeActiveStroke: Bool) {
-        let strokeColor = NSColor.systemGreen.withAlphaComponent(0.88)
-        strokeColor.setStroke()
-
-        for path in cachedPathsForDrawnStrokes() {
-            path.stroke()
-        }
-
-        if includeActiveStroke,
-           let path = pathForActiveStroke() {
-            path.stroke()
-        }
-    }
-
-    func drawAnnotations(in imageRect: CGRect) {
-        guard !annotations.isEmpty else { return }
-        for annotation in annotations {
-            let resolvedFont: NSFont
-            if annotation.style.fontName == "System" {
-                resolvedFont = NSFont.systemFont(ofSize: annotation.style.fontSize, weight: .semibold)
-            } else {
-                resolvedFont = NSFont(
-                    name: annotation.style.fontName,
-                    size: annotation.style.fontSize
-                ) ?? NSFont.systemFont(ofSize: annotation.style.fontSize, weight: .semibold)
-            }
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: resolvedFont,
-                .foregroundColor: annotation.style.textColor
-            ]
-            let attributed = NSAttributedString(string: annotation.text, attributes: attributes)
-            let textSize = attributed.size()
-            let padding = NSSize(width: 8, height: 4)
-            let origin = CGPoint(
-                x: min(max(annotation.location.x + 6, 0), max(0, imageRect.width - (textSize.width + padding.width * 2))),
-                y: min(max(annotation.location.y + 6, 0), max(0, imageRect.height - (textSize.height + padding.height * 2)))
-            )
-            let bubbleRect = CGRect(
-                x: origin.x,
-                y: origin.y,
-                width: textSize.width + padding.width * 2,
-                height: textSize.height + padding.height * 2
-            )
-
-            let bubblePath = NSBezierPath(roundedRect: bubbleRect, xRadius: 5, yRadius: 5)
-            annotation.style.backgroundColor.setFill()
-            bubblePath.fill()
-            NSColor.black.withAlphaComponent(0.7).setStroke()
-            bubblePath.lineWidth = 1
-            bubblePath.stroke()
-
-            let textPoint = CGPoint(x: bubbleRect.origin.x + padding.width, y: bubbleRect.origin.y + padding.height)
-            attributed.draw(at: textPoint)
-        }
-    }
-
-    func drawCropSelection() {
-        guard editingMode == .crop,
-              let cropSelection,
-              cropSelection.width > 0,
-              cropSelection.height > 0 else {
+        if previewStraightenRadians != 0 {
+            drawStraightenPreview(workingImage, in: canvasRect)
             return
         }
 
-        NSColor.systemBlue.withAlphaComponent(0.20).setFill()
-        cropSelection.fill()
-
-        let border = NSBezierPath(rect: cropSelection)
-        border.lineWidth = 1.5
-        border.setLineDash([5, 3], count: 2, phase: 0)
-        NSColor.systemBlue.withAlphaComponent(0.90).setStroke()
-        border.stroke()
+        let editingID = markupDrag == nil ? nil : markupPreview?.id
+        // The composite bakes in every committed item, so it can't be used while one is being
+        // dragged (it would show the item twice). Revision and session must match; the adjustment
+        // part of the key may lag during a slider drag so the preview stays smooth.
+        if needsLiveComposite, editingID == nil, let liveComposite,
+           liveComposite.key.revision == session.revision, liveComposite.key.sessionID == ObjectIdentifier(session) {
+            // The composite already contains every committed overlay, including pixel effects.
+            NSImage(cgImage: liveComposite.image, size: canvasSize).draw(in: canvasRect)
+        } else {
+            workingImage.draw(in: canvasRect)
+            for operation in session.overlayOperations where operation.markupItem?.id != editingID {
+                if let item = operation.markupItem, item.isPixelEffect {
+                    drawPixelEffectPlaceholder(item)
+                } else {
+                    RasterImageOverlayPainter.draw(operation, canvasSize: canvasSize)
+                }
+            }
+        }
+        if let markupPreview, markupDrag != nil {
+            if markupPreview.isPixelEffect {
+                drawPixelEffectPlaceholder(markupPreview)
+            } else {
+                RasterImageOverlayPainter.draw(markupPreview)
+            }
+        }
+        drawRecognizedText(canvasSize: canvasSize)
+        drawCropSelection()
+        drawMarkupSelection()
     }
 
-    func compositedImage() -> NSImage? {
-        guard let workingImage else { return nil }
-        let size = workingImage.size
-        guard size.width > 0, size.height > 0 else { return nil }
-        if let cachedImage = cachedCompositedImageIfAvailable() {
-            return cachedImage
+    /// Outlines recognized text lines so users can see what OCR found.
+    private func drawRecognizedText(canvasSize: CGSize) {
+        guard !recognizedTextLines.isEmpty else { return }
+        let lineWidth = canvasLength(forScreenPoints: 1)
+        for line in recognizedTextLines {
+            let box = line.box(in: canvasSize).insetBy(dx: -lineWidth * 2, dy: -lineWidth * 2)
+            NSColor.systemYellow.withAlphaComponent(0.18).setFill()
+            NSBezierPath(rect: box).fill()
+            let outline = NSBezierPath(rect: box)
+            outline.lineWidth = lineWidth
+            NSColor.systemYellow.withAlphaComponent(0.9).setStroke()
+            outline.stroke()
         }
+    }
 
-        let imageRect = CGRect(origin: .zero, size: size)
-        var proposedRect = imageRect
-        let sourceCGImage = workingImage.cgImage(
-            forProposedRect: &proposedRect,
-            context: nil,
-            hints: nil
-        )
-        let pixelWidth = max(sourceCGImage?.width ?? Int(ceil(size.width)), 1)
-        let pixelHeight = max(sourceCGImage?.height ?? Int(ceil(size.height)), 1)
-
-        guard let bitmapRep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: pixelWidth,
-            pixelsHigh: pixelHeight,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ) else {
-            return nil
+    /// Previews a straighten: the rotated image scaled so its inscribed crop fills the canvas,
+    /// matching what `.straighten` will produce (shown at the current canvas size).
+    private func drawStraightenPreview(_ image: NSImage, in rect: CGRect) {
+        guard let context = NSGraphicsContext.current?.cgContext, rect.width > 0 else { return }
+        let output = ImageEditOperation.straightenedSize(for: rect.size, radians: Double(previewStraightenRadians))
+        let zoom = rect.width / max(output.width, 0.0001)
+        context.saveGState()
+        context.clip(to: rect)
+        context.translateBy(x: rect.midX, y: rect.midY)
+        context.rotate(by: previewStraightenRadians)
+        context.scaleBy(x: zoom, y: zoom)
+        context.translateBy(x: -rect.midX, y: -rect.midY)
+        image.draw(in: rect)
+        if let session {
+            RasterImageOverlayPainter.draw(session.overlayOperations, canvasSize: session.canvasSize)
         }
-        bitmapRep.size = size
-
-        guard let graphicsContext = NSGraphicsContext(bitmapImageRep: bitmapRep) else {
-            return nil
-        }
-
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = graphicsContext
-        graphicsContext.imageInterpolation = .high
-        graphicsContext.shouldAntialias = true
-        graphicsContext.cgContext.translateBy(x: 0, y: size.height)
-        graphicsContext.cgContext.scaleBy(x: 1, y: -1)
-        drawCompositeContent(in: imageRect, includeActiveStroke: false)
-        graphicsContext.flushGraphics()
-        NSGraphicsContext.restoreGraphicsState()
-
-        let outputImage = NSImage(size: size)
-        outputImage.addRepresentation(bitmapRep)
-        cacheCompositedImage(outputImage)
-        return outputImage
+        context.restoreGState()
+        drawThirdsGrid(in: rect, lineWidth: canvasLength(forScreenPoints: 1))
     }
 }

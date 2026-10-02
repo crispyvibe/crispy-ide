@@ -150,7 +150,7 @@ struct MarkdownEditorView: View {
             commentDecoratedContent
         }
         .onReceive(NotificationCenter.default.publisher(for: .saveCurrentMarkdown)) { _ in
-            viewModel.save()
+            viewModel.saveActiveDocument()
         }
         .onReceive(NotificationCenter.default.publisher(for: .showFindInDocument)) { _ in
             activateFind(replaceMode: false)

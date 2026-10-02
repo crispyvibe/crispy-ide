@@ -294,7 +294,13 @@ private struct ImagePreviewPlugin: EditorContentPlugin {
             },
             onRasterDirtyStateChange: { hasUnsavedEdits in
                 context.viewModel.setImageEditDirtyState(hasUnsavedEdits)
-            }
+            },
+            saveRequest: RasterImageSaveRequest(
+                token: context.viewModel.imageSaveRequestToken,
+                isPending: { context.viewModel.isImageSaveRequestPending },
+                acknowledge: { context.viewModel.acknowledgeImageSaveRequest() }
+            ),
+            services: context.viewModel.rasterImageEditorServices
         )
         .accessibilityIdentifier("editor.preview.image.host")
         return AnyView(preview)

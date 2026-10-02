@@ -558,6 +558,9 @@ extension MarkdownViewModel {
         openFileTask = Task { [weak self] in
             guard let self else { return }
             do {
+                // F009: capture the version before reading so later image saves can detect
+                // remote changes; an older token errs toward reporting a conflict.
+                let baselineToken = try? await provider.modificationToken(at: sourceURL.path)
                 let data = try await provider.readFile(at: sourceURL.path)
                 guard !Task.isCancelled else { return }
                 guard self.openRequestID == requestID else { return }
@@ -568,6 +571,7 @@ extension MarkdownViewModel {
                     return
                 }
 
+                self.remoteImageBaselineToken = baselineToken
                 applyPreviewURL(stagedURL)
                 self.workerStatus = .ready
             } catch {

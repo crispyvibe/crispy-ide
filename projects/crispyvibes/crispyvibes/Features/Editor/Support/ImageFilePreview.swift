@@ -1,9 +1,13 @@
 import SwiftUI
 
+@MainActor
 struct ImageFilePreview: View {
     let fileURL: URL
-    var onSaveDataRequest: ((URL, Data, @escaping (Result<Void, Error>) -> Void) -> Void)? = nil
+    var onSaveDataRequest: RasterImageSaveDataHandler? = nil
     var onRasterDirtyStateChange: (Bool) -> Void = { _ in }
+    /// Owner-issued ⌘S request for the raster editor.
+    var saveRequest: RasterImageSaveRequest = .none
+    var services: RasterImageEditorServices = .makeDefault()
 
     private var isSVG: Bool {
         fileURL.pathExtension.lowercased() == "svg"
@@ -17,7 +21,9 @@ struct ImageFilePreview: View {
             RasterImagePreviewHost(
                 fileURL: fileURL,
                 onSaveDataRequest: onSaveDataRequest,
-                onDirtyStateChange: onRasterDirtyStateChange
+                onDirtyStateChange: onRasterDirtyStateChange,
+                saveRequest: saveRequest,
+                services: services
             )
             .accessibilityIdentifier("editor.preview.image")
         }

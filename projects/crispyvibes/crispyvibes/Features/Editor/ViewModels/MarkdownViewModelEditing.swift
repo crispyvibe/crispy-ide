@@ -1,7 +1,7 @@
 import Foundation
 
 extension MarkdownViewModel {
-    private func postVibeSpaceFileDidSaveNotification(for fileURL: URL) {
+    func postVibeSpaceFileDidSaveNotification(for fileURL: URL) {
         NotificationCenter.default.post(name: .vibespaceFileDidSave, object: fileURL.standardizedFileURL)
     }
 
@@ -146,46 +146,6 @@ extension MarkdownViewModel {
 
     func saveAndExitEditing() {
         save()
-    }
-
-    func saveImagePreviewData(
-        _ data: Data,
-        from presentedFileURL: URL,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        guard let sourceFileURL = fileURL else {
-            completion(.failure(CocoaError(.fileNoSuchFile)))
-            return
-        }
-
-        workerStatus = .busy("Saving image")
-
-        Task { [weak self] in
-            guard let self else { return }
-
-            do {
-                if let provider = self.fileContentProvider,
-                   provider.requiresMaterializedLocalPreview,
-                   presentedFileURL.standardizedFileURL != sourceFileURL.standardizedFileURL {
-                    try await provider.writeFile(at: sourceFileURL.path, contents: data)
-                    try data.write(to: presentedFileURL, options: .atomic)
-                } else {
-                    try data.write(to: presentedFileURL, options: .atomic)
-                }
-
-                self.hasUnsavedImageEdits = false
-                self.refreshUnsavedChangesFlag()
-                self.workerStatus = .ready
-                self.postVibeSpaceFileDidSaveNotification(for: sourceFileURL)
-                completion(.success(()))
-            } catch {
-                self.hasUnsavedImageEdits = true
-                self.refreshUnsavedChangesFlag()
-                self.errorMessage = "Unable to save image: \(error.localizedDescription)"
-                self.workerStatus = .unavailable("Editor worker unavailable")
-                completion(.failure(error))
-            }
-        }
     }
 
     func scheduleAutosave() {

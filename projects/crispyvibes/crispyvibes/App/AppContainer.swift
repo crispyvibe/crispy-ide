@@ -85,8 +85,14 @@ struct AppContainer {
             bufferStore: bufferStore,
             markdownLinkRouter: makeMarkdownLinkRouter(
                 vibespaceInteraction: vibespaceInteraction
-            )
+            ),
+            rasterImageEditorServices: makeRasterImageEditorServices()
         )
+    }
+
+    /// F009: raster image editor decode/render/export services.
+    func makeRasterImageEditorServices() -> RasterImageEditorServices {
+        RasterImageEditorServices.makeDefault()
     }
 
     @MainActor
@@ -603,11 +609,13 @@ struct AppContainer {
         let markdownLinkRouter = makeMarkdownLinkRouter(
             vibespaceInteraction: vibespaceInteraction
         )
+        let rasterImageEditorServices = RasterImageEditorServices.makeDefault()
         let makeMarkdownViewModel: @MainActor () -> MarkdownViewModel = {
             MarkdownViewModel(
                 worker: measuredPaneWorkerFactory(.editor),
                 bufferStore: DocumentBufferStore(),
-                markdownLinkRouter: markdownLinkRouter
+                markdownLinkRouter: markdownLinkRouter,
+                rasterImageEditorServices: rasterImageEditorServices
             )
         }
         let makeTerminalViewModel: @MainActor () -> TerminalViewModel = {

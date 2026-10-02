@@ -1,11 +1,14 @@
 import AppKit
 import SwiftUI
 
+/// Top-level editor modes.
 enum RasterImageEditingMode: String, CaseIterable {
     case pan
     case crop
-    case draw
-    case annotate
+    /// Shapes, arrows, text, highlight, blur, pixelate, redact (see `RasterMarkupTool`).
+    case markup
+    /// Color adjustments.
+    case adjust
 }
 
 enum RasterImagePreviewGeometry {
@@ -33,142 +36,79 @@ enum RasterImagePreviewGeometry {
     }
 }
 
+/// An owner-issued save request (⌘S), delivered exactly once to the raster editor.
+struct RasterImageSaveRequest {
+    /// Changes whenever a new request is issued.
+    let token: Int
+    let isPending: () -> Bool
+    let acknowledge: () -> Void
+
+    static let none = RasterImageSaveRequest(token: 0, isPending: { false }, acknowledge: {})
+}
+
+/// Toolbar + canvas host for editable raster images (F009).
+@MainActor
 struct RasterImagePreviewHost: View {
     let fileURL: URL
-    let onSaveDataRequest: ((URL, Data, @escaping (Result<Void, Error>) -> Void) -> Void)?
+    let onSaveDataRequest: RasterImageSaveDataHandler?
     let onDirtyStateChange: (Bool) -> Void
+    let saveRequest: RasterImageSaveRequest
 
-    @State private var editingMode: RasterImageEditingMode = .draw
-    @State private var cropTrigger = 0
-    @State private var clearTrigger = 0
-    @State private var saveTrigger = 0
-    @State private var actionStatus: String?
-    @State private var hasPendingEdits = false
-    @State private var annotationText = "Note"
-    @State private var annotationFontFamily = "System"
-    @State private var annotationFontSize = 14.0
-    @Environment(\.appThemePalette) private var appThemePalette
+    @StateObject var viewModel: RasterImageEditorViewModel
+    @Environment(\.appThemePalette) var appThemePalette
 
-    private static let annotationFontFamilies: [String] = {
-        let families = NSFontManager.shared.availableFontFamilies.sorted()
-        return ["System"] + families
-    }()
-
-    private var toolbarBackground: Color {
-        appThemePalette.windowBackgroundColor.opacity(0.92)
-    }
-
-    private var modeHint: String {
-        switch editingMode {
-        case .pan:
-            return "Pan: drag to move and pinch to zoom."
-        case .crop:
-            return "Crop: drag a selection, then click Apply Crop."
-        case .draw:
-            return "Draw: drag on the image to sketch."
-        case .annotate:
-            return "Annotate: click on the image to place a note."
-        }
+    init(
+        fileURL: URL,
+        onSaveDataRequest: RasterImageSaveDataHandler?,
+        onDirtyStateChange: @escaping (Bool) -> Void,
+        saveRequest: RasterImageSaveRequest = .none,
+        services: RasterImageEditorServices = .makeDefault()
+    ) {
+        self.fileURL = fileURL
+        self.onSaveDataRequest = onSaveDataRequest
+        self.onDirtyStateChange = onDirtyStateChange
+        self.saveRequest = saveRequest
+        _viewModel = StateObject(wrappedValue: RasterImageEditorViewModel(services: services))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 6) {
-                HStack(spacing: 8) {
-                    modeButton("Crop", mode: .crop, accessibilityIdentifier: "editor.preview.image.mode.crop")
-                    modeButton("Draw", mode: .draw, accessibilityIdentifier: "editor.preview.image.mode.draw")
-                    modeButton("Annotate", mode: .annotate, accessibilityIdentifier: "editor.preview.image.mode.annotate")
-                    Divider()
-                        .frame(height: 18)
-                    Button("Apply Crop") {
-                        cropTrigger += 1
-                    }
-                    .disabled(editingMode != .crop)
-                    .accessibilityIdentifier("editor.preview.image.action.apply-crop")
-                    Button("Save") {
-                        saveTrigger += 1
-                    }
-                    .disabled(!hasPendingEdits)
-                    .accessibilityIdentifier("editor.preview.image.action.save")
-                    Button("Clear") {
-                        clearTrigger += 1
-                    }
-                    .accessibilityIdentifier("editor.preview.image.action.clear")
-                }
-                .buttonStyle(.crispyvibesText)
-                .controlSize(.small)
-
-                Text(actionStatus ?? modeHint)
-                    .font(AppTypographyTokens.imageStatus)
-                    .foregroundStyle(appThemePalette.secondaryTextColor)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("editor.preview.image.status")
-
-                if editingMode == .annotate {
-                    HStack(spacing: 8) {
-                        TextField("Annotation text", text: $annotationText)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(minWidth: 220)
-                            .accessibilityIdentifier("editor.preview.image.annotation.text")
-                        Picker("Font", selection: $annotationFontFamily) {
-                            ForEach(Self.annotationFontFamilies, id: \.self) { family in
-                                Text(family).tag(family)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .frame(minWidth: 170)
-                        .accessibilityIdentifier("editor.preview.image.annotation.font")
-                        Stepper(value: $annotationFontSize, in: 8...72, step: 1) {
-                            Text("Size \(Int(annotationFontSize))")
-                        }
-                        .frame(minWidth: 120)
-                        .accessibilityIdentifier("editor.preview.image.annotation.size")
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(toolbarBackground)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("editor.preview.image.toolbar")
-
+            RasterImageEditorToolbar(viewModel: viewModel, onSave: save)
             Divider()
-
             RasterImageFilePreview(
                 fileURL: fileURL,
-                editingMode: editingMode,
-                cropToken: cropTrigger,
-                clearToken: clearTrigger,
-                saveToken: saveTrigger,
-                annotationText: annotationText,
-                annotationFontFamily: annotationFontFamily,
-                annotationFontSize: annotationFontSize,
-                onSaveDataRequest: onSaveDataRequest,
-                onDirtyStateChange: { hasUnsavedEdits in
-                    DispatchQueue.main.async {
-                        hasPendingEdits = hasUnsavedEdits
-                        onDirtyStateChange(hasUnsavedEdits)
-                    }
-                },
-                onActionFeedback: { message in
-                    DispatchQueue.main.async {
-                        actionStatus = message
-                    }
-                }
+                viewModel: viewModel,
+                onDirtyStateChange: onDirtyStateChange
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onAppear {
+            viewModel.saveDataHandler = onSaveDataRequest
+            consumeSaveRequestIfPending()
+        }
+        .onDisappear { viewModel.shutdown() }
+        .onChange(of: saveRequest.token) { _, _ in consumeSaveRequestIfPending() }
+        .onChange(of: viewModel.hasRenderableImage) { _, _ in consumeSaveRequestIfPending() }
+        .sheet(isPresented: $viewModel.isResizeSheetPresented) {
+            RasterImageResizeSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.isExportSheetPresented) {
+            RasterImageExportSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.isRecognizedTextPresented) {
+            RasterImageRecognizedTextSheet(viewModel: viewModel)
+        }
     }
 
-    private func modeButton(
-        _ title: String,
-        mode: RasterImageEditingMode,
-        accessibilityIdentifier: String
-    ) -> some View {
-        Button(title) {
-            editingMode = mode
-            actionStatus = nil
-        }
-        .accessibilityIdentifier(accessibilityIdentifier)
+    private func save() {
+        viewModel.saveDataHandler = onSaveDataRequest
+        viewModel.save()
+    }
+
+    /// Delivers a pending ⌘S once the editor can act on it.
+    private func consumeSaveRequestIfPending() {
+        guard saveRequest.isPending(), viewModel.hasRenderableImage else { return }
+        saveRequest.acknowledge()
+        save()
     }
 }

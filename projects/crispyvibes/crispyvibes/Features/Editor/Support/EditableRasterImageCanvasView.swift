@@ -1,92 +1,297 @@
 import AppKit
 
+/// Snapshot of canvas editing state published to the editor view model.
+struct RasterImageCanvasState: Equatable {
+    /// Committed but unsaved edits.
+    var hasPendingEdits = false
+    /// A crop marquee exists and has not been applied or cancelled.
+    var hasCropSelection = false
+    /// The marquee maps to a valid pixel rectangle.
+    var canApplyCrop = false
+    var canUndo = false
+    var canRedo = false
+    /// Export-pixel size of the pending crop, when one is drawn.
+    var cropPixelSize: CGSize?
+    /// Export-pixel size of the whole image.
+    var imagePixelSize: CGSize?
+    /// Selected markup item, if any.
+    var selectedMarkup: RasterMarkupItem?
+    /// Number of editable markup items.
+    var markupCount = 0
+}
+
+/// Keyboard / menu commands the canvas forwards to its controller.
+enum RasterImageCanvasCommand {
+    case applyCrop
+    case cancelCrop
+    case undo
+    case redo
+    case deleteSelection
+    case editSelectedText
+}
+
+/// AppKit input/render adapter for an editable raster image.
+///
+/// Document state (operations, history, display bitmap) lives in `RasterImageEditSession`;
+/// the canvas only holds transient gesture state (crop marquee, in-progress stroke, pan).
+/// The crop marquee never counts as a persistable edit and stays visible in every mode.
+@MainActor
 final class EditableRasterImageCanvasView: NSView {
-    struct AnnotationStyle {
-        var fontName: String
-        var fontSize: CGFloat
-        var textColor: NSColor
-        var backgroundColor: NSColor
-    }
-
-    struct TextAnnotation {
-        var text: String
-        var location: CGPoint
-        var style: AnnotationStyle
-    }
-
     override var isFlipped: Bool { true }
+    override var acceptsFirstResponder: Bool { hasRenderableImage }
 
-    var editingMode: RasterImageEditingMode = .pan
-    var annotationTextTemplate: String = "Note"
-    var annotationFontFamily: String = "System"
-    var annotationFontSize: CGFloat = 14
-
-    var hasRenderableImage: Bool {
-        workingImage != nil
+    /// Document being displayed; assigning it resets transient gesture state.
+    var session: RasterImageEditSession? {
+        didSet {
+            oldValue?.onChange = nil
+            session?.onChange = { [weak self] in self?.sessionDidChange() }
+            cropStartPoint = nil
+            cropSelection = nil
+            markupDrag = nil
+            markupPreview = nil
+            selectedMarkupID = nil
+            liveComposite = nil
+            compositor.cancel()
+            sessionDidChange(force: true)
+        }
     }
 
-    var hasPendingEdits: Bool {
-        hasUnsavedBitmapMutations ||
-            cropSelection != nil ||
-            !activeStroke.isEmpty ||
-            !drawnStrokes.isEmpty ||
-            !annotations.isEmpty
+    var editingMode: RasterImageEditingMode = .pan {
+        didSet {
+            guard oldValue != editingMode else { return }
+            editingModeDidChange(from: oldValue)
+            window?.invalidateCursorRects(for: self)
+        }
     }
+    /// Width ÷ height constraint for crop selections; `nil` is free-form.
+    var cropAspectRatio: CGFloat? {
+        didSet {
+            guard oldValue != cropAspectRatio else { return }
+            cropAspectRatioDidChange()
+        }
+    }
+    /// Active markup tool in Markup mode.
+    var markupTool: RasterMarkupTool = .select {
+        didSet {
+            guard oldValue != markupTool else { return }
+            window?.invalidateCursorRects(for: self)
+        }
+    }
+    /// Style for new markup items.
+    var markupStyle = RasterMarkupStyle.default
+    /// Adjustment override for live slider preview / before-after compare; `nil` shows the document.
+    var previewAdjustments: RasterImageAdjustments? {
+        didSet {
+            guard oldValue != previewAdjustments else { return }
+            refreshLiveComposite()
+        }
+    }
+    /// OCR results to outline on the canvas (normalized, top-left origin).
+    var recognizedTextLines: [RecognizedTextLine] = [] {
+        didSet {
+            guard oldValue != recognizedTextLines else { return }
+            needsDisplay = true
+        }
+    }
+    /// Live straighten preview angle (radians, clockwise); committed separately.
+    var previewStraightenRadians: CGFloat = 0 {
+        didSet {
+            guard oldValue != previewStraightenRadians else { return }
+            needsDisplay = true
+        }
+    }
+    var annotationTextTemplate: String = AppStrings.ImageEditor.annotationDefaultText
+    /// Ignores edits while a save is in flight so the submitted revision cannot change.
+    var isInteractionLocked = false
+    /// Receives Return / Escape / Undo / Redo commands.
+    var onCommand: ((RasterImageCanvasCommand) -> Void)?
 
-    var workingImage: NSImage?
     var cropStartPoint: CGPoint?
     var cropSelection: CGRect?
-    var activeStroke: [CGPoint] = []
-    var drawnStrokes: [[CGPoint]] = []
-    var annotations: [TextAnnotation] = []
-    var hasUnsavedBitmapMutations = false
-    var lastReportedDirtyState = false
-    var onDirtyStateChange: ((Bool) -> Void)?
-    private var drawnStrokePaths: [NSBezierPath] = []
-    private var needsStrokePathRefresh = true
-    private var compositingRevision = 0
-    private var cachedCompositedRevision = -1
-    private var cachedCompositedImage: NSImage?
+    var selectedMarkupID: UUID?
+    var markupDrag: RasterImageCanvasMarkupDrag?
+    /// Live geometry of the markup item being created or edited.
+    var markupPreview: RasterMarkupItem?
+    /// Off-main composite used when vectors can't be drawn directly (pixel effects, preview adjustments).
+    var liveComposite: (key: RasterImageLiveCompositor.Key, image: CGImage)?
+    let compositor = RasterImageLiveCompositor()
+    var panAnchor: (window: CGPoint, origin: CGPoint)?
+    /// Active crop-box gesture.
+    var cropDrag: RasterImageCanvasCropDrag?
+    /// Space is held: temporary pan in any mode.
+    var isSpacePanning = false
+    private var lastReportedState: RasterImageCanvasState?
+    private weak var lastFlattenedImage: CGImage?
+    private var onDirtyStateChange: ((Bool) -> Void)?
+    private var onStateChange: ((RasterImageCanvasState) -> Void)?
+    private var cachedDisplayImage: (source: CGImage, image: NSImage)?
+    private var lastCanvasSize: CGSize = .zero
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         frame = NSRect(origin: .zero, size: NSSize(width: 1, height: 1))
         wantsLayer = true
+        setAccessibilityRole(.image)
+        setAccessibilityLabel(AppStrings.ImageEditor.canvasAccessibilityLabel)
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
     }
 
+    var hasRenderableImage: Bool { session != nil }
+
+    var hasPendingEdits: Bool {
+        (session?.isDirty ?? false) || markupDrag.map { if case .create = $0 { return true } else { return false } } ?? false
+    }
+
+    /// The marquee differs from the whole image (a full-image crop box is not a pending edit).
+    var hasPendingCropSelection: Bool {
+        guard let cropSelection, let session else { return false }
+        return !session.isFullCanvasSelection(cropSelection)
+    }
+
+    var state: RasterImageCanvasState {
+        let snapped = cropSelection.flatMap { session?.snappedCropRect(forSelection: $0) }
+        let scale = session?.document.exportScale ?? 1
+        let pixels = session?.exportTransform.pixelSize
+        return RasterImageCanvasState(
+            hasPendingEdits: hasPendingEdits,
+            hasCropSelection: hasPendingCropSelection,
+            canApplyCrop: hasPendingCropSelection && snapped != nil,
+            canUndo: session?.canUndo ?? false,
+            canRedo: session?.canRedo ?? false,
+            cropPixelSize: snapped.map { CGSize(width: ($0.width * scale).rounded(), height: ($0.height * scale).rounded()) },
+            imagePixelSize: pixels.map { CGSize(width: $0.width, height: $0.height) },
+            selectedMarkup: selectedMarkupID.flatMap { session?.markupItem(id: $0) },
+            markupCount: session?.markupEntries.count ?? 0
+        )
+    }
+
+    /// Display bitmap with every geometric edit applied, sized in canvas units.
+    var workingImage: NSImage? {
+        guard let session else { return nil }
+        let source = session.flattenedDisplayImage
+        if let cachedDisplayImage, cachedDisplayImage.source === source, cachedDisplayImage.image.size == session.canvasSize {
+            return cachedDisplayImage.image
+        }
+        let image = NSImage(cgImage: source, size: session.canvasSize)
+        cachedDisplayImage = (source, image)
+        return image
+    }
+
+    // MARK: - Observation
+
+    /// Observes only the dirty flag (lightweight hosts and tests).
     func setDirtyStateObserver(_ observer: @escaping (Bool) -> Void) {
         onDirtyStateChange = observer
-        publishDirtyStateIfNeeded(force: true)
+        publishStateIfNeeded(force: true)
     }
 
-    func loadImage(_ image: NSImage?) {
-        workingImage = image
-        hasUnsavedBitmapMutations = false
-        clearTransientEdits()
-        invalidateStrokePathCache()
-        invalidateCompositedImageCache()
-        if let size = image?.size, size.width > 0, size.height > 0 {
-            frame = NSRect(origin: .zero, size: size)
-        } else {
-            frame = NSRect(origin: .zero, size: NSSize(width: 1, height: 1))
+    /// Observes the full canvas state.
+    func setStateObserver(_ observer: @escaping (RasterImageCanvasState) -> Void) {
+        onStateChange = observer
+        publishStateIfNeeded(force: true)
+    }
+
+    func publishStateIfNeeded(force: Bool = false) {
+        let current = state
+        guard force || current != lastReportedState else { return }
+        let dirtyChanged = current.hasPendingEdits != lastReportedState?.hasPendingEdits
+        lastReportedState = current
+        if force || dirtyChanged {
+            onDirtyStateChange?(current.hasPendingEdits)
         }
-        needsDisplay = true
-        publishDirtyStateIfNeeded(force: true)
+        onStateChange?(current)
     }
 
+    private func sessionDidChange(force: Bool = false) {
+        let size = session?.canvasSize ?? NSSize(width: 1, height: 1)
+        let flattened = session?.flattenedDisplayImage
+        if size != lastCanvasSize || flattened !== lastFlattenedImage {
+            // A geometric change invalidates any marquee drawn in the old canvas space.
+            cropStartPoint = nil
+            cropDrag = nil
+            cropSelection = nil
+            lastCanvasSize = size
+            lastFlattenedImage = flattened
+            resetCropBoxIfNeeded()
+        }
+        validateMarkupSelection()
+        refreshLiveComposite()
+        frame = NSRect(origin: .zero, size: size.width > 0 && size.height > 0 ? size : NSSize(width: 1, height: 1))
+        NSAccessibility.post(element: self, notification: .valueChanged)
+        needsDisplay = true
+        window?.invalidateCursorRects(for: self)
+        publishStateIfNeeded(force: force)
+    }
+
+    // MARK: - Commands
+
+    /// Replaces the document with in-memory pixels (standalone use and tests).
+    func loadImage(_ image: NSImage?) {
+        var rect = CGRect(origin: .zero, size: image?.size ?? .zero)
+        guard let image, image.size.width > 0, image.size.height > 0,
+              let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+            session = nil
+            return
+        }
+        session = .inMemory(cgImage, canvasSize: image.size)
+    }
+
+    /// Commits a finished overlay operation.
+    func commit(_ operation: ImageEditOperation) {
+        guard !isInteractionLocked else { return }
+        session?.commit(operation)
+    }
+
+    /// Discards the crop marquee and every unsaved edit (undoable).
+    /// - Returns: `true` when anything was discarded.
     @discardableResult
     func clearEdits() -> Bool {
-        let hadEdits = cropSelection != nil || !activeStroke.isEmpty || !drawnStrokes.isEmpty || !annotations.isEmpty
-        clearTransientEdits()
-        invalidateStrokePathCache()
-        invalidateCompositedImageCache()
+        let hadSelection = cancelCropSelection()
+        let hadDrag = markupDrag != nil
+        markupDrag = nil
+        markupPreview = nil
+        let reverted = session?.revert() ?? false
         needsDisplay = true
-        publishDirtyStateIfNeeded()
-        return hadEdits
+        publishStateIfNeeded()
+        return hadSelection || hadDrag || reverted
+    }
+
+    /// Discards the pending crop without touching pixels. In Crop mode the box resets to the
+    /// whole image (or the aspect-ratio box) instead of disappearing.
+    /// - Returns: `true` when a pending crop was discarded.
+    @discardableResult
+    func cancelCropSelection() -> Bool {
+        guard cropSelection != nil else { return false }
+        let wasPending = hasPendingCropSelection
+        cropStartPoint = nil
+        cropDrag = nil
+        cropSelection = nil
+        resetCropBoxIfNeeded()
+        needsDisplay = true
+        publishStateIfNeeded()
+        return wasPending
+    }
+
+    /// Applies the current marquee as a crop operation.
+    func applyCropSelection() -> RasterImageCropResult {
+        guard let session else { return .decodeFailure }
+        guard !isInteractionLocked else { return .cropFailure }
+        let result = session.applyCrop(selection: cropSelection)
+        if result.didApply {
+            cropStartPoint = nil
+            cropSelection = nil
+            publishStateIfNeeded(force: true)
+        }
+        return result
+    }
+
+    /// Display-scale composite of every edit.
+    func compositedImage() -> NSImage? {
+        guard let session, let composite = session.compositeDisplayImage() else { return nil }
+        return NSImage(cgImage: composite, size: session.canvasSize)
     }
 
     @discardableResult
@@ -97,237 +302,76 @@ final class EditableRasterImageCanvasView: NSView {
         return pasteboard.writeObjects([composited])
     }
 
+    /// Synchronously renders at export resolution, writes `destinationURL`, and rebases.
     func saveCompositedImage(to destinationURL: URL) -> Result<Void, Error> {
+        guard let session else { return .failure(RasterImageSaveError.noRenderableImage) }
+        let result = RasterImageExportService.run(
+            session.makeExportJob(destinationURL: destinationURL),
+            handle: nil,
+            decoder: RasterImageDecoder(),
+            renderer: RasterImageRenderer(),
+            encoder: RasterImageEncoder()
+        )
         do {
-            try encodedCompositedImageData(for: destinationURL).write(to: destinationURL, options: .atomic)
-            finalizeSuccessfulSave(from: destinationURL)
+            let output = try result.get()
+            try output.data?.write(to: destinationURL, options: .atomic)
+            session.rebase(afterSaving: output)
             return .success(())
         } catch {
             return .failure(error)
         }
     }
 
-    func encodedCompositedImageData(for destinationURL: URL) throws -> Data {
-        guard let composited = compositedImage() else {
-            throw RasterImageSaveError.noRenderableImage
-        }
-        return try RasterImagePersistence.encodedData(for: composited, destinationURL: destinationURL)
+    // MARK: - Undo / Redo responders (⌘Z, ⇧⌘Z)
+
+    @objc func undo(_ sender: Any?) {
+        onCommand?(.undo)
     }
 
-    func finalizeSuccessfulSave(from destinationURL: URL) {
-        let refreshedImage = NSImage(contentsOf: destinationURL) ?? compositedImage()
-        workingImage = refreshedImage
-        hasUnsavedBitmapMutations = false
-        clearTransientEdits()
-        invalidateStrokePathCache()
-        invalidateCompositedImageCache()
-        if let refreshedImage, refreshedImage.size.width > 0, refreshedImage.size.height > 0 {
-            frame = NSRect(origin: .zero, size: refreshedImage.size)
-        }
-        needsDisplay = true
-        publishDirtyStateIfNeeded(force: true)
-    }
-
-    func applyCropSelection() -> RasterImageCropResult {
-        guard let sourceImage = workingImage else {
-            return .decodeFailure
-        }
-        guard let selectionRect = cropSelection else {
-            return .noSelection
-        }
-
-        let imageRect = CGRect(origin: .zero, size: sourceImage.size)
-        let normalizedSelection = selectionRect.intersection(imageRect).integral
-        guard normalizedSelection.width >= 2, normalizedSelection.height >= 2 else {
-            return .invalidSelection
-        }
-
-        var proposedRect = CGRect(origin: .zero, size: sourceImage.size)
-        guard let sourceCGImage = sourceImage.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil) else {
-            return .decodeFailure
-        }
-
-        let scaleX = CGFloat(sourceCGImage.width) / imageRect.width
-        let scaleY = CGFloat(sourceCGImage.height) / imageRect.height
-        let cropRect = CGRect(
-            x: normalizedSelection.origin.x * scaleX,
-            y: (imageRect.height - normalizedSelection.maxY) * scaleY,
-            width: normalizedSelection.width * scaleX,
-            height: normalizedSelection.height * scaleY
-        )
-        .integral
-        .intersection(
-            CGRect(x: 0, y: 0, width: sourceCGImage.width, height: sourceCGImage.height)
-        )
-
-        guard cropRect.width >= 2, cropRect.height >= 2 else {
-            return .invalidSelection
-        }
-        guard let croppedCGImage = sourceCGImage.cropping(to: cropRect) else {
-            return .cropFailure
-        }
-
-        let preservedStrokes = croppedStrokes(within: normalizedSelection)
-        let preservedAnnotations = croppedAnnotations(within: normalizedSelection)
-        let croppedImage = NSImage(
-            cgImage: croppedCGImage,
-            size: NSSize(width: normalizedSelection.width, height: normalizedSelection.height)
-        )
-        workingImage = croppedImage
-        hasUnsavedBitmapMutations = true
-        cropStartPoint = nil
-        cropSelection = nil
-        activeStroke.removeAll()
-        drawnStrokes = preservedStrokes
-        annotations = preservedAnnotations
-        invalidateStrokePathCache()
-        invalidateCompositedImageCache()
-        frame = NSRect(origin: .zero, size: croppedImage.size)
-        needsDisplay = true
-        publishDirtyStateIfNeeded(force: true)
-        return .success
+    @objc func redo(_ sender: Any?) {
+        onCommand?(.redo)
     }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        guard let workingImage else { return }
+        drawCanvasContent()
+    }
+}
 
-        let imageRect = CGRect(origin: .zero, size: workingImage.size)
-        drawCompositeContent(in: imageRect, includeActiveStroke: true)
-        drawCropSelection()
+extension EditableRasterImageCanvasView {
+    /// `true` when the canvas must show an off-main composite instead of drawing vectors directly.
+    var needsLiveComposite: Bool {
+        guard let session else { return false }
+        return previewAdjustments != nil || session.overlayOperations.containsPixelEffects
     }
 
-    override func mouseDown(with event: NSEvent) {
-        guard hasRenderableImage else { return }
-        let location = clampedLocation(from: event)
-        switch editingMode {
-        case .pan:
-            super.mouseDown(with: event)
-        case .crop:
-            cropStartPoint = location
-            cropSelection = CGRect(origin: location, size: .zero)
+    /// Requests a fresh off-main composite when the document or preview override changed.
+    func refreshLiveComposite() {
+        guard let session, needsLiveComposite else {
+            liveComposite = nil
+            compositor.cancel()
             needsDisplay = true
-            publishDirtyStateIfNeeded()
-        case .draw:
-            activeStroke = [location]
-            needsDisplay = true
-            publishDirtyStateIfNeeded()
-        case .annotate:
-            let trimmed = annotationTextTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
-            let label = trimmed.isEmpty ? "Note" : trimmed
-            let style = AnnotationStyle(
-                fontName: annotationFontFamily,
-                fontSize: max(8, min(annotationFontSize, 96)),
-                textColor: NSColor.white.withAlphaComponent(0.98),
-                backgroundColor: NSColor.systemOrange.withAlphaComponent(0.92)
-            )
-            annotations.append(TextAnnotation(text: label, location: location, style: style))
-            invalidateCompositedImageCache()
-            needsDisplay = true
-            publishDirtyStateIfNeeded()
+            return
+        }
+        let key = RasterImageLiveCompositor.Key(
+            revision: session.revision, adjustments: previewAdjustments, sessionID: ObjectIdentifier(session)
+        )
+        guard liveComposite?.key != key else { return }
+        compositor.render(session.displayCompositeJob(adjustments: previewAdjustments), renderer: session.displayRenderer) { [weak self] image in
+            guard let self, self.session.map(ObjectIdentifier.init) == key.sessionID else { return }
+            // A failed render must not leave an older composite on screen.
+            self.liveComposite = image.map { (key, $0) }
+            self.needsDisplay = true
         }
     }
+}
 
-    override func mouseDragged(with event: NSEvent) {
-        guard hasRenderableImage else { return }
-        let location = clampedLocation(from: event)
-        switch editingMode {
-        case .crop:
-            guard let start = cropStartPoint else { return }
-            cropSelection = CGRect(
-                x: min(start.x, location.x),
-                y: min(start.y, location.y),
-                width: abs(location.x - start.x),
-                height: abs(location.y - start.y)
-            )
-            needsDisplay = true
-        case .draw:
-            activeStroke.append(location)
-            needsDisplay = true
-        case .pan, .annotate:
-            break
+extension EditableRasterImageCanvasView: NSMenuItemValidation {
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(undo(_:)): return !isInteractionLocked && (session?.canUndo ?? false)
+        case #selector(redo(_:)): return !isInteractionLocked && (session?.canRedo ?? false)
+        default: return true
         }
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        guard hasRenderableImage else { return }
-        switch editingMode {
-        case .draw:
-            if activeStroke.count > 1 {
-                drawnStrokes.append(activeStroke)
-                invalidateStrokePathCache()
-                invalidateCompositedImageCache()
-            }
-            activeStroke.removeAll()
-            needsDisplay = true
-            publishDirtyStateIfNeeded()
-        case .crop:
-            cropStartPoint = nil
-            needsDisplay = true
-            publishDirtyStateIfNeeded()
-        case .pan, .annotate:
-            break
-        }
-    }
-
-    func clearTransientEdits() {
-        cropStartPoint = nil
-        cropSelection = nil
-        activeStroke.removeAll()
-        drawnStrokes.removeAll()
-        annotations.removeAll()
-    }
-
-    func cachedPathsForDrawnStrokes() -> [NSBezierPath] {
-        if needsStrokePathRefresh {
-            drawnStrokePaths = drawnStrokes.compactMap(pathForStroke(_:))
-            needsStrokePathRefresh = false
-        }
-        return drawnStrokePaths
-    }
-
-    func pathForActiveStroke() -> NSBezierPath? {
-        pathForStroke(activeStroke)
-    }
-
-    func cachedCompositedImageIfAvailable() -> NSImage? {
-        guard cachedCompositedRevision == compositingRevision else { return nil }
-        return cachedCompositedImage
-    }
-
-    func cacheCompositedImage(_ image: NSImage) {
-        cachedCompositedImage = image
-        cachedCompositedRevision = compositingRevision
-    }
-
-    func invalidateCompositedImageCache() {
-        compositingRevision += 1
-        cachedCompositedRevision = -1
-        cachedCompositedImage = nil
-    }
-
-    func invalidateStrokePathCache() {
-        needsStrokePathRefresh = true
-        drawnStrokePaths.removeAll(keepingCapacity: true)
-    }
-
-    private func pathForStroke(_ stroke: [CGPoint]) -> NSBezierPath? {
-        guard stroke.count > 1 else { return nil }
-        let path = NSBezierPath()
-        path.lineWidth = 2.2
-        path.lineJoinStyle = .round
-        path.lineCapStyle = .round
-        path.move(to: stroke[0])
-        for point in stroke.dropFirst() {
-            path.line(to: point)
-        }
-        return path
-    }
-
-    func publishDirtyStateIfNeeded(force: Bool = false) {
-        let dirtyState = hasPendingEdits
-        guard force || dirtyState != lastReportedDirtyState else { return }
-        lastReportedDirtyState = dirtyState
-        onDirtyStateChange?(dirtyState)
     }
 }

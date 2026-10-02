@@ -116,6 +116,11 @@ final class MarkdownViewModel: ObservableObject {
     @Published var activeEditorTabID: String?
     @Published var documentType: DocumentType = .none
     @Published var imageFileURL: URL?
+    /// Incremented to ask the active raster image editor to save (⌘S).
+    @Published var imageSaveRequestToken = 0
+    /// Last request consumed by a raster editor; requests are delivered exactly once, even if
+    /// the editor mounts after the request was made.
+    var handledImageSaveRequestToken = 0
     @Published var pdfFileURL: URL?
     @Published var officeFileURL: URL?
     @Published var unsupportedFileMessage: String?
@@ -141,6 +146,8 @@ final class MarkdownViewModel: ObservableObject {
     private(set) var autosave: AutosaveScheduler
     /// Optional remote file content provider. When set, file reads/writes use this instead of the local worker.
     var fileContentProvider: (any FileContentProviding)?
+    /// Decoder/renderer/export services handed to raster image editors (F009).
+    let rasterImageEditorServices: RasterImageEditorServices
     /// Installed by the owning editor group so linked files participate in its
     /// visible tab list, provider registry, comments context, and persistence.
     var linkedFileOpenHandler: ((URL, FileDocumentReference) -> Void)?
@@ -204,14 +211,18 @@ final class MarkdownViewModel: ObservableObject {
     /// remote FS can't push FSEvents and `inotifywait` isn't assumed present).
     private var remoteReloadPollTask: Task<Void, Never>?
     private var lastRemoteModificationToken: String?
+    /// F009: remote version the staged image preview was read at; image saves require it to match.
+    var remoteImageBaselineToken: String?
     private var fileURLPollingCancellable: AnyCancellable?
     private let remoteReloadPollInterval: UInt64 = 4_000_000_000
 
     init(
         worker: any PaneWorkerExecuting,
         bufferStore: DocumentBufferStore,
-        markdownLinkRouter: MarkdownLinkRouter = .disabled
+        markdownLinkRouter: MarkdownLinkRouter = .disabled,
+        rasterImageEditorServices: RasterImageEditorServices = .makeDefault()
     ) {
+        self.rasterImageEditorServices = rasterImageEditorServices
         self.worker = worker
         self.bufferStore = bufferStore
         self.markdownLinkRouter = markdownLinkRouter
@@ -304,6 +315,10 @@ final class MarkdownViewModel: ObservableObject {
     }
 
     private func reloadOpenRemoteFileIfClean() {
+        if documentType == .image {
+            refreshStagedRemoteImage()
+            return
+        }
         guard isEditableDocumentType(documentType) else { return }
         guard Date().timeIntervalSince(lastSaveDate) > 1.0 else { return }
         if let buffer = activeBuffer, !buffer.isDirty, !buffer.isSaving, !buffer.isLoading {

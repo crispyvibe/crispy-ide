@@ -7,6 +7,63 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		022F47790E592F7DEBCE1A8C /* RasterImageEditorViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D63DF9C709C4FBB8A97B506B /* RasterImageEditorViewModelTests.swift */; };
+		9BE28C271293487AF528F662 /* MarkdownViewModelRemoteImageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7DEE58364597EA61B85ECB3 /* MarkdownViewModelRemoteImageTests.swift */; };
+		E51E09E2EA9A7BD54B0A1EA0 /* RasterImageTestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F66236753DF3BC0E2E1A60 /* RasterImageTestFixtures.swift */; };
+		966962B25608FD056C8A7EA5 /* RasterImageFilePreviewIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07F881DC80C69FF554F126D9 /* RasterImageFilePreviewIntegrationTests.swift */; };
+		098878F44C3238BE7C1A58B1 /* EditableRasterImageCanvasViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8E42DEE2E0964E132E7B97 /* EditableRasterImageCanvasViewTests.swift */; };
+		7F85C7769EADC639D136B390 /* RasterImageVisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E9615599994016C5F2B6C98 /* RasterImageVisionTests.swift */; };
+		FF53DE42FA2801DF6EF6558A /* RasterImageRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A00D98EFCAC57E032210C4 /* RasterImageRendererTests.swift */; };
+		6BCE981F43822D637281CB0F /* RasterImageMarkupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 279393511D03732BDA8231E0 /* RasterImageMarkupTests.swift */; };
+		7505FFEE9109177109671526 /* RasterImageGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9C19B09757430C3AD74CC1 /* RasterImageGeometryTests.swift */; };
+		73EE6739EFE54278D774AD87 /* RasterImageDecoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69EF8609990D757DBE797086 /* RasterImageDecoderTests.swift */; };
+		EC60B0382087B3735A47A448 /* RasterImageDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 455FF81511AE87573C6D47A9 /* RasterImageDocumentTests.swift */; };
+		A7094CE668D55235836F5E45 /* RasterImageCropInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEDCF9ED7EE5745FCCC038B7 /* RasterImageCropInteractionTests.swift */; };
+		A94A47B69393C8146312B15F /* RasterImageCropGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26B54567552810464B929817 /* RasterImageCropGeometryTests.swift */; };
+		B8B8EDA7B8DBEC9502FBCDE2 /* AppStrings+ImageEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F4CE5C5B61FC0EAD92DFA3 /* AppStrings+ImageEditor.swift */; };
+		AA4E730E0A75973846D57EAC /* RasterImageEditorControlling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C858B05FAFB70213B00672 /* RasterImageEditorControlling.swift */; };
+		637423E15FD940E19EED2196 /* RasterImageEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 832CD6951B47CE5341FF2514 /* RasterImageEditing.swift */; };
+		97FEFBB639375C34EECCA250 /* RasterImageEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFED3A0DED9275900F34EC9B /* RasterImageEditorViewModel.swift */; };
+		304BC0495B633A986A40D0F6 /* RasterImageEditorViewModel+Vision.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFB0087BE1A9B7B8D7D311FD /* RasterImageEditorViewModel+Vision.swift */; };
+		CEA17B6D92FD47CEBC156C94 /* RasterImageEditorViewModel+Markup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8185F79A4C35C46AFEF7F3B7 /* RasterImageEditorViewModel+Markup.swift */; };
+		0A08BF862E5A442872E8F39E /* RasterImageEditorViewModel+Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69178461153BF511161FF680 /* RasterImageEditorViewModel+Geometry.swift */; };
+		91EC8A06AB6BD62410C85236 /* RasterImageEditorViewModel+ExportAs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93CFB897606821613AAD3BC9 /* RasterImageEditorViewModel+ExportAs.swift */; };
+		698FF4076893E54B67882DD1 /* RasterImageEditorViewModel+Export.swift in Sources */ = {isa = PBXBuildFile; fileRef = 944C7065A6D00B83949C6876 /* RasterImageEditorViewModel+Export.swift */; };
+		04250C2188BCDFE073AB04B5 /* RasterImageEditorViewModel+Editing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3981C564338E5AE076F2CCA6 /* RasterImageEditorViewModel+Editing.swift */; };
+		1940547A5D2F82EF1ED65A6E /* RasterImageEditingMode+Presentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB91162D8B8029BA9BA1862 /* RasterImageEditingMode+Presentation.swift */; };
+		FF1959FAF0A1CC1BD73C1198 /* MarkdownViewModel+RasterImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4530CC61AB06BE0A094EB1E /* MarkdownViewModel+RasterImage.swift */; };
+		1329EA734DFF2598BBF05015 /* RasterImageVisionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF52CA5C3F257723356209FD /* RasterImageVisionViews.swift */; };
+		0559DC1948B8CF3EAEC6FCBD /* RasterImageMarkupToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A261F8BE2DAD1ED5A4E4F3 /* RasterImageMarkupToolbar.swift */; };
+		72F3B8915B42442E265FA726 /* RasterImageFilePreviewCoordinatorViewport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C451F4110B5E62816F161CB6 /* RasterImageFilePreviewCoordinatorViewport.swift */; };
+		B951569F06D9713E6C30E2B2 /* RasterImageFilePreviewCoordinatorObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F582A318FF28600AC8A2D1B /* RasterImageFilePreviewCoordinatorObservation.swift */; };
+		71AF8A296D23073EFED6FBE3 /* RasterImageFilePreviewCoordinatorLoading.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09C2EC79CBEB2F922A6E1B4 /* RasterImageFilePreviewCoordinatorLoading.swift */; };
+		860F29827D26A62786188816 /* RasterImageFilePreviewCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B502535B7CB9BB109740A41E /* RasterImageFilePreviewCoordinator.swift */; };
+		C2B00C21E5C91BB1384E998F /* RasterImageEditorToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CD99B74027B99CB66AFE93A /* RasterImageEditorToolbar.swift */; };
+		F42F50A5A699161CFD8B6851 /* RasterImageEditorSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C9C1C7DB7E40511134AF69C /* RasterImageEditorSheets.swift */; };
+		DC3D51A6CF584298FE991BE0 /* EditableRasterImageCanvasViewMarkup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2E9CC95C3FFBD3FDAB3518 /* EditableRasterImageCanvasViewMarkup.swift */; };
+		081C496FB03A63E712611490 /* EditableRasterImageCanvasViewInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E5FF7A7F63273304C91D2A /* EditableRasterImageCanvasViewInput.swift */; };
+		61F39F7F8DD04AC11871B032 /* EditableRasterImageCanvasViewCrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B160283CA3B34773AE5500E /* EditableRasterImageCanvasViewCrop.swift */; };
+		E3D43F0DAD285171C2E6F158 /* EditableRasterImageCanvasViewAccessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EC385A7B7933D1719309D7A /* EditableRasterImageCanvasViewAccessibility.swift */; };
+		27DCB903415AB98FFFD93E9B /* RasterImageVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00CC704E6A7A47ECD30CD7E9 /* RasterImageVisionService.swift */; };
+		B2EDC67AE7E65E87A5C61CCD /* RasterImageRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 454FEDFEE18670EF6A027595 /* RasterImageRenderer.swift */; };
+		42977B78E8B265736D8C7B8E /* RasterImageRenderer+Pixels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D9D10ACDE63651F3FB8241B /* RasterImageRenderer+Pixels.swift */; };
+		F609D7E1E76FC444B0EE8699 /* RasterImageOverlayPainter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F249C47A1B872D86FAED59 /* RasterImageOverlayPainter.swift */; };
+		CA35D694A17E41D25B4AC313 /* RasterImageOverlayPainter+Markup.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D9A0010426C6530C0B93A3 /* RasterImageOverlayPainter+Markup.swift */; };
+		A1A32A7867D068600F2D5DE9 /* RasterImageLiveCompositor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B450CAA512BD27630E04A1 /* RasterImageLiveCompositor.swift */; };
+		52DD8D14D32CA3C8CBC919FF /* RasterImageExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500A8D1E261E9D4036AEE224 /* RasterImageExportService.swift */; };
+		953D2F2394D14B346B712FB6 /* RasterImageEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AF89550A1BB4A3503E855FD /* RasterImageEffects.swift */; };
+		C3C861A5B41F4BEA1593386A /* RasterImageEditorServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B5B168A8A0A0F3E5AB6120B /* RasterImageEditorServices.swift */; };
+		7EC1E2B07592148EED2B9008 /* RasterImageDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD4508145612C68104576AED /* RasterImageDecoder.swift */; };
+		4D1FB1958D28D7E85E879469 /* RasterMarkupItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B958539A4CC8B05BF2C158 /* RasterMarkupItem.swift */; };
+		42B5A6355F215EE8F865FFF0 /* RasterImageSourceInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB63C3E95305390F1122309F /* RasterImageSourceInfo.swift */; };
+		4EF62D496D8357708ACEFBAE /* RasterImageExportFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC2F77379CD12330765D8EE /* RasterImageExportFormat.swift */; };
+		3AD957B492DF4420B8779C3A /* RasterImageEditSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C685ACAF1DA9F65C9FC8FF8 /* RasterImageEditSession.swift */; };
+		B0929C24E3C75F9A28389262 /* RasterImageEditSession+Output.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6029B63377EA83A6AC188DBC /* RasterImageEditSession+Output.swift */; };
+		15B24C3DAA093CC0A7CEBE85 /* RasterImageDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = B81EE0E2B1744F4B91D1111B /* RasterImageDocument.swift */; };
+		C41ACEEDDAF08AD81F1D72EC /* RasterImageCropInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88BA9B085C1EF093A7DB07DE /* RasterImageCropInteraction.swift */; };
+		F32D559ED99DBC24FDAC3940 /* RasterImageCropGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96FC14C6F7A44E35A148965F /* RasterImageCropGeometry.swift */; };
+		EB3C65794FFEFFE75FB93532 /* RasterImageCanvasTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FAC21B7ABE5530732111871 /* RasterImageCanvasTransform.swift */; };
+		19F818D7EDDBCBB787FB1EBE /* ImageEditOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DBB87FBC1C8C73279732125 /* ImageEditOperation.swift */; };
 		01267F46A2AEA5373C9EADB8 /* ACPMarkdownHTMLView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC48D35FCD58D084483C9917 /* ACPMarkdownHTMLView.swift */; };
 		0192232DBD01670BF7C6C6D7 /* BoardCursorRegionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00F72377C9FA23F598D0560F /* BoardCursorRegionsTests.swift */; };
 		AATHEMECON0000000000TEST /* AppThemePaletteContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AATHEMECON0000000000FILE /* AppThemePaletteContrastTests.swift */; };
@@ -769,6 +826,63 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		D63DF9C709C4FBB8A97B506B /* RasterImageEditorViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditorViewModelTests.swift; sourceTree = "<group>"; };
+		B7DEE58364597EA61B85ECB3 /* MarkdownViewModelRemoteImageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownViewModelRemoteImageTests.swift; sourceTree = "<group>"; };
+		63F66236753DF3BC0E2E1A60 /* RasterImageTestFixtures.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageTestFixtures.swift; sourceTree = "<group>"; };
+		07F881DC80C69FF554F126D9 /* RasterImageFilePreviewIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageFilePreviewIntegrationTests.swift; sourceTree = "<group>"; };
+		2E8E42DEE2E0964E132E7B97 /* EditableRasterImageCanvasViewTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditableRasterImageCanvasViewTests.swift; sourceTree = "<group>"; };
+		6E9615599994016C5F2B6C98 /* RasterImageVisionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageVisionTests.swift; sourceTree = "<group>"; };
+		A7A00D98EFCAC57E032210C4 /* RasterImageRendererTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageRendererTests.swift; sourceTree = "<group>"; };
+		279393511D03732BDA8231E0 /* RasterImageMarkupTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageMarkupTests.swift; sourceTree = "<group>"; };
+		6A9C19B09757430C3AD74CC1 /* RasterImageGeometryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageGeometryTests.swift; sourceTree = "<group>"; };
+		69EF8609990D757DBE797086 /* RasterImageDecoderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageDecoderTests.swift; sourceTree = "<group>"; };
+		455FF81511AE87573C6D47A9 /* RasterImageDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageDocumentTests.swift; sourceTree = "<group>"; };
+		BEDCF9ED7EE5745FCCC038B7 /* RasterImageCropInteractionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageCropInteractionTests.swift; sourceTree = "<group>"; };
+		26B54567552810464B929817 /* RasterImageCropGeometryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageCropGeometryTests.swift; sourceTree = "<group>"; };
+		F4F4CE5C5B61FC0EAD92DFA3 /* AppStrings+ImageEditor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "AppStrings+ImageEditor.swift"; sourceTree = "<group>"; };
+		70C858B05FAFB70213B00672 /* RasterImageEditorControlling.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditorControlling.swift; sourceTree = "<group>"; };
+		832CD6951B47CE5341FF2514 /* RasterImageEditing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditing.swift; sourceTree = "<group>"; };
+		BFED3A0DED9275900F34EC9B /* RasterImageEditorViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditorViewModel.swift; sourceTree = "<group>"; };
+		EFB0087BE1A9B7B8D7D311FD /* RasterImageEditorViewModel+Vision.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageEditorViewModel+Vision.swift"; sourceTree = "<group>"; };
+		8185F79A4C35C46AFEF7F3B7 /* RasterImageEditorViewModel+Markup.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageEditorViewModel+Markup.swift"; sourceTree = "<group>"; };
+		69178461153BF511161FF680 /* RasterImageEditorViewModel+Geometry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageEditorViewModel+Geometry.swift"; sourceTree = "<group>"; };
+		93CFB897606821613AAD3BC9 /* RasterImageEditorViewModel+ExportAs.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageEditorViewModel+ExportAs.swift"; sourceTree = "<group>"; };
+		944C7065A6D00B83949C6876 /* RasterImageEditorViewModel+Export.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageEditorViewModel+Export.swift"; sourceTree = "<group>"; };
+		3981C564338E5AE076F2CCA6 /* RasterImageEditorViewModel+Editing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageEditorViewModel+Editing.swift"; sourceTree = "<group>"; };
+		0BB91162D8B8029BA9BA1862 /* RasterImageEditingMode+Presentation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageEditingMode+Presentation.swift"; sourceTree = "<group>"; };
+		B4530CC61AB06BE0A094EB1E /* MarkdownViewModel+RasterImage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "MarkdownViewModel+RasterImage.swift"; sourceTree = "<group>"; };
+		BF52CA5C3F257723356209FD /* RasterImageVisionViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageVisionViews.swift; sourceTree = "<group>"; };
+		E8A261F8BE2DAD1ED5A4E4F3 /* RasterImageMarkupToolbar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageMarkupToolbar.swift; sourceTree = "<group>"; };
+		C451F4110B5E62816F161CB6 /* RasterImageFilePreviewCoordinatorViewport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageFilePreviewCoordinatorViewport.swift; sourceTree = "<group>"; };
+		5F582A318FF28600AC8A2D1B /* RasterImageFilePreviewCoordinatorObservation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageFilePreviewCoordinatorObservation.swift; sourceTree = "<group>"; };
+		D09C2EC79CBEB2F922A6E1B4 /* RasterImageFilePreviewCoordinatorLoading.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageFilePreviewCoordinatorLoading.swift; sourceTree = "<group>"; };
+		B502535B7CB9BB109740A41E /* RasterImageFilePreviewCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageFilePreviewCoordinator.swift; sourceTree = "<group>"; };
+		6CD99B74027B99CB66AFE93A /* RasterImageEditorToolbar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditorToolbar.swift; sourceTree = "<group>"; };
+		8C9C1C7DB7E40511134AF69C /* RasterImageEditorSheets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditorSheets.swift; sourceTree = "<group>"; };
+		2C2E9CC95C3FFBD3FDAB3518 /* EditableRasterImageCanvasViewMarkup.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditableRasterImageCanvasViewMarkup.swift; sourceTree = "<group>"; };
+		F6E5FF7A7F63273304C91D2A /* EditableRasterImageCanvasViewInput.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditableRasterImageCanvasViewInput.swift; sourceTree = "<group>"; };
+		7B160283CA3B34773AE5500E /* EditableRasterImageCanvasViewCrop.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditableRasterImageCanvasViewCrop.swift; sourceTree = "<group>"; };
+		2EC385A7B7933D1719309D7A /* EditableRasterImageCanvasViewAccessibility.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditableRasterImageCanvasViewAccessibility.swift; sourceTree = "<group>"; };
+		00CC704E6A7A47ECD30CD7E9 /* RasterImageVisionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageVisionService.swift; sourceTree = "<group>"; };
+		454FEDFEE18670EF6A027595 /* RasterImageRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageRenderer.swift; sourceTree = "<group>"; };
+		6D9D10ACDE63651F3FB8241B /* RasterImageRenderer+Pixels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageRenderer+Pixels.swift"; sourceTree = "<group>"; };
+		B1F249C47A1B872D86FAED59 /* RasterImageOverlayPainter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageOverlayPainter.swift; sourceTree = "<group>"; };
+		C3D9A0010426C6530C0B93A3 /* RasterImageOverlayPainter+Markup.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageOverlayPainter+Markup.swift"; sourceTree = "<group>"; };
+		21B450CAA512BD27630E04A1 /* RasterImageLiveCompositor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageLiveCompositor.swift; sourceTree = "<group>"; };
+		500A8D1E261E9D4036AEE224 /* RasterImageExportService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageExportService.swift; sourceTree = "<group>"; };
+		5AF89550A1BB4A3503E855FD /* RasterImageEffects.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEffects.swift; sourceTree = "<group>"; };
+		9B5B168A8A0A0F3E5AB6120B /* RasterImageEditorServices.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditorServices.swift; sourceTree = "<group>"; };
+		CD4508145612C68104576AED /* RasterImageDecoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageDecoder.swift; sourceTree = "<group>"; };
+		11B958539A4CC8B05BF2C158 /* RasterMarkupItem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterMarkupItem.swift; sourceTree = "<group>"; };
+		AB63C3E95305390F1122309F /* RasterImageSourceInfo.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageSourceInfo.swift; sourceTree = "<group>"; };
+		7BC2F77379CD12330765D8EE /* RasterImageExportFormat.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageExportFormat.swift; sourceTree = "<group>"; };
+		8C685ACAF1DA9F65C9FC8FF8 /* RasterImageEditSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditSession.swift; sourceTree = "<group>"; };
+		6029B63377EA83A6AC188DBC /* RasterImageEditSession+Output.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "RasterImageEditSession+Output.swift"; sourceTree = "<group>"; };
+		B81EE0E2B1744F4B91D1111B /* RasterImageDocument.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageDocument.swift; sourceTree = "<group>"; };
+		88BA9B085C1EF093A7DB07DE /* RasterImageCropInteraction.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageCropInteraction.swift; sourceTree = "<group>"; };
+		96FC14C6F7A44E35A148965F /* RasterImageCropGeometry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageCropGeometry.swift; sourceTree = "<group>"; };
+		8FAC21B7ABE5530732111871 /* RasterImageCanvasTransform.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageCanvasTransform.swift; sourceTree = "<group>"; };
+		8DBB87FBC1C8C73279732125 /* ImageEditOperation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageEditOperation.swift; sourceTree = "<group>"; };
 		0054B49DFF128C8728A43DF5 /* MarkdownViewModelFileLifecycle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownViewModelFileLifecycle.swift; sourceTree = "<group>"; };
 		00F72377C9FA23F598D0560F /* BoardCursorRegionsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BoardCursorRegionsTests.swift; sourceTree = "<group>"; };
 		01B341FEE8A9DC4469441377 /* AppShellModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppShellModelTests.swift; sourceTree = "<group>"; };
@@ -1572,6 +1686,17 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		7417F72A1BFBBFB26BD9198A /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				63F66236753DF3BC0E2E1A60 /* RasterImageTestFixtures.swift */,
+				2E8E42DEE2E0964E132E7B97 /* EditableRasterImageCanvasViewTests.swift */,
+				07F881DC80C69FF554F126D9 /* RasterImageFilePreviewIntegrationTests.swift */,
+			);
+			name = Support;
+			path = Support;
+			sourceTree = "<group>";
+		};
 		042B21DE06A5D12032A7D97E /* ContentViewer */ = {
 			isa = PBXGroup;
 			children = (
@@ -1741,6 +1866,9 @@
 		315CDD02D0A1B7F95BE8BDD1 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				455FF81511AE87573C6D47A9 /* RasterImageDocumentTests.swift */,
+				BEDCF9ED7EE5745FCCC038B7 /* RasterImageCropInteractionTests.swift */,
+				26B54567552810464B929817 /* RasterImageCropGeometryTests.swift */,
 				9F1559F53B1144C2961079C5 /* DocumentBufferTests.swift */,
 			);
 			name = Models;
@@ -2172,6 +2300,7 @@
 		6E1F0A10D7D1453D9A8B3018 /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				F4F4CE5C5B61FC0EAD92DFA3 /* AppStrings+ImageEditor.swift */,
 				B10000000000000000000002D /* FileIconProvider.swift */,
 				076F010F6417EBE98E5BEA2B /* AppStrings.swift */,
 				B100000000000000000000101 /* ComposeHistoryStore.swift */,
@@ -2258,6 +2387,7 @@
 		7443CDF63B0A6E53DD25E56A /* Editor */ = {
 			isa = PBXGroup;
 			children = (
+				7417F72A1BFBBFB26BD9198A /* Support */,
 				EC2DB291E0789C2FE96146F9 /* Services */,
 				F4394871F90A0276E16D10B0 /* ViewModels */,
 				D0F2B9DD150813F7935E0A43 /* Languages */,
@@ -2745,6 +2875,8 @@
 		BB0000000000000000000001 /* Protocols */ = {
 			isa = PBXGroup;
 			children = (
+				70C858B05FAFB70213B00672 /* RasterImageEditorControlling.swift */,
+				832CD6951B47CE5341FF2514 /* RasterImageEditing.swift */,
 				CC00000000000000000000387 /* AnyProjectSession+BackwardCompat.swift */,
 				CC000000000000000000002F /* AnyTerminalProvider.swift */,
 				CC000000000000000000002D /* AnyProjectSession.swift */,
@@ -3277,6 +3409,16 @@
 		E8F64636681270C9F3E69889 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				11B958539A4CC8B05BF2C158 /* RasterMarkupItem.swift */,
+				AB63C3E95305390F1122309F /* RasterImageSourceInfo.swift */,
+				7BC2F77379CD12330765D8EE /* RasterImageExportFormat.swift */,
+				8C685ACAF1DA9F65C9FC8FF8 /* RasterImageEditSession.swift */,
+				6029B63377EA83A6AC188DBC /* RasterImageEditSession+Output.swift */,
+				B81EE0E2B1744F4B91D1111B /* RasterImageDocument.swift */,
+				88BA9B085C1EF093A7DB07DE /* RasterImageCropInteraction.swift */,
+				96FC14C6F7A44E35A148965F /* RasterImageCropGeometry.swift */,
+				8FAC21B7ABE5530732111871 /* RasterImageCanvasTransform.swift */,
+				8DBB87FBC1C8C73279732125 /* ImageEditOperation.swift */,
 				2F6E5EE50F3205E59ABAEDC1 /* BufferState.swift */,
 				23EA96D1CFF07A8293EEBA96 /* DocumentBuffer.swift */,
 			);
@@ -3315,6 +3457,11 @@
 		EC2DB291E0789C2FE96146F9 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				6E9615599994016C5F2B6C98 /* RasterImageVisionTests.swift */,
+				A7A00D98EFCAC57E032210C4 /* RasterImageRendererTests.swift */,
+				279393511D03732BDA8231E0 /* RasterImageMarkupTests.swift */,
+				6A9C19B09757430C3AD74CC1 /* RasterImageGeometryTests.swift */,
+				69EF8609990D757DBE797086 /* RasterImageDecoderTests.swift */,
 				C99C9C15D74A9A0AA1C73543 /* TextProcessorServiceTests.swift */,
 				SEC00003000000000000FILE /* EditorHTMLSecurityTests.swift */,
 				A8C001000000000000000003 /* MarkdownRuntimeTests.swift */,
@@ -3337,6 +3484,8 @@
 		F4394871F90A0276E16D10B0 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				D63DF9C709C4FBB8A97B506B /* RasterImageEditorViewModelTests.swift */,
+				B7DEE58364597EA61B85ECB3 /* MarkdownViewModelRemoteImageTests.swift */,
 				E496F764F317F6CF1D17EB6C /* MarkdownViewModelTests.swift */,
 				4B3444C6DBB3A395D597D916 /* DocumentBufferStoreTests.swift */,
 			);
@@ -3533,6 +3682,15 @@
 		FEA000000000000000000008 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				BFED3A0DED9275900F34EC9B /* RasterImageEditorViewModel.swift */,
+				EFB0087BE1A9B7B8D7D311FD /* RasterImageEditorViewModel+Vision.swift */,
+				8185F79A4C35C46AFEF7F3B7 /* RasterImageEditorViewModel+Markup.swift */,
+				69178461153BF511161FF680 /* RasterImageEditorViewModel+Geometry.swift */,
+				93CFB897606821613AAD3BC9 /* RasterImageEditorViewModel+ExportAs.swift */,
+				944C7065A6D00B83949C6876 /* RasterImageEditorViewModel+Export.swift */,
+				3981C564338E5AE076F2CCA6 /* RasterImageEditorViewModel+Editing.swift */,
+				0BB91162D8B8029BA9BA1862 /* RasterImageEditingMode+Presentation.swift */,
+				B4530CC61AB06BE0A094EB1E /* MarkdownViewModel+RasterImage.swift */,
 				8CE84DF2B373C9E623AEFA7F /* MarkdownViewModelDetection.swift */,
 				65D91C56DD875A98CF22860E /* MarkdownViewModelEditing.swift */,
 				0054B49DFF128C8728A43DF5 /* MarkdownViewModelFileLifecycle.swift */,
@@ -3545,6 +3703,16 @@
 		FEA000000000000000000009 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				00CC704E6A7A47ECD30CD7E9 /* RasterImageVisionService.swift */,
+				454FEDFEE18670EF6A027595 /* RasterImageRenderer.swift */,
+				6D9D10ACDE63651F3FB8241B /* RasterImageRenderer+Pixels.swift */,
+				B1F249C47A1B872D86FAED59 /* RasterImageOverlayPainter.swift */,
+				C3D9A0010426C6530C0B93A3 /* RasterImageOverlayPainter+Markup.swift */,
+				21B450CAA512BD27630E04A1 /* RasterImageLiveCompositor.swift */,
+				500A8D1E261E9D4036AEE224 /* RasterImageExportService.swift */,
+				5AF89550A1BB4A3503E855FD /* RasterImageEffects.swift */,
+				9B5B168A8A0A0F3E5AB6120B /* RasterImageEditorServices.swift */,
+				CD4508145612C68104576AED /* RasterImageDecoder.swift */,
 				214CE87D375AE539C13A9EE4 /* PaneWorkerExecutorEditor.swift */,
 				B10000000000000000000000D /* TextProcessorService.swift */,
 				D94906EA32A42238B55587C4 /* AutosaveScheduler.swift */,
@@ -3556,6 +3724,18 @@
 		FEA00000000000000000000A /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				BF52CA5C3F257723356209FD /* RasterImageVisionViews.swift */,
+				E8A261F8BE2DAD1ED5A4E4F3 /* RasterImageMarkupToolbar.swift */,
+				C451F4110B5E62816F161CB6 /* RasterImageFilePreviewCoordinatorViewport.swift */,
+				5F582A318FF28600AC8A2D1B /* RasterImageFilePreviewCoordinatorObservation.swift */,
+				D09C2EC79CBEB2F922A6E1B4 /* RasterImageFilePreviewCoordinatorLoading.swift */,
+				B502535B7CB9BB109740A41E /* RasterImageFilePreviewCoordinator.swift */,
+				6CD99B74027B99CB66AFE93A /* RasterImageEditorToolbar.swift */,
+				8C9C1C7DB7E40511134AF69C /* RasterImageEditorSheets.swift */,
+				2C2E9CC95C3FFBD3FDAB3518 /* EditableRasterImageCanvasViewMarkup.swift */,
+				F6E5FF7A7F63273304C91D2A /* EditableRasterImageCanvasViewInput.swift */,
+				7B160283CA3B34773AE5500E /* EditableRasterImageCanvasViewCrop.swift */,
+				2EC385A7B7933D1719309D7A /* EditableRasterImageCanvasViewAccessibility.swift */,
 				75FAAB0D8B5109965541C328 /* EditableRasterImageCanvasViewGeometry.swift */,
 				7792B6DF8AA43845A0CEEF49 /* EditableRasterImageCanvasViewRendering.swift */,
 				B100000000000000000000046 /* EditableRasterImageCanvasView.swift */,
@@ -4018,6 +4198,50 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B8B8EDA7B8DBEC9502FBCDE2 /* AppStrings+ImageEditor.swift in Sources */,
+				AA4E730E0A75973846D57EAC /* RasterImageEditorControlling.swift in Sources */,
+				637423E15FD940E19EED2196 /* RasterImageEditing.swift in Sources */,
+				97FEFBB639375C34EECCA250 /* RasterImageEditorViewModel.swift in Sources */,
+				304BC0495B633A986A40D0F6 /* RasterImageEditorViewModel+Vision.swift in Sources */,
+				CEA17B6D92FD47CEBC156C94 /* RasterImageEditorViewModel+Markup.swift in Sources */,
+				0A08BF862E5A442872E8F39E /* RasterImageEditorViewModel+Geometry.swift in Sources */,
+				91EC8A06AB6BD62410C85236 /* RasterImageEditorViewModel+ExportAs.swift in Sources */,
+				698FF4076893E54B67882DD1 /* RasterImageEditorViewModel+Export.swift in Sources */,
+				04250C2188BCDFE073AB04B5 /* RasterImageEditorViewModel+Editing.swift in Sources */,
+				1940547A5D2F82EF1ED65A6E /* RasterImageEditingMode+Presentation.swift in Sources */,
+				FF1959FAF0A1CC1BD73C1198 /* MarkdownViewModel+RasterImage.swift in Sources */,
+				1329EA734DFF2598BBF05015 /* RasterImageVisionViews.swift in Sources */,
+				0559DC1948B8CF3EAEC6FCBD /* RasterImageMarkupToolbar.swift in Sources */,
+				72F3B8915B42442E265FA726 /* RasterImageFilePreviewCoordinatorViewport.swift in Sources */,
+				B951569F06D9713E6C30E2B2 /* RasterImageFilePreviewCoordinatorObservation.swift in Sources */,
+				71AF8A296D23073EFED6FBE3 /* RasterImageFilePreviewCoordinatorLoading.swift in Sources */,
+				860F29827D26A62786188816 /* RasterImageFilePreviewCoordinator.swift in Sources */,
+				C2B00C21E5C91BB1384E998F /* RasterImageEditorToolbar.swift in Sources */,
+				F42F50A5A699161CFD8B6851 /* RasterImageEditorSheets.swift in Sources */,
+				DC3D51A6CF584298FE991BE0 /* EditableRasterImageCanvasViewMarkup.swift in Sources */,
+				081C496FB03A63E712611490 /* EditableRasterImageCanvasViewInput.swift in Sources */,
+				61F39F7F8DD04AC11871B032 /* EditableRasterImageCanvasViewCrop.swift in Sources */,
+				E3D43F0DAD285171C2E6F158 /* EditableRasterImageCanvasViewAccessibility.swift in Sources */,
+				27DCB903415AB98FFFD93E9B /* RasterImageVisionService.swift in Sources */,
+				B2EDC67AE7E65E87A5C61CCD /* RasterImageRenderer.swift in Sources */,
+				42977B78E8B265736D8C7B8E /* RasterImageRenderer+Pixels.swift in Sources */,
+				F609D7E1E76FC444B0EE8699 /* RasterImageOverlayPainter.swift in Sources */,
+				CA35D694A17E41D25B4AC313 /* RasterImageOverlayPainter+Markup.swift in Sources */,
+				A1A32A7867D068600F2D5DE9 /* RasterImageLiveCompositor.swift in Sources */,
+				52DD8D14D32CA3C8CBC919FF /* RasterImageExportService.swift in Sources */,
+				953D2F2394D14B346B712FB6 /* RasterImageEffects.swift in Sources */,
+				C3C861A5B41F4BEA1593386A /* RasterImageEditorServices.swift in Sources */,
+				7EC1E2B07592148EED2B9008 /* RasterImageDecoder.swift in Sources */,
+				4D1FB1958D28D7E85E879469 /* RasterMarkupItem.swift in Sources */,
+				42B5A6355F215EE8F865FFF0 /* RasterImageSourceInfo.swift in Sources */,
+				4EF62D496D8357708ACEFBAE /* RasterImageExportFormat.swift in Sources */,
+				3AD957B492DF4420B8779C3A /* RasterImageEditSession.swift in Sources */,
+				B0929C24E3C75F9A28389262 /* RasterImageEditSession+Output.swift in Sources */,
+				15B24C3DAA093CC0A7CEBE85 /* RasterImageDocument.swift in Sources */,
+				C41ACEEDDAF08AD81F1D72EC /* RasterImageCropInteraction.swift in Sources */,
+				F32D559ED99DBC24FDAC3940 /* RasterImageCropGeometry.swift in Sources */,
+				EB3C65794FFEFFE75FB93532 /* RasterImageCanvasTransform.swift in Sources */,
+				19F818D7EDDBCBB787FB1EBE /* ImageEditOperation.swift in Sources */,
 				DD00000000000000000000387 /* AnyProjectSession+BackwardCompat.swift in Sources */,
 				DD00000000000000000000386 /* SSHProfileRow.swift in Sources */,
 				DD00000000000000000000385 /* SSHRemoteError.swift in Sources */,
@@ -4621,6 +4845,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				022F47790E592F7DEBCE1A8C /* RasterImageEditorViewModelTests.swift in Sources */,
+				9BE28C271293487AF528F662 /* MarkdownViewModelRemoteImageTests.swift in Sources */,
+				E51E09E2EA9A7BD54B0A1EA0 /* RasterImageTestFixtures.swift in Sources */,
+				966962B25608FD056C8A7EA5 /* RasterImageFilePreviewIntegrationTests.swift in Sources */,
+				098878F44C3238BE7C1A58B1 /* EditableRasterImageCanvasViewTests.swift in Sources */,
+				7F85C7769EADC639D136B390 /* RasterImageVisionTests.swift in Sources */,
+				FF53DE42FA2801DF6EF6558A /* RasterImageRendererTests.swift in Sources */,
+				6BCE981F43822D637281CB0F /* RasterImageMarkupTests.swift in Sources */,
+				7505FFEE9109177109671526 /* RasterImageGeometryTests.swift in Sources */,
+				73EE6739EFE54278D774AD87 /* RasterImageDecoderTests.swift in Sources */,
+				EC60B0382087B3735A47A448 /* RasterImageDocumentTests.swift in Sources */,
+				A7094CE668D55235836F5E45 /* RasterImageCropInteractionTests.swift in Sources */,
+				A94A47B69393C8146312B15F /* RasterImageCropGeometryTests.swift in Sources */,
 				A2000000000000000000000B /* TestSupport.swift in Sources */,
 				A20000000000000000000001 /* UnitSuiteStructureTests.swift in Sources */,
 				E9399A471341216BF7F773E5 /* VibeSpaceStatePropertyTests.swift in Sources */,
