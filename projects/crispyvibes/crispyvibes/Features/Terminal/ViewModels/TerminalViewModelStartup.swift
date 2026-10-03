@@ -270,7 +270,8 @@ extension TerminalViewModel {
                     workingDirectoryPath: normalized,
                     customName: entry.customName,
                     origin: entry.origin,
-                    tmuxSessionName: entry.tmuxSessionName
+                    tmuxSessionName: entry.tmuxSessionName,
+                    displayMagnification: entry.displayMagnification
                 )
             )
         }
@@ -288,14 +289,18 @@ extension TerminalViewModel {
             activeTabID = nil
 
             for entry in dedupedEntries {
+                let tabID = entry.id ?? UUID()
                 let dir = URL(fileURLWithPath: entry.workingDirectoryPath).standardizedFileURL
                 createTab(
-                    id: entry.id ?? UUID(),
+                    id: tabID,
                     directoryURL: dir,
                     customName: entry.customName,
                     origin: entry.origin,
                     tmuxSessionName: entry.tmuxSessionName,
                     startImmediately: false
+                )
+                sessions[tabID]?.setDisplayMagnification(
+                    CGFloat(entry.displayMagnification ?? 1)
                 )
             }
 

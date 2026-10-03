@@ -464,7 +464,7 @@ if line:
         )
         root.layoutSubtreeIfNeeded()
         XCTAssertTrue(
-            session.hostedView.superview === primaryHost,
+            primaryHost.hostsTerminalView(session.hostedView),
             "Primary host should own terminal after first attach."
         )
 
@@ -482,18 +482,18 @@ if line:
         )
         root.layoutSubtreeIfNeeded()
         XCTAssertTrue(
-            session.hostedView.superview === primaryHost,
+            primaryHost.hostsTerminalView(session.hostedView),
             "Secondary host should not preempt a mounted owner immediately."
         )
 
         primaryHost.removeFromSuperview()
         root.layoutSubtreeIfNeeded()
         let secondaryReclaimDeadline = Date().addingTimeInterval(1.0)
-        var secondaryReclaimed = session.hostedView.superview === secondaryHost
+        var secondaryReclaimed = secondaryHost.hostsTerminalView(session.hostedView)
         while !secondaryReclaimed, Date() < secondaryReclaimDeadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
             root.layoutSubtreeIfNeeded()
-            secondaryReclaimed = session.hostedView.superview === secondaryHost
+            secondaryReclaimed = secondaryHost.hostsTerminalView(session.hostedView)
         }
         XCTAssertTrue(
             secondaryReclaimed,
@@ -504,7 +504,7 @@ if line:
         primaryHost.layoutSubtreeIfNeeded()
         root.layoutSubtreeIfNeeded()
         XCTAssertTrue(
-            session.hostedView.superview === secondaryHost,
+            secondaryHost.hostsTerminalView(session.hostedView),
             "Stale host should not reclaim terminal without a new attach request."
         )
 
@@ -522,14 +522,14 @@ if line:
         )
         root.layoutSubtreeIfNeeded()
         XCTAssertTrue(
-            session.hostedView.superview === primaryHost,
+            primaryHost.hostsTerminalView(session.hostedView),
             "Higher-priority regular host should preempt compact owner after a fresh attach request."
         )
 
         secondaryHost.removeFromSuperview()
         root.layoutSubtreeIfNeeded()
         XCTAssertTrue(
-            session.hostedView.superview === primaryHost,
+            primaryHost.hostsTerminalView(session.hostedView),
             "Remaining regular host should retain ownership after compact host removal."
         )
 
@@ -576,7 +576,7 @@ if line:
         )
         root.layoutSubtreeIfNeeded()
         XCTAssertTrue(
-            session.hostedView.superview === compactHost,
+            compactHost.hostsTerminalView(session.hostedView),
             "Compact host should own terminal when it attaches first."
         )
 
@@ -594,8 +594,31 @@ if line:
         )
         root.layoutSubtreeIfNeeded()
         XCTAssertTrue(
-            session.hostedView.superview === regularHost,
+            regularHost.hostsTerminalView(session.hostedView),
             "Regular focused host should preempt compact host immediately."
+        )
+        let staleReferenceCleanupDeadline = Date().addingTimeInterval(1.0)
+        while compactHost.hasOpticalDocumentReferenceForTesting,
+              Date() < staleReferenceCleanupDeadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertFalse(
+            compactHost.hasOpticalDocumentReferenceForTesting,
+            "Preempted host should clear its stale optical document reference."
+        )
+
+        regularHost.removeFromSuperview()
+        root.layoutSubtreeIfNeeded()
+        let compactReclaimDeadline = Date().addingTimeInterval(1.0)
+        var compactReclaimed = compactHost.hostsTerminalView(session.hostedView)
+        while !compactReclaimed, Date() < compactReclaimDeadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+            root.layoutSubtreeIfNeeded()
+            compactReclaimed = compactHost.hostsTerminalView(session.hostedView)
+        }
+        XCTAssertTrue(
+            compactReclaimed,
+            "Compact host should reclaim the same terminal after its preempting host disappears."
         )
 
         window.contentView = nil
@@ -642,7 +665,7 @@ if line:
         )
         root.layoutSubtreeIfNeeded()
         XCTAssertTrue(
-            session.hostedView.superview === visibleHost,
+            visibleHost.hostsTerminalView(session.hostedView),
             "Visible host should own terminal after first attach."
         )
 
@@ -661,7 +684,7 @@ if line:
         )
         root.layoutSubtreeIfNeeded()
         XCTAssertTrue(
-            session.hostedView.superview === visibleHost,
+            visibleHost.hostsTerminalView(session.hostedView),
             "Non-participating host must not steal ownership from the visible host."
         )
 
@@ -869,8 +892,8 @@ if line:
         )
         root.layoutSubtreeIfNeeded()
 
-        XCTAssertTrue(firstSession.hostedView.superview === firstHost)
-        XCTAssertTrue(secondSession.hostedView.superview === secondHost)
+        XCTAssertTrue(firstHost.hostsTerminalView(firstSession.hostedView))
+        XCTAssertTrue(secondHost.hostsTerminalView(secondSession.hostedView))
 
         firstHost.attach(
             firstSession.hostedView,
@@ -900,8 +923,8 @@ if line:
         )
         root.layoutSubtreeIfNeeded()
 
-        XCTAssertTrue(firstSession.hostedView.superview === firstHost)
-        XCTAssertTrue(secondSession.hostedView.superview === secondHost)
+        XCTAssertTrue(firstHost.hostsTerminalView(firstSession.hostedView))
+        XCTAssertTrue(secondHost.hostsTerminalView(secondSession.hostedView))
 
         window.contentView = nil
     }

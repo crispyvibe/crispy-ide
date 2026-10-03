@@ -146,6 +146,7 @@ struct VibeSpaceTerminalBoardTileCard: View {
                         inlineTriggerSearchRoots: inlineTriggerSearchRoots,
                         inlineTriggerShortcuts: shortcutDefinitions,
                         onManageInlineTriggerShortcutsRequested: onManageShortcutsRequested,
+                        onDoubleClick: onSpotlight,
                         onSplitTerminalRequested: onSplitTerminal,
                         onTemporaryTerminalRequested: onTemporaryTerminal,
                         onOpenInEditorPaneRequested: onOpenInEditorPaneRequested,
@@ -154,6 +155,7 @@ struct VibeSpaceTerminalBoardTileCard: View {
                     )
                     .id(session.viewIdentity)
                     .onTapGesture(count: 2) {
+                        guard !(session.hostedView is GhosttyTerminalView) else { return }
                         onSpotlight()
                     }
                     .onTapGesture {

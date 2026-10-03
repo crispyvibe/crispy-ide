@@ -3,7 +3,7 @@ title: "Terminal Spotlight"
 feature: "F003"
 domain: "terminal"
 audience: "user"
-version: "1.0"
+version: "1.1"
 sidebar:
   label: "Spotlight"
   order: 3
@@ -21,7 +21,9 @@ Open Spotlight from a terminal tile, rail card, session preview, or a shortcut t
 
 ## Workflows
 
-- Switch items with the side chevrons or a two-finger horizontal trackpad swipe.
+- Switch items with the side chevrons or a two-finger horizontal trackpad swipe when the active terminal is at normal `1×` size.
+- Spread two fingers apart to magnify a Spotlight terminal and use two-finger scrolling to pan it. While magnified, scrolling stays with the terminal instead of switching the carousel. Use the tab strip or side chevrons to switch items, or pinch back to `1×` to restore swipe navigation.
+- Double-click a terminal to open Spotlight. Double-click the Spotlight terminal again to return to its original layout.
 - Use the tab strip above the card to jump directly to a visible item.
 - When the tab strip has more items than fit, use the small left and right strip controls to reveal hidden tabs without changing the active Spotlight item.
 - Drag a terminal tab chip across another terminal tab to reorder Spotlight tabs. A vertical marker shows the exact insertion point, and the chips move as you drag over valid targets. In vibespace Spotlight, terminal tabs can be organized across projects and the new order follows the vibespace Spotlight order. In terminal-board Spotlight, the new order follows the active board surface's tile order.
@@ -40,8 +42,9 @@ No user-facing settings are required for Spotlight tab paging, reordering, or ac
 - If a tab is not visible in the strip, use the small strip chevrons; side chevrons switch Spotlight content, while strip chevrons only page the tab strip.
 - If a reordered tab returns to its old position, check whether the Spotlight was opened from the vibespace or from a terminal board. Each view preserves its own order.
 - Temporary terminal, file preview, and browser preview Spotlights do not participate in carousel navigation.
+- If a horizontal swipe pans instead of switching Spotlight items, the terminal is magnified. Return it to `1×` or use the tab strip/side chevrons.
 - Non-terminal carousel items cannot be reordered from the Spotlight strip.
 
 ## Known Limitations
 
-Spotlight tab reordering is limited to persistent terminal tabs. VibeSpace Spotlight supports cross-project ordering; terminal-board Spotlight is scoped to the active board surface.
+Spotlight tab reordering is limited to persistent terminal tabs. VibeSpace Spotlight supports cross-project ordering; terminal-board Spotlight is scoped to the active board surface. Carousel swipe is intentionally suspended while a terminal is magnified so panning cannot accidentally change the active item.

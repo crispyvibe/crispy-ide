@@ -28,6 +28,8 @@ final class TerminalSession: NSObject {
     var isCurrentlyActive = false
     var activitySuppressedUntil = Date.distantPast
     var currentDisplayDensity: TerminalDisplayDensity = .regular
+    /// Per-session optical magnification, preserved when this session changes hosts.
+    var displayMagnification: CGFloat
     let focusRetryLimit = 16
     var focusRequestGeneration: UInt = 0
     let shellResolutionProvider: @Sendable () -> TerminalShellResolution
@@ -98,6 +100,7 @@ final class TerminalSession: NSObject {
         engineFactory: @escaping @MainActor (TerminalServices) -> any TerminalSessionEngine = {
             TerminalSession.makeDefaultEngine(terminalServices: $0)
         },
+        displayMagnification: CGFloat = 1,
         shellResolutionProvider: @escaping @Sendable () -> TerminalShellResolution = {
             TerminalShellResolver.resolve(context: TerminalShellResolutionContext())
         }
@@ -107,6 +110,10 @@ final class TerminalSession: NSObject {
         self.initialWorkingDirectory = workingDirectory
         self.currentWorkingDirectory = workingDirectory
         self.terminalServices = terminalServices
+        self.displayMagnification = min(
+            Self.maximumDisplayMagnification,
+            max(Self.minimumDisplayMagnification, displayMagnification)
+        )
         self.shellResolutionProvider = shellResolutionProvider
         self.engine = engineFactory(terminalServices)
         super.init()

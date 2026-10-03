@@ -415,6 +415,7 @@ struct TerminalSessionView: View {
                     inlineTriggerSearchRoots: inlineTriggerSearchRoots,
                     inlineTriggerShortcuts: inlineTriggerShortcuts,
                     onManageInlineTriggerShortcutsRequested: onManageInlineTriggerShortcutsRequested,
+                    onDoubleClick: nativeDoubleClickAction,
                     onSplitTerminalRequested: {
                         onSplitTerminalRequested?(tab)
                     },
@@ -442,11 +443,21 @@ struct TerminalSessionView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(sessionAccessibilityIdentifier)
         .onTapGesture(count: 2) {
+            guard !usesNativeDoubleClickRouting else { return }
             onSessionDoubleClicked?(tab.id)
         }
         .onTapGesture {
             onSessionSelected?(tab.id)
         }
+    }
+
+    private var nativeDoubleClickAction: (() -> Void)? {
+        guard let onSessionDoubleClicked else { return nil }
+        return { onSessionDoubleClicked(tab.id) }
+    }
+
+    private var usesNativeDoubleClickRouting: Bool {
+        viewModel.session(for: tab.id)?.hostedView is GhosttyTerminalView
     }
 }
 

@@ -74,6 +74,14 @@ Persisted terminal session entries MUST carry stable terminal tab IDs. VibeSpace
 
 When a terminal represented in the spotlight tab strip is active, its tab chip MUST show a clearly visible animated bottom underline in addition to the narrow activity bar. The animation MUST be drawn inside the chip's existing bounds and MUST NOT change chip size, tab-strip height, or neighboring tab positions while animating.
 
+### F003-R15: Native Terminal Double-Click Routes Exactly Once
+
+Double-clicking a Ghostty terminal that has a Spotlight action MUST invoke that action through the AppKit terminal host exactly once, including while the terminal is magnified or panned. The handled second Ghostty press and matching release MUST be suppressed so word selection and Spotlight activation do not race. SwiftTerm MUST retain the SwiftUI double-click fallback. A terminal host without a Spotlight action MUST leave Ghostty's native double-click word selection unchanged.
+
+### F003-R16: Magnified Terminal Pan Takes Priority Over Carousel Swipe
+
+While the active Spotlight terminal is magnified above `1×`, precise scroll gestures MUST be reserved for the terminal viewport and MUST NOT switch the Spotlight carousel. Any partial carousel offset and tracking state MUST reset when terminal pan takes ownership. At `1×`, horizontal trackpad swipe MUST continue to navigate the carousel according to F003-R02. Non-terminal and temporary Spotlight source behavior MUST remain unchanged.
+
 ## Scenarios
 
 ### Scenario F003-S01: Terminal board supports temporary spotlight focus
@@ -209,6 +217,27 @@ When a terminal represented in the spotlight tab strip is active, its tab chip M
 **Then** the chip shows both the narrow activity bar and an animated bottom underline inside the chip
 **And** the chip and tab strip keep stable dimensions throughout the animation
 
+### Scenario F003-S16: Double-clicking a transformed terminal opens or closes Spotlight exactly once
+
+**Given** a Ghostty terminal session has a Spotlight double-click action
+**And** the terminal may be magnified or panned
+**When** the user double-clicks inside the visible transformed terminal
+**Then** the AppKit host invokes the Spotlight action exactly once
+**And** the second Ghostty press and matching release are not forwarded
+**And** the same terminal can be double-clicked in Spotlight to return to its original layout
+**And** a callback-free Ghostty terminal retains native word selection
+**And** SwiftTerm retains its SwiftUI double-click fallback
+
+### Scenario F003-S17: Magnified Spotlight terminal pans without switching the carousel
+
+**Given** Spotlight shows a persistent terminal at magnification above `1×`
+**When** the user performs a precise trackpad scroll gesture over Spotlight
+**Then** the terminal viewport receives the gesture for panning
+**And** the Spotlight carousel does not switch
+**And** any partial carousel offset is cleared
+**When** the terminal returns to `1×`
+**Then** a qualifying horizontal trackpad swipe switches to the previous or next carousel item
+
 ## Test Coverage
 
 | Scenario | Coverage |
@@ -218,6 +247,8 @@ When a terminal represented in the spotlight tab strip is active, its tab chip M
 | F003-S13 | VibeSpace Spotlight order tests MUST verify cross-project reorder persistence by project identity plus terminal tab ID, including close/reopen and vibespace restore. |
 | F003-S14 | `VibeSpaceTerminalBoardStoreAddTileTests.testMoveTerminalTabTileReordersBoardLinearOrder` covers terminal-board tile reorder state; persistence coverage MUST verify board layout restore preserves the reordered tile sequence. |
 | F003-S15 | View regression MUST verify the active-tab underline animates inside fixed chip bounds without changing tab-strip height or neighboring chip positions. |
+| F003-S16 | Automated core coverage: `GhosttyTerminalViewInputTests.testHostDoubleClickInvokesCallbackWithoutForwardingSecondGhosttyClick` and `testDoubleClickWithoutCallbackRetainsGhosttyMouseSequence` verify exact native routing, suppression, and callback-free Ghostty behavior under the host path. UI smoke coverage remains responsible for visible Spotlight open/close and SwiftTerm fallback. |
+| F003-S17 | Automated core coverage: `TerminalViewModelTests.testSpotlightScrollRoutingReservesGesturesOnlyForMagnifiedTerminal` verifies source policy, and `testSpotlightScrollGestureTrackerSwitchesAtNormalSizeAndResetsForZoomedPan` verifies phase accumulation, normal-size switch direction, terminal takeover, and partial-state reset. UI smoke coverage remains responsible for end-to-end NSEvent monitor delivery into viewport pan. |
 
 ## Acceptance Criteria
 
@@ -231,16 +262,19 @@ When a terminal represented in the spotlight tab strip is active, its tab chip M
 - Spotlight terminal tab reordering persists through the carousel host's source of truth: vibespace-level Spotlight order for vibespace Spotlight and board layout tile order for terminal-board Spotlight.
 - Spotlight terminal tab reordering preserves running sessions, active selection, and board grid shape.
 - Spotlight active-tab animation remains contained within existing tab-chip bounds.
+- A transformed Ghostty terminal double-click opens or closes Spotlight exactly once without forwarding an unmatched mouse event.
+- Magnified terminal panning cannot trigger carousel switching; `1×` horizontal swipe behavior remains available.
 - Spotlight operations logged (OBS-1).
 
 ## Open Questions
 
-- Should spotlight support pinch-to-resize?
+- None for optical terminal magnification and carousel arbitration.
 
 ## Change History
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-02 | Added native transformed-terminal double-click routing and magnified-terminal pan precedence over carousel swipe. | — |
 | 2026-04-27 | Clarified cross-project vibespace Spotlight ordering and separate terminal-board Spotlight reorder persistence requirements. | — |
 | 2026-04-26 | Added tab-strip overflow, reorder, and prominent activity animation requirements. | — |
 | 2026-04-15 | Migrated from docs/features/terminal/feature.md (TRM-036A–C, TRM-040, TRM-047–048, TRM-052–053, TRM-067) | — |

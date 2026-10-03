@@ -2,7 +2,7 @@
 
 ## Overview
 
-Terminal Spotlight is a modal overlay presenting an expanded terminal view on top of the vibespace canvas. It is managed by `TerminalSpotlightCoordinator` (ObservableObject) and supports three source types, carousel navigation across all terminal tabs and VibeCast, trackpad swipe transitions, nested restore chains, and a compose input bar.
+Terminal Spotlight is a modal overlay presenting an expanded terminal view on top of the vibespace canvas. It is managed by `TerminalSpotlightCoordinator` (`ObservableObject`) and supports persistent and temporary terminal sources, related vibespace surfaces, carousel navigation, trackpad swipe transitions, nested restore chains, optical terminal pan/zoom, and a compose input bar.
 
 ## Architecture
 
@@ -22,7 +22,7 @@ TerminalSpotlightOverlayView (z-index: 220)
 │   └── SpotlightTerminalInputBar (hidden for VibeCast)
 │       ├── SpotlightComposeInlinePanel (optional)
 │       └── TerminalComposeInputView (send + rephrase actions + inline trigger key routing)
-└── Scroll Monitor (NSEvent local monitor for trackpad swipe)
+└── Scroll Monitor (NSEvent local monitor with terminal-pan/carousel arbitration)
 ```
 
 ### Spotlight Source Types
@@ -41,6 +41,10 @@ TerminalSpotlightOverlayView (z-index: 220)
 ### Spotlight State Model
 
 `TerminalSpotlightState` carries: unique `id` (UUID), `title`, optional `accentColor`, `workingDirectoryURL`, `isTemporary` flag, optional `owningProjectRootURL`, and optional closures for split-terminal and temporary-terminal requests.
+
+### Native Terminal Double-Click
+
+For Ghostty, `TerminalSessionView` and terminal-board tiles pass the Spotlight action through `TerminalSessionHostView` and `TerminalContainerView` to `GhosttyTerminalView.onDoubleClick`. On `clickCount == 2`, Ghostty cancels pending pointer interaction, invokes the action, and suppresses the matching second mouse-up. The surrounding SwiftUI double-tap handler is disabled for Ghostty to avoid duplicate transitions and remains enabled for SwiftTerm. A nil action is preserved as nil so callback-free Ghostty hosts retain native word selection.
 
 ## Data Flow
 
@@ -119,10 +123,10 @@ Installed as `NSEvent.addLocalMonitorForEvents(matching: .scrollWheel)`.
 | Phase | Behavior |
 |-------|----------|
 | `.began` | Reset cumulative delta and tracking state |
-| `.changed` | Accumulate `scrollingDeltaX`. Horizontal gesture recognized when cumulative > 8pt and horizontal > vertical. Offset dampened by **0.35×**, applied with `.interactiveSpring(response: 0.08, dampingFraction: 0.9)` |
+| `.changed` | Accumulate both axes. Horizontal gesture is recognized when cumulative X exceeds **20pt** and is more than twice cumulative Y. Offset is dampened by **0.35×**, applied with `.interactiveSpring(response: 0.08, dampingFraction: 0.9)`. A dominant Y gesture passes through. |
 | `.ended`/`.cancelled` | If cumulative > **50pt** → trigger switch (+1 or -1). Else snap back with `.spring(response: 0.35, dampingFraction: 0.7)` |
 
-Only precise scrolling deltas (trackpad) activate; mouse wheel events pass through. Horizontal gesture events are consumed (return `nil`).
+Only precise scrolling deltas (trackpad) activate; mouse wheel events pass through. Horizontal carousel gestures are consumed (`nil`). When a persistent or transient terminal is magnified above `1×`, `TerminalSpotlightState.Source.reservesScrollForTerminalViewport` wins before carousel classification: cumulative carousel state and `swipeOffset` reset, and the event is returned for `TerminalOpticalViewport` to pan. Returning to `1×` restores normal carousel recognition. Unsupported sources, imprecise events, and terminal takeover reset partial tracking; momentum end/cancel also clears stale state.
 
 ### Switch Animation (`switchSpotlight(by:)`)
 
@@ -218,7 +222,8 @@ Only precise scrolling deltas (trackpad) activate; mouse wheel events pass throu
 
 ## Platform Considerations
 
-- Scroll monitor uses `NSEvent.addLocalMonitorForEvents` (macOS-only AppKit API).
+- Scroll monitor uses `NSEvent.addLocalMonitorForEvents` (macOS-only AppKit API) and must defer to a magnified terminal viewport before classifying carousel gestures.
+- Ghostty double-click routing crosses the SwiftUI/AppKit boundary explicitly; SwiftTerm uses the SwiftUI fallback.
 - Momentum phase events are consumed if horizontal gesture is active, otherwise passed through.
 - Keyboard shortcut `.escape` bound to close button for system-level Escape handling.
 - `.onExitCommand` on overlay provides additional Escape dismissal path.

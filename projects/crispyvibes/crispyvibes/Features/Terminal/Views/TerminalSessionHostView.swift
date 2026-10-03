@@ -1,5 +1,6 @@
 import SwiftUI
 import os.signpost
+import QuartzCore
 
 private struct TerminalHostOwnershipParticipationEnabledKey: EnvironmentKey {
     static let defaultValue = true
@@ -32,6 +33,7 @@ struct TerminalSessionHostView: View {
     var inlineTriggerSearchRoots: [URL] = []
     var inlineTriggerShortcuts: [TerminalShortcutDefinition] = []
     var onManageInlineTriggerShortcutsRequested: (() -> Void)? = nil
+    var onDoubleClick: (() -> Void)? = nil
     var onSplitTerminalRequested: (() -> Void)? = nil
     var onTemporaryTerminalRequested: (() -> Void)? = nil
     var onOpenInEditorPaneRequested: (() -> Void)? = nil
@@ -105,6 +107,7 @@ struct TerminalSessionHostView: View {
             onInlineTriggerCommand: { [weak inlineTriggerControllerRef] command in
                 inlineTriggerControllerRef?.handleCommand(command) == true
             },
+            onDoubleClick: onDoubleClick,
             onSplitTerminalRequested: onSplitTerminalRequested,
             onTemporaryTerminalRequested: onTemporaryTerminalRequested,
             onOpenInEditorPaneRequested: onOpenInEditorPaneRequested,
@@ -192,6 +195,7 @@ private struct TerminalSessionHostRepresentable: NSViewRepresentable {
     var accessibilityIdentifier: String? = nil
     var onInlineTriggerTextInput: ((String) -> Bool)? = nil
     var onInlineTriggerCommand: ((TerminalInlineTriggerCommand) -> Bool)? = nil
+    var onDoubleClick: (() -> Void)? = nil
     var onSplitTerminalRequested: (() -> Void)? = nil
     var onTemporaryTerminalRequested: (() -> Void)? = nil
     var onOpenInEditorPaneRequested: (() -> Void)? = nil
@@ -213,6 +217,7 @@ private struct TerminalSessionHostRepresentable: NSViewRepresentable {
             isActive: isActive,
             allowsOwnershipParticipation: allowsOwnershipParticipation && ownershipParticipationEnabled,
             ownershipPriorityBoost: ownershipPriorityBoost,
+            onDoubleClick: onDoubleClick,
             onSplitTerminalRequested: onSplitTerminalRequested,
             onTemporaryTerminalRequested: onTemporaryTerminalRequested,
             onOpenInEditorPaneRequested: onOpenInEditorPaneRequested,
@@ -236,6 +241,7 @@ private struct TerminalSessionHostRepresentable: NSViewRepresentable {
             isActive: isActive,
             allowsOwnershipParticipation: allowsOwnershipParticipation && ownershipParticipationEnabled,
             ownershipPriorityBoost: ownershipPriorityBoost,
+            onDoubleClick: onDoubleClick,
             onSplitTerminalRequested: onSplitTerminalRequested,
             onTemporaryTerminalRequested: onTemporaryTerminalRequested,
             onOpenInEditorPaneRequested: onOpenInEditorPaneRequested,
@@ -254,6 +260,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
     private var diagnosticsSnapshot: TerminalDiagnosticsSnapshot?
     private var hasRegisteredDiagnosticsHost = false
     private var attachedTerminalView: NSView?
+    private let opticalViewport = TerminalOpticalViewport(frame: .zero)
     private weak var desiredTerminalView: NSView?
     private weak var desiredSession: TerminalSession?
     private var desiredSessionID: UUID?
@@ -281,6 +288,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
     private var defaultsDidChangeObserver: NSObjectProtocol?
     private var windowNotificationObservers: [NSObjectProtocol] = []
     private var lastObservedSystemScheme: ColorScheme?
+    private var desiredOnDoubleClick: (() -> Void)?
     private var desiredOnSplitTerminalRequested: (() -> Void)?
     private var desiredOnTemporaryTerminalRequested: (() -> Void)?
     private var desiredOnOpenInEditorPaneRequested: (() -> Void)?
@@ -356,12 +364,43 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
         super.init(frame: frameRect)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
+        configureOpticalViewport()
+        configurePinchZoom()
         registerHostOwnership()
         observeThemePreferences()
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    private func configureOpticalViewport() {
+        addSubview(opticalViewport)
+    }
+
+    private func configurePinchZoom() {
+        addGestureRecognizer(
+            NSMagnificationGestureRecognizer(
+                target: self,
+                action: #selector(handlePinchZoom(_:))
+            )
+        )
+    }
+
+    @objc private func handlePinchZoom(_ recognizer: NSMagnificationGestureRecognizer) {
+        guard recognizer.state == .changed,
+              attachedTerminalView is GhosttyTerminalView,
+              let session = desiredSession else {
+            return
+        }
+        let delta = recognizer.magnification
+        recognizer.magnification = 0
+        guard delta.isFinite, delta > -1 else { return }
+        session.setDisplayMagnification(session.displayMagnification * (1 + delta))
+        applyOpticalMagnification(
+            session.displayMagnification,
+            centeredAt: recognizer.location(in: opticalViewport)
+        )
     }
 
     deinit {
@@ -387,6 +426,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
         isActive: Bool,
         allowsOwnershipParticipation: Bool = true,
         ownershipPriorityBoost: Int = 0,
+        onDoubleClick: (() -> Void)? = nil,
         onSplitTerminalRequested: (() -> Void)?,
         onTemporaryTerminalRequested: (() -> Void)?,
         onOpenInEditorPaneRequested: (() -> Void)?,
@@ -407,6 +447,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
             || desiredOwnershipPriorityBoost != ownershipPriorityBoost
         if previousSessionID != sessionID {
             relinquishOwnership(for: previousSessionID)
+            opticalViewport.resetTransform()
         }
         if previousTerminalIdentifier != nextTerminalIdentifier {
             cachedTerminalScroller = nil
@@ -421,6 +462,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
         desiredIsActive = isActive
         desiredAllowsOwnershipParticipation = allowsOwnershipParticipation
         desiredOwnershipPriorityBoost = ownershipPriorityBoost
+        desiredOnDoubleClick = onDoubleClick
         desiredOnSplitTerminalRequested = onSplitTerminalRequested
         desiredOnTemporaryTerminalRequested = onTemporaryTerminalRequested
         desiredOnOpenInEditorPaneRequested = onOpenInEditorPaneRequested
@@ -484,7 +526,10 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
     override func layout() {
         super.layout()
         if let attachedTerminalView,
-           attachedTerminalView.superview !== self {
+           !isHostedInOpticalViewport(attachedTerminalView) {
+            if opticalViewport.documentView === attachedTerminalView {
+                opticalViewport.documentView = nil
+            }
             self.attachedTerminalView = nil
             appliedDisplayDensity = nil
         }
@@ -531,9 +576,12 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
 
     private func attemptAttachIfNeeded(trigger: String) {
         guard ensureDesiredSessionOwnership() else {
-            if let attachedTerminalView,
-               attachedTerminalView.superview === self {
-                attachedTerminalView.removeFromSuperview()
+            if let attachedTerminalView {
+                if isHostedInOpticalViewport(attachedTerminalView) {
+                    detachFromOpticalViewport(attachedTerminalView)
+                } else if opticalViewport.documentView === attachedTerminalView {
+                    opticalViewport.documentView = nil
+                }
             }
             self.attachedTerminalView = nil
             appliedDisplayDensity = nil
@@ -546,11 +594,13 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
             return
         }
         let sessionIDText = desiredSessionID?.uuidString ?? "unknown"
+        configureOpticalInputMapping(for: terminalView)
 
         if attachedTerminalView === terminalView,
-           terminalView.superview === self {
+           isHostedInOpticalViewport(terminalView) {
             restoreGhosttySurfaceIfNeeded(for: terminalView)
             applyDesiredDensityIfNeeded()
+            applyOpticalMagnification(desiredSession?.displayMagnification ?? 1)
             applyTerminalScrollerConfiguration(to: terminalView)
             applyTerminalActionConfiguration()
             layoutAttachedTerminalViewFrame()
@@ -560,15 +610,15 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
 
         if let attachedTerminalView,
            attachedTerminalView !== terminalView,
-           attachedTerminalView.superview === self {
-            attachedTerminalView.removeFromSuperview()
+           isHostedInOpticalViewport(attachedTerminalView) {
+            detachFromOpticalViewport(attachedTerminalView)
         }
 
-        if terminalView.superview !== self {
+        if !isHostedInOpticalViewport(terminalView) {
             terminalView.removeFromSuperview()
-            terminalView.frame = terminalViewFrame(in: bounds)
-            terminalView.autoresizingMask = [.width, .height]
-            addSubview(terminalView)
+            terminalView.frame = NSRect(origin: .zero, size: terminalViewFrame(in: bounds).size)
+            terminalView.autoresizingMask = []
+            opticalViewport.documentView = terminalView
             AppDiagnostics.hostDebug("terminal attached trigger=\(trigger) session=\(sessionIDText) terminal=\(terminalIdentifier(for: terminalView)) container=\(containerIdentifier)")
             AppDiagnostics.record(
                 category: .terminalHost,
@@ -596,6 +646,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
         attachedTerminalView = terminalView
         restoreGhosttySurfaceIfNeeded(for: terminalView)
         applyDesiredDensityIfNeeded()
+        applyOpticalMagnification(desiredSession?.displayMagnification ?? 1)
         applyTerminalScrollerConfiguration(to: terminalView)
         applyTerminalActionConfiguration()
         desiredSession?.startIfNeeded()
@@ -603,9 +654,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
 
     private func detachAttachedTerminalIfNeeded() {
         guard let attachedTerminalView else { return }
-        if attachedTerminalView.superview === self {
-            attachedTerminalView.removeFromSuperview()
-        }
+        detachFromOpticalViewport(attachedTerminalView)
         if let ghosttyView = attachedTerminalView as? GhosttyTerminalView {
             ghosttyView.engine?.syncOutputPollingToVisibility()
         }
@@ -624,6 +673,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
         desiredTerminalView = nil
         desiredSession = nil
         desiredSessionID = nil
+        desiredOnDoubleClick = nil
         desiredOnSplitTerminalRequested = nil
         desiredOnTemporaryTerminalRequested = nil
         desiredOnOpenInEditorPaneRequested = nil
@@ -734,6 +784,24 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
                 self?.refreshScrollerVisibility()
             }
         )
+        windowNotificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: NSWindow.didResignKeyNotification,
+                object: window,
+                queue: .main
+            ) { [weak self] _ in
+                self?.cancelAttachedPointerInteraction()
+            }
+        )
+        windowNotificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.didResignActiveNotification,
+                object: NSApp,
+                queue: .main
+            ) { [weak self] _ in
+                self?.cancelAttachedPointerInteraction()
+            }
+        )
 
         refreshScrollerVisibility()
     }
@@ -751,6 +819,10 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
         } else if let desiredTerminalView {
             applyTerminalScrollerConfiguration(to: desiredTerminalView)
         }
+    }
+
+    private func cancelAttachedPointerInteraction() {
+        (attachedTerminalView as? GhosttyTerminalView)?.cancelPointerInteraction()
     }
 
     private func findTerminalScroller(in terminalView: NSView) -> NSScroller? {
@@ -838,11 +910,64 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
     }
 
     private func layoutAttachedTerminalViewFrame() {
-        guard let attachedTerminalView else { return }
         let frame = terminalViewFrame(in: bounds)
-        guard lastAppliedTerminalFrame != frame || attachedTerminalView.frame != frame else { return }
-        attachedTerminalView.frame = frame
+        if opticalViewport.frame != frame {
+            opticalViewport.frame = frame
+        }
+        guard let attachedTerminalView else { return }
+        let documentFrame = NSRect(origin: .zero, size: frame.size)
+        guard lastAppliedTerminalFrame != frame || attachedTerminalView.frame != documentFrame else { return }
+        attachedTerminalView.frame = documentFrame
+        opticalViewport.refreshTransform()
         lastAppliedTerminalFrame = frame
+    }
+
+    private func isHostedInOpticalViewport(_ terminalView: NSView) -> Bool {
+        terminalView.superview === opticalViewport
+    }
+
+    private func detachFromOpticalViewport(_ terminalView: NSView) {
+        guard isHostedInOpticalViewport(terminalView) else { return }
+        if let ghosttyView = terminalView as? GhosttyTerminalView {
+            ghosttyView.cancelPointerInteraction()
+            ghosttyView.onDoubleClick = nil
+            ghosttyView.opticalViewportPointerMapper = nil
+            ghosttyView.opticalViewportPointMapper = nil
+            ghosttyView.opticalViewportRectMapper = nil
+        }
+        if opticalViewport.documentView === terminalView {
+            opticalViewport.documentView = nil
+        } else {
+            terminalView.removeFromSuperview()
+        }
+    }
+
+    private func configureOpticalInputMapping(for terminalView: NSView) {
+        guard let ghosttyView = terminalView as? GhosttyTerminalView else { return }
+        ghosttyView.onDoubleClick = desiredOnDoubleClick
+        ghosttyView.opticalViewportPointerMapper = { [weak opticalViewport, weak ghosttyView] event in
+            opticalViewport?.terminalPoint(for: event)
+                ?? ghosttyView?.convert(event.locationInWindow, from: nil)
+                ?? .zero
+        }
+        ghosttyView.opticalViewportPointMapper = { [weak opticalViewport] point in
+            opticalViewport?.viewportPoint(forTerminalPoint: point) ?? point
+        }
+        ghosttyView.opticalViewportRectMapper = { [weak opticalViewport] rect in
+            opticalViewport?.viewportRect(forTerminalRect: rect) ?? rect
+        }
+    }
+
+    private func applyOpticalMagnification(
+        _ magnification: CGFloat,
+        centeredAt point: CGPoint? = nil
+    ) {
+        guard opticalViewport.hostedDocumentView is GhosttyTerminalView else {
+            opticalViewport.setMagnification(1, centeredAt: .zero)
+            return
+        }
+        let center = point ?? CGPoint(x: opticalViewport.bounds.midX, y: opticalViewport.bounds.midY)
+        opticalViewport.setMagnification(magnification, centeredAt: center)
     }
 
     private func restoreGhosttySurfaceIfNeeded(for terminalView: NSView) {
@@ -915,6 +1040,28 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
             return density == .compact ? .rail : .detailed
         }
     }
+    func configureOpticalViewportForTesting(
+        magnification: CGFloat,
+        centeredAt point: CGPoint,
+        panDelta: CGPoint
+    ) {
+        opticalViewport.setMagnification(magnification, centeredAt: point)
+        opticalViewport.pan(by: panDelta)
+    }
+
+    func opticalWindowPointForTesting(terminalPoint: CGPoint) -> CGPoint {
+        let viewportPoint = opticalViewport.viewportPoint(forTerminalPoint: terminalPoint)
+        return opticalViewport.convert(viewportPoint, to: nil)
+    }
+
+    var opticalMagnificationForTesting: CGFloat { opticalViewport.magnification }
+    var opticalVisibleOriginForTesting: CGPoint { opticalViewport.visibleOrigin }
+    var hasOpticalDocumentReferenceForTesting: Bool { opticalViewport.documentView != nil }
+
+    func hostsTerminalView(_ terminalView: NSView) -> Bool {
+        attachedTerminalView === terminalView && isHostedInOpticalViewport(terminalView)
+    }
+
     var desiredSessionIDForOwnership: UUID? { desiredSessionID }
     var canParticipateInOwnershipArbitration: Bool { canParticipateInOwnership }
     var ownershipArbitrationPriority: Int {
@@ -934,5 +1081,222 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
 
     func retryOwnershipAcquisition() {
         attemptAttachIfNeeded(trigger: "ownershipReleased")
+    }
+}
+
+struct TerminalOpticalTransform: Equatable {
+    var scale: CGFloat = 1
+    var visibleOrigin: CGPoint = .zero
+
+    var layerTransform: CATransform3D {
+        CATransform3DMakeAffineTransform(
+            CGAffineTransform(scaleX: scale, y: scale)
+                .translatedBy(x: -visibleOrigin.x, y: -visibleOrigin.y)
+        )
+    }
+
+    func terminalPoint(fromViewport point: CGPoint) -> CGPoint {
+        CGPoint(
+            x: point.x / max(scale, 0.001) + visibleOrigin.x,
+            y: point.y / max(scale, 0.001) + visibleOrigin.y
+        )
+    }
+
+    func viewportPoint(fromTerminal point: CGPoint) -> CGPoint {
+        CGPoint(
+            x: (point.x - visibleOrigin.x) * scale,
+            y: (point.y - visibleOrigin.y) * scale
+        )
+    }
+
+    mutating func setScale(
+        _ newScale: CGFloat,
+        anchoredAt anchor: CGPoint,
+        contentSize: CGSize,
+        viewportSize: CGSize
+    ) {
+        let terminalAnchor = terminalPoint(fromViewport: anchor)
+        scale = max(newScale, 1)
+        visibleOrigin = CGPoint(
+            x: terminalAnchor.x - anchor.x / scale,
+            y: terminalAnchor.y - anchor.y / scale
+        )
+        constrain(contentSize: contentSize, viewportSize: viewportSize)
+    }
+
+    mutating func pan(
+        by delta: CGPoint,
+        contentSize: CGSize,
+        viewportSize: CGSize
+    ) {
+        visibleOrigin.x -= delta.x / max(scale, 0.001)
+        visibleOrigin.y += delta.y / max(scale, 0.001)
+        constrain(contentSize: contentSize, viewportSize: viewportSize)
+    }
+
+    mutating func constrain(contentSize: CGSize, viewportSize: CGSize) {
+        visibleOrigin.x = Self.constrainedOrigin(
+            visibleOrigin.x,
+            contentLength: contentSize.width,
+            viewportLength: viewportSize.width,
+            scale: scale
+        )
+        visibleOrigin.y = Self.constrainedOrigin(
+            visibleOrigin.y,
+            contentLength: contentSize.height,
+            viewportLength: viewportSize.height,
+            scale: scale
+        )
+    }
+
+    private static func constrainedOrigin(
+        _ origin: CGFloat,
+        contentLength: CGFloat,
+        viewportLength: CGFloat,
+        scale: CGFloat
+    ) -> CGFloat {
+        let visibleLength = viewportLength / max(scale, 0.001)
+        guard visibleLength < contentLength else {
+            return (contentLength - visibleLength) / 2
+        }
+        return min(max(origin, 0), contentLength - visibleLength)
+    }
+}
+
+private final class TerminalOpticalViewport: NSView {
+    weak var documentView: NSView? {
+        didSet {
+            if oldValue !== documentView, oldValue?.superview === self {
+                oldValue?.removeFromSuperview()
+            }
+            if let documentView, documentView.superview !== self {
+                documentView.removeFromSuperview()
+                addSubview(documentView)
+            }
+            refreshTransform()
+        }
+    }
+
+    private var opticalTransform = TerminalOpticalTransform()
+    var magnification: CGFloat { opticalTransform.scale }
+    var visibleOrigin: CGPoint { opticalTransform.visibleOrigin }
+    var hostedDocumentView: NSView? {
+        guard documentView?.superview === self else { return nil }
+        return documentView
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        refreshTransform()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let localPoint = convert(point, from: superview)
+        guard bounds.contains(localPoint) else { return nil }
+        if let event = NSApp.currentEvent,
+           event.type == .scrollWheel,
+           magnification > 1.001,
+           !event.modifierFlags.contains(.option) {
+            return self
+        }
+        guard let documentView = hostedDocumentView else { return self }
+        let terminalPoint = opticalTransform.terminalPoint(fromViewport: localPoint)
+        guard documentView.frame.contains(terminalPoint) else { return self }
+        let documentLocalPoint = CGPoint(
+            x: terminalPoint.x - documentView.frame.minX,
+            y: terminalPoint.y - documentView.frame.minY
+        )
+        return documentView.hitTest(documentLocalPoint) ?? documentView
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        if magnification > 1.001,
+           !event.modifierFlags.contains(.option) {
+            pan(by: CGPoint(x: event.scrollingDeltaX, y: event.scrollingDeltaY))
+        } else {
+            hostedDocumentView?.scrollWheel(with: event)
+        }
+    }
+
+    func setMagnification(_ magnification: CGFloat, centeredAt point: CGPoint) {
+        opticalTransform.setScale(
+            magnification,
+            anchoredAt: point,
+            contentSize: hostedDocumentView?.frame.size ?? bounds.size,
+            viewportSize: bounds.size
+        )
+        applyLayerTransform()
+    }
+
+    func pan(by delta: CGPoint) {
+        opticalTransform.pan(
+            by: delta,
+            contentSize: hostedDocumentView?.frame.size ?? bounds.size,
+            viewportSize: bounds.size
+        )
+        applyLayerTransform()
+    }
+
+    func resetTransform() {
+        opticalTransform = TerminalOpticalTransform()
+        refreshTransform()
+    }
+
+    func refreshTransform() {
+        opticalTransform.constrain(
+            contentSize: hostedDocumentView?.frame.size ?? bounds.size,
+            viewportSize: bounds.size
+        )
+        applyLayerTransform()
+    }
+
+    func terminalPoint(for event: NSEvent) -> CGPoint {
+        let viewportPoint = convert(event.locationInWindow, from: nil)
+        let point = opticalTransform.terminalPoint(fromViewport: viewportPoint)
+        guard let documentView = hostedDocumentView else { return point }
+        return CGPoint(
+            x: point.x - documentView.frame.minX,
+            y: point.y - documentView.frame.minY
+        )
+    }
+
+    func viewportPoint(forTerminalPoint point: CGPoint) -> CGPoint {
+        guard let documentView = hostedDocumentView else {
+            return opticalTransform.viewportPoint(fromTerminal: point)
+        }
+        return opticalTransform.viewportPoint(
+            fromTerminal: CGPoint(
+                x: point.x + documentView.frame.minX,
+                y: point.y + documentView.frame.minY
+            )
+        )
+    }
+
+    func viewportRect(forTerminalRect rect: CGRect) -> CGRect {
+        CGRect(
+            origin: viewportPoint(forTerminalPoint: rect.origin),
+            size: CGSize(
+                width: rect.width * magnification,
+                height: rect.height * magnification
+            )
+        )
+    }
+
+    private func applyLayerTransform() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.sublayerTransform = opticalTransform.layerTransform
+        CATransaction.commit()
+        (hostedDocumentView as? GhosttyTerminalView)?.invalidateOpticalCharacterCoordinates()
     }
 }

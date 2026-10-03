@@ -268,6 +268,14 @@ The focused project's bottom terminal tray in `Detailed` canvas mode MUST NOT ex
 
 When the user docks the visible detailed-tray terminal into the main content view, Crispy MUST move that terminal's presentation using the existing terminal session identity rather than creating a duplicate session. After the move, the detailed tray MUST continue showing at most one project terminal session, advancing to the next available project terminal when one exists.
 
+### F001-R59: Optical Terminal Magnification Preserves Grid Geometry
+
+Ghostty terminal hosts MUST support pinch magnification from normal size (`1×`) through `3×`. Spreading two fingers MUST magnify the terminal; bringing them together MUST return it toward `1×` and MUST NOT make it smaller than normal. Zoom and pan MUST be compositor-only operations that preserve terminal view bounds, Ghostty surface pixel geometry, row/column count, and line wrapping. Per-session magnification MUST survive host handoff, restart replacement, snapshot, and restore; persisted legacy values below `1×` MUST normalize to `1×`.
+
+### F001-R60: Selection Remains Reliable Under Optical Transform
+
+Pointer hit testing, hover targets, context menus, IME geometry, and Ghostty mouse coordinates MUST map through the active optical transform. A selection drag MUST preserve one balanced position/press/drag/release sequence, including when it begins over an interactive URL or path. Leaving the visible viewport while dragging MUST NOT invalidate the pointer position, and focus loss, app deactivation, detach, or host ownership transfer MUST release any forwarded primary press. A stale host MUST NOT remove, route input to, or invalidate geometry for a terminal owned by another host.
+
 ## Scenarios
 
 ### Scenario F001-S01: Empty terminal state when no tabs exist
@@ -747,15 +755,43 @@ When the user docks the visible detailed-tray terminal into the main content vie
 **And** the detailed tray advances to the next available project terminal when one exists
 **And** otherwise the tray remains empty or collapsed without terminating the moved session
 
+### Scenario F001-S59: Terminal magnifies and pans without reflow or shrinking below normal
+
+**Given** a Ghostty terminal is visible at normal `1×` size
+**When** the user spreads two fingers to magnify and then pans the terminal
+**Then** magnification remains between `1×` and `3×`
+**And** the terminal may be panned while magnified
+**And** terminal bounds, surface pixel geometry, rows, columns, and line wrapping remain unchanged by zoom and pan
+**When** the user brings two fingers together past normal size
+**Then** magnification stops at `1×`
+**And** persisted values below `1×` restore as `1×`
+
+### Scenario F001-S60: Text selection remains balanced while terminal is zoomed and panned
+
+**Given** a Ghostty terminal is magnified and may be panned
+**When** the user drags across ordinary text, a URL, or a file path
+**Then** visible pointer positions map to the corresponding logical terminal cells
+**And** Ghostty receives one balanced primary press and release for the selection
+**And** leaving the viewport during the drag does not prematurely invalidate selection
+**And** focus loss, detach, or host handoff clears any outstanding primary press
+**And** context-menu and IME presentation geometry remains aligned with the transformed terminal
+
+## Test Coverage
+
+| Scenario | Coverage |
+|----------|----------|
+| F001-S59 | Automated core coverage: `GhosttyTerminalViewInputTests.testOpticalTransformClampsPanAndPreventsShrinkingBelowNormal`, `testTerminalPointTracksDocumentCoordinatesUnderCompositorZoomAndPan`, `TerminalViewModelTests.testTerminalSessionMagnificationClampsToNormalAndMaximum`, `testRestoreTabsNormalizesLegacyMagnificationBelowNormal`, and `testTerminalSessionMagnificationPersistsAcrossSnapshotAndRestore`. UI smoke coverage remains responsible for physical pinch direction and visual quality. |
+| F001-S60 | Automated core coverage: `GhosttyTerminalViewInputTests.testDraggingInteractiveTargetTransitionsToBalancedGhosttySelection`, `testWindowFocusLossReleasesForwardedPrimaryMousePress`, `testHostDetachReleasesForwardedPrimaryMousePress`, transformed point/rectangle and hit-test assertions in `testTerminalPointTracksDocumentCoordinatesUnderCompositorZoomAndPan`, and ownership handoff regressions in `TerminalViewModelTestsExecutionFlows`. UI smoke coverage remains responsible for ordinary-text/file-path drags and physical viewport-exit behavior. |
+
 ## Acceptance Criteria
 
-- Shell resolution completes within 50ms (PERF-1).
+- Shell resolution completes within 50ms (PERF-3).
 - Tab create/close operations complete within 100ms (PERF-3).
-- Session restore completes within 500ms for up to 10 tabs (PERF-4).
+- Session restore completes within 500ms for up to 10 tabs (PERF-1).
 - No orphaned shell processes after tab close or project restart (REL-6).
 - Keyboard focus is always routable to the active terminal (A11Y-2).
 - All session lifecycle events logged (OBS-1, OBS-2).
-- Remote terminal activation does not block the main thread (PERF-2).
+- Remote terminal activation does not block the main thread (PERF-3).
 
 ## Open Questions
 
@@ -766,5 +802,6 @@ When the user docks the visible detailed-tray terminal into the main content vie
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-02 | Added fixed-grid optical magnification/pan and transformed pointer-selection requirements with regression mappings. | — |
 | 2026-09-30 | Expanded terminal path drops to accept folders from standard file URLs, legacy filename lists, and validated absolute-path drag representations | — |
 | 2026-04-15 | Migrated from docs/features/terminal/feature.md (TRM-001–076) | — |

@@ -227,6 +227,476 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         XCTAssertGreaterThan(syncCount, 0)
     }
 
+    func testOpticalTransformPreservesZoomAnchorAndRoundTripsPoints() {
+        var transform = TerminalOpticalTransform()
+        let contentSize = CGSize(width: 320, height: 200)
+        let anchor = CGPoint(x: 240, y: 50)
+        let terminalAnchorBeforeZoom = transform.terminalPoint(fromViewport: anchor)
+
+        transform.setScale(
+            2,
+            anchoredAt: anchor,
+            contentSize: contentSize,
+            viewportSize: contentSize
+        )
+
+        let terminalAnchorAfterZoom = transform.terminalPoint(fromViewport: anchor)
+        XCTAssertEqual(terminalAnchorAfterZoom.x, terminalAnchorBeforeZoom.x, accuracy: 0.001)
+        XCTAssertEqual(terminalAnchorAfterZoom.y, terminalAnchorBeforeZoom.y, accuracy: 0.001)
+
+        let terminalPoint = CGPoint(x: 180, y: 80)
+        let roundTripped = transform.terminalPoint(
+            fromViewport: transform.viewportPoint(fromTerminal: terminalPoint)
+        )
+        XCTAssertEqual(roundTripped.x, terminalPoint.x, accuracy: 0.001)
+        XCTAssertEqual(roundTripped.y, terminalPoint.y, accuracy: 0.001)
+    }
+
+    /// F001-S59
+    func testOpticalTransformClampsPanAndPreventsShrinkingBelowNormal() {
+        let size = CGSize(width: 320, height: 200)
+        var transform = TerminalOpticalTransform(scale: 2, visibleOrigin: .zero)
+
+        transform.pan(by: CGPoint(x: -10_000, y: 10_000), contentSize: size, viewportSize: size)
+        XCTAssertEqual(transform.visibleOrigin.x, 160, accuracy: 0.001)
+        XCTAssertEqual(transform.visibleOrigin.y, 100, accuracy: 0.001)
+
+        transform.setScale(0.75, anchoredAt: .zero, contentSize: size, viewportSize: size)
+        XCTAssertEqual(transform.scale, 1, accuracy: 0.001)
+        XCTAssertEqual(transform.visibleOrigin.x, 0, accuracy: 0.001)
+        XCTAssertEqual(transform.visibleOrigin.y, 0, accuracy: 0.001)
+    }
+
+    /// F001-S59, F001-S60
+    func testTerminalPointTracksDocumentCoordinatesUnderCompositorZoomAndPan() throws {
+        let (session, engine) = makeSessionAndEngine()
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot()
+        let container = TerminalContainerView(
+            ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
+            frame: root.bounds
+        )
+        root.addSubview(container)
+        container.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        let terminalFrame = engine.terminalView.frame
+        let surfaceGeometry = engine.terminalView.lastSyncedSurfaceGeometry
+        var characterCoordinateInvalidationCount = 0
+        engine.terminalView.characterCoordinatesInvalidationSinkForTesting = {
+            characterCoordinateInvalidationCount += 1
+        }
+        container.configureOpticalViewportForTesting(
+            magnification: 2,
+            centeredAt: CGPoint(x: 152, y: 100),
+            panDelta: CGPoint(x: 20, y: 20)
+        )
+
+        let expectedPoint = CGPoint(x: 100, y: 75)
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDragged,
+                location: container.opticalWindowPointForTesting(terminalPoint: expectedPoint),
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 0
+            )
+        )
+
+        let actualPoint = engine.terminalView.terminalPoint(for: event)
+        XCTAssertEqual(actualPoint.x, expectedPoint.x, accuracy: 0.001)
+        XCTAssertEqual(actualPoint.y, expectedPoint.y, accuracy: 0.001)
+        XCTAssertEqual(container.opticalMagnificationForTesting, 2, accuracy: 0.001)
+        XCTAssertGreaterThan(characterCoordinateInvalidationCount, 0)
+        XCTAssertEqual(engine.terminalView.frame, terminalFrame)
+        XCTAssertEqual(engine.terminalView.lastSyncedSurfaceGeometry, surfaceGeometry)
+
+        let presentationPoint = engine.terminalView.presentationPoint(for: expectedPoint)
+        let presentationWindowPoint = engine.terminalView.convert(presentationPoint, to: nil)
+        let expectedWindowPoint = container.opticalWindowPointForTesting(terminalPoint: expectedPoint)
+        XCTAssertEqual(presentationWindowPoint.x, expectedWindowPoint.x, accuracy: 0.001)
+        XCTAssertEqual(presentationWindowPoint.y, expectedWindowPoint.y, accuracy: 0.001)
+
+        let terminalRect = CGRect(x: expectedPoint.x, y: expectedPoint.y, width: 12, height: 8)
+        let presentationRect = engine.terminalView.presentationRect(for: terminalRect)
+        XCTAssertEqual(presentationRect.origin.x, presentationPoint.x, accuracy: 0.001)
+        XCTAssertEqual(presentationRect.origin.y, presentationPoint.y, accuracy: 0.001)
+        XCTAssertEqual(presentationRect.width, 24, accuracy: 0.001)
+        XCTAssertEqual(presentationRect.height, 16, accuracy: 0.001)
+
+        let rightEdgeTerminalPoint = CGPoint(x: 217.5, y: 110)
+        let rightEdgeWindowPoint = container.opticalWindowPointForTesting(
+            terminalPoint: rightEdgeTerminalPoint
+        )
+        XCTAssertTrue(root.hitTest(rightEdgeWindowPoint) === engine.terminalView)
+    }
+
+    func testHostSessionChangeResetsCompositorTransformBeforeRestoringMagnification() {
+        let services = TerminalServices()
+        let firstEngine = GhosttyTerminalEngine(terminalServices: services)
+        let secondEngine = GhosttyTerminalEngine(terminalServices: services)
+        let firstSession = TerminalSession(
+            id: UUID(),
+            workingDirectory: FileManager.default.temporaryDirectory,
+            terminalServices: services,
+            engineFactory: { _ in firstEngine }
+        )
+        let secondSession = TerminalSession(
+            id: UUID(),
+            workingDirectory: FileManager.default.temporaryDirectory,
+            terminalServices: services,
+            engineFactory: { _ in secondEngine },
+            displayMagnification: 2
+        )
+        defer {
+            firstSession.terminate()
+            secondSession.terminate()
+        }
+
+        let (_, root) = makeWindowAndRoot()
+        let container = TerminalContainerView(
+            ownershipCoordinator: services.hostOwnershipCoordinator,
+            frame: root.bounds
+        )
+        root.addSubview(container)
+        container.attach(
+            firstSession.hostedView,
+            session: firstSession,
+            sessionID: firstSession.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+        container.configureOpticalViewportForTesting(
+            magnification: 2,
+            centeredAt: CGPoint(x: 152, y: 100),
+            panDelta: CGPoint(x: 40, y: 20)
+        )
+
+        container.attach(
+            secondSession.hostedView,
+            session: secondSession,
+            sessionID: secondSession.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(container.opticalMagnificationForTesting, 2, accuracy: 0.001)
+        XCTAssertEqual(container.opticalVisibleOriginForTesting.x, 76, accuracy: 0.001)
+        XCTAssertEqual(container.opticalVisibleOriginForTesting.y, 50, accuracy: 0.001)
+        XCTAssertTrue(container.hostsTerminalView(secondSession.hostedView))
+    }
+
+    /// F003-S16
+    func testHostDoubleClickInvokesCallbackWithoutForwardingSecondGhosttyClick() throws {
+        let (session, engine) = makeSessionAndEngine()
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot()
+        let container = TerminalContainerView(
+            ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
+            frame: root.bounds
+        )
+        root.addSubview(container)
+        var doubleClickCount = 0
+        container.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onDoubleClick: { doubleClickCount += 1 },
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        var forwardedPrimaryButtonStates: [Bool] = []
+        engine.terminalView.primaryMouseButtonSinkForTesting = {
+            forwardedPrimaryButtonStates.append($0)
+        }
+        container.configureOpticalViewportForTesting(
+            magnification: 2,
+            centeredAt: CGPoint(x: 152, y: 100),
+            panDelta: CGPoint(x: 20, y: 20)
+        )
+        let location = container.opticalWindowPointForTesting(terminalPoint: CGPoint(x: 100, y: 75))
+        func event(_ type: NSEvent.EventType) throws -> NSEvent {
+            try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: type,
+                    location: location,
+                    modifierFlags: [],
+                    timestamp: 0,
+                    windowNumber: window.windowNumber,
+                    context: nil,
+                    eventNumber: 0,
+                    clickCount: 2,
+                    pressure: 0
+                )
+            )
+        }
+
+        engine.terminalView.mouseDown(with: try event(.leftMouseDown))
+
+        XCTAssertEqual(doubleClickCount, 1)
+        XCTAssertTrue(engine.terminalView.suppressesNextPrimaryMouseUp)
+        XCTAssertTrue(forwardedPrimaryButtonStates.isEmpty)
+
+        engine.terminalView.mouseUp(with: try event(.leftMouseUp))
+
+        XCTAssertFalse(engine.terminalView.suppressesNextPrimaryMouseUp)
+        XCTAssertFalse(engine.terminalView.isPrimaryMousePressForwarded)
+        XCTAssertTrue(forwardedPrimaryButtonStates.isEmpty)
+    }
+
+    /// F003-S16
+    func testDoubleClickWithoutCallbackRetainsGhosttyMouseSequence() throws {
+        let engine = GhosttyTerminalEngine(terminalServices: TerminalServices())
+        var forwardedPrimaryButtonStates: [Bool] = []
+        engine.terminalView.primaryMouseButtonSinkForTesting = {
+            forwardedPrimaryButtonStates.append($0)
+        }
+        engine.terminalView.opticalViewportPointerMapper = { _ in CGPoint(x: 40, y: 40) }
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 2,
+                pressure: 0
+            )
+        )
+        let mouseUp = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseUp,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 2,
+                pressure: 0
+            )
+        )
+
+        engine.terminalView.mouseDown(with: event)
+        engine.terminalView.mouseUp(with: mouseUp)
+
+        XCTAssertEqual(forwardedPrimaryButtonStates, [true, false])
+    }
+
+    /// F001-S60
+    func testHostDetachReleasesForwardedPrimaryMousePress() throws {
+        let (session, engine) = makeSessionAndEngine()
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot()
+        let container = TerminalContainerView(
+            ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
+            frame: root.bounds
+        )
+        root.addSubview(container)
+        container.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        var forwardedPrimaryButtonStates: [Bool] = []
+        engine.terminalView.primaryMouseButtonSinkForTesting = {
+            forwardedPrimaryButtonStates.append($0)
+        }
+        let mouseDown = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown,
+                location: container.opticalWindowPointForTesting(terminalPoint: CGPoint(x: 20, y: 20)),
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 0
+            )
+        )
+
+        engine.terminalView.mouseDown(with: mouseDown)
+        XCTAssertEqual(forwardedPrimaryButtonStates, [true])
+
+        container.removeFromSuperview()
+
+        XCTAssertFalse(engine.terminalView.isPrimaryMousePressForwarded)
+        XCTAssertEqual(forwardedPrimaryButtonStates, [true, false])
+    }
+
+    /// F001-S60
+    func testWindowFocusLossReleasesForwardedPrimaryMousePress() throws {
+        let (session, engine) = makeSessionAndEngine()
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot()
+        let container = TerminalContainerView(
+            ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
+            frame: root.bounds
+        )
+        root.addSubview(container)
+        container.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        var forwardedPrimaryButtonStates: [Bool] = []
+        engine.terminalView.primaryMouseButtonSinkForTesting = {
+            forwardedPrimaryButtonStates.append($0)
+        }
+        let point = CGPoint(x: 20, y: 20)
+        let mouseDown = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown,
+                location: container.opticalWindowPointForTesting(terminalPoint: point),
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 0
+            )
+        )
+
+        engine.terminalView.mouseDown(with: mouseDown)
+        XCTAssertTrue(engine.terminalView.isPrimaryMousePressForwarded)
+        XCTAssertEqual(forwardedPrimaryButtonStates, [true])
+
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: window)
+
+        XCTAssertFalse(engine.terminalView.isPrimaryMousePressForwarded)
+        XCTAssertEqual(forwardedPrimaryButtonStates, [true, false])
+    }
+
+    /// F001-S60
+    func testDraggingInteractiveTargetTransitionsToBalancedGhosttySelection() throws {
+        let (session, engine) = makeSessionAndEngine()
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot()
+        let container = TerminalContainerView(
+            ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
+            frame: root.bounds
+        )
+        root.addSubview(container)
+        container.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        engine.currentDirectoryPath = FileManager.default.temporaryDirectory.path
+        var forwardedPrimaryButtonStates: [Bool] = []
+        engine.terminalView.primaryMouseButtonSinkForTesting = {
+            forwardedPrimaryButtonStates.append($0)
+        }
+        engine.terminalView.visibleContentsProviderForTesting = {
+            "open https://example.com/docs here"
+        }
+        engine.terminalView.dimensionsProviderForTesting = { (cols: 40, rows: 2) }
+
+        let start = CGPoint(
+            x: engine.terminalView.bounds.width * 10.5 / 40,
+            y: engine.terminalView.bounds.height * 0.75
+        )
+        let end = CGPoint(x: start.x + 20, y: start.y)
+        func event(_ type: NSEvent.EventType, at point: CGPoint) throws -> NSEvent {
+            try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: type,
+                    location: container.opticalWindowPointForTesting(terminalPoint: point),
+                    modifierFlags: [],
+                    timestamp: 0,
+                    windowNumber: window.windowNumber,
+                    context: nil,
+                    eventNumber: 0,
+                    clickCount: 1,
+                    pressure: 0
+                )
+            )
+        }
+
+        engine.terminalView.mouseDown(with: try event(.leftMouseDown, at: start))
+        XCTAssertNotNil(engine.terminalView.pendingContextMenuMouseDownPoint)
+        XCTAssertFalse(engine.terminalView.isPrimaryMousePressForwarded)
+
+        engine.terminalView.mouseDragged(with: try event(.leftMouseDragged, at: end))
+        XCTAssertNil(engine.terminalView.pendingContextMenuMouseDownPoint)
+        XCTAssertTrue(engine.terminalView.isPrimaryMousePressForwarded)
+        XCTAssertEqual(forwardedPrimaryButtonStates, [true])
+
+        engine.terminalView.mouseUp(with: try event(.leftMouseUp, at: end))
+        XCTAssertFalse(engine.terminalView.isPrimaryMousePressForwarded)
+        XCTAssertEqual(forwardedPrimaryButtonStates, [true, false])
+    }
+
     func testCommandClickActivatesGhosttyLinkTargetRouting() throws {
         let engine = GhosttyTerminalEngine(terminalServices: TerminalServices())
         engine.currentDirectoryPath = FileManager.default.temporaryDirectory.path

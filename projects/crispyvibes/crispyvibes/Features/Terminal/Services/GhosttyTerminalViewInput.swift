@@ -289,7 +289,7 @@ extension GhosttyTerminalView {
         keyEvent.composing = false
         _ = ghostty_surface_key(surface, keyEvent)
 
-        let point = convert(event.locationInWindow, from: nil)
+        let point = terminalPoint(for: event)
         if bounds.contains(point) {
             updateHoveredInteractiveTarget(at: point, modifierFlags: event.modifierFlags)
         } else {
@@ -298,11 +298,15 @@ extension GhosttyTerminalView {
     }
 
     func mods(from event: NSEvent) -> ghostty_input_mods_e {
+        mods(from: event.modifierFlags)
+    }
+
+    func mods(from modifierFlags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
         var raw = GHOSTTY_MODS_NONE.rawValue
-        if event.modifierFlags.contains(.shift) { raw |= GHOSTTY_MODS_SHIFT.rawValue }
-        if event.modifierFlags.contains(.control) { raw |= GHOSTTY_MODS_CTRL.rawValue }
-        if event.modifierFlags.contains(.option) { raw |= GHOSTTY_MODS_ALT.rawValue }
-        if event.modifierFlags.contains(.command) { raw |= GHOSTTY_MODS_SUPER.rawValue }
+        if modifierFlags.contains(.shift) { raw |= GHOSTTY_MODS_SHIFT.rawValue }
+        if modifierFlags.contains(.control) { raw |= GHOSTTY_MODS_CTRL.rawValue }
+        if modifierFlags.contains(.option) { raw |= GHOSTTY_MODS_ALT.rawValue }
+        if modifierFlags.contains(.command) { raw |= GHOSTTY_MODS_SUPER.rawValue }
         return ghostty_input_mods_e(rawValue: raw)
     }
 

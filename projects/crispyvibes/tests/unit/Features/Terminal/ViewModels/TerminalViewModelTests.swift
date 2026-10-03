@@ -299,6 +299,132 @@ final class TerminalViewModelTests: XCTestCase {
         XCTAssertEqual(snapshot.activeTerminalIdentity, TerminalViewModel.persistenceIdentity(tabID: firstID))
     }
 
+    /// F003-S17
+    func testSpotlightScrollGestureTrackerSwitchesAtNormalSizeAndResetsForZoomedPan() {
+        var tracker = SpotlightScrollGestureTracker()
+        let began = SpotlightScrollGestureSample(
+            phase: .began,
+            momentumPhase: [],
+            deltaX: 0,
+            deltaY: 0,
+            isPrecise: true
+        )
+        let horizontalChange = SpotlightScrollGestureSample(
+            phase: .changed,
+            momentumPhase: [],
+            deltaX: 60,
+            deltaY: 4,
+            isPrecise: true
+        )
+        let ended = SpotlightScrollGestureSample(
+            phase: .ended,
+            momentumPhase: [],
+            deltaX: 0,
+            deltaY: 0,
+            isPrecise: true
+        )
+
+        XCTAssertEqual(
+            tracker.handle(began, carouselEnabled: true, terminalReservesScroll: false),
+            .passThrough(resetOffset: true)
+        )
+        XCTAssertEqual(
+            tracker.handle(horizontalChange, carouselEnabled: true, terminalReservesScroll: false),
+            .updateOffset(21)
+        )
+        XCTAssertTrue(tracker.isHorizontalGesture)
+        XCTAssertEqual(
+            tracker.handle(horizontalChange, carouselEnabled: true, terminalReservesScroll: true),
+            .passThrough(resetOffset: true)
+        )
+        XCTAssertFalse(tracker.isTracking)
+        XCTAssertFalse(tracker.isHorizontalGesture)
+        XCTAssertEqual(tracker.cumulativeDeltaX, 0)
+
+        _ = tracker.handle(began, carouselEnabled: true, terminalReservesScroll: false)
+        _ = tracker.handle(horizontalChange, carouselEnabled: true, terminalReservesScroll: false)
+        XCTAssertEqual(
+            tracker.handle(ended, carouselEnabled: true, terminalReservesScroll: false),
+            .finishSwitch(-1)
+        )
+    }
+
+    /// F003-S17
+    func testSpotlightScrollRoutingReservesGesturesOnlyForMagnifiedTerminal() throws {
+        viewModel.createTab(directoryURL: tempRoot, startImmediately: false)
+        let tabID = try XCTUnwrap(viewModel.activeTabID)
+        let session = try XCTUnwrap(viewModel.session(for: tabID))
+        let source = TerminalSpotlightState.Source.persistent(
+            terminalViewModel: viewModel,
+            tabID: tabID
+        )
+
+        XCTAssertFalse(source.reservesScrollForTerminalViewport)
+
+        session.setDisplayMagnification(1.5)
+
+        XCTAssertTrue(source.reservesScrollForTerminalViewport)
+        XCTAssertFalse(TerminalSpotlightState.Source.vibeCast.reservesScrollForTerminalViewport)
+    }
+
+    /// F001-S59
+    func testTerminalSessionMagnificationClampsToNormalAndMaximum() throws {
+        viewModel.createTab(directoryURL: tempRoot, startImmediately: false)
+        let tabID = try XCTUnwrap(viewModel.activeTabID)
+        let session = try XCTUnwrap(viewModel.session(for: tabID))
+
+        session.setDisplayMagnification(0.5)
+        XCTAssertEqual(session.displayMagnification, 1)
+
+        session.adjustDisplayMagnification(by: -0.5)
+        XCTAssertEqual(session.displayMagnification, 1)
+
+        session.setDisplayMagnification(4)
+        XCTAssertEqual(session.displayMagnification, 3)
+    }
+
+    /// F001-S59
+    func testRestoreTabsNormalizesLegacyMagnificationBelowNormal() throws {
+        let entries = [
+            TerminalSessionEntry(
+                workingDirectoryPath: tempRoot.standardizedFileURL.path,
+                customName: "Legacy Zoom",
+                origin: .adHoc,
+                displayMagnification: 0.75
+            )
+        ]
+
+        viewModel.restoreTabsFromEntries(
+            entries,
+            activeDirectory: tempRoot,
+            activeIdentity: nil,
+            defaultDirectory: tempRoot
+        )
+
+        let restoredID = try XCTUnwrap(viewModel.activeTabID)
+        XCTAssertEqual(viewModel.session(for: restoredID)?.displayMagnification, 1)
+    }
+
+    /// F001-S59
+    func testTerminalSessionMagnificationPersistsAcrossSnapshotAndRestore() throws {
+        viewModel.createTab(directoryURL: tempRoot, customName: "Zoomed", startImmediately: false)
+        let tabID = try XCTUnwrap(viewModel.activeTabID)
+        try XCTUnwrap(viewModel.session(for: tabID)).adjustDisplayMagnification(by: 0.5)
+
+        let snapshot = ProjectTerminalSessionPersistence.snapshot(from: viewModel)
+        XCTAssertEqual(try XCTUnwrap(snapshot.terminalEntries.first?.displayMagnification), 1.5)
+
+        viewModel.restoreTabsFromEntries(
+            snapshot.terminalEntries,
+            activeDirectory: tempRoot,
+            activeIdentity: snapshot.activeTerminalIdentity,
+            defaultDirectory: tempRoot
+        )
+
+        let restoredID = try XCTUnwrap(viewModel.activeTabID)
+        XCTAssertEqual(viewModel.session(for: restoredID)?.displayMagnification, 1.5)
+    }
+
     func testRestoreTabsFromEntriesPrefersPersistedActiveIdentityOverDirectoryMatch() {
         let entries = [
             TerminalSessionEntry(

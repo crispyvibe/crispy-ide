@@ -5,6 +5,100 @@ enum SpotlightSwipeDirection {
     case none, leading, trailing
 }
 
+struct SpotlightScrollGestureSample {
+    let phase: NSEvent.Phase
+    let momentumPhase: NSEvent.Phase
+    let deltaX: CGFloat
+    let deltaY: CGFloat
+    let isPrecise: Bool
+}
+
+enum SpotlightScrollGestureAction: Equatable {
+    case passThrough(resetOffset: Bool)
+    case consume
+    case consumeAndResetOffset
+    case updateOffset(CGFloat)
+    case finishSwitch(Int?)
+}
+
+struct SpotlightScrollGestureTracker {
+    private(set) var cumulativeDeltaX: CGFloat = 0
+    private(set) var cumulativeDeltaY: CGFloat = 0
+    private(set) var isTracking = false
+    private(set) var isHorizontalGesture = false
+    private(set) var isVerticalGesture = false
+
+    mutating func handle(
+        _ sample: SpotlightScrollGestureSample,
+        carouselEnabled: Bool,
+        terminalReservesScroll: Bool
+    ) -> SpotlightScrollGestureAction {
+        guard carouselEnabled, sample.isPrecise else {
+            reset()
+            return .passThrough(resetOffset: true)
+        }
+        guard !terminalReservesScroll else {
+            reset()
+            return .passThrough(resetOffset: true)
+        }
+        if sample.momentumPhase != [] {
+            let shouldConsume = isHorizontalGesture
+            if sample.momentumPhase == .ended || sample.momentumPhase == .cancelled {
+                reset()
+                return shouldConsume ? .consumeAndResetOffset : .passThrough(resetOffset: true)
+            }
+            return shouldConsume ? .consume : .passThrough(resetOffset: false)
+        }
+
+        switch sample.phase {
+        case .began:
+            reset()
+            isTracking = true
+            return .passThrough(resetOffset: true)
+        case .changed where isTracking:
+            cumulativeDeltaX += sample.deltaX
+            cumulativeDeltaY += sample.deltaY
+            if !isHorizontalGesture {
+                if isVerticalGesture {
+                    return .passThrough(resetOffset: false)
+                }
+                if abs(cumulativeDeltaY) > 12,
+                   abs(cumulativeDeltaY) > abs(cumulativeDeltaX) {
+                    isVerticalGesture = true
+                    return .passThrough(resetOffset: false)
+                }
+                guard abs(cumulativeDeltaX) > 20,
+                      abs(cumulativeDeltaX) > abs(cumulativeDeltaY) * 2 else {
+                    return .passThrough(resetOffset: false)
+                }
+                isHorizontalGesture = true
+            }
+            return .updateOffset(cumulativeDeltaX * 0.35)
+        case .ended, .cancelled:
+            guard isTracking else {
+                reset()
+                return .passThrough(resetOffset: false)
+            }
+            let wasHorizontal = isHorizontalGesture
+            let finalDeltaX = cumulativeDeltaX
+            reset()
+            guard wasHorizontal else { return .passThrough(resetOffset: false) }
+            let switchOffset = abs(finalDeltaX) > 50 ? (finalDeltaX < 0 ? 1 : -1) : nil
+            return .finishSwitch(switchOffset)
+        default:
+            return .passThrough(resetOffset: false)
+        }
+    }
+
+    mutating func reset() {
+        cumulativeDeltaX = 0
+        cumulativeDeltaY = 0
+        isTracking = false
+        isHorizontalGesture = false
+        isVerticalGesture = false
+    }
+}
+
 enum SpotlightItem {
     case terminal(project: AnyProjectSession, tab: TerminalTab)
     case vibeCast
@@ -109,6 +203,18 @@ extension TerminalSpotlightState.Source {
         }
     }
 
+    @MainActor
+    var reservesScrollForTerminalViewport: Bool {
+        switch self {
+        case let .persistent(terminalViewModel, tabID):
+            return (terminalViewModel.session(for: tabID)?.displayMagnification ?? 1) > 1.001
+        case let .transient(session):
+            return session.displayMagnification > 1.001
+        case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
+            return false
+        }
+    }
+
     var showsTemporaryBadge: Bool {
         switch self {
         case .transient, .filePreview, .browserPreview:
@@ -198,63 +304,46 @@ final class TerminalSpotlightCoordinator: ObservableObject {
 
     func installScrollMonitor(onSwitchSpotlight: @escaping (Int) -> Void) {
         guard scrollMonitor == nil else { return }
-        var cumulativeDeltaX: CGFloat = 0
-        var cumulativeDeltaY: CGFloat = 0
-        var isTracking = false
-        var isHorizontalGesture = false
-        var isVerticalGesture = false
+        var gestureTracker = SpotlightScrollGestureTracker()
 
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
             guard let self else { return event }
-            guard spotlight?.supportsCarouselNavigation == true else { return event }
-            guard event.hasPreciseScrollingDeltas else { return event }
-            if event.momentumPhase != [] { return isHorizontalGesture ? nil : event }
+            let action = gestureTracker.handle(
+                SpotlightScrollGestureSample(
+                    phase: event.phase,
+                    momentumPhase: event.momentumPhase,
+                    deltaX: event.scrollingDeltaX,
+                    deltaY: event.scrollingDeltaY,
+                    isPrecise: event.hasPreciseScrollingDeltas
+                ),
+                carouselEnabled: self.spotlight?.supportsCarouselNavigation == true,
+                terminalReservesScroll: self.spotlight?.source.reservesScrollForTerminalViewport == true
+            )
 
-            switch event.phase {
-            case .began:
-                cumulativeDeltaX = 0
-                cumulativeDeltaY = 0
-                isTracking = true
-                isHorizontalGesture = false
-                isVerticalGesture = false
-            case .changed where isTracking:
-                cumulativeDeltaX += event.scrollingDeltaX
-                cumulativeDeltaY += event.scrollingDeltaY
-                if !isHorizontalGesture {
-                    if isVerticalGesture {
-                        return event
-                    }
-                    if abs(cumulativeDeltaY) > 12 && abs(cumulativeDeltaY) > abs(cumulativeDeltaX) {
-                        isVerticalGesture = true
-                        return event
-                    }
-                    if abs(cumulativeDeltaX) > 20 && abs(cumulativeDeltaX) > abs(cumulativeDeltaY) * 2 {
-                        isHorizontalGesture = true
-                    } else {
-                        return event
-                    }
-                }
-                let dampened = cumulativeDeltaX * 0.35
+            switch action {
+            case let .passThrough(resetOffset):
+                if resetOffset { self.swipeOffset = 0 }
+                return event
+            case .consume:
+                return nil
+            case .consumeAndResetOffset:
+                self.swipeOffset = 0
+                return nil
+            case let .updateOffset(offset):
                 withAnimation(.interactiveSpring(response: 0.08, dampingFraction: 0.9)) {
-                    self.swipeOffset = dampened
+                    self.swipeOffset = offset
                 }
-            case .ended, .cancelled:
-                guard isTracking else { return event }
-                isTracking = false
-                guard isHorizontalGesture else { return event }
-                isHorizontalGesture = false
-                if abs(cumulativeDeltaX) > 50 {
-                    onSwitchSpotlight(cumulativeDeltaX < 0 ? 1 : -1)
+                return nil
+            case let .finishSwitch(offset):
+                if let offset {
+                    onSwitchSpotlight(offset)
                 } else {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                         self.swipeOffset = 0
                     }
                 }
                 return nil
-            default:
-                return event
             }
-            return isHorizontalGesture ? nil : event
         }
     }
 

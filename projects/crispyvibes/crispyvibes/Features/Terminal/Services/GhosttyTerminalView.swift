@@ -40,6 +40,14 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
     var interactiveTargetMenuPresenterForTesting: ((TerminalInteractiveTarget, CGPoint) -> Void)?
     var visibleContentsProviderForTesting: (() -> String)?
     var dimensionsProviderForTesting: (() -> (cols: Int, rows: Int))?
+    var onDoubleClick: (() -> Void)?
+    var opticalViewportPointerMapper: ((NSEvent) -> CGPoint)?
+    var opticalViewportPointMapper: ((CGPoint) -> CGPoint)?
+    var opticalViewportRectMapper: ((CGRect) -> CGRect)?
+    var primaryMouseButtonSinkForTesting: ((Bool) -> Void)?
+    var characterCoordinatesInvalidationSinkForTesting: (() -> Void)?
+    private(set) var isPrimaryMousePressForwarded = false
+    private(set) var suppressesNextPrimaryMouseUp = false
     let interactiveHoverOverlay = TerminalInteractiveHoverOverlayView(frame: .zero)
     nonisolated static let surfaceFreeQueue = DispatchQueue(
         label: "com.crispyvibe.app.ghostty.surface-free",
@@ -271,7 +279,7 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
         guard localRect.hasFiniteCoordinates, !localRect.isEmpty else {
             return fallbackCaretScreenRect()
         }
-        return window.convertToScreen(convert(localRect, to: nil))
+        return window.convertToScreen(convert(presentationRect(for: localRect), to: nil))
     }
 
     private func fallbackCaretScreenRect() -> NSRect {
@@ -281,7 +289,7 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
             1
         )
         let caretRect = NSRect(x: 0, y: max(bounds.height - lineHeight, 0), width: 1, height: lineHeight)
-        return window.convertToScreen(convert(caretRect, to: nil))
+        return window.convertToScreen(convert(presentationRect(for: caretRect), to: nil))
     }
 
     override func updateTrackingAreas() {
@@ -301,20 +309,33 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        let point = convert(event.locationInWindow, from: nil)
+        if event.clickCount != 2 {
+            suppressesNextPrimaryMouseUp = false
+        }
+        if event.clickCount == 2, let onDoubleClick {
+            cancelPointerInteraction()
+            suppressesNextPrimaryMouseUp = true
+            onDoubleClick()
+            return
+        }
+        let point = terminalPoint(for: event)
         if beginInteractiveTargetClick(at: point, modifierFlags: event.modifierFlags) {
             return
         }
         if beginInteractiveTargetContextMenuClick(at: point, modifierFlags: event.modifierFlags) {
             return
         }
-        sendMousePosition(for: event)
-        guard let surface else { return }
-        _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, mods(from: event))
+        forwardPrimaryMousePress(at: point, event: event)
     }
 
     override func mouseUp(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
+        if suppressesNextPrimaryMouseUp {
+            suppressesNextPrimaryMouseUp = false
+            return
+        }
+        let point = terminalPoint(for: event)
+        let hadDeferredInteractiveClick = pendingPrimaryMouseDownPoint != nil
+            || pendingContextMenuMouseDownPoint != nil
         if let target = activatedInteractiveTargetOnMouseUp(
             at: point,
             modifierFlags: event.modifierFlags,
@@ -329,47 +350,51 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
             modifierFlags: event.modifierFlags,
             clickCount: event.clickCount
         ) {
-            showInteractiveTargetContextMenu(for: target, at: point)
+            showInteractiveTargetContextMenu(for: target, at: presentationPoint(for: point))
             updateHoveredInteractiveTarget(at: point, modifierFlags: event.modifierFlags)
             return
         }
-        if pendingPrimaryMouseDownPoint != nil {
+        if hadDeferredInteractiveClick {
             resetInteractiveTargetTracking()
-            updateHoveredInteractiveTarget(at: point, modifierFlags: event.modifierFlags)
-            return
-        }
-        if pendingContextMenuMouseDownPoint != nil {
             resetInteractiveTargetContextMenuTracking()
             updateHoveredInteractiveTarget(at: point, modifierFlags: event.modifierFlags)
             return
         }
-        sendMousePosition(for: event)
-        guard let surface else { return }
-        _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, mods(from: event))
+        sendMousePosition(at: point, modifierFlags: event.modifierFlags)
+        releasePrimaryMouseIfNeeded(modifierFlags: event.modifierFlags)
     }
 
     override func mouseDragged(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        if pendingPrimaryMouseDownPoint != nil || pendingContextMenuMouseDownPoint != nil {
+        let point = terminalPoint(for: event)
+        if let deferredPoint = pendingPrimaryMouseDownPoint ?? pendingContextMenuMouseDownPoint {
             updateInteractiveTargetDrag(at: point, modifierFlags: event.modifierFlags)
-            return
+            guard primaryMouseDidDrag || contextMenuMouseDidDrag else { return }
+            resetInteractiveTargetTracking()
+            resetInteractiveTargetContextMenuTracking()
+            forwardPrimaryMousePress(at: deferredPoint, event: event)
         }
-        sendMousePosition(for: event)
+        sendMousePosition(at: point, modifierFlags: event.modifierFlags)
     }
 
     override func mouseMoved(with event: NSEvent) {
         sendMousePosition(for: event)
-        let point = convert(event.locationInWindow, from: nil)
+        let point = terminalPoint(for: event)
         updateHoveredInteractiveTarget(at: point, modifierFlags: event.modifierFlags)
     }
 
     override func mouseEntered(with event: NSEvent) {
         sendMousePosition(for: event)
-        let point = convert(event.locationInWindow, from: nil)
+        let point = terminalPoint(for: event)
         updateHoveredInteractiveTarget(at: point, modifierFlags: event.modifierFlags)
     }
 
     override func mouseExited(with event: NSEvent) {
+        guard !isPrimaryMousePressForwarded,
+              pendingPrimaryMouseDownPoint == nil,
+              pendingContextMenuMouseDownPoint == nil,
+              NSEvent.pressedMouseButtons == 0 else {
+            return
+        }
         clearHoveredInteractiveTarget()
         guard let surface else { return }
         ghostty_surface_mouse_pos(surface, -1, -1, mods(from: event))
@@ -448,10 +473,69 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
         ghostty_surface_mouse_scroll(surface, x, y, ghostty_input_scroll_mods_t(packed))
     }
 
-    fileprivate func sendMousePosition(for event: NSEvent) {
+    func terminalPoint(for event: NSEvent) -> CGPoint {
+        opticalViewportPointerMapper?(event) ?? convert(event.locationInWindow, from: nil)
+    }
+
+    func presentationPoint(for terminalPoint: CGPoint) -> CGPoint {
+        opticalViewportPointMapper?(terminalPoint) ?? terminalPoint
+    }
+
+    func presentationRect(for terminalRect: CGRect) -> CGRect {
+        opticalViewportRectMapper?(terminalRect) ?? terminalRect
+    }
+
+    func invalidateOpticalCharacterCoordinates() {
+        inputContext?.invalidateCharacterCoordinates()
+        characterCoordinatesInvalidationSinkForTesting?()
+    }
+
+    func cancelPointerInteraction() {
+        resetInteractiveTargetTracking()
+        resetInteractiveTargetContextMenuTracking()
+        releasePrimaryMouseIfNeeded(modifierFlags: [])
+    }
+
+    private func forwardPrimaryMousePress(at point: CGPoint, event: NSEvent) {
+        sendMousePosition(at: point, modifierFlags: event.modifierFlags)
+        if let primaryMouseButtonSinkForTesting {
+            primaryMouseButtonSinkForTesting(true)
+            isPrimaryMousePressForwarded = true
+            return
+        }
         guard let surface else { return }
-        let point = convert(event.locationInWindow, from: nil)
-        ghostty_surface_mouse_pos(surface, point.x, bounds.height - point.y, mods(from: event))
+        _ = ghostty_surface_mouse_button(
+            surface,
+            GHOSTTY_MOUSE_PRESS,
+            GHOSTTY_MOUSE_LEFT,
+            mods(from: event)
+        )
+        isPrimaryMousePressForwarded = true
+    }
+
+    private func releasePrimaryMouseIfNeeded(modifierFlags: NSEvent.ModifierFlags) {
+        guard isPrimaryMousePressForwarded else { return }
+        isPrimaryMousePressForwarded = false
+        if let primaryMouseButtonSinkForTesting {
+            primaryMouseButtonSinkForTesting(false)
+            return
+        }
+        guard let surface else { return }
+        _ = ghostty_surface_mouse_button(
+            surface,
+            GHOSTTY_MOUSE_RELEASE,
+            GHOSTTY_MOUSE_LEFT,
+            mods(from: modifierFlags)
+        )
+    }
+
+    fileprivate func sendMousePosition(for event: NSEvent) {
+        sendMousePosition(at: terminalPoint(for: event), modifierFlags: event.modifierFlags)
+    }
+
+    private func sendMousePosition(at point: CGPoint, modifierFlags: NSEvent.ModifierFlags) {
+        guard let surface else { return }
+        ghostty_surface_mouse_pos(surface, point.x, bounds.height - point.y, mods(from: modifierFlags))
     }
 
     func releaseSurfaceCallbackContext() {

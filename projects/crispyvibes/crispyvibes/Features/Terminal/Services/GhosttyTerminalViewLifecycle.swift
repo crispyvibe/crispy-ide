@@ -268,6 +268,9 @@ extension GhosttyTerminalView {
 
     override func resignFirstResponder() -> Bool {
         let result = super.resignFirstResponder()
+        if result {
+            cancelPointerInteraction()
+        }
         if result, let engine, let sessionID = engine.sessionID {
             engine.terminalServices.focusCoordinator.relinquish(sessionID: sessionID)
         }

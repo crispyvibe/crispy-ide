@@ -6,11 +6,29 @@ Technical design pending. This document will cover the architecture, data flow, 
 
 ## Architecture
 
-_Pending._
+### Optical Terminal Presentation
+
+`TerminalSessionHostView` bridges SwiftUI to `TerminalContainerView`. The container owns a `TerminalOpticalViewport`, which clips a fixed-geometry terminal document and applies `CALayer.sublayerTransform` for optical scale and translation. `TerminalOpticalTransform` is the single affine model for terminal-to-viewport and viewport-to-terminal conversion.
+
+Optical zoom and pan do not change `GhosttyTerminalView.frame`, `bounds`, `CAMetalLayer.drawableSize`, or the Ghostty surface size. The terminal grid therefore does not reflow during those interactions. Host layout changes may still establish a new canonical terminal frame; optical interaction itself only changes the ancestor compositor transform.
+
+The supported session magnification range is `1×...3×`. `TerminalSession.displayMagnification` owns the persisted per-session value, while each active host owns its bounded pan origin. Session replacement resets the host transform before applying the incoming session's saved magnification.
+
+Other terminal session architecture remains documented in the runtime structure below.
 
 ## Data Flow
 
-_Pending._
+### Optical Input Flow
+
+1. Pinch input updates `TerminalSession.displayMagnification`; each recognizer delta is consumed once and reset.
+2. `TerminalOpticalViewport` updates its affine transform around the gesture anchor and clamps the visible origin.
+3. AppKit hit testing converts the incoming superview point to viewport coordinates, applies the inverse affine transform, and routes the event to the hosted terminal.
+4. `GhosttyTerminalView` forwards logical terminal coordinates to Ghostty. Presentation-only geometry such as context menus and IME candidate rectangles uses the forward transform.
+5. Selection preserves a balanced position → press → drag positions → final position → release sequence. Focus loss, app deactivation, detach, and ownership handoff cancel an outstanding forwarded press.
+
+### Magnification Persistence
+
+`ProjectTerminalSessionPersistence.snapshot` writes `TerminalSessionEntry.displayMagnification`. Restore and session replacement clamp decoded values through `TerminalSession.setDisplayMagnification`; legacy values below `1×` normalize to `1×`.
 
 ## API / Command Contracts
 
@@ -40,11 +58,15 @@ _Pending._
 
 ## Performance Constraints
 
-_Pending._
+- Optical zoom and pan MUST NOT call `ghostty_surface_set_size` or change terminal row/column geometry.
+- Transform updates MUST remain compositor-only and disable implicit Core Animation transitions.
+- Pointer conversion MUST remain constant-time per event.
 
 ## Migration / Rollout Notes
 
-_Pending._
+- Existing session entries without `displayMagnification` restore at `1×`.
+- Values persisted by earlier builds below `1×` are accepted but normalized to `1×` on restore and the next snapshot.
+- SwiftTerm remains at normal optical scale; Ghostty owns transformed pointer and presentation geometry.
 
 ## File Structure
 
@@ -74,7 +96,7 @@ _Pending._
   - Installed CLI tool detection and preset management.
 
 - `TerminalSessionAppearance.swift`
-  - `TerminalSession` extension for appearance and density configuration.
+  - `TerminalSession` extension for appearance, density, and `1×...3×` optical magnification bounds.
 
 - `TerminalSessionCommandDispatch.swift`
   - `TerminalSession` extension for command dispatch gating and pending command queue.
@@ -165,6 +187,7 @@ _Pending._
 
 - `TerminalSessionHostView.swift`
   - SwiftUI/AppKit bridge for rendering a `TerminalSession` host view.
+  - Owns the compositor-only `TerminalOpticalViewport` and testable affine `TerminalOpticalTransform`.
   - Supports density-specific rendering (`regular`, `compact`) and font overrides.
 
 - `TerminalView.swift`

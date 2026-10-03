@@ -22,9 +22,11 @@ extension TerminalSession {
         )
     }
 
+    static let minimumDisplayMagnification: CGFloat = 1
+    static let maximumDisplayMagnification: CGFloat = 3
+
     func setDisplayDensity(_ density: TerminalDisplayDensity) {
         let resolvedFontSize = density.fontSize
-
         let defaults = UserDefaults.standard
         let fontFamilyRawValue = defaults.string(forKey: AppPreferences.codeFontFamilyKey)
             ?? AppPreferences.defaultCodeFontFamily
@@ -33,14 +35,26 @@ extension TerminalSession {
             size: resolvedFontSize
         )
 
-        if density == currentDisplayDensity,
-           abs(engine.font.pointSize - resolvedFont.pointSize) < 0.1,
-           engine.font.fontName == resolvedFont.fontName {
+        guard density != currentDisplayDensity
+            || abs(engine.font.pointSize - resolvedFont.pointSize) >= 0.1
+            || engine.font.fontName != resolvedFont.fontName else {
             return
         }
-
         currentDisplayDensity = density
         engine.font = resolvedFont
+    }
+
+    func adjustDisplayMagnification(by delta: CGFloat) {
+        guard delta.isFinite, delta != 0 else { return }
+        setDisplayMagnification(displayMagnification + delta)
+    }
+
+    func setDisplayMagnification(_ magnification: CGFloat) {
+        guard magnification.isFinite else { return }
+        displayMagnification = min(
+            Self.maximumDisplayMagnification,
+            max(Self.minimumDisplayMagnification, magnification)
+        )
     }
 
     func requestKeyboardFocus(retryCount: Int) {

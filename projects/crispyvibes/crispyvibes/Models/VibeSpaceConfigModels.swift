@@ -14,6 +14,8 @@ struct TerminalSessionEntry: Codable, Equatable {
     var customName: String?
     var origin: TerminalOrigin
     var tmuxSessionName: String?
+    /// Per-session optical terminal magnification. Does not alter terminal grid dimensions.
+    var displayMagnification: Double? = nil
 }
 
 // MARK: - App State (global, lightweight)

@@ -70,6 +70,7 @@ extension TerminalViewModel {
         let existingTab = tabs[tabIndex]
         let workingDirectory = existingTab.workingDirectory.standardizedFileURL
         let existingTmuxSessionName = sessions[tabID]?.tmuxSessionName
+        let existingDisplayMagnification = sessions[tabID]?.displayMagnification ?? 1
         let replacementTab = TerminalTab(
             id: tabID,
             workingDirectory: workingDirectory,
@@ -94,6 +95,7 @@ extension TerminalViewModel {
             id: tabID,
             workingDirectory: workingDirectory,
             terminalServices: terminalServices,
+            displayMagnification: existingDisplayMagnification,
             shellResolutionProvider: { [shellResolutionProviderStore] in
                 shellResolutionProviderStore.resolve()
             }

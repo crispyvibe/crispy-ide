@@ -3,7 +3,7 @@ title: "Terminal Sessions & Tabs"
 feature: "F001"
 domain: "terminal"
 audience: "user"
-version: "1.0"
+version: "1.1"
 sidebar:
   label: "Sessions & Tabs"
   order: 1
@@ -69,8 +69,16 @@ Terminal Sessions & Tabs manages the full lifecycle of terminal sessions within 
 
 ### Copy and Paste
 
-1. Select text in the terminal using the mouse.
+1. Select text in the terminal using the mouse. Selection remains aligned when the terminal is magnified or panned, including when a drag begins over a URL or file path.
 2. Use the app menu or notification-based commands to copy/paste (routed to the active tab session).
+
+### Magnifying and Panning a Terminal
+
+1. Spread two fingers apart over a Ghostty terminal to magnify it, up to `3×`.
+2. Use a two-finger scroll gesture to pan around while magnified.
+3. Bring two fingers together to return toward normal size. The terminal stops at `1×` and never becomes smaller than its original size.
+4. Magnification is remembered for the terminal session. Zooming and panning do not change terminal line wrapping or grid dimensions.
+5. Hold `Option` while scrolling if you need to send the scroll gesture to terminal scrollback instead of panning the magnified viewport.
 
 ### Using Shortcut Commands
 
@@ -152,6 +160,7 @@ Unavailable candidates are skipped automatically. Shell is always launched with 
 - **Tab reordering**: Drag tabs in the tab bar to reorder them.
 - **Split mode**: In single-active-tab presentation, toggle split mode to view two terminal sessions side by side (requires 2+ tabs).
 - **Density switching**: The terminal automatically uses regular density in the focused pane and compact density in stacked rail cards.
+- **Optical zoom**: Magnification changes only presentation. It does not increase font size, resize the terminal grid, or rewrap output.
 
 ## Troubleshooting
 
@@ -163,3 +172,5 @@ Unavailable candidates are skipped automatically. Shell is always launched with 
 | Tab not restoring on relaunch | Ensure the vibespace was saved properly; check that the directory still exists |
 | Interactive links not working | Ensure the terminal host supports interactive targeting (Ghostty and SwiftTerm both support it) |
 | Commands queued but not executing | The session may not have reached interactive readiness yet — wait for the shell prompt or check startup command timing |
+| Terminal will not shrink below its original size | This is intentional. Bring two fingers together to return to normal `1×`; only magnification above normal is supported. |
+| Cannot scroll terminal history while magnified | Hold `Option` while scrolling to pass the gesture to terminal scrollback. |

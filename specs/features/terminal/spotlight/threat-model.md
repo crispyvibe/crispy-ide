@@ -19,6 +19,7 @@ Terminal Spotlight presents existing terminal sessions and related vibespace sur
 - Carousel switching and focus restoration between terminal sessions, VibeCast, and temporary previews.
 - Temporary terminal process creation and termination callbacks.
 - Inline insert trigger lookup and generated command insertion.
+- Native/SwiftUI double-click arbitration and trackpad ownership between terminal panning and carousel switching.
 
 ## Threats
 
@@ -57,14 +58,25 @@ Terminal Spotlight presents existing terminal sessions and related vibespace sur
 - Likelihood: Low.
 - Mitigation: Search roots are limited to local vibespace project roots and the active local working directory fallback. Inline insert actions replace text only and never auto-execute.
 
+### F003-T06: Ambiguous gesture triggers duplicate or unintended Spotlight navigation
+
+- Vector: A transformed native terminal and its SwiftUI wrapper both handle one double-click, or the application-level carousel monitor consumes a pan intended for a magnified terminal.
+- Impact: Spotlight can open and immediately close, switch to the wrong item, disturb terminal selection, or leave stale carousel offset.
+- Likelihood: Medium without explicit arbitration.
+- Mitigation: Ghostty uses one explicit AppKit double-click callback and suppresses the matching second press/up; its SwiftUI handler is gated off while SwiftTerm retains the fallback. Magnified terminal sources reserve precise scrolling before carousel classification, and all ineligible/takeover/momentum-end paths clear cumulative gesture state and visual offset. Linked NFRs: A11Y-4, PERF-3, TEST-2.
+
 ## Residual Risks
 
 - Reorder persistence is intentionally host-specific, so regression tests must cover both vibespace Spotlight and terminal-board Spotlight.
 - A stale tab UUID from legacy state can only be resolved if restored state has enough project scope and legacy identity fields to match a tab before the next stable-ID snapshot.
+- While a terminal remains magnified, horizontal trackpad gestures are intentionally unavailable for carousel switching; users can use the tab strip or chevrons, or return to `1×`.
 
 ## NFR Compliance
 
 - SEC-1, SEC-3a — see `nfr/security.md`
 - A11Y-2 — keyboard focus and shortcut routing must remain predictable.
+- A11Y-4 — Spotlight terminal interaction remains functional at supported magnification.
 - REL-1 — restore chains and persisted reorder state must survive view rebuilds and vibespace restore.
+- PERF-3 — double-click and scroll arbitration remain immediate UI interactions.
+- TEST-2 — native double-click and magnified scroll arbitration have scenario-mapped regression coverage.
 - OBS-1 — Spotlight operations should remain observable for diagnosis.

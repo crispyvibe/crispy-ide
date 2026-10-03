@@ -159,7 +159,8 @@ enum ProjectTerminalSessionPersistence {
                     workingDirectoryPath: pathMapper(entry.workingDirectoryPath),
                     customName: entry.customName,
                     origin: entry.origin,
-                    tmuxSessionName: entry.tmuxSessionName
+                    tmuxSessionName: entry.tmuxSessionName,
+                    displayMagnification: entry.displayMagnification
                 )
             },
             activeTerminalDirectory: session.activeDirectory.map(pathMapper),
@@ -204,7 +205,8 @@ enum ProjectTerminalSessionPersistence {
                 workingDirectoryPath: tab.workingDirectory.standardizedFileURL.path,
                 customName: tab.customName,
                 origin: tab.origin,
-                tmuxSessionName: terminalViewModel.session(for: tab.id)?.tmuxSessionName
+                tmuxSessionName: terminalViewModel.session(for: tab.id)?.tmuxSessionName,
+                displayMagnification: terminalViewModel.session(for: tab.id).map { Double($0.displayMagnification) }
             )
         }
         let activePersistedTab = terminalViewModel.activeTab.flatMap { tab -> TerminalTab? in
