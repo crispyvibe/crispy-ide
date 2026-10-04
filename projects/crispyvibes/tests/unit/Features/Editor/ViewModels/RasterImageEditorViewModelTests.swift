@@ -229,8 +229,10 @@ final class RasterImageEditorViewModelTests: XCTestCase {
         wait(for: [done], timeout: 2)
     }
 
-    func test_defaultMode_isPan() {
+    func test_fileBackedConfigurationAndGenericDefaultsRemainUnchanged() {
+        XCTAssertEqual(RasterImageEditorToolbarConfiguration.fileBacked.modes, [.pan, .crop, .markup, .adjust])
         XCTAssertEqual(viewModel.editingMode, .pan)
+        XCTAssertEqual(viewModel.markupTool, .select)
     }
 
     func test_save_isBlockedWhileCropSelectionPending() {

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 
 enum AppShortcutSection: String, CaseIterable, Identifiable {
+    case screenCapture
     case vibespace
     case board
     case projects
@@ -13,6 +14,8 @@ enum AppShortcutSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .screenCapture:
+            return AppStrings.ScreenCapture.settingsTitle
         case .vibespace:
             return "VibeSpace"
         case .board:
@@ -30,6 +33,7 @@ enum AppShortcutSection: String, CaseIterable, Identifiable {
 }
 
 enum AppShortcutAction: String, CaseIterable, Identifiable, Codable {
+    case captureScreen
     case saveDocument
     case findInDocument
     case replaceInDocument
@@ -61,6 +65,13 @@ enum AppShortcutAction: String, CaseIterable, Identifiable, Codable {
     case quickCaptureTodo
 
     var id: String { rawValue }
+
+    var globalCaptureCommand: GlobalCaptureShortcutCommand? {
+        switch self {
+        case .captureScreen: return .captureScreen
+        default: return nil
+        }
+    }
 }
 
 enum AppShortcutKeyCode {
@@ -221,6 +232,13 @@ enum AppShortcutRouting {
         reservedTextEditingBindings.contains(binding)
     }
 
+    /// Apple's built-in full-screen, area, and screenshot-toolbar chords remain reserved.
+    static func isReservedAppleScreenshotBinding(_ binding: AppShortcutBinding) -> Bool {
+        binding.modifierFlags == [.command, .shift]
+            && [AppShortcutKeyCode.three, AppShortcutKeyCode.four, AppShortcutKeyCode.five]
+                .contains(binding.keyCode)
+    }
+
     static func isTextEditingResponder(_ responder: NSResponder?) -> Bool {
         guard let responder else { return false }
         if responder is NSTextView {
@@ -241,12 +259,18 @@ struct AppShortcutPreferenceValue: Codable, Equatable {
     var binding: AppShortcutBinding?
 }
 
+enum AppShortcutScope: String, Equatable {
+    case local
+    case systemWide
+}
+
 struct AppShortcutDescriptor: Identifiable {
     let action: AppShortcutAction
     let title: String
     let section: AppShortcutSection
     let defaultBinding: AppShortcutBinding?
     let isEditable: Bool
+    var scope: AppShortcutScope = .local
 
     var id: AppShortcutAction { action }
 }
@@ -262,6 +286,7 @@ struct AppShortcutVibeSpaceContext {
 
 enum AppShortcutRegistry {
     static let descriptors: [AppShortcutDescriptor] = [
+        .init(action: .captureScreen, title: AppStrings.ScreenCapture.captureScreenshot, section: .screenCapture, defaultBinding: .init(keyCode: AppShortcutKeyCode.two, modifiers: [.command, .shift]), isEditable: true, scope: .systemWide),
         .init(action: .saveDocument, title: "Save Document", section: .editor, defaultBinding: .init(keyCode: AppShortcutKeyCode.s, modifiers: [.command]), isEditable: true),
         .init(action: .findInDocument, title: "Find in Document", section: .editor, defaultBinding: .init(keyCode: AppShortcutKeyCode.f, modifiers: [.command]), isEditable: true),
         .init(action: .replaceInDocument, title: "Replace in Document", section: .editor, defaultBinding: .init(keyCode: AppShortcutKeyCode.h, modifiers: [.command, .shift]), isEditable: true),
@@ -315,6 +340,7 @@ enum AppShortcutRegistry {
 
     static func action(matching event: NSEvent, userDefaults: UserDefaults = .standard) -> AppShortcutAction? {
         if let customizedAction = descriptors.first(where: { descriptor in
+            guard descriptor.scope == .local else { return false }
             guard let preference = preferenceValue(
                 for: descriptor.action,
                 userDefaults: userDefaults
@@ -339,7 +365,8 @@ enum AppShortcutRegistry {
         }
 
         return descriptors.first(where: { descriptor in
-            guard let binding = binding(for: descriptor.action, userDefaults: userDefaults) else { return false }
+            guard descriptor.scope == .local,
+                  let binding = binding(for: descriptor.action, userDefaults: userDefaults) else { return false }
             return binding.matches(event)
         })?.action
     }
@@ -396,15 +423,35 @@ enum AppShortcutRegistry {
         }
         if overrides.isEmpty {
             userDefaults.removeObject(forKey: AppPreferences.appShortcutOverridesKey)
-            return
+        } else if let encoded = try? JSONEncoder().encode(overrides) {
+            userDefaults.set(encoded, forKey: AppPreferences.appShortcutOverridesKey)
         }
-        if let encoded = try? JSONEncoder().encode(overrides) {
+        NotificationCenter.default.post(name: .appShortcutBindingsDidChange, object: action)
+    }
+
+    /// Migrates legacy multi-route screenshot overrides into the single capture action.
+    /// Existing captureScreen enabled/disabled state always wins; obsolete keys are removed.
+    static func migrateLegacyScreenCaptureOverrides(userDefaults: UserDefaults = .standard) {
+        var overrides = loadOverrides(userDefaults: userDefaults)
+        let legacyKeys = ["captureAndMarkup", "captureToClipboard", "repeatLastArea"]
+        if overrides[AppShortcutAction.captureScreen.rawValue] == nil {
+            for key in legacyKeys.prefix(2) {
+                guard let legacy = overrides[key], legacy.isEnabled, legacy.binding != nil else { continue }
+                overrides[AppShortcutAction.captureScreen.rawValue] = legacy
+                break
+            }
+        }
+        legacyKeys.forEach { overrides.removeValue(forKey: $0) }
+        if overrides.isEmpty {
+            userDefaults.removeObject(forKey: AppPreferences.appShortcutOverridesKey)
+        } else if let encoded = try? JSONEncoder().encode(overrides) {
             userDefaults.set(encoded, forKey: AppPreferences.appShortcutOverridesKey)
         }
     }
 
     static func resetAll(userDefaults: UserDefaults = .standard) {
         userDefaults.removeObject(forKey: AppPreferences.appShortcutOverridesKey)
+        NotificationCenter.default.post(name: .appShortcutBindingsDidChange, object: nil)
     }
 
     static func preferenceValue(
@@ -432,6 +479,8 @@ struct AppShortcutSettingsRow: Identifiable {
     let currentBinding: AppShortcutBinding?
     let isCustomized: Bool
     let isEditable: Bool
+    let scope: AppShortcutScope
+    let globalRegistration: GlobalCaptureShortcutRegistration?
 
     var id: AppShortcutAction { action }
 }
@@ -442,9 +491,14 @@ final class AppShortcutSettingsStore: ObservableObject {
     @Published var message: String?
 
     private let userDefaults: UserDefaults
+    private let globalRegistrationProvider: (AppShortcutAction) -> GlobalCaptureShortcutRegistration?
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        globalRegistrationProvider: @escaping (AppShortcutAction) -> GlobalCaptureShortcutRegistration? = { _ in nil }
+    ) {
         self.userDefaults = userDefaults
+        self.globalRegistrationProvider = globalRegistrationProvider
         reload()
     }
 
@@ -458,16 +512,27 @@ final class AppShortcutSettingsStore: ObservableObject {
                 defaultBinding: descriptor.defaultBinding,
                 currentBinding: AppShortcutRegistry.binding(for: descriptor.action, userDefaults: userDefaults),
                 isCustomized: preferenceValue != nil,
-                isEditable: descriptor.isEditable
+                isEditable: descriptor.isEditable,
+                scope: descriptor.scope,
+                globalRegistration: globalRegistrationProvider(descriptor.action)
             )
         }
     }
 
     func setBinding(_ binding: AppShortcutBinding?, for action: AppShortcutAction) {
         guard AppShortcutRegistry.descriptor(for: action).isEditable else { return }
+        let descriptor = AppShortcutRegistry.descriptor(for: action)
+        if let binding,
+           descriptor.scope == .systemWide,
+           AppShortcutRouting.isReservedAppleScreenshotBinding(binding) {
+            message = AppStrings.ScreenCapture.reservedAppleScreenshot(binding.displayString)
+            return
+        }
         if let binding,
            AppShortcutRouting.isReservedTextEditingBinding(binding) {
-            message = "\"\(binding.displayString)\" is reserved for text editing."
+            message = descriptor.scope == .systemWide
+                ? AppStrings.ScreenCapture.reservedTextEditingShortcut(binding.displayString)
+                : "\"\(binding.displayString)\" is reserved for text editing."
             return
         }
         if let binding,
@@ -477,7 +542,9 @@ final class AppShortcutSettingsStore: ObservableObject {
             userDefaults: userDefaults
            ) {
             let conflictingTitle = AppShortcutRegistry.descriptor(for: conflictingAction).title
-            message = "\"\(binding.displayString)\" is already assigned to \(conflictingTitle)."
+            message = descriptor.scope == .systemWide
+                ? AppStrings.ScreenCapture.shortcutAlreadyAssigned(binding.displayString, conflictingTitle)
+                : "\"\(binding.displayString)\" is already assigned to \(conflictingTitle)."
             return
         }
 

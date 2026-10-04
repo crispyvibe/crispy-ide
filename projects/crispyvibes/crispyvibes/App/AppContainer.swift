@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct AppContainer {
@@ -56,6 +57,10 @@ struct AppContainer {
     /// Captures every Foundation Models generation for the terminal context summary
     /// feature so developer tools can show received → sent → result. F041.
     let contextSummaryObservabilityStore: ContextSummaryObservabilityStore
+    /// Shared F009 services reused by file-backed editors and the F062 in-memory markup utility.
+    private(set) var rasterImageEditorServices: RasterImageEditorServices = .makeDefault()
+    /// F062: `makeDefault()` installs one graph; nil supports isolated legacy memberwise tests.
+    private(set) var screenCaptureServices: ScreenCaptureServices? = nil
 
     /// F055: git worktree discovery + mutations, behind a protocol so views
     /// don't shell out to git directly. Defaulted so `makeDefault` is unchanged.
@@ -92,7 +97,7 @@ struct AppContainer {
 
     /// F009: raster image editor decode/render/export services.
     func makeRasterImageEditorServices() -> RasterImageEditorServices {
-        RasterImageEditorServices.makeDefault()
+        rasterImageEditorServices
     }
 
     @MainActor
@@ -659,7 +664,11 @@ struct AppContainer {
         todoTriageCoordinator.modeProvider = { AppPreferences.todoTriageMode() }
         todoTriageCoordinator.activate()
         let cliSocketServer = CLISocketServer(router: cliCommandRouter)
-        return AppContainer(
+        let screenCaptureServices = makeScreenCaptureServices(
+            rasterServices: rasterImageEditorServices,
+            appPersistenceStore: appPersistenceStore
+        )
+        var container = AppContainer(
             appPersistenceStore: appPersistenceStore,
             vibespacePersistenceStore: vibespacePersistenceStore,
             terminalBoardStandaloneRegistry: terminalBoardStandaloneRegistry,
@@ -703,6 +712,9 @@ struct AppContainer {
             cliSocketServer: cliSocketServer,
             jupyterServerService: JupyterServerService()
         )
+        container.rasterImageEditorServices = rasterImageEditorServices
+        container.screenCaptureServices = screenCaptureServices
+        return container
     }
 
 }

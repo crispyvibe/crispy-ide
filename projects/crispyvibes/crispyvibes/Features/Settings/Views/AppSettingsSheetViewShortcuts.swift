@@ -128,6 +128,12 @@ private struct AppShortcutSettingsRowView: View {
     }
 
     private var detailText: String {
+        if row.scope == .systemWide {
+            let detail = row.defaultBinding.map {
+                AppStrings.ScreenCapture.defaultShortcut($0.displayString)
+            } ?? AppStrings.ScreenCapture.noDefaultShortcut
+            return AppStrings.ScreenCapture.systemWideShortcutDetail(detail)
+        }
         if let defaultBinding = row.defaultBinding {
             return "Default: \(defaultBinding.displayString)"
         }
@@ -135,6 +141,14 @@ private struct AppShortcutSettingsRowView: View {
     }
 
     private var statusText: String {
+        if let registration = row.globalRegistration {
+            switch registration {
+            case .registered: return AppStrings.ScreenCapture.shortcutRegistered
+            case .disabled: return AppStrings.ScreenCapture.shortcutDisabled
+            case .conflict: return AppStrings.ScreenCapture.shortcutConflict
+            case .failed: return AppStrings.ScreenCapture.shortcutFailed
+            }
+        }
         if !row.isEditable {
             return "Fixed"
         }

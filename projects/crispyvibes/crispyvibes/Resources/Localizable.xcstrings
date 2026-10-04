@@ -3832,12 +3832,1052 @@
         }
       }
     },
+    "screenCapture.action.cancel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "screenCapture.action.newCapture": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Capture"
+          }
+        }
+      }
+    },
+    "screenCapture.action.tryAgain": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try Again"
+          }
+        }
+      }
+    },
+    "screenCapture.announcement.delayChanged": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delay %lld seconds"
+          }
+        }
+      }
+    },
+    "screenCapture.announcement.modeChanged": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@) mode"
+          }
+        }
+      }
+    },
+    "screenCapture.command.captureScreen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture Screenshot…"
+          }
+        }
+      }
+    },
+    "screenCapture.error.cancelled": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture cancelled."
+          }
+        }
+      }
+    },
+    "screenCapture.error.capture": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The image could not be captured."
+          }
+        }
+      }
+    },
+    "screenCapture.error.catalog": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Displays and windows are currently unavailable."
+          }
+        }
+      }
+    },
+    "screenCapture.error.copy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to copy the capture."
+          }
+        }
+      }
+    },
+    "screenCapture.error.encoding": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The capture could not be encoded."
+          }
+        }
+      }
+    },
+    "screenCapture.error.geometry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected area is invalid."
+          }
+        }
+      }
+    },
+    "screenCapture.error.protected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected content cannot be captured."
+          }
+        }
+      }
+    },
+    "screenCapture.error.resourceLimit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The capture exceeds the supported size limit."
+          }
+        }
+      }
+    },
+    "screenCapture.error.stale": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The capture changed before the operation completed."
+          }
+        }
+      }
+    },
+    "screenCapture.error.target": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected target is no longer available."
+          }
+        }
+      }
+    },
+    "screenCapture.error.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen Capture Failed"
+          }
+        }
+      }
+    },
+    "screenCapture.error.topology": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The display arrangement changed. Start a new capture."
+          }
+        }
+      }
+    },
+    "screenCapture.mode.display": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display"
+          }
+        }
+      }
+    },
+    "screenCapture.mode.region": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Region"
+          }
+        }
+      }
+    },
+    "screenCapture.mode.window": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window"
+          }
+        }
+      }
+    },
+    "screenCapture.option.delay": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delay"
+          }
+        }
+      }
+    },
+    "screenCapture.option.delay.none": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None"
+          }
+        }
+      }
+    },
+    "screenCapture.option.delay.seconds": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld seconds"
+          }
+        }
+      }
+    },
+    "screenCapture.option.includePointer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include pointer"
+          }
+        }
+      }
+    },
+    "screenCapture.option.mode": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mode"
+          }
+        }
+      }
+    },
+    "screenCapture.option.pointerExcluded": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pointer excluded"
+          }
+        }
+      }
+    },
+    "screenCapture.option.pointerIncluded": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pointer included"
+          }
+        }
+      }
+    },
+    "screenCapture.permission.message.denied": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen Recording access is denied or restricted. Enable Crispy in System Settings, then recheck."
+          }
+        }
+      }
+    },
+    "screenCapture.permission.message.granted": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen Recording access is available."
+          }
+        }
+      }
+    },
+    "screenCapture.permission.message.relaunch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permission was granted, but Crispy must be relaunched before capturing."
+          }
+        }
+      }
+    },
+    "screenCapture.permission.message.revoked": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen Recording access was revoked. Restore it in System Settings, then recheck."
+          }
+        }
+      }
+    },
+    "screenCapture.permission.message.undetermined": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crispy requests Screen Recording access only after you start a capture."
+          }
+        }
+      }
+    },
+    "screenCapture.permission.openSettings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open System Settings"
+          }
+        }
+      }
+    },
+    "screenCapture.permission.recheck": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recheck"
+          }
+        }
+      }
+    },
+    "screenCapture.permission.relaunch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relaunch Crispy"
+          }
+        }
+      }
+    },
+    "screenCapture.permission.status.denied": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denied or restricted"
+          }
+        }
+      }
+    },
+    "screenCapture.permission.status.granted": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authorized"
+          }
+        }
+      }
+    },
+    "screenCapture.permission.status.relaunch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relaunch required"
+          }
+        }
+      }
+    },
+    "screenCapture.permission.status.revoked": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revoked"
+          }
+        }
+      }
+    },
+    "screenCapture.permission.status.undetermined": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not requested"
+          }
+        }
+      }
+    },
+    "screenCapture.permission.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen Recording Permission"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.canvas": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen capture selection"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.commit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture Selection"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.countdown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capturing in %lld"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.dimensions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld × %2$lld px"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.dimensionsUnavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dimensions unavailable"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.pointerMagnifier": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pointer magnifier"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.displayTarget": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.hint.display": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a display and click or press Return."
+          }
+        }
+      }
+    },
+    "screenCapture.selection.hint.region": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag a region, or use the keyboard controls."
+          }
+        }
+      }
+    },
+    "screenCapture.selection.hint.window": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a window and click or press Return."
+          }
+        }
+      }
+    },
+    "screenCapture.selection.nextEdge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select Next Region Edge"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.regionEdge.bottom": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bottom"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.regionEdge.left": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.regionEdge.right": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Right"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.regionEdge.top": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.regionEdge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Region edge: %@"
+          }
+        }
+      }
+    },
+    "screenCapture.selection.regionKeyboardHint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Tab to choose an edge, arrow keys to adjust, and Return to capture."
+          }
+        }
+      }
+    },
+    "screenCapture.selection.regionLimited": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Region limited to this display."
+          }
+        }
+      }
+    },
+    "screenCapture.selection.windowTarget": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "screenCapture.settings.editShortcuts": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Keyboard Shortcut"
+          }
+        }
+      }
+    },
+    "screenCapture.settings.globalShortcuts.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The configurable system-wide shortcut works while Crispy is running and does not require Accessibility permission."
+          }
+        }
+      }
+    },
+    "screenCapture.settings.rememberedMode": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remembered mode"
+          }
+        }
+      }
+    },
+    "screenCapture.settings.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot shortcut, options, permission, and local history"
+          }
+        }
+      }
+    },
+    "screenCapture.settings.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen Capture"
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.conflict": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unavailable — shortcut conflict"
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.disabled": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disabled"
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registration failed"
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.registered": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registered"
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.reservedApple": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is reserved for Apple screenshots."
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.systemWideDetail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System-wide • %@"
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.alreadyAssigned": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"%1$@\" is already assigned to %2$@."
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.default": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default: %@"
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.noDefault": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No default shortcut"
+          }
+        }
+      }
+    },
+    "screenCapture.shortcut.reservedTextEditing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"%@\" is reserved for text editing."
+          }
+        }
+      }
+    },
     "·": {},
     "•": {},
     "→ %@": {},
     "↩": {},
     "⇥ browse  ⏎ create": {},
-    "⏎": {}
+    "⏎": {},
+    "screenCapture.toolbar.capture.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture a screenshot and open Screenshot Studio"
+          }
+        }
+      }
+    },
+    "screenCapture.settings.capture.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture Options"
+          }
+        }
+      }
+    },
+    "screenCapture.settings.capture.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the remembered mode, delay, and pointer behavior."
+          }
+        }
+      }
+    },
+    "screenCapture.settings.globalShortcut": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot Shortcut"
+          }
+        }
+      }
+    },
+    "screenCapture.settings.history.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot History"
+          }
+        }
+      }
+    },
+    "screenCapture.settings.history.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flattened screenshots stay on this Mac for up to 30 days, with at most 50 items."
+          }
+        }
+      }
+    },
+    "screenCapture.settings.history.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Screenshot History"
+          }
+        }
+      }
+    },
+    "screenCapture.settings.history.clearFailed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History could not be updated."
+          }
+        }
+      }
+    },
+    "screenCapture.settings.history.count": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld saved screenshots"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot Studio"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.copy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.copyAndDismiss": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy & Dismiss"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.retryCopy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry Copy"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.refresh": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.deleteCurrent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Current"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.deleteItem": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.clearHistory": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear History"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.clearConfirmation.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear all screenshot history?"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.close": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.cancel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.empty.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Screenshot"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.empty.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take a screenshot to begin marking it up."
+          }
+        }
+      }
+    },
+    "screenCapture.studio.history": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.current": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.loading": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading…"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.thumbnailUnavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview unavailable"
+          }
+        }
+      }
+    },
+    "screenCapture.studio.failure.output": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The latest image is still open, but delivery did not finish."
+          }
+        }
+      }
+    },
+    "screenCapture.studio.failure.history": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The image is still open, but screenshot history could not be updated."
+          }
+        }
+      }
+    }
   },
   "version": "1.1"
 }

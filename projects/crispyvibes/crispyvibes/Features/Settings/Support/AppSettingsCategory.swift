@@ -5,6 +5,7 @@ enum AppSettingsCategory: String, CaseIterable, Identifiable {
     case general
     case vibespaces
     case shortcuts
+    case screenCapture
     case layout
     case terminal
     case updates
@@ -21,6 +22,7 @@ enum AppSettingsCategory: String, CaseIterable, Identifiable {
             .general,
             .vibespaces,
             .shortcuts,
+            .screenCapture,
             .terminal,
             .services,
             .acp,
@@ -54,6 +56,8 @@ enum AppSettingsCategory: String, CaseIterable, Identifiable {
             return "VibeSpaces"
         case .shortcuts:
             return "Keyboard Shortcuts"
+        case .screenCapture:
+            return AppStrings.ScreenCapture.settingsTitle
         case .layout:
             return AppSettingsCategory.general.title
         case .terminal:
@@ -85,6 +89,8 @@ enum AppSettingsCategory: String, CaseIterable, Identifiable {
             return "Open vibespaces from the full library and remove ones you no longer need"
         case .shortcuts:
             return "Customize app-wide shortcuts and terminal inline trigger"
+        case .screenCapture:
+            return AppStrings.ScreenCapture.settingsSubtitle
         case .layout:
             return AppSettingsCategory.general.subtitle
         case .terminal:
@@ -116,6 +122,8 @@ enum AppSettingsCategory: String, CaseIterable, Identifiable {
             return "square.stack.3d.up"
         case .shortcuts:
             return "keyboard"
+        case .screenCapture:
+            return "camera.viewfinder"
         case .layout:
             return AppSettingsCategory.general.iconSystemName
         case .terminal:

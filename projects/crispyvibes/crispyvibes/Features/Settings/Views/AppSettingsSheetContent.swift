@@ -68,6 +68,8 @@ struct AppSettingsSheetView: View {
     var nerdTerminalEngine = AppPreferences.nerdTerminalEngineDefault
     let vibespaceShortcutContext: AppShortcutVibeSpaceContext?
     let vibespacesContext: AppSettingsVibeSpacesContext?
+    @ObservedObject var screenCaptureSettingsViewModel: ScreenCaptureSettingsViewModel
+    @ObservedObject var appShortcutSettingsStore: AppShortcutSettingsStore
     let onClose: () -> Void
     let onResetLocalState: () -> Void
 
@@ -76,7 +78,6 @@ struct AppSettingsSheetView: View {
     @State var isShowingResetConfirmation = false
     @State var showTmuxSessionManager = false
     @StateObject var authService = CognitoAuthService()
-    @StateObject var appShortcutSettingsStore = AppShortcutSettingsStore()
 
     init(
         appearancePreference: Binding<String>,
@@ -99,6 +100,8 @@ struct AppSettingsSheetView: View {
         selectedCategory: Binding<AppSettingsCategory>,
         vibespaceShortcutContext: AppShortcutVibeSpaceContext? = nil,
         vibespacesContext: AppSettingsVibeSpacesContext? = nil,
+        screenCaptureSettingsViewModel: ScreenCaptureSettingsViewModel,
+        appShortcutSettingsStore: AppShortcutSettingsStore,
         authCognitoDomain: Binding<String>? = nil,
         authCognitoMacClientId: Binding<String>? = nil,
         autoUpdateChecksEnabled: Binding<Bool>? = nil,
@@ -115,6 +118,8 @@ struct AppSettingsSheetView: View {
         _selectedCategory = selectedCategory
         self.vibespaceShortcutContext = vibespaceShortcutContext
         self.vibespacesContext = vibespacesContext
+        self.screenCaptureSettingsViewModel = screenCaptureSettingsViewModel
+        self.appShortcutSettingsStore = appShortcutSettingsStore
         self.onResetLocalState = onResetLocalState
         self.onClose = onClose
 
@@ -417,6 +422,8 @@ struct AppSettingsSheetView: View {
             vibespacesCategoryContent
         case .shortcuts:
             shortcutsCategoryContent
+        case .screenCapture:
+            screenCaptureCategoryContent
         case .terminal:
             terminalCategoryContent
         case .updates:

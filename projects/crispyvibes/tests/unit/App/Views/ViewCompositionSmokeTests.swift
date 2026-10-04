@@ -32,6 +32,8 @@ final class ViewCompositionSmokeTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        container?.screenCaptureServices?.shutdown()
+        container?.terminalServices.focusCoordinator.unfocusCurrent()
         if let tempRoot {
             try? FileManager.default.removeItem(at: tempRoot)
         }
@@ -54,7 +56,16 @@ final class ViewCompositionSmokeTests: XCTestCase {
         )
     }
 
-    func testSettingsScreensComposeWithoutCrashing() {
+    func testScreenCaptureToolbarActionComposesAndIsAvailableWithoutVibeSpace() throws {
+        let services = try XCTUnwrap(container.screenCaptureServices)
+        let button = ScreenCaptureToolbarButton(coordinator: services.coordinator)
+
+        XCTAssertTrue(button.isEnabled)
+        mount(button)
+        XCTAssertFalse(String(describing: button.body).isEmpty)
+    }
+
+    func testSettingsScreensComposeWithoutCrashing() throws {
         let appearance = Box(AppearancePreference.system.rawValue)
         let railFontScale = Box(AppPreferences.defaultRailTerminalFontScale)
         let codeFamily = Box(AppPreferences.defaultCodeFontFamily)
@@ -95,6 +106,8 @@ final class ViewCompositionSmokeTests: XCTestCase {
             themePreset: binding(themePreset),
             customThemePaletteJSON: binding(customThemeJSON),
             selectedCategory: binding(selectedCategory),
+            screenCaptureSettingsViewModel: try XCTUnwrap(container.screenCaptureServices).settingsViewModel,
+            appShortcutSettingsStore: try XCTUnwrap(container.screenCaptureServices).shortcutSettingsStore,
             authCognitoDomain: binding(authDomain),
             authCognitoMacClientId: binding(authClientID),
             autoUpdateChecksEnabled: binding(autoUpdateChecks),

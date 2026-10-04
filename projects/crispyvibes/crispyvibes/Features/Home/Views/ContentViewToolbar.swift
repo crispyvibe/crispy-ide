@@ -284,6 +284,15 @@ struct HomeAppSideMenuRailView: View {
 }
 
 extension ContentView {
+    @ToolbarContentBuilder
+    var screenCaptureToolbarContent: some ToolbarContent {
+        if let screenCaptureServices = appContainer.screenCaptureServices {
+            ToolbarItem(placement: .primaryAction) {
+                ScreenCaptureToolbarButton(coordinator: screenCaptureServices.coordinator)
+            }
+        }
+    }
+
     private var activeVibeSpaceHasRemoteProjects: Bool {
         activeVibeSpaceSession.projects.contains { $0.metadata.hostLabel != nil }
     }

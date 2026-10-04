@@ -46,18 +46,30 @@ extension ViewCompositionSmokeTests {
         mount(htmlEditor)
     }
 
-    func testRasterImagePreviewHostAndCanvasComposeWithoutCrashing() throws {
+    func testRasterImagePreviewHostAndCanvasComposeWithoutCrashing() async throws {
         let pngURL = tempRoot.appendingPathComponent("preview.png")
         try writeFixturePNG(to: pngURL, size: NSSize(width: 64, height: 48))
 
         var dirtyStates: [Bool] = []
+        var didReceiveInitialCleanState = false
+        let initialDirtyState = expectation(description: "Raster preview publishes initial clean state")
         let rasterHost = RasterImagePreviewHost(
             fileURL: pngURL,
             onSaveDataRequest: nil,
-            onDirtyStateChange: { dirtyStates.append($0) }
+            onDirtyStateChange: {
+                dirtyStates.append($0)
+                if $0 == false, !didReceiveInitialCleanState {
+                    didReceiveInitialCleanState = true
+                    initialDirtyState.fulfill()
+                }
+            }
         )
-        mount(rasterHost)
+        let rasterHostingView = NSHostingView(rootView: rasterHost)
+        rasterHostingView.frame = NSRect(x: 0, y: 0, width: 1280, height: 900)
+        rasterHostingView.layoutSubtreeIfNeeded()
+        _ = rasterHostingView.fittingSize
         XCTAssertFalse(String(describing: rasterHost.body).isEmpty)
+        await fulfillment(of: [initialDirtyState], timeout: 2)
         XCTAssertEqual(dirtyStates.last, false)
 
         let unsupportedURL = tempRoot.appendingPathComponent("preview.txt")

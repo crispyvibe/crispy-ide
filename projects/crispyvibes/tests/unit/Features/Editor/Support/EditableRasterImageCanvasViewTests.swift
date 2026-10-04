@@ -322,10 +322,14 @@ final class EditableRasterImageCanvasViewTests: XCTestCase {
         let canvas = makeCanvas()
         canvas.editingMode = .crop
         canvas.cropSelection = CGRect(x: 10, y: 10, width: 20, height: 20)
-        let commandSpace = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
-                                                          context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49))
-        canvas.keyDown(with: commandSpace)
-        XCTAssertFalse(canvas.isSpacePanning)
+        for modifier: NSEvent.ModifierFlags in [.command, .option, .control] {
+            let modifiedSpace = try XCTUnwrap(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: modifier, timestamp: 0, windowNumber: 0,
+                context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49
+            ))
+            canvas.keyDown(with: modifiedSpace)
+            XCTAssertFalse(canvas.isSpacePanning, "modified Space must remain available to system/app shortcuts")
+        }
         let arrow = String(UnicodeScalar(NSRightArrowFunctionKey)!)
         let optionRight = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.option], timestamp: 0, windowNumber: 0,
                                                          context: nil, characters: arrow, charactersIgnoringModifiers: arrow, isARepeat: false, keyCode: 124))

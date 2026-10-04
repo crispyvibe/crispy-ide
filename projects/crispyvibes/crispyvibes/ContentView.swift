@@ -738,6 +738,7 @@ struct ContentView: View {
             .allowsHitTesting(!(shouldPresentDisclaimer || shouldBlockForDisclaimerBootstrap))
             .accessibilityHidden(shouldPresentDisclaimer || shouldBlockForDisclaimerBootstrap)
             .toolbar {
+                screenCaptureToolbarContent
                 if activeVibeSpaceID != nil {
                     vibespaceActionsToolbarContent
                 }

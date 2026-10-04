@@ -183,15 +183,15 @@ final class EditableRasterImageCanvasView: NSView {
     // MARK: - Observation
 
     /// Observes only the dirty flag (lightweight hosts and tests).
-    func setDirtyStateObserver(_ observer: @escaping (Bool) -> Void) {
+    func setDirtyStateObserver(_ observer: ((Bool) -> Void)?) {
         onDirtyStateChange = observer
-        publishStateIfNeeded(force: true)
+        if observer != nil { publishStateIfNeeded(force: true) }
     }
 
     /// Observes the full canvas state.
-    func setStateObserver(_ observer: @escaping (RasterImageCanvasState) -> Void) {
+    func setStateObserver(_ observer: ((RasterImageCanvasState) -> Void)?) {
         onStateChange = observer
-        publishStateIfNeeded(force: true)
+        if observer != nil { publishStateIfNeeded(force: true) }
     }
 
     func publishStateIfNeeded(force: Bool = false) {

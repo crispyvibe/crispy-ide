@@ -119,6 +119,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let keyboardShortcutMonitor {
             NSEvent.removeMonitor(keyboardShortcutMonitor)
         }
+        MainActor.assumeIsolated {
+            appContainer?.screenCaptureServices?.shutdown()
+        }
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -159,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "Services registered: provider=\(NSStringFromClass(type(of: self.textProcessorService)), privacy: .public) rephrase=\(self.textProcessorService.responds(to: rephraseSelector)) research=\(self.textProcessorService.responds(to: researchSelector))"
         )
         configureKeyboardShortcuts()
+        appContainer?.screenCaptureServices?.start()
         configureWindowChromeObservers()
         configureSparkleUpdater(
             autoChecksEnabled: lastObservedAutoUpdateChecksEnabled,
@@ -193,6 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             appContainer?.cliSocketServer.shutdown()
             cliExecRelayServer?.shutdown()
             appContainer?.jupyterServerService.shutdownAll()
+            appContainer?.screenCaptureServices?.shutdown()
         }
     }
 
@@ -259,6 +264,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     private func dispatchShortcutAction(_ action: AppShortcutAction) {
         switch action {
+        case .captureScreen:
+            appContainer?.screenCaptureServices?.coordinator.beginCapture()
         case .saveDocument:
             NotificationCenter.default.post(name: .saveCurrentMarkdown, object: nil)
         case .findInDocument:

@@ -79,6 +79,11 @@ enum AppPreferences {
     // MARK: Shortcuts
     static let appShortcutOverridesKey = "crispyvibes.shortcuts.overrides"
 
+    // MARK: Screen Capture (F062 — preferences only, never pixels or target metadata)
+    static let screenCapturePreferencesKey = "crispyvibes.screenCapture.preferences"
+    static let screenCaptureAuthorizationHistoryKey = "crispyvibes.screenCapture.authorizationHistory"
+    static let defaultScreenCapturePreferences = ScreenCapturePreferences.default
+
     // MARK: Agent
     static let acpDefaultAgentIDKey = "crispyvibes.agent.defaultID"
     static let acpDefaultTrustModeKey = "crispyvibes.agent.defaultTrustMode"

@@ -99,7 +99,8 @@ extension ContentView {
             }
         )
 
-        AppSettingsSheetView(
+        if let screenCaptureServices = appContainer.screenCaptureServices {
+            AppSettingsSheetView(
             appearancePreference: $appearancePreference,
             defaultTerminalShellRaw: $terminalShellPreference,
             defaultRailPosition: Binding(
@@ -115,6 +116,8 @@ extension ContentView {
             selectedCategory: vibespaceShell.appSettingsCategoryBinding,
             vibespaceShortcutContext: activeVibeSpaceShortcutContext,
             vibespacesContext: vibespacesContext,
+            screenCaptureSettingsViewModel: screenCaptureServices.settingsViewModel,
+            appShortcutSettingsStore: screenCaptureServices.shortcutSettingsStore,
             onResetLocalState: {
                 homeCatalogCoordinator.resetLocalAppState(
                     clearExpandedVibeSpaceSidebarProjectPaths: {
@@ -141,6 +144,9 @@ extension ContentView {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .applyingAppThemePalette(activeThemePalette)
         .applyingAppAccentTheme(activeThemePalette.accentColor)
+        } else {
+            EmptyView()
+        }
     }
 
     @ViewBuilder

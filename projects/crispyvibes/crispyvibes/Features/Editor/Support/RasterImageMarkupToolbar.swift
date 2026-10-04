@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 struct RasterImageMarkupToolbar: View {
     @ObservedObject var viewModel: RasterImageEditorViewModel
+    var accessibilityPrefix = "editor.preview.image"
     @FocusState private var isTextFieldFocused: Bool
 
     private static let fontFamilies: [String] = {
@@ -31,7 +32,7 @@ struct RasterImageMarkupToolbar: View {
                             .fill(viewModel.markupTool == tool ? Color.accentColor.opacity(0.25) : Color.clear)
                     )
                     .accessibilityAddTraits(viewModel.markupTool == tool ? .isSelected : [])
-                    .accessibilityIdentifier("editor.preview.image.tool.\(tool.rawValue)")
+                    .accessibilityIdentifier("\(accessibilityPrefix).tool.\(tool.rawValue)")
             }
         }
         .accessibilityElement(children: .contain)
@@ -45,18 +46,18 @@ struct RasterImageMarkupToolbar: View {
                 set: { viewModel.setStrokeColor(RasterColor(NSColor($0))) }
             ), supportsOpacity: true)
             .fixedSize()
-            .accessibilityIdentifier("editor.preview.image.markup.stroke")
+            .accessibilityIdentifier("\(accessibilityPrefix).markup.stroke")
             Button(AppStrings.ImageEditor.sampleColor, systemImage: "eyedropper") { viewModel.sampleStrokeColor() }
                 .labelStyle(.iconOnly)
                 .help(AppStrings.ImageEditor.sampleColor)
-                .accessibilityIdentifier("editor.preview.image.markup.eyedropper")
+                .accessibilityIdentifier("\(accessibilityPrefix).markup.eyedropper")
             Toggle(AppStrings.ImageEditor.fillColor, isOn: Binding(
                 get: { viewModel.markupStyle.fillColor != nil },
                 set: { viewModel.setFillColor($0 ? (viewModel.markupStyle.fillColor ?? RasterColor(red: 1, green: 1, blue: 1, alpha: 0.85)) : nil) }
             ))
             .toggleStyle(.checkbox)
             .fixedSize()
-            .accessibilityIdentifier("editor.preview.image.markup.fill-enabled")
+            .accessibilityIdentifier("\(accessibilityPrefix).markup.fill-enabled")
             if let fill = viewModel.markupStyle.fillColor {
                 ColorPicker(AppStrings.ImageEditor.fillColor, selection: Binding(
                     get: { Color(nsColor: fill.nsColor) },
@@ -64,7 +65,7 @@ struct RasterImageMarkupToolbar: View {
                 ), supportsOpacity: true)
                 .labelsHidden()
                 .accessibilityLabel(AppStrings.ImageEditor.fillColor)
-                .accessibilityIdentifier("editor.preview.image.markup.fill")
+                .accessibilityIdentifier("\(accessibilityPrefix).markup.fill")
             }
             Stepper(value: Binding(get: { Double(viewModel.markupStyle.lineWidth) }, set: { viewModel.setLineWidth($0) }),
                     in: 1...40, step: 1) {
@@ -72,7 +73,7 @@ struct RasterImageMarkupToolbar: View {
                     .monospacedDigit()
             }
             .fixedSize()
-            .accessibilityIdentifier("editor.preview.image.markup.width")
+            .accessibilityIdentifier("\(accessibilityPrefix).markup.width")
             if viewModel.showsTextControls {
                 textControls
             }
@@ -81,7 +82,7 @@ struct RasterImageMarkupToolbar: View {
                 Button(AppStrings.ImageEditor.deleteItem, systemImage: "trash") { viewModel.deleteSelectedMarkup() }
                     .labelStyle(.iconOnly)
                     .help(AppStrings.ImageEditor.deleteItem)
-                    .accessibilityIdentifier("editor.preview.image.markup.delete")
+                    .accessibilityIdentifier("\(accessibilityPrefix).markup.delete")
             }
         }
     }
@@ -95,7 +96,7 @@ struct RasterImageMarkupToolbar: View {
             .textFieldStyle(.roundedBorder)
             .frame(minWidth: 160)
             .focused($isTextFieldFocused)
-            .accessibilityIdentifier("editor.preview.image.annotation.text")
+            .accessibilityIdentifier("\(accessibilityPrefix).annotation.text")
             Picker(AppStrings.ImageEditor.annotationFont, selection: Binding(
                 get: { viewModel.markupStyle.fontName },
                 set: { viewModel.setFontName($0) }
@@ -108,14 +109,14 @@ struct RasterImageMarkupToolbar: View {
             .labelsHidden()
             .frame(maxWidth: 150)
             .accessibilityLabel(AppStrings.ImageEditor.annotationFont)
-            .accessibilityIdentifier("editor.preview.image.annotation.font")
+            .accessibilityIdentifier("\(accessibilityPrefix).annotation.font")
             Stepper(value: Binding(get: { Double(viewModel.markupStyle.fontSize) }, set: { viewModel.setFontSize($0) }),
                     in: 8...144, step: 2) {
                 Text(AppStrings.ImageEditor.annotationSize(Int(viewModel.markupStyle.fontSize)))
                     .monospacedDigit()
             }
             .fixedSize()
-            .accessibilityIdentifier("editor.preview.image.annotation.size")
+            .accessibilityIdentifier("\(accessibilityPrefix).annotation.size")
         }
     }
 }

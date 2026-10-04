@@ -1,11 +1,42 @@
 import AppKit
 import SwiftUI
 
+/// Controls which F009 actions are exposed by a raster editor host.
+struct RasterImageEditorToolbarConfiguration {
+    let modes: [RasterImageEditingMode]
+    let showsVision: Bool
+    let showsCopy: Bool
+    let showsExport: Bool
+    let showsFileSave: Bool
+    let accessibilityPrefix: String
+
+    /// Existing file-backed editor behavior.
+    static let fileBacked = RasterImageEditorToolbarConfiguration(
+        modes: RasterImageEditingMode.allCases,
+        showsVision: true,
+        showsCopy: true,
+        showsExport: true,
+        showsFileSave: true,
+        accessibilityPrefix: "editor.preview.image"
+    )
+
+    /// In-memory Screen Capture editor behavior; delivery is owned by F062.
+    static let screenCapture = RasterImageEditorToolbarConfiguration(
+        modes: [.markup, .crop],
+        showsVision: false,
+        showsCopy: false,
+        showsExport: false,
+        showsFileSave: false,
+        accessibilityPrefix: "screenCapture.markup"
+    )
+}
+
 /// Image editor toolbar: modes, actions, crop/geometry controls, status line, and zoom.
 @MainActor
 struct RasterImageEditorToolbar: View {
     @ObservedObject var viewModel: RasterImageEditorViewModel
     let onSave: () -> Void
+    var configuration: RasterImageEditorToolbarConfiguration = .fileBacked
     @Environment(\.appThemePalette) private var appThemePalette
 
     var body: some View {
@@ -15,7 +46,7 @@ struct RasterImageEditorToolbar: View {
                 cropRow
             }
             if viewModel.editingMode == .markup {
-                RasterImageMarkupToolbar(viewModel: viewModel)
+                RasterImageMarkupToolbar(viewModel: viewModel, accessibilityPrefix: configuration.accessibilityPrefix)
             }
             if viewModel.editingMode == .adjust {
                 RasterImageAdjustToolbar(viewModel: viewModel)
@@ -29,7 +60,7 @@ struct RasterImageEditorToolbar: View {
                     .foregroundStyle(appThemePalette.secondaryTextColor)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("editor.preview.image.status")
+                    .accessibilityIdentifier("\(configuration.accessibilityPrefix).status")
                     .accessibilityAddTraits(.updatesFrequently)
                 zoomControls
             }
@@ -40,7 +71,7 @@ struct RasterImageEditorToolbar: View {
         .padding(.vertical, 8)
         .background(appThemePalette.windowBackgroundColor.opacity(0.92))
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("editor.preview.image.toolbar")
+        .accessibilityIdentifier("\(configuration.accessibilityPrefix).toolbar")
     }
 
     private var actionRow: some View {
@@ -50,10 +81,10 @@ struct RasterImageEditorToolbar: View {
                 Divider().frame(height: 18)
                 Button(AppStrings.ImageEditor.applyCrop) { viewModel.applyCrop() }
                     .disabled(!viewModel.canApplyCrop)
-                    .accessibilityIdentifier("editor.preview.image.action.apply-crop")
+                    .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.apply-crop")
                 Button(AppStrings.ImageEditor.cancelCrop) { viewModel.cancelCrop() }
                     .disabled(!viewModel.canCancelCrop)
-                    .accessibilityIdentifier("editor.preview.image.action.cancel-crop")
+                    .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.cancel-crop")
             }
             Spacer(minLength: 8)
             iconButton(AppStrings.ImageEditor.undo, systemImage: "arrow.uturn.backward", id: "undo", enabled: viewModel.canUndo) {
@@ -62,19 +93,27 @@ struct RasterImageEditorToolbar: View {
             iconButton(AppStrings.ImageEditor.redo, systemImage: "arrow.uturn.forward", id: "redo", enabled: viewModel.canRedo) {
                 viewModel.redo()
             }
-            RasterImageVisionMenu(viewModel: viewModel)
-            Button(AppStrings.ImageEditor.copy) { viewModel.copy() }
-                .disabled(!viewModel.canCopy)
-                .accessibilityIdentifier("editor.preview.image.action.copy")
+            if configuration.showsVision {
+                RasterImageVisionMenu(viewModel: viewModel)
+            }
+            if configuration.showsCopy {
+                Button(AppStrings.ImageEditor.copy) { viewModel.copy() }
+                    .disabled(!viewModel.canCopy)
+                    .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.copy")
+            }
             Button(AppStrings.ImageEditor.revert) { viewModel.revert() }
                 .disabled(!viewModel.canRevert)
-                .accessibilityIdentifier("editor.preview.image.action.clear")
-            Button(AppStrings.ImageEditor.exportAs) { viewModel.presentExport() }
-                .disabled(!viewModel.canExport)
-                .accessibilityIdentifier("editor.preview.image.action.export")
-            Button(AppStrings.ImageEditor.save, action: onSave)
-                .disabled(!viewModel.canSave)
-                .accessibilityIdentifier("editor.preview.image.action.save")
+                .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.clear")
+            if configuration.showsExport {
+                Button(AppStrings.ImageEditor.exportAs) { viewModel.presentExport() }
+                    .disabled(!viewModel.canExport)
+                    .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.export")
+            }
+            if configuration.showsFileSave {
+                Button(AppStrings.ImageEditor.save, action: onSave)
+                    .disabled(!viewModel.canSave)
+                    .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.save")
+            }
             if viewModel.isSaving || viewModel.isExporting {
                 ProgressView().controlSize(.small)
             }
@@ -86,17 +125,17 @@ struct RasterImageEditorToolbar: View {
             get: { viewModel.editingMode },
             set: { viewModel.selectMode($0) }
         )) {
-            ForEach(RasterImageEditingMode.allCases, id: \.self) { mode in
+            ForEach(configuration.modes, id: \.self) { mode in
                 Text(mode.title)
                     .tag(mode)
-                    .accessibilityIdentifier("editor.preview.image.mode.\(mode.rawValue)")
+                    .accessibilityIdentifier("\(configuration.accessibilityPrefix).mode.\(mode.rawValue)")
             }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
         .fixedSize()
         .disabled(viewModel.isSaving)
-        .accessibilityIdentifier("editor.preview.image.mode")
+        .accessibilityIdentifier("\(configuration.accessibilityPrefix).mode")
     }
 
     private var cropRow: some View {
@@ -111,7 +150,7 @@ struct RasterImageEditorToolbar: View {
             }
             .pickerStyle(.menu)
             .fixedSize()
-            .accessibilityIdentifier("editor.preview.image.crop.aspect")
+            .accessibilityIdentifier("\(configuration.accessibilityPrefix).crop.aspect")
             iconButton(AppStrings.ImageEditor.cropOrientation, systemImage: "rectangle.portrait.rotate", id: "crop-orientation",
                        enabled: viewModel.cropAspectRatio.isOrientable) {
                 viewModel.toggleCropOrientation()
@@ -143,7 +182,7 @@ struct RasterImageEditorToolbar: View {
             .disabled(!viewModel.canEditGeometry)
             .accessibilityLabel(AppStrings.ImageEditor.straighten)
             .accessibilityValue(AppStrings.ImageEditor.straightenValue(viewModel.straightenDegrees))
-            .accessibilityIdentifier("editor.preview.image.straighten")
+            .accessibilityIdentifier("\(configuration.accessibilityPrefix).straighten")
             Text(AppStrings.ImageEditor.straightenValue(viewModel.straightenDegrees))
                 .font(AppTypographyTokens.imageStatus)
                 .monospacedDigit()
@@ -151,7 +190,7 @@ struct RasterImageEditorToolbar: View {
             Spacer(minLength: 8)
             Button(AppStrings.ImageEditor.resize) { viewModel.presentResize() }
                 .disabled(!viewModel.canEditGeometry)
-                .accessibilityIdentifier("editor.preview.image.action.resize")
+                .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.resize")
         }
     }
 
@@ -164,12 +203,12 @@ struct RasterImageEditorToolbar: View {
                 .font(AppTypographyTokens.imageStatus)
             Spacer(minLength: 8)
             Button(AppStrings.ImageEditor.reloadFromDisk) { viewModel.reloadFromDisk() }
-                .accessibilityIdentifier("editor.preview.image.action.reload")
+                .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.reload")
             Button(AppStrings.ImageEditor.keepMine) { viewModel.keepMyEdits() }
-                .accessibilityIdentifier("editor.preview.image.action.keep-mine")
+                .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.keep-mine")
         }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("editor.preview.image.conflict")
+        .accessibilityIdentifier("\(configuration.accessibilityPrefix).conflict")
     }
 
     private var zoomControls: some View {
@@ -184,7 +223,7 @@ struct RasterImageEditorToolbar: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .disabled(!viewModel.hasRenderableImage)
-            .accessibilityIdentifier("editor.preview.image.zoom")
+            .accessibilityIdentifier("\(configuration.accessibilityPrefix).zoom")
             iconButton(AppStrings.ImageEditor.zoomIn, systemImage: "plus.magnifyingglass", id: "zoom-in", enabled: viewModel.hasRenderableImage) {
                 viewModel.zoomIn()
             }
@@ -202,7 +241,7 @@ struct RasterImageEditorToolbar: View {
             .labelStyle(.iconOnly)
             .help(title)
             .disabled(!enabled)
-            .accessibilityIdentifier("editor.preview.image.action.\(id)")
+            .accessibilityIdentifier("\(configuration.accessibilityPrefix).action.\(id)")
     }
 }
 

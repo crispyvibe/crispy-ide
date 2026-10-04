@@ -14,6 +14,7 @@ extension Notification.Name {
     static let openNewBrowserRequested = Notification.Name("openNewBrowserRequested")
     static let closeBrowserRequested = Notification.Name("closeBrowserRequested")
     static let vibespaceShortcutsDidChange = Notification.Name("vibespaceShortcutsDidChange")
+    static let appShortcutBindingsDidChange = Notification.Name("appShortcutBindingsDidChange")
     static let focusProjectByNumber = Notification.Name("focusProjectByNumber")
     static let focusNextProject = Notification.Name("focusNextProject")
     static let focusPreviousProject = Notification.Name("focusPreviousProject")
@@ -141,6 +142,19 @@ private struct SecondaryMenuPruningCommands: Commands {
         CommandGroup(replacing: .windowArrangement) {}
         CommandGroup(replacing: .windowSize) {}
         CommandGroup(replacing: .windowList) {}
+    }
+}
+
+private struct ScreenCaptureCommands: Commands {
+    @ObservedObject var coordinator: ScreenCaptureCoordinator
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button(AppStrings.ScreenCapture.captureScreenshot) {
+                coordinator.beginCapture()
+            }
+            .disabled(!coordinator.canBeginCapture)
+        }
     }
 }
 
@@ -284,6 +298,11 @@ struct CrispyVibesApp: App {
         .commands {
             CoreMenuPruningCommands()
             SecondaryMenuPruningCommands()
+            if let screenCaptureServices = appContainer.screenCaptureServices {
+                ScreenCaptureCommands(
+                    coordinator: screenCaptureServices.coordinator
+                )
+            }
             TextSizeCommands()
             OptionsMenuCommands(appName: appName)
             HelpLinksCommands()
