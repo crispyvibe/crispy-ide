@@ -32,8 +32,57 @@ enum ExternalOpenRelay {
     }
 }
 
+@MainActor
+protocol ScreenCaptureServiceStarting: AnyObject {
+    var lifecycleIdentity: ObjectIdentifier { get }
+    func start()
+    func shutdown()
+}
+
+extension ScreenCaptureServiceStarting {
+    var lifecycleIdentity: ObjectIdentifier { ObjectIdentifier(self) }
+}
+
+extension ScreenCaptureServices: ScreenCaptureServiceStarting {}
+
+/// Coordinates screen-capture startup without depending on the complete app container.
+@MainActor
+final class AppScreenCaptureLifecycleCoordinator {
+    private var service: (any ScreenCaptureServiceStarting)?
+    private var serviceIdentity: ObjectIdentifier?
+    private var isApplicationReady = false
+
+    /// Replaces a distinct owner, shutting down the old service before starting the new ready owner.
+    @discardableResult
+    func attach(_ newService: (any ScreenCaptureServiceStarting)?) -> Bool {
+        let newIdentity = newService?.lifecycleIdentity
+        guard newIdentity != serviceIdentity else { return false }
+        service?.shutdown()
+        service = newService
+        serviceIdentity = newIdentity
+        if isApplicationReady {
+            newService?.start()
+        }
+        return true
+    }
+
+    func markApplicationReady() {
+        isApplicationReady = true
+    }
+
+    func startIfReady() {
+        guard isApplicationReady else { return }
+        service?.start()
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    @MainActor var appContainer: AppContainer?
+    @MainActor var appContainer: AppContainer? {
+        didSet {
+            startScreenCaptureServicesIfReady()
+        }
+    }
     /// F051: owns the remote-CLI exec relay lifecycle.
     @MainActor var cliExecRelayServer: CLIExecRelayServer?
     static let infoPlistEnableSparkleUpdaterKey = "CrispyVibesEnableSparkleUpdater"
@@ -93,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var lastObservedAutoUpdateChecksEnabled = AppPreferences.defaultAutoUpdateChecksEnabled
     var lastObservedAppUpdateFeedURL = AppPreferences.defaultAppUpdateFeedURL
     var lastObservedCodeFontSize = AppPreferences.defaultCodeFontSize
+    @MainActor private let screenCaptureLifecycle = AppScreenCaptureLifecycleCoordinator()
 
     var serviceProviderName: String {
         Bundle.main.bundleIdentifier ?? "com.crispyvibe.app"
@@ -135,6 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !isRunningUnitTests else { return }
         guard !isPaneWorkerProcess else { return }
+        screenCaptureLifecycle.markApplicationReady()
         AppPreferences.migrateUserDefaultsIfNeeded()
         if AppInstallationGuard.handleLaunchIfNeeded() {
             return
@@ -162,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "Services registered: provider=\(NSStringFromClass(type(of: self.textProcessorService)), privacy: .public) rephrase=\(self.textProcessorService.responds(to: rephraseSelector)) research=\(self.textProcessorService.responds(to: researchSelector))"
         )
         configureKeyboardShortcuts()
-        appContainer?.screenCaptureServices?.start()
+        startScreenCaptureServicesIfReady()
         configureWindowChromeObservers()
         configureSparkleUpdater(
             autoChecksEnabled: lastObservedAutoUpdateChecksEnabled,
@@ -182,7 +233,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // left the socket orphaned), this rebinds it. No-op when already
         // serving, since start() guards on the running flag.
         startAgentCLISocketServerIfEnabled()
+        startScreenCaptureServicesIfReady()
         appContainer?.vibeLoopScheduler.reconcileNow()
+    }
+
+    @MainActor
+    private func startScreenCaptureServicesIfReady() {
+        guard !isRunningUnitTests, !isPaneWorkerProcess else { return }
+        let replacedOwner = screenCaptureLifecycle.attach(appContainer?.screenCaptureServices)
+        if !replacedOwner {
+            screenCaptureLifecycle.startIfReady()
+        }
+    }
+
+    /// Attaches the composition root after SwiftUI has presented the application scene.
+    func attachAppContainerAfterApplicationReady(_ appContainer: AppContainer) {
+        screenCaptureLifecycle.markApplicationReady()
+        self.appContainer = appContainer
     }
 
     func applicationWillTerminate(_ notification: Notification) {

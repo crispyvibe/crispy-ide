@@ -3,6 +3,7 @@ import Foundation
 import XCTest
 @testable import CrispyVibes
 
+@MainActor
 final class DiagnosticsTests: XCTestCase {
     func testDiagnosticsEventStoreEvictsOldEntries() {
         let store = DiagnosticsEventStore(maxEvents: 2)
@@ -153,5 +154,79 @@ final class DiagnosticsTests: XCTestCase {
         let provider = NSApp.servicesProvider as AnyObject?
         XCTAssertTrue(provider?.responds(to: NSSelectorFromString("rephrase:userData:error:")) == true)
         XCTAssertTrue(provider?.responds(to: NSSelectorFromString("research:userData:error:")) == true)
+    }
+}
+
+
+@MainActor
+final class AppScreenCaptureLifecycleCoordinatorTests: XCTestCase {
+    private final class Starter: ScreenCaptureServiceStarting {
+        private(set) var startCount = 0
+        private(set) var shutdownCount = 0
+
+        func start() {
+            startCount += 1
+        }
+
+        func shutdown() {
+            shutdownCount += 1
+        }
+    }
+
+    func test_serviceAttachedBeforeLaunchStartsAtFinishAndAgainAtActivation() {
+        let lifecycle = AppScreenCaptureLifecycleCoordinator()
+        let starter = Starter()
+
+        lifecycle.attach(starter)
+        lifecycle.startIfReady()
+        XCTAssertEqual(starter.startCount, 0)
+
+        lifecycle.markApplicationReady()
+        lifecycle.startIfReady()
+        lifecycle.startIfReady()
+
+        XCTAssertEqual(starter.startCount, 2)
+    }
+
+    func test_serviceAttachedAfterLaunchStartsImmediatelyAndCanRetryOnActivation() {
+        let lifecycle = AppScreenCaptureLifecycleCoordinator()
+        let starter = Starter()
+
+        lifecycle.markApplicationReady()
+        lifecycle.startIfReady()
+        lifecycle.attach(starter)
+        lifecycle.startIfReady()
+        lifecycle.startIfReady()
+
+        XCTAssertEqual(starter.startCount, 3)
+    }
+
+    func test_attachDistinctOwnerShutsDownOldBeforeStartingNewOwner() {
+        let lifecycle = AppScreenCaptureLifecycleCoordinator()
+        let first = Starter()
+        let second = Starter()
+        lifecycle.markApplicationReady()
+
+        lifecycle.attach(first)
+        lifecycle.attach(second)
+
+        XCTAssertEqual(first.startCount, 1)
+        XCTAssertEqual(first.shutdownCount, 1)
+        XCTAssertEqual(second.startCount, 1)
+        XCTAssertEqual(second.shutdownCount, 0)
+    }
+
+    func test_attachSameOwnerDoesNotChurnAndDetachShutsDownOnce() {
+        let lifecycle = AppScreenCaptureLifecycleCoordinator()
+        let starter = Starter()
+        lifecycle.markApplicationReady()
+
+        lifecycle.attach(starter)
+        lifecycle.attach(starter)
+        lifecycle.attach(nil)
+        lifecycle.attach(nil)
+
+        XCTAssertEqual(starter.startCount, 1)
+        XCTAssertEqual(starter.shutdownCount, 1)
     }
 }

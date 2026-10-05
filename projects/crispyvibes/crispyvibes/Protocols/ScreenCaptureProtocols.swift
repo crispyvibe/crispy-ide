@@ -26,6 +26,52 @@ struct ContinuousScreenCaptureScheduler: ScreenCaptureScheduling {
     }
 }
 
+/// Bounded race helper for non-interactive catalog and pixel-acquisition stages.
+protocol ScreenCaptureStageRacing: Sendable {
+    func catalog(
+        timeout: Duration,
+        operation: @escaping @Sendable () async throws -> ScreenCaptureCatalog
+    ) async throws -> ScreenCaptureCatalog
+    func capture(
+        timeout: Duration,
+        operation: @escaping @Sendable () async throws -> CapturedScreenImage
+    ) async throws -> CapturedScreenImage
+}
+
+/// Production stage racer with generous bounds; user selection is intentionally not timed.
+struct ContinuousScreenCaptureStageRacer: ScreenCaptureStageRacing {
+    func catalog(
+        timeout: Duration,
+        operation: @escaping @Sendable () async throws -> ScreenCaptureCatalog
+    ) async throws -> ScreenCaptureCatalog {
+        try await race(timeout: timeout, timeoutError: .catalogUnavailable, operation: operation)
+    }
+
+    func capture(
+        timeout: Duration,
+        operation: @escaping @Sendable () async throws -> CapturedScreenImage
+    ) async throws -> CapturedScreenImage {
+        try await race(timeout: timeout, timeoutError: .captureFailed, operation: operation)
+    }
+
+    private func race<Value: Sendable>(
+        timeout: Duration,
+        timeoutError: ScreenCaptureError,
+        operation: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        try await withThrowingTaskGroup(of: Value.self) { group in
+            group.addTask(operation: operation)
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                throw timeoutError
+            }
+            guard let first = try await group.next() else { throw timeoutError }
+            group.cancelAll()
+            return first
+        }
+    }
+}
+
 /// Still-capture catalog and acquisition boundary.
 protocol ScreenCaptureProviding: Sendable {
     func catalog() async throws -> ScreenCaptureCatalog
@@ -35,12 +81,18 @@ protocol ScreenCaptureProviding: Sendable {
     ) async throws -> CapturedScreenImage
 }
 
+/// Restores capture-owned surfaces hidden behind the compositor barrier.
+@MainActor
+protocol ScreenCaptureHiddenSurfaceRestoring: AnyObject {
+    func restore()
+}
+
 /// Current capture-UI windows that must not appear in acquired pixels.
 @MainActor
 protocol ScreenCaptureUIExclusionProviding: AnyObject {
     var excludedCaptureWindowIDs: Set<CGWindowID> { get }
-    /// Orders out non-filterable UI and waits for a compositor barrier when necessary.
-    func prepareForCapture() async
+    /// Orders out non-filterable UI and returns a token that can restore previously visible surfaces.
+    func prepareForCapture() async -> any ScreenCaptureHiddenSurfaceRestoring
 }
 
 /// Read-only persisted preferences boundary supplied by F036 integration.

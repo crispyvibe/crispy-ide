@@ -4,6 +4,12 @@ import Foundation
 /// Long-lived F062 dependency aggregate owned and assembled by `AppContainer`.
 @MainActor
 final class ScreenCaptureServices {
+    enum LifecycleState: Equatable {
+        case idle
+        case running
+        case shutDown
+    }
+
     let coordinator: ScreenCaptureCoordinator
     let preferences: any ScreenCapturePreferencesManaging
     let shortcutManager: any GlobalCaptureShortcutManaging
@@ -18,7 +24,7 @@ final class ScreenCaptureServices {
     private let userDefaults: UserDefaults
     private var coordinatorCancellable: AnyCancellable?
     private var bindingObserver: NSObjectProtocol?
-    private var isStarted = false
+    private(set) var lifecycleState: LifecycleState = .idle
     private var isRecoveryPresented = false
 
     init(
@@ -47,48 +53,73 @@ final class ScreenCaptureServices {
         self.userDefaults = userDefaults
     }
 
-    /// Starts bounded-history loading, global registration, and recovery observation after launch.
+    /// Starts bounded-history loading and observers once, then reconciles global registration on every call.
     func start() {
-        guard !isStarted else { return }
-        isStarted = true
-        historyStore.load()
-        shortcutManager.onRegistrationChanged = { [weak self] in
-            self?.publishRegistrationState()
+        guard lifecycleState != .shutDown else { return }
+        if lifecycleState == .idle {
+            lifecycleState = .running
+            historyStore.load()
+            shortcutManager.onRegistrationChanged = { [weak self] in
+                self?.publishRegistrationState()
+            }
+            bindingObserver = NotificationCenter.default.addObserver(
+                forName: .appShortcutBindingsDidChange,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.rebindGlobalShortcut() }
+            }
+            coordinatorCancellable = coordinator.$state.sink { [weak self] state in
+                self?.handleCoordinatorState(state)
+            }
         }
-        bindingObserver = NotificationCenter.default.addObserver(
-            forName: .appShortcutBindingsDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.rebindGlobalShortcut() }
+        reconcileGlobalShortcut()
+    }
+
+    /// Reconciles the configured binding with current manager state without churning an exact registration.
+    func reconcileGlobalShortcut() {
+        guard lifecycleState != .shutDown else { return }
+        let expectedShortcut = configuredGlobalShortcut()
+        let registration = shortcutManager.registration(for: .captureScreen)
+        switch (expectedShortcut, registration) {
+        case (nil, .disabled):
+            publishRegistrationState()
+        case (let expected?, .registered(let registered)) where registered == expected:
+            publishRegistrationState()
+        default:
+            _ = shortcutManager.rebind(.captureScreen, to: expectedShortcut)
+            publishRegistrationState()
         }
-        coordinatorCancellable = coordinator.$state.sink { [weak self] state in
-            self?.handleCoordinatorState(state)
-        }
-        rebindGlobalShortcut()
     }
 
     func rebindGlobalShortcut() {
-        let binding = AppShortcutRegistry.binding(for: .captureScreen, userDefaults: userDefaults)
+        guard lifecycleState != .shutDown else { return }
         _ = shortcutManager.rebind(
             .captureScreen,
-            to: shortcutResolver(binding)
+            to: configuredGlobalShortcut()
         )
         publishRegistrationState()
     }
 
     func shutdown() {
+        guard lifecycleState != .shutDown else { return }
+        lifecycleState = .shutDown
         if let bindingObserver {
             NotificationCenter.default.removeObserver(bindingObserver)
             self.bindingObserver = nil
         }
-        isStarted = false
         coordinatorCancellable?.cancel()
         coordinatorCancellable = nil
         dismissRecoveryIfPresented()
         shortcutManager.shutdown()
+        publishRegistrationState()
         coordinator.shutdown()
         historyStore.shutdown()
+    }
+
+    private func configuredGlobalShortcut() -> GlobalCaptureShortcut? {
+        let binding = AppShortcutRegistry.binding(for: .captureScreen, userDefaults: userDefaults)
+        return shortcutResolver(binding)
     }
 
     private func publishRegistrationState() {

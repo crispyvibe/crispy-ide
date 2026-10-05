@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Combine
 import CoreGraphics
 import XCTest
@@ -77,21 +78,39 @@ final class ScreenCaptureCoordinatorTests: XCTestCase {
 
     private final class ShortcutManager: GlobalCaptureShortcutManaging {
         var onRegistrationChanged: (() -> Void)?
+        var registrationState: GlobalCaptureShortcutRegistration = .disabled
+        var nextRebindResult: GlobalCaptureShortcutRegistration?
+        private(set) var rebindCalls: [GlobalCaptureShortcut?] = []
+        private(set) var shutdownCount = 0
+
         func registration(for command: GlobalCaptureShortcutCommand) -> GlobalCaptureShortcutRegistration {
-            .disabled
+            registrationState
         }
+
         func rebind(
             _ command: GlobalCaptureShortcutCommand,
             to shortcut: GlobalCaptureShortcut?
         ) -> GlobalCaptureShortcutRegistration {
-            .disabled
+            rebindCalls.append(shortcut)
+            let result = nextRebindResult ?? shortcut.map(GlobalCaptureShortcutRegistration.registered) ?? .disabled
+            nextRebindResult = nil
+            registrationState = result
+            return result
         }
-        func unregister(_ command: GlobalCaptureShortcutCommand) {}
-        func shutdown() {}
+
+        func unregister(_ command: GlobalCaptureShortcutCommand) {
+            registrationState = .disabled
+        }
+
+        func shutdown() {
+            shutdownCount += 1
+            registrationState = .disabled
+        }
     }
 
     private final class RecoveryPresenter: ScreenCaptureRecoveryPresenting {
         private(set) var events: [String] = []
+        private(set) var presentedError: ScreenCaptureError?
         private(set) var isPresented = false
         private var recheck: (() -> Void)?
         private var cancel: (() -> Void)?
@@ -113,6 +132,7 @@ final class ScreenCaptureCoordinatorTests: XCTestCase {
             perform: @escaping (ScreenCaptureRecoveryAction) -> Void
         ) {
             events.append("presentError")
+            presentedError = error
             isPresented = true
         }
 
@@ -128,21 +148,29 @@ final class ScreenCaptureCoordinatorTests: XCTestCase {
     private final class Selection: ScreenCaptureSelectionControlling {
         var selection: CaptureSelectionDescriptor?
         var isCancelled = false
+        private(set) var selectCount = 0
         func selectTarget(
             from catalog: ScreenCaptureCatalog,
             initialMode: CaptureMode,
             options: CaptureOptions,
             sessionGeneration: UInt64
         ) async throws -> CaptureSelectionDescriptor? {
-            isCancelled ? nil : selection
+            selectCount += 1
+            return isCancelled ? nil : selection
         }
         func dismissSelection() {}
         func shutdown() {}
     }
 
+    private final class HiddenSurfaceToken: ScreenCaptureHiddenSurfaceRestoring {
+        private(set) var restoreCount = 0
+        func restore() { restoreCount += 1 }
+    }
+
     private final class Exclusion: ScreenCaptureUIExclusionProviding {
         var excludedCaptureWindowIDs: Set<CGWindowID> = []
-        func prepareForCapture() async {}
+        let token = HiddenSurfaceToken()
+        func prepareForCapture() async -> any ScreenCaptureHiddenSurfaceRestoring { token }
     }
 
     private final class StudioRouter: ScreenCaptureStudioRouting {
@@ -307,6 +335,362 @@ final class ScreenCaptureCoordinatorTests: XCTestCase {
         XCTAssertFalse(recovery.isPresented, "Recovery must not coexist with selection")
     }
 
+    func test_secondStartRegistersAfterInitialRegistrationFailure() throws {
+        let fixture = try makeFixture()
+        let manager = ShortcutManager()
+        let expected = GlobalCaptureShortcut(
+            keyCode: UInt32(AppShortcutKeyCode.four),
+            modifiers: UInt32(controlKey | shiftKey)
+        )
+        manager.nextRebindResult = .failed(expected)
+        let recovery = RecoveryPresenter()
+        let (services, defaults, suiteName) = try makeServices(
+            fixture: fixture,
+            recovery: recovery,
+            shortcutManager: manager,
+            shortcutResolver: { _ in expected }
+        )
+        defer {
+            services.shutdown()
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        services.start()
+        services.start()
+
+        XCTAssertEqual(manager.rebindCalls, [expected, expected])
+        XCTAssertEqual(manager.registrationState, .registered(expected))
+    }
+
+    func test_repeatedStartWithExactRegistrationDoesNotChurn() throws {
+        let fixture = try makeFixture()
+        let manager = ShortcutManager()
+        let expected = GlobalCaptureShortcut(
+            keyCode: UInt32(AppShortcutKeyCode.four),
+            modifiers: UInt32(controlKey | shiftKey)
+        )
+        let recovery = RecoveryPresenter()
+        let (services, defaults, suiteName) = try makeServices(
+            fixture: fixture,
+            recovery: recovery,
+            shortcutManager: manager,
+            shortcutResolver: { _ in expected }
+        )
+        defer {
+            services.shutdown()
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        services.start()
+        services.start()
+        services.start()
+
+        XCTAssertEqual(manager.rebindCalls, [expected])
+    }
+
+    func test_repeatedStartReconcilesLostFailedAndMismatchedRegistrations() throws {
+        let fixture = try makeFixture()
+        let manager = ShortcutManager()
+        let expected = GlobalCaptureShortcut(
+            keyCode: UInt32(AppShortcutKeyCode.four),
+            modifiers: UInt32(controlKey | shiftKey)
+        )
+        let recovery = RecoveryPresenter()
+        let (services, defaults, suiteName) = try makeServices(
+            fixture: fixture,
+            recovery: recovery,
+            shortcutManager: manager,
+            shortcutResolver: { _ in expected }
+        )
+        defer {
+            services.shutdown()
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        services.start()
+        manager.registrationState = .disabled
+        services.start()
+        manager.registrationState = .failed(expected)
+        services.start()
+        manager.registrationState = .registered(.init(keyCode: 20, modifiers: 0x0200))
+        services.start()
+
+        XCTAssertEqual(manager.rebindCalls, [expected, expected, expected, expected])
+        XCTAssertEqual(manager.registrationState, .registered(expected))
+    }
+
+    func test_repeatedStartLeavesDisabledBindingUnregistered() throws {
+        let fixture = try makeFixture()
+        let manager = ShortcutManager()
+        let recovery = RecoveryPresenter()
+        let (services, defaults, suiteName) = try makeServices(
+            fixture: fixture,
+            recovery: recovery,
+            shortcutManager: manager
+        )
+        defer {
+            services.shutdown()
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        services.start()
+        services.start()
+
+        XCTAssertTrue(manager.rebindCalls.isEmpty)
+        XCTAssertEqual(manager.registrationState, .disabled)
+    }
+
+    func test_bindingChangeNotificationRebindsExactlyOnce() throws {
+        let fixture = try makeFixture()
+        let manager = ShortcutManager()
+        let first = GlobalCaptureShortcut(
+            keyCode: UInt32(AppShortcutKeyCode.four),
+            modifiers: UInt32(controlKey | shiftKey)
+        )
+        let second = GlobalCaptureShortcut(keyCode: 20, modifiers: 0x0200)
+        var configured = first
+        let recovery = RecoveryPresenter()
+        let (services, defaults, suiteName) = try makeServices(
+            fixture: fixture,
+            recovery: recovery,
+            shortcutManager: manager,
+            shortcutResolver: { _ in configured }
+        )
+        defer {
+            services.shutdown()
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        services.start()
+
+        configured = second
+        NotificationCenter.default.post(name: .appShortcutBindingsDidChange, object: nil)
+
+        XCTAssertEqual(manager.rebindCalls, [first, second])
+        XCTAssertEqual(manager.registrationState, .registered(second))
+    }
+
+    func test_captureAvailabilityPublishesTrueThenFalseAndRefreshesToolbarEnablement() async throws {
+        let fixture = try makeFixture()
+        var published: [Bool] = []
+        let observation = fixture.coordinator.$isCaptureInFlight.sink { published.append($0) }
+        let toolbar = ScreenCaptureToolbarButton(coordinator: fixture.coordinator)
+        XCTAssertTrue(toolbar.isEnabled)
+
+        fixture.coordinator.beginCapture()
+
+        XCTAssertFalse(toolbar.isEnabled)
+        XCTAssertEqual(Array(published.prefix(2)), [false, true])
+        try await waitUntil { fixture.coordinator.canBeginCapture }
+        XCTAssertTrue(toolbar.isEnabled)
+        XCTAssertEqual(published.last, false)
+        withExtendedLifetime(observation) {}
+    }
+
+    func test_permissionOriginIsRestoredBeforeRecoveryStatePublishes() async throws {
+        let fixture = try makeFixture()
+        fixture.origin.context = OriginFocusContext(
+            application: .current,
+            keyWindow: nil,
+            firstResponder: nil
+        )
+        fixture.authorizer.state = .deniedOrRestricted
+        var restoreCountAtPublication: Int?
+        let observation = fixture.coordinator.$state.sink { state in
+            if case .permissionRequired = state {
+                restoreCountAtPublication = fixture.origin.restoreCount
+            }
+        }
+
+        fixture.coordinator.beginCapture()
+        try await waitUntil { restoreCountAtPublication != nil }
+
+        XCTAssertEqual(restoreCountAtPublication, 1)
+        withExtendedLifetime(observation) {}
+    }
+
+    func test_acquisitionFailureRestoresPreviouslyVisibleCaptureSurfaces() async throws {
+        let fixture = try makeFixture()
+        await fixture.provider.setFailure(.captureFailed)
+
+        fixture.coordinator.beginCapture()
+        try await waitUntil {
+            if case .failed = fixture.coordinator.state { return true }
+            return false
+        }
+
+        XCTAssertEqual(fixture.exclusion.token.restoreCount, 1)
+        XCTAssertTrue(fixture.coordinator.canBeginCapture)
+    }
+
+    func test_cancelAfterCompositorBarrierRestoresPreviouslyVisibleCaptureSurfaces() async throws {
+        let catalog = makeCatalog()
+        let provider = CancellationProvider(catalog: catalog)
+        let selection = Selection()
+        selection.selection = CaptureSelectionDescriptor(
+            target: .display(displayID: 1),
+            options: .default,
+            catalogGeneration: catalog.generation,
+            topology: catalog.topology
+        )
+        let exclusion = Exclusion()
+        let coordinator = ScreenCaptureCoordinator(
+            authorizer: Authorizer(),
+            provider: provider,
+            preferences: Preferences(),
+            selectionController: selection,
+            exclusionProvider: exclusion,
+            studioRouter: StudioRouter(),
+            originTracker: Origin()
+        )
+        coordinator.beginCapture()
+        try await waitUntil {
+            if case .capturing = coordinator.state { return true }
+            return false
+        }
+
+        coordinator.cancelCapture()
+
+        XCTAssertEqual(exclusion.token.restoreCount, 1)
+        XCTAssertTrue(coordinator.canBeginCapture)
+        guard case .idle = coordinator.state else { return XCTFail("Expected idle after cancel") }
+    }
+
+    func test_shutdownThenStartNeverReregistersAndPublishesFinalDisabledStatus() throws {
+        let fixture = try makeFixture()
+        let manager = ShortcutManager()
+        let expected = GlobalCaptureShortcut(
+            keyCode: UInt32(AppShortcutKeyCode.four),
+            modifiers: UInt32(controlKey | shiftKey)
+        )
+        let (services, defaults, suiteName) = try makeServices(
+            fixture: fixture,
+            recovery: RecoveryPresenter(),
+            shortcutManager: manager,
+            shortcutResolver: { _ in expected }
+        )
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        services.start()
+        XCTAssertEqual(manager.rebindCalls, [expected])
+
+        services.shutdown()
+        services.start()
+        services.reconcileGlobalShortcut()
+        NotificationCenter.default.post(name: .appShortcutBindingsDidChange, object: nil)
+
+        XCTAssertEqual(services.lifecycleState, .shutDown)
+        XCTAssertEqual(manager.rebindCalls, [expected])
+        XCTAssertEqual(manager.shutdownCount, 1)
+        XCTAssertEqual(services.settingsViewModel.registration, .disabled)
+    }
+
+    func test_overlayEmptyCatalogThrowsAndCoordinatorRecoversAvailability() async throws {
+        let emptyCatalog = ScreenCaptureCatalog(generation: 9, displays: [], windows: [])
+        let provider = Provider(catalog: emptyCatalog, image: try makeImage())
+        let overlay = makeUnavailableOverlayController()
+        let coordinator = ScreenCaptureCoordinator(
+            authorizer: Authorizer(),
+            provider: provider,
+            preferences: Preferences(),
+            selectionController: overlay,
+            exclusionProvider: Exclusion(),
+            studioRouter: StudioRouter(),
+            originTracker: Origin()
+        )
+
+        coordinator.beginCapture()
+        try await waitUntil { coordinator.canBeginCapture }
+
+        guard case .failed(_, let error) = coordinator.state else {
+            return XCTFail("Expected an empty-catalog failure")
+        }
+        XCTAssertEqual(error, .catalogUnavailable)
+    }
+
+    func test_overlayScreenMismatchThrowsTargetUnavailableWithoutSuspending() async throws {
+        let catalog = makeCatalog()
+        let overlay = makeUnavailableOverlayController()
+
+        do {
+            _ = try await overlay.selectTarget(
+                from: catalog,
+                initialMode: .region,
+                options: .default,
+                sessionGeneration: 1
+            )
+            XCTFail("Expected targetUnavailable")
+        } catch let error as ScreenCaptureError {
+            XCTAssertEqual(error, .targetUnavailable)
+        }
+    }
+
+    func test_catalogStageTimeoutFailsWithStructuredRecoveryBeforeSelection() async throws {
+        let catalog = makeCatalog()
+        let provider = Provider(catalog: catalog, image: try makeImage())
+        let selection = Selection()
+        let coordinator = ScreenCaptureCoordinator(
+            authorizer: Authorizer(),
+            provider: provider,
+            preferences: Preferences(),
+            selectionController: selection,
+            exclusionProvider: Exclusion(),
+            studioRouter: StudioRouter(),
+            originTracker: Origin(),
+            stageRacer: CatalogTimeoutRacer()
+        )
+
+        coordinator.beginCapture()
+        try await waitUntil { coordinator.canBeginCapture }
+
+        guard case .failed(_, let error) = coordinator.state else {
+            return XCTFail("Expected catalog timeout failure")
+        }
+        XCTAssertEqual(error, .catalogUnavailable)
+        let counts = await provider.counts()
+        XCTAssertEqual(counts.catalog, 0)
+    }
+
+    func test_acquisitionStageTimeoutRestoresOriginAndHiddenSurfacesPresentsRecoveryAndClearsInFlightWithoutStudioRoute() async throws {
+        let racer = AcquisitionTimeoutRacer()
+        let fixture = try makeFixture(stageRacer: racer)
+        fixture.origin.context = OriginFocusContext(
+            application: .current,
+            keyWindow: nil,
+            firstResponder: nil
+        )
+        let recovery = RecoveryPresenter()
+        let (services, defaults, suiteName) = try makeServices(fixture: fixture, recovery: recovery)
+        defer {
+            services.shutdown()
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        services.start()
+
+        fixture.coordinator.beginCapture()
+        try await waitUntil {
+            fixture.coordinator.canBeginCapture && recovery.isPresented
+        }
+
+        guard case .failed(_, let error) = fixture.coordinator.state else {
+            return XCTFail("Expected acquisition timeout failure")
+        }
+        XCTAssertEqual(error, .captureFailed)
+        XCTAssertEqual(recovery.presentedError, .captureFailed)
+        XCTAssertEqual(recovery.events, ["presentError"])
+        XCTAssertEqual(fixture.origin.restoreCount, 1)
+        XCTAssertEqual(fixture.exclusion.token.restoreCount, 1)
+        XCTAssertEqual(fixture.selection.selectCount, 1, "Interactive selection must run directly without a timeout race")
+        XCTAssertFalse(fixture.coordinator.isCaptureInFlight)
+        XCTAssertTrue(fixture.coordinator.canBeginCapture)
+        XCTAssertTrue(fixture.studio.captures.isEmpty, "A timed-out acquisition must not reach Studio, clipboard, or history delivery")
+
+        let providerCounts = await fixture.provider.counts()
+        XCTAssertEqual(providerCounts.catalog, 1)
+        XCTAssertEqual(providerCounts.capture, 0)
+        let racerCounts = await racer.counts()
+        XCTAssertEqual(racerCounts.catalog, 1)
+        XCTAssertEqual(racerCounts.capture, 1)
+    }
+
     func test_shutdownClosesStudioAndPreventsNewCapture() throws {
         let fixture = try makeFixture()
         fixture.coordinator.shutdown()
@@ -319,29 +703,109 @@ final class ScreenCaptureCoordinatorTests: XCTestCase {
         }
     }
 
+    private actor CancellationProvider: ScreenCaptureProviding {
+        let catalogValue: ScreenCaptureCatalog
+        init(catalog: ScreenCaptureCatalog) { catalogValue = catalog }
+        func catalog() async throws -> ScreenCaptureCatalog { catalogValue }
+        func capture(
+            selection: CaptureSelectionDescriptor,
+            excludingWindowIDs: Set<CGWindowID>
+        ) async throws -> CapturedScreenImage {
+            try await Task.sleep(for: .seconds(60))
+            throw ScreenCaptureError.cancelled
+        }
+    }
+
+    private struct CatalogTimeoutRacer: ScreenCaptureStageRacing {
+        func catalog(
+            timeout: Duration,
+            operation: @escaping @Sendable () async throws -> ScreenCaptureCatalog
+        ) async throws -> ScreenCaptureCatalog {
+            throw ScreenCaptureError.catalogUnavailable
+        }
+
+        func capture(
+            timeout: Duration,
+            operation: @escaping @Sendable () async throws -> CapturedScreenImage
+        ) async throws -> CapturedScreenImage {
+            try await operation()
+        }
+    }
+
+    private actor AcquisitionTimeoutRacer: ScreenCaptureStageRacing {
+        private var catalogRaceCount = 0
+        private var captureRaceCount = 0
+
+        func catalog(
+            timeout: Duration,
+            operation: @escaping @Sendable () async throws -> ScreenCaptureCatalog
+        ) async throws -> ScreenCaptureCatalog {
+            catalogRaceCount += 1
+            return try await operation()
+        }
+
+        func capture(
+            timeout: Duration,
+            operation: @escaping @Sendable () async throws -> CapturedScreenImage
+        ) async throws -> CapturedScreenImage {
+            captureRaceCount += 1
+            throw ScreenCaptureError.captureFailed
+        }
+
+        func counts() -> (catalog: Int, capture: Int) {
+            (catalogRaceCount, captureRaceCount)
+        }
+    }
+
+    private actor EmptyMagnifierSampler: ScreenCaptureMagnifierSampling {
+        func sample(_ request: ScreenCaptureMagnifierRequest) async -> CGImage? { nil }
+    }
+
+    private func makeUnavailableOverlayController() -> ScreenCaptureOverlayController {
+        ScreenCaptureOverlayController(
+            surfaceRegistry: ScreenCaptureSurfaceRegistry(),
+            screenResolver: { _ in nil },
+            selectionViewModelFactory: { catalog, mode, options in
+                CaptureSelectionViewModel(
+                    catalog: catalog,
+                    initialMode: mode,
+                    options: options,
+                    magnifierSampler: EmptyMagnifierSampler(),
+                    excludedWindowIDs: { [] },
+                    announce: { _ in }
+                )
+            }
+        )
+    }
+
     private struct Fixture {
         let coordinator: ScreenCaptureCoordinator
         let authorizer: Authorizer
         let provider: Provider
         let preferences: Preferences
         let selection: Selection
+        let exclusion: Exclusion
         let studio: StudioRouter
         let origin: Origin
     }
 
     private func makeServices(
         fixture: Fixture,
-        recovery: RecoveryPresenter
+        recovery: RecoveryPresenter,
+        shortcutManager: ShortcutManager? = nil,
+        shortcutResolver: @escaping (AppShortcutBinding?) -> GlobalCaptureShortcut? = { _ in nil }
     ) throws -> (ScreenCaptureServices, UserDefaults, String) {
+        let shortcutManager = shortcutManager ?? ShortcutManager()
         let suiteName = "ScreenCaptureCoordinatorTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let historyStore = ScreenCaptureHistoryStore(repository: try ControlledRepository())
-        let shortcutManager = ShortcutManager()
         let settingsViewModel = ScreenCaptureSettingsViewModel(
             preferenceStore: fixture.preferences,
             authorizer: fixture.authorizer,
-            registrationProvider: { .disabled },
+            registrationProvider: {
+                shortcutManager.registration(for: .captureScreen)
+            },
             historyStore: historyStore,
             clearHistory: {}
         )
@@ -355,14 +819,16 @@ final class ScreenCaptureCoordinatorTests: XCTestCase {
             historyStore: historyStore,
             recoveryController: recovery,
             authorizer: fixture.authorizer,
-            shortcutResolver: { _ in nil },
+            shortcutResolver: shortcutResolver,
             relaunchApplication: {},
             userDefaults: defaults
         )
         return (services, defaults, suiteName)
     }
 
-    private func makeFixture() throws -> Fixture {
+    private func makeFixture(
+        stageRacer: any ScreenCaptureStageRacing = ContinuousScreenCaptureStageRacer()
+    ) throws -> Fixture {
         let catalog = makeCatalog()
         let provider = Provider(catalog: catalog, image: try makeImage())
         let authorizer = Authorizer()
@@ -376,14 +842,16 @@ final class ScreenCaptureCoordinatorTests: XCTestCase {
         )
         let studio = StudioRouter()
         let origin = Origin()
+        let exclusion = Exclusion()
         let coordinator = ScreenCaptureCoordinator(
             authorizer: authorizer,
             provider: provider,
             preferences: preferences,
             selectionController: selection,
-            exclusionProvider: Exclusion(),
+            exclusionProvider: exclusion,
             studioRouter: studio,
-            originTracker: origin
+            originTracker: origin,
+            stageRacer: stageRacer
         )
         return Fixture(
             coordinator: coordinator,
@@ -391,6 +859,7 @@ final class ScreenCaptureCoordinatorTests: XCTestCase {
             provider: provider,
             preferences: preferences,
             selection: selection,
+            exclusion: exclusion,
             studio: studio,
             origin: origin
         )

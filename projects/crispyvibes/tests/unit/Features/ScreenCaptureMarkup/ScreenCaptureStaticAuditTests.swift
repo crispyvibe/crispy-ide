@@ -44,6 +44,17 @@ final class ScreenCaptureStaticAuditTests: XCTestCase {
         XCTAssertTrue(services.contains("any GlobalCaptureShortcutManaging"))
         XCTAssertFalse(services.contains("CarbonGlobalCaptureShortcutManager"))
 
+        let composition = try source("crispyvibes/App/AppContainer+ScreenCapture.swift")
+        XCTAssertFalse(composition.contains("ScreenCaptureCoordinatorRelay"))
+        XCTAssertTrue(composition.contains("commandHandler: { [weak coordinator] command in"))
+        XCTAssertTrue(composition.contains("coordinator?.beginCapture()"))
+        let carbon = try source(
+            "crispyvibes/Features/ScreenCaptureMarkup/Services/CarbonGlobalCaptureShortcutManager.swift"
+        )
+        XCTAssertTrue(carbon.contains("OptionBits(kEventHotKeyExclusive)"))
+        XCTAssertTrue(carbon.contains("Unmanaged.passRetained(CallbackContext(manager: self))"))
+        XCTAssertFalse(carbon.contains("Unmanaged.passUnretained(self)"))
+
         let homeToolbar = try source("crispyvibes/Features/Home/Views/ContentViewToolbar.swift")
         XCTAssertFalse(homeToolbar.contains("struct ScreenCaptureToolbarButton"))
         XCTAssertTrue(homeToolbar.contains("ScreenCaptureToolbarButton(coordinator:"))
@@ -80,20 +91,20 @@ final class ScreenCaptureStaticAuditTests: XCTestCase {
             pattern: #"(?m)^\|\s*(F062-S\d{2})\s*\|([^|]*)\|([^|]*)\|\s*$"#,
             in: section
         )
-        let expectedIDs = Set((1...22).map { String(format: "F062-S%02d", $0) })
+        let expectedIDs = Set((1...23).map { String(format: "F062-S%02d", $0) })
         let scenarioIDs = try captures(
             pattern: #"(?m)^### Scenario (F062-S\d{2}):"#,
             in: spec
         ).compactMap(\.first)
-        XCTAssertEqual(scenarioIDs.count, 22, "Spec must declare exactly 22 F062 scenarios")
-        XCTAssertEqual(Set(scenarioIDs).count, 22, "Spec scenario IDs must be unique")
-        XCTAssertEqual(Set(scenarioIDs), expectedIDs, "Spec must declare F062-S01 through F062-S22")
+        XCTAssertEqual(scenarioIDs.count, 23, "Spec must declare exactly 23 F062 scenarios")
+        XCTAssertEqual(Set(scenarioIDs).count, 23, "Spec scenario IDs must be unique")
+        XCTAssertEqual(Set(scenarioIDs), expectedIDs, "Spec must declare F062-S01 through F062-S23")
 
         let rowIDs = rows.compactMap(\.first)
 
-        XCTAssertEqual(rows.count, 22, "Mapping must contain exactly 22 scenario rows")
-        XCTAssertEqual(Set(rowIDs).count, 22, "Mapping scenario rows must be unique")
-        XCTAssertEqual(Set(rowIDs), expectedIDs, "Mapping must cover F062-S01 through F062-S22")
+        XCTAssertEqual(rows.count, 23, "Mapping must contain exactly 23 scenario rows")
+        XCTAssertEqual(Set(rowIDs).count, 23, "Mapping scenario rows must be unique")
+        XCTAssertEqual(Set(rowIDs), expectedIDs, "Mapping must cover F062-S01 through F062-S23")
 
         let testsRoot = projectRoot.appendingPathComponent("tests", isDirectory: true)
         let testCorpus = try FileManager.default.subpathsOfDirectory(atPath: testsRoot.path)
@@ -202,11 +213,11 @@ extension ScreenCaptureStaticAuditTests {
         ).compactMap(\.first)
         XCTAssertEqual(
             requirementIDs,
-            (1...19).map { String(format: "F062-R%02d", $0) }
+            (1...20).map { String(format: "F062-R%02d", $0) }
         )
         XCTAssertEqual(
             threatIDs,
-            (1...17).map { String(format: "F062-T%02d", $0) }
+            (1...19).map { String(format: "F062-T%02d", $0) }
         )
     }
 }

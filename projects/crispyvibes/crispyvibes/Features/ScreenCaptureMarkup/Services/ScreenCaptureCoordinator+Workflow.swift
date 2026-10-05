@@ -9,13 +9,16 @@ extension ScreenCaptureCoordinator {
                 authorization = authorizer.requestAuthorization()
             }
             guard authorization == .granted else {
-                transition(to: .permissionRequired(session: generation, state: authorization))
                 restoreAndClearOrigin()
+                transition(to: .permissionRequired(session: generation, state: authorization))
                 return
             }
 
             transition(to: .preparingCatalog(session: generation))
-            let catalog = try await provider.catalog()
+            let provider = provider
+            let catalog = try await stageRacer.catalog(timeout: .seconds(15)) {
+                try await provider.catalog()
+            }
             try checkCurrent(generation)
 
             let saved = preferences.screenCapturePreferences
@@ -40,16 +43,20 @@ extension ScreenCaptureCoordinator {
 
             try checkCurrent(generation)
             selectionController.dismissSelection()
-            await exclusionProvider.prepareForCapture()
+            hiddenSurfaceToken = await exclusionProvider.prepareForCapture()
             try checkCurrent(generation)
             transition(to: .capturing(session: generation))
-            let image = try await provider.capture(
-                selection: selection,
-                excludingWindowIDs: exclusionProvider.excludedCaptureWindowIDs
-            )
+            let excludedWindowIDs = exclusionProvider.excludedCaptureWindowIDs
+            let image = try await stageRacer.capture(timeout: .seconds(30)) {
+                try await provider.capture(
+                    selection: selection,
+                    excludingWindowIDs: excludedWindowIDs
+                )
+            }
             try checkCurrent(generation)
 
             let capture = AcquiredScreenCapture(image: image)
+            hiddenSurfaceToken = nil
             studioRouter.present(capture)
             origin = nil
             transition(to: .presentingStudio(captureID: capture.id))

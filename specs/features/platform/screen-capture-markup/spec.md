@@ -12,7 +12,7 @@ F062 provides one system-wide still-screenshot command. A user visibly selects a
 
 ## Requirements
 ### F062-R01: One capture command
-Crispy MUST expose only `captureScreen`: **File > Capture Screenshot…**, one app-wide camera toolbar action, and one configurable system-wide shortcut. The default MUST be ⇧⌘2. All entry points MUST call the same `beginCapture()` workflow. Apple ⇧⌘3/4/5 remain reserved. No Repeat or Reopen menu surface is permitted.
+Crispy MUST expose only `captureScreen`: **File > Capture Screenshot…**, one app-wide camera toolbar action, and one configurable system-wide shortcut. The default MUST be ⌃⇧4, avoiding the Grammarly Snippet conflict formerly encountered by the letter chord. Because it uses Control rather than Command, it does not replace macOS ⇧⌘4. All entry points MUST call the same `beginCapture()` workflow. Apple ⇧⌘3/4/5 and standard ⇧⌘S Save As remain reserved and MUST NOT be intercepted by the capture default. No Repeat or Reopen menu surface is permitted.
 
 ### F062-R02: Early shortcut migration
 Before shortcut-store or Carbon registration construction, an idempotent migration MUST preserve an existing `captureScreen` override, including disabled state. If absent, it MUST adopt the first enabled binding from legacy `captureAndMarkup`, then `captureToClipboard`; it MUST remove those keys and `repeatLastArea` in every case.
@@ -68,9 +68,14 @@ Settings MUST show exactly one screenshot shortcut plus remembered mode, delay, 
 ### F062-R19: Copy & Dismiss delivery guarantee
 Studio MUST expose localized primary **Copy & Dismiss** with stable identifier `screenCapture.studio.copyAndDismiss`, bordered-prominent style, and default Return shortcut, alongside secondary stay-open **Copy** and separate Close/Escape. The ViewModel MUST require a current item and installed session, record item ID and requested revision, prevent duplicate requests, and invoke immediate `copyNow` without optimistic close. Delivery MUST carry revision and clipboard-commit state through persistence and emit `deliveryCompleted(itemID, revision)` only after full-resolution output, successful clipboard commit, flattened history add/update commit, and guarded entries/thumbnail publication. A matching completion with revision at least requested and the same selected item MUST clear pending state, nil close ownership, and invoke it exactly once. Any matching failure MUST clear pending state, preserve Studio/current edits, and expose retry. Clipboard or history failure MUST NOT emit completion. A manual `.add` colliding with an already committed initial add MUST retry only `itemAlreadyExists` as `.update` under unchanged generation/token/cancellation guards; other errors MUST propagate.
 
+### F062-R20: Reliable global-shortcut ownership and recovery
+Screen-capture startup MUST tolerate either SwiftUI/AppDelegate composition order. Assignment after application readiness, `applicationDidFinishLaunching`, and every `applicationDidBecomeActive` MUST attempt the same guarded idempotent start outside XCTest and pane-worker processes. First start MUST install observers/load history and reconcile the configured binding; later starts MUST reconcile registration without churning an exact healthy match. Disabled bindings MUST remain unregistered, while missing, failed, conflicting, mismatched, or internally incoherent handler/registration/command-ID state MUST fail closed and rebind so activation can self-heal. Carbon registration MUST request `kEventHotKeyExclusive`; success means Crispy effectively owns the chord, while conflict/failure remains actionable. Carbon MUST successfully install and own its event handler before calling `RegisterEventHotKey`; rebind/shutdown MUST unregister and remove owned resources, and a failed handler removal MUST leave an independently retained, weak-manager callback context rather than a dangling pointer. `AppContainer+ScreenCapture` MUST capture the strongly service-owned coordinator weakly and directly from the manager command closure, with operation/status/count-only callback diagnostics.
+
+Service shutdown MUST be terminal: attaching the same lifecycle owner is a no-op, replacing/detaching an owner shuts down the prior distinct owner once, and `start()` after shutdown MUST never register again while Settings receives the final disabled/failed state. Capture availability MUST publish synchronously for menu/toolbar refresh. Empty or unmappable display catalogs MUST fail before selection suspension and recover availability. Origin restoration MUST precede recovery-state publication; recovery activates Crispy and keys only its non-main utility panel. A temporary hidden-surface token MUST restore a previously visible Studio after post-barrier failure/cancellation. Catalog and acquisition MUST have generous bounded timeouts, while visible user selection MUST not time out.
+
 ## Scenarios
 ### Scenario F062-S01: Default shortcut (Given / When / Then)
-Given no override, when Crispy starts, then ⇧⌘2 is registered for `captureScreen` and the shortcuts UI contains one screenshot row.
+Given no override, when Crispy starts, then ⌃⇧4 is registered and displayed for `captureScreen`, the shortcuts UI contains one screenshot row, and ⇧⌘S remains available to Save As.
 
 ### Scenario F062-S02: Legacy shortcut migration (Given / When / Then)
 Given old override keys, when composition starts, then existing `captureScreen` wins or the first enabled legacy binding is adopted, obsolete keys are removed, and rerunning migration changes nothing.
@@ -135,11 +140,14 @@ Given initial auto-add is atomically committed but not yet registered/published,
 ### Scenario F062-S22: Stale completion cannot close replacement (Given / When / Then)
 Given pending Copy & Dismiss ownership, when completion has an older revision, another item becomes selected, shutdown occurs, or completion repeats, then it cannot close a replacement/current different item; a valid matching completion nils close ownership before invoking it exactly once.
 
+### Scenario F062-S23: Global shortcut and lifecycle self-healing (Given / When / Then)
+Given the AppContainer may arrive before or after application readiness and Carbon or capture lifecycle state may be unhealthy, when launch, delayed assignment, activation, binding change, owner replacement, callback dispatch, zero-panel selection, or post-barrier failure occurs, then Crispy exclusively owns and synchronously dispatches the configured chord to the still-live coordinator, reconciles only coherent resources, safely retains callback context across removal failure, never restarts a shut-down service, reactively refreshes capture availability, focuses only recovery UI after origin restoration, and restores any previously visible hidden Studio. Catalog/acquisition time out with structured recovery, but user selection does not time out.
+
 ## Test Coverage Mapping
 | Scenario | Automated test method(s) | Hardware/manual coverage |
 |---|---|---|
-| F062-S01 | `test_onlyOneScreenCaptureDescriptorUsesEnabledShiftCommand2SystemWide` | Carbon registration is covered by the injected registration policy. |
-| F062-S02 | `test_existingCaptureScreenDisabledOverrideWinsAndLegacyKeysAreRemoved` | Automated migration coverage. |
+| F062-S01 | `test_onlyOneScreenCaptureDescriptorUsesEnabledControlShift4SystemWide`<br>`test_captureDefaultDoesNotReserveStandardShiftCommandSSaveAs` | Carbon registration is covered by the injected registration policy. |
+| F062-S02 | `test_existingCaptureScreenDisabledOverrideWinsAndLegacyKeysAreRemoved`<br>`test_compiledDefaultChangeDoesNotOverwriteCustomizedCaptureBinding` | Automated migration and explicit-user-intent preservation coverage. |
 | F062-S03 | `test_schemaV1DecodesFieldByFieldDiscardsBehaviorAndPersistsCanonicalV3` | Automated persistence-policy coverage. |
 | F062-S04 | `test_cancelledSelectionRestoresOriginAndDoesNotPresentStudio` | Hardware/manual keyboard route: `test_keyboardCancelRestoresWithoutPresentingStudio`. |
 | F062-S05 | `test_F062_S05_spanningWindowUsesDesktopIndependentTargetWithoutDisplayClipping` | Hardware/manual ScreenCaptureKit route: `test_windowAndDisplayCaptureUseTheSingleStudioRoute`. |
@@ -160,9 +168,10 @@ Given pending Copy & Dismiss ownership, when completion has an older revision, a
 | F062-S20 | `test_copyAndDismissClipboardFailurePersistsButStaysOpenAndRetryable`<br>`test_copyAndDismissHistoryAddFailureAfterClipboardStaysOpenWithRetry`<br>`test_copyAndDismissHistoryUpdateFailureAfterClipboardStaysOpen` | Automated clipboard/add/update failure coverage. |
 | F062-S21 | `test_initialCommittedAddRaceFallsBackToUpdateAndCopyAndDismissClosesWithoutDuplicate` | Automated committed-add/publication race coverage. |
 | F062-S22 | `test_staleCompletionDifferentSelectionAndShutdownCannotCloseReplacement`<br>`test_deliveryCompletionNilsCloseOwnershipBeforeExactlyOneCallback`<br>`test_plainCopyPersistsAndStaysOpen` | Automated stale/repeated completion, ownership, shutdown, and plain-Copy coverage. |
+| F062-S23 | `test_serviceAttachedAfterLaunchStartsImmediatelyAndCanRetryOnActivation`<br>`test_attachDistinctOwnerShutsDownOldBeforeStartingNewOwner`<br>`test_attachSameOwnerDoesNotChurnAndDetachShutsDownOnce`<br>`test_shutdownThenStartNeverReregistersAndPublishesFinalDisabledStatus`<br>`test_directCoordinatorCompositionSurvivesFactoryScopeAndDispatchesToSelection`<br>`test_realApplicationTargetCarbonEventDispatchesSynchronouslyToCoordinatorOnce`<br>`test_registrationUsesExclusiveCarbonOwnershipAndReportsDispatchDiagnostics`<br>`test_cachedRegistrationWithMissingHandlerOwnershipReportsFailedAndReconciles`<br>`test_failedHandlerRemovalLeavesSafeRetainedCallbackContextAfterManagerDeinit`<br>`test_captureAvailabilityPublishesTrueThenFalseAndRefreshesToolbarEnablement`<br>`test_overlayEmptyCatalogThrowsAndCoordinatorRecoversAvailability`<br>`test_overlayScreenMismatchThrowsTargetUnavailableWithoutSuspending`<br>`test_permissionOriginIsRestoredBeforeRecoveryStatePublishes`<br>`test_recoveryPanelActivatesApplicationBeforeKeyingOnlyRecoveryPanel`<br>`test_acquisitionFailureRestoresPreviouslyVisibleCaptureSurfaces`<br>`test_cancelAfterCompositorBarrierRestoresPreviouslyVisibleCaptureSurfaces`<br>`test_catalogStageTimeoutFailsWithStructuredRecoveryBeforeSelection`<br>`test_acquisitionStageTimeoutRestoresOriginAndHiddenSurfacesPresentsRecoveryAndClearsInFlightWithoutStudioRoute` | Genuine in-process application-target Carbon `EventRef` injection is automated without CGEvent synthesis or TCC; production ⌃⇧4 ownership remains externally probeable. |
 
 ## Acceptance Criteria
-- Automated unit/integration coverage maps F062-S01–S22, including repository concurrency/recovery, Studio delivery ordering, Copy & Dismiss failure/race handling, and one-shot close ownership.
+- Automated unit/integration coverage maps F062-S01–S23, including repository concurrency/recovery, Studio delivery ordering, Copy & Dismiss failure/race handling, one-shot close ownership, lifecycle reconciliation, and Carbon handler/registration ownership.
 - Hardware/TCC UI checks for real ScreenCaptureKit acquisition, native dimensions, current-Space panel placement, keyboard/VoiceOver routes, and TCC behavior remain manual-gated with `CRISPY_F062_HARDWARE_UI=1`.
 - PBX, localization, build, dead-code, and route-string audits contain no obsolete production surface.
 
@@ -172,6 +181,10 @@ None.
 ## Change History
 | Date | Change | Author |
 |---|---|---|
+| 2026-10-04 | Added deterministic acquisition-stage timeout coverage to S23 and aligned F062 threat/NFR documentation with the canonical SEC-2, reliability, performance, accessibility, and testability requirements. | — |
+| 2026-10-04 | Fixed direct coordinator shortcut lifetime; added exclusive/coherent Carbon ownership, safe failed-removal callback context, terminal service replacement/shutdown, reactive availability, zero-panel recovery, recovery-panel focus order, hidden-Studio restoration, and bounded non-interactive stages. | — |
+| 2026-10-04 | Changed the no-override system-wide capture binding from Control-Shift-S (`⌃⇧S`) to Control-Shift-4 (`⌃⇧4`) to avoid a Grammarly Snippet conflict; preserved explicit customized/disabled values and left macOS Shift-Command-4 plus Shift-Command-S Save As unclaimed. | — |
+| 2026-10-04 | Added R20/S23 for launch-order-safe and activation-driven global-shortcut reconciliation, checked Carbon handler installation, and owned-resource release. | — |
 | 2026-10-04 | Restored primary Copy & Dismiss with post-clipboard/history completion, failure preservation, add-collision fallback, and S19–S22 coverage. | — |
 | 2026-10-04 | Added concrete S01–S18 test coverage mapping and dismiss-first permission recovery behavior. | — |
 | 2026-10-04 | Clarified S18/R16/R17 atomic disk commit boundaries: cancellation suppresses late publication and uncommitted work but does not roll back a completed add/update commit. | — |

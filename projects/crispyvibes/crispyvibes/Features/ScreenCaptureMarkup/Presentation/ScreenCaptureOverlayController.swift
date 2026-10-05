@@ -18,6 +18,7 @@ final class ScreenCaptureOverlayController: ScreenCaptureSelectionControlling {
 
   private let surfaceRegistry: ScreenCaptureSurfaceRegistry
   private let selectionViewModelFactory: SelectionViewModelFactory
+  private let screenResolver: (CGDirectDisplayID) -> NSScreen?
   private var panels: [CGDirectDisplayID: NSPanel] = [:]
   private var viewModel: CaptureSelectionViewModel?
   private var continuation: CheckedContinuation<CaptureSelectionDescriptor?, Error>?
@@ -25,9 +26,16 @@ final class ScreenCaptureOverlayController: ScreenCaptureSelectionControlling {
 
   init(
     surfaceRegistry: ScreenCaptureSurfaceRegistry,
+    screenResolver: ((CGDirectDisplayID) -> NSScreen?)? = nil,
     selectionViewModelFactory: @escaping SelectionViewModelFactory
   ) {
     self.surfaceRegistry = surfaceRegistry
+    self.screenResolver = screenResolver ?? { displayID in
+      NSScreen.screens.first {
+        ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+          == displayID
+      }
+    }
     self.selectionViewModelFactory = selectionViewModelFactory
   }
 
@@ -40,7 +48,13 @@ final class ScreenCaptureOverlayController: ScreenCaptureSelectionControlling {
     dismissSelection()
     let model = selectionViewModelFactory(catalog, initialMode, options)
     viewModel = model
-    installPanels(for: catalog, viewModel: model)
+    let panelCount = installPanels(for: catalog, viewModel: model)
+    guard panelCount > 0 else {
+      dismissSelection()
+      throw catalog.displays.isEmpty
+        ? ScreenCaptureError.catalogUnavailable
+        : ScreenCaptureError.targetUnavailable
+    }
     installKeyMonitor(for: model)
     return try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
@@ -75,11 +89,12 @@ final class ScreenCaptureOverlayController: ScreenCaptureSelectionControlling {
 
   func shutdown() { dismissSelection() }
 
+  @discardableResult
   private func installPanels(
     for catalog: ScreenCaptureCatalog, viewModel: CaptureSelectionViewModel
-  ) {
+  ) -> Int {
     for display in catalog.displays {
-      guard let screen = screen(display.id) else { continue }
+      guard let screen = screenResolver(display.id) else { continue }
       let panel = makePanel(frame: screen.frame, screen: screen)
       panel.contentView = NSHostingView(
         rootView: CaptureSelectionOverlay(display: display, viewModel: viewModel))
@@ -88,6 +103,7 @@ final class ScreenCaptureOverlayController: ScreenCaptureSelectionControlling {
       panel.orderFrontRegardless()
     }
     panels.values.first?.makeKey()
+    return panels.count
   }
 
   private func makePanel(frame: CGRect, screen: NSScreen) -> NSPanel {
@@ -170,13 +186,6 @@ final class ScreenCaptureOverlayController: ScreenCaptureSelectionControlling {
     if let continuation {
       self.continuation = nil
       continuation.resume(returning: nil)
-    }
-  }
-
-  private func screen(_ displayID: CGDirectDisplayID) -> NSScreen? {
-    NSScreen.screens.first {
-      ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
-        == displayID
     }
   }
 }

@@ -193,3 +193,65 @@ extension ScreenshotStudioWindowControllerTests {
         viewModel.shutdown()
     }
 }
+
+
+extension ScreenshotStudioWindowControllerTests {
+    func test_recoveryPanelActivatesApplicationBeforeKeyingOnlyRecoveryPanel() throws {
+        let events = RecoveryFocusEvents()
+        let controller = ScreenCaptureRecoveryPanelController(
+            registry: ScreenCaptureSurfaceRegistry(),
+            authorizer: RecoveryAuthorizer(),
+            applicationActivator: RecoveryActivation(events: events),
+            windowFocuser: RecoveryFocus(events: events),
+            viewModelFactory: { title, message, commands in
+                ScreenCaptureRecoveryViewModel(title: title, message: message, commands: commands)
+            }
+        )
+
+        controller.presentError(.captureFailed) { _ in }
+        let panel = try XCTUnwrap(controller.panel)
+
+        XCTAssertEqual(events.values, ["activate", "key", "front"])
+        XCTAssertFalse(panel.hidesOnDeactivate)
+        XCTAssertFalse(panel.canBecomeMain)
+        XCTAssertTrue(events.windows.allSatisfy { $0 === panel })
+        controller.dismiss()
+        XCTAssertNil(controller.panel)
+    }
+}
+
+@MainActor
+private final class RecoveryFocusEvents {
+    var values: [String] = []
+    var windows: [NSWindow] = []
+}
+
+@MainActor
+private final class RecoveryActivation: ScreenCaptureApplicationActivating {
+    private let events: RecoveryFocusEvents
+    init(events: RecoveryFocusEvents) { self.events = events }
+    func activateApplication() { events.values.append("activate") }
+}
+
+@MainActor
+private final class RecoveryFocus: ScreenCaptureWindowFocusing {
+    private let events: RecoveryFocusEvents
+    init(events: RecoveryFocusEvents) { self.events = events }
+    func makeKeyAndOrderFront(_ window: NSWindow) {
+        events.values.append("key")
+        events.windows.append(window)
+    }
+    func orderFrontRegardless(_ window: NSWindow) {
+        events.values.append("front")
+        events.windows.append(window)
+    }
+    func makeFirstResponder(_ responder: NSResponder, in window: NSWindow) -> Bool { true }
+}
+
+@MainActor
+private final class RecoveryAuthorizer: ScreenCaptureAuthorizing {
+    var cachedAuthorizationState: ScreenCaptureAuthorizationState { .deniedOrRestricted }
+    func authorizationStatus() -> ScreenCaptureAuthorizationState { .deniedOrRestricted }
+    func requestAuthorization() -> ScreenCaptureAuthorizationState { .deniedOrRestricted }
+    func openScreenRecordingSettings() {}
+}

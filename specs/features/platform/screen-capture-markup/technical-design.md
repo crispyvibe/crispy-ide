@@ -5,7 +5,7 @@ F062 is a single state machine from explicit command to visible selection, acqui
 
 ## Architecture
 ```text
-File menu / app toolbar / Carbon ⇧⌘2
+File menu / app toolbar / Carbon ⌃⇧4
                  │
                  ▼
       ScreenCaptureCoordinator.beginCapture()
@@ -27,7 +27,9 @@ File menu / app toolbar / Carbon ⇧⌘2
 
 `AppContainer+ScreenCapture.swift` is the sole concrete root. It derives exactly one history URL from injected `AppPersistenceDataStore`, constructs one repository/store, and injects factories for delivery, Studio view models, and the panel. No F062 type discovers Application Support or creates a concrete repository outside the composition root.
 
-`ScreenCaptureServices` owns startup and shutdown: history load, Carbon binding, coordinator-state recovery observation, selection, Studio, output callbacks, history store, and registration teardown.
+`ScreenCaptureServices` owns startup and terminal shutdown: history load, Carbon binding, coordinator-state recovery observation, selection, Studio, output callbacks, history store, and registration teardown. `AppContainer+ScreenCapture` constructs the coordinator before the Carbon manager; the manager command closure captures that coordinator weakly and switches the typed command directly. The services aggregate strongly owns both objects, so factory-scope locals can leave without losing command delivery and no retain cycle is introduced. `AppDelegate` keeps AppContainer injection and routes container assignment, finish-launching, and every activation through one guarded lifecycle helper. Same-owner attachment does not churn; a distinct replacement or detach shuts down the prior owner before a ready replacement starts. Once `ScreenCaptureServices` reaches `shutDown`, later start/reconcile notifications are no-ops and Settings is refreshed with the final registration result.
+
+`ScreenCaptureServices.start()` installs history/observer state only once and reconciles the configured global shortcut on every call. Exact registered matches and exact disabled state are no-ops; missing, failed, conflicting, or mismatched state rebinds. Binding-change notifications bypass comparison and rebind immediately. This allows activation to recover after a conflict is released without repeatedly unregistering a healthy shortcut.
 
 ## Data Flow
 1. All three entry surfaces call `beginCapture()` with no intent parameter.
@@ -44,6 +46,8 @@ File menu / app toolbar / Carbon ⇧⌘2
 
 ## API / Command Contracts
 - `AppShortcutAction.captureScreen` and `GlobalCaptureShortcutCommand.captureScreen` are the only screenshot actions.
+- `CarbonGlobalCaptureShortcutAPI` is the injected low-level boundary for handler install/remove, hot-key register/unregister, explicit registration options, and typed hot-key ID extraction. The live adapter alone calls Carbon.
+- `CarbonGlobalCaptureShortcutManager.rebind` installs and owns the event handler before exclusive `kEventHotKeyExclusive` registration. A failed install never calls `RegisterEventHotKey`; any partial handler is removed or retained only for a later removal retry. Registration reports success only when handler reference, independently retained callback context, hot-key reference, shortcut, and command ID are coherent. Incoherent cached state reports failed and releases what it can for activation reconciliation. Callback context holds only a weak manager reference, so failed handler removal cannot become a use-after-free. If Carbon calls after manager release, the callback returns `eventNotHandledErr`; rebind/shutdown retry removal, and at most the manager's tiny independent context remains intentionally retained until removal succeeds or the process exits. Diagnostics contain operation, status, and count only; callback routing validates the feature signature and command ID.
 - `ScreenCaptureCoordinator.beginCapture()` has no route parameter.
 - `ScreenCaptureStudioRouting.present(_:)` is the only success route.
 - `AcquiredScreenCapture` contains only ID and immutable image/placement facts.
@@ -51,7 +55,9 @@ File menu / app toolbar / Carbon ⇧⌘2
 - `ScreenshotStudioViewModel` exposes named install, delivery, selection, copy, delete, clear, retry, refresh, close, and shutdown methods.
 
 ## State Management
-Coordinator state is `idle → checkingPermission → preparingCatalog → selecting → capturing → presentingStudio`, with permission/failure/shutdown branches. Session generations reject stale acquisition completions. Success clears origin immediately after Studio routing; cancel/failure restores then clears it.
+Coordinator state is `idle → checkingPermission → preparingCatalog → selecting → capturing → presentingStudio`, with permission/failure/shutdown branches. `isCaptureInFlight` is published synchronously before task creation and cleared only by the matching task identity or explicit cancel/shutdown, so observed menu and toolbar availability refreshes reliably. Session generations reject stale acquisition completions. Catalog and acquisition race generous 15-second and 30-second bounds respectively; interactive selection has no timeout. Zero installable overlay panels throw catalog/target unavailable before a continuation or key monitor is retained. Success clears origin immediately after Studio routing; cancel/failure restores origin and any temporary post-barrier hidden-surface token before publishing recovery state.
+
+Recovery presentation activates Crispy, then keys/orders only its non-main utility panel with `hidesOnDeactivate = false`; it never orders the IDE main window. The surface registry snapshots only previously visible capture surfaces before ordering them out and returns a one-shot restore token. Acquisition success transfers visibility to Studio presentation, while post-barrier cancellation/failure restores the prior Studio.
 
 Studio has one current item, recent metadata, presentation thumbnails, latest selection request, editor session/baseline, working status, structured failure, and optional pending-dismiss item/revision. It never stores origin identity. Copy & Dismiss disables duplicate delivery actions while pending. A different selection/install or matching failure clears pending ownership. Only matching `deliveryCompleted` for the same current item and a revision at least requested consumes and nils `onClose` before invoking it once.
 
@@ -62,7 +68,7 @@ Repository uses clear epochs, generations, tombstones, staging, private trash, i
 ## Persistence and Migration
 Canonical preference v3 JSON keys are `schemaVersion`, `mode`, `delay`, and `includesPointer`. Decoder reads legacy nested `options` fields independently and ignores unknown `postCaptureBehavior`; store immediately writes v3.
 
-Shortcut override migration runs in `AppContainer+ScreenCapture` before preferences, shortcut settings, or Carbon manager construction. Existing `captureScreen` override/disabled state wins. Otherwise first enabled `captureAndMarkup`, then `captureToClipboard`, is copied. All three obsolete keys, including `repeatLastArea`, are removed. Repeated execution is idempotent.
+Shortcut override migration runs in `AppContainer+ScreenCapture` before preferences, shortcut settings, or Carbon manager construction. Existing `captureScreen` override/disabled state wins, including across compiled-default changes. Otherwise first enabled `captureAndMarkup`, then `captureToClipboard`, is copied. All three obsolete keys, including `repeatLastArea`, are removed. Repeated execution is idempotent. With no override, the system-wide default is Control-Shift-4 (`⌃⇧4`), avoiding a Grammarly Snippet conflict. Its Control modifier means it does not replace macOS Shift-Command-4; standard Shift-Command-S also remains available to Save As.
 
 History root:
 ```swift
@@ -73,8 +79,11 @@ appPersistenceStore.appFileURL(
 ```
 The root must be local/non-ubiquitous and excluded from backup. Each item contains exact-whitelist `current.json`, one current flattened canonical metadata-free PNG, and one <=320 px aspect-fit thumbnail. Retention is maximum 50 and 30 days.
 
+### Integrity posture
+The screenshot PNG is user content, while `current.json` is application metadata: it selects the current immutable source/thumbnail version and records item/version/timestamp/dimension state. The repository stages and atomically replaces this exact-key file and rejects malformed JSON, unknown keys, symlinks, mismatched identifiers/relative names, and invalid images. However, `current.json` is currently unsigned and has no HMAC or equivalent authenticity check. Those validation and atomicity controls handle corruption, path abuse, and partial writes but do not satisfy SEC-2 tamper detection. F062 is therefore Partial/noncompliant with SEC-2 until the pointer metadata uses the app persistence integrity envelope (or equivalent HMAC-SHA256 verification), includes migration/quarantine behavior, and has tamper-detection integration coverage. This is a release follow-up, not a current compliance claim.
+
 ## Failure and Lifecycle
-Permission/acquisition failure restores origin and never enters Studio delivery. Permission Recheck and Cancel first dismiss the active recovery surface, then respectively begin a new capture or cancel to idle. Any subsequent non-recovery coordinator state also dismisses an active recovery surface, so recovery cannot coexist with selection or Studio. Studio output/history failures preserve Current, clear pending dismissal, and provide Copy retry or history refresh. Plain Copy never closes. Copy & Dismiss closes only from guarded completion, after required clipboard and history commits/publication; controller shutdown therefore cannot cancel those required commits early. Delete/clear invalidate presentation and output tokens before repository mutation. Shutdown cancels selection, selection decode, thumbnails, debounce, render, encode, persistence/mutation tasks, clears callbacks, closes the panel, unregisters Carbon, and clears published store state. Cancellation checks prevent work that has not reached its atomic disk commit and all token/generation checks suppress late clipboard, history-store, thumbnail, event, and UI publication. Cancellation is not rollback: if repository `add` or `update` completed its atomic disk commit before cancellation was observed, the flattened version may remain on disk; startup/next load discovers it and applies ordinary validation and retention pruning without publishing to the shut-down UI.
+Permission/acquisition failure restores origin and never enters Studio delivery. Permission Recheck and Cancel first dismiss the active recovery surface, then respectively begin a new capture or cancel to idle. Any subsequent non-recovery coordinator state also dismisses an active recovery surface, so recovery cannot coexist with selection or Studio. Studio output/history failures preserve Current, clear pending dismissal, and provide Copy retry or history refresh. Plain Copy never closes. Copy & Dismiss closes only from guarded completion, after required clipboard and history commits/publication; controller shutdown therefore cannot cancel those required commits early. Delete/clear invalidate presentation and output tokens before repository mutation. Launch, delayed AppContainer assignment, and activation all invoke guarded idempotent screen-capture startup. Activation reconciles failed/conflicting/missing/mismatched shortcut state while exact registered or disabled state causes no Carbon churn. Handler-install failure is reported as failed registration before any hot-key registration attempt; rebind and shutdown preserve ownership until unregister/remove succeeds. Shutdown cancels selection, selection decode, thumbnails, debounce, render, encode, persistence/mutation tasks, clears callbacks, closes the panel, unregisters Carbon, and clears published store state. Cancellation checks prevent work that has not reached its atomic disk commit and all token/generation checks suppress late clipboard, history-store, thumbnail, event, and UI publication. Cancellation is not rollback: if repository `add` or `update` completed its atomic disk commit before cancellation was observed, the flattened version may remain on disk; startup/next load discovers it and applies ordinary validation and retention pruning without publishing to the shut-down UI.
 
 ## Dependencies
 - ScreenCaptureKit, CoreGraphics/ImageIO, AppKit/SwiftUI, Carbon hot keys.
@@ -97,6 +106,10 @@ The old Quick Access, post-capture router, HUD, file promise, explicit Save As, 
 ## Change History
 | Date | Change | Author |
 |---|---|---|
+| 2026-10-04 | Documented the unsigned `current.json` SEC-2 integrity gap and release follow-up, bounded failed-removal callback retention, and deterministic catalog/acquisition timeout coverage. | — |
+| 2026-10-04 | Added direct coordinator shortcut lifetime, exclusive/coherent Carbon ownership and safe callback context, terminal lifecycle replacement/shutdown, reactive availability, zero-panel recovery, recovery-only focus, hidden-surface restoration, and bounded catalog/acquisition stages. | — |
+| 2026-10-04 | Added AppDelegate-order-safe and activation-driven registration reconciliation plus checked, injected Carbon handler/hot-key ownership. | — |
 | 2026-10-04 | Restored Studio-local Copy & Dismiss with revision-bound post-clipboard/history completion and add-collision fallback. | — |
+| 2026-10-04 | Changed the no-override default from Control-Shift-S (`⌃⇧S`) to Control-Shift-4 (`⌃⇧4`) to avoid a Grammarly Snippet conflict; preserved explicit customized/disabled values and left macOS Shift-Command-4 plus Shift-Command-S Save As unclaimed. | — |
 | 2026-10-04 | Added dismiss-first permission recovery actions and non-recovery-state stale-panel teardown. | — |
 | 2026-10-04 | Documented the cancellation versus completed atomic disk commit boundary and guaranteed suppression of late publication. | — |

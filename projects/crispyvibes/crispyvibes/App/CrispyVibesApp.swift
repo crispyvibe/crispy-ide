@@ -293,6 +293,9 @@ struct CrispyVibesApp: App {
         Window("Crispy", id: "main") {
             RootView(appContainer: appContainer)
                 .frame(minWidth: 960, minHeight: 620)
+                .onAppear {
+                    appDelegate.attachAppContainerAfterApplicationReady(appContainer)
+                }
         }
         .windowToolbarStyle(.unifiedCompact)
         .commands {

@@ -2,18 +2,6 @@ import AppKit
 import CoreGraphics
 import OSLog
 
-@MainActor
-private final class ScreenCaptureCoordinatorRelay {
-    weak var coordinator: ScreenCaptureCoordinator?
-
-    func handle(_ command: GlobalCaptureShortcutCommand) {
-        switch command {
-        case .captureScreen:
-            coordinator?.beginCapture()
-        }
-    }
-}
-
 extension AppContainer {
     /// Assembles the complete F062 graph. This is the sole concrete composition site.
     @MainActor
@@ -119,6 +107,10 @@ extension AppContainer {
         let recoveryController = ScreenCaptureRecoveryPanelController(
             registry: registry,
             authorizer: authorizer,
+            applicationActivator: AppKitScreenCaptureApplicationActivator(
+                application: currentApplication
+            ),
+            windowFocuser: AppKitScreenCaptureWindowFocuser(),
             viewModelFactory: { title, message, commands in
                 ScreenCaptureRecoveryViewModel(
                     title: title,
@@ -145,11 +137,26 @@ extension AppContainer {
             studioRouter: studioCoordinator,
             originTracker: originTracker
         )
-        let relay = ScreenCaptureCoordinatorRelay()
-        relay.coordinator = coordinator
-        let shortcutManager = CarbonGlobalCaptureShortcutManager { [weak relay] command in
-            relay?.handle(command)
-        }
+        let shortcutLogger = Logger(
+            subsystem: Bundle.main.bundleIdentifier ?? "com.crispyvibe.app",
+            category: "screenCapture.shortcut"
+        )
+        let shortcutManager = CarbonGlobalCaptureShortcutManager(
+            statusHandler: { operation, status in
+                shortcutLogger.info("\(operation, privacy: .public) status=\(status, privacy: .public)")
+            },
+            diagnosticHandler: { operation, status, count in
+                shortcutLogger.info(
+                    "\(operation, privacy: .public) status=\(status, privacy: .public) count=\(count, privacy: .public)"
+                )
+            },
+            commandHandler: { [weak coordinator] command in
+                switch command {
+                case .captureScreen:
+                    coordinator?.beginCapture()
+                }
+            }
+        )
         let relaunchApplication = {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.createsNewApplicationInstance = true

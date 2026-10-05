@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 final class ScreenCaptureCoordinator: ObservableObject {
     @Published private(set) var state: ScreenCaptureCoordinatorState = .idle
+    @Published private(set) var isCaptureInFlight = false
 
     let authorizer: any ScreenCaptureAuthorizing
     let provider: any ScreenCaptureProviding
@@ -13,11 +14,13 @@ final class ScreenCaptureCoordinator: ObservableObject {
     let exclusionProvider: any ScreenCaptureUIExclusionProviding
     let studioRouter: any ScreenCaptureStudioRouting
     let originTracker: any OriginFocusTracking
+    let stageRacer: any ScreenCaptureStageRacing
 
     var sessionGeneration: UInt64 = 0
     var captureTask: Task<Void, Never>?
     var captureTaskID: UUID?
     var origin: OriginFocusContext?
+    var hiddenSurfaceToken: (any ScreenCaptureHiddenSurfaceRestoring)?
     var isShutDown = false
 
     init(
@@ -27,7 +30,8 @@ final class ScreenCaptureCoordinator: ObservableObject {
         selectionController: any ScreenCaptureSelectionControlling,
         exclusionProvider: any ScreenCaptureUIExclusionProviding,
         studioRouter: any ScreenCaptureStudioRouting,
-        originTracker: any OriginFocusTracking
+        originTracker: any OriginFocusTracking,
+        stageRacer: any ScreenCaptureStageRacing = ContinuousScreenCaptureStageRacer()
     ) {
         self.authorizer = authorizer
         self.provider = provider
@@ -36,13 +40,15 @@ final class ScreenCaptureCoordinator: ObservableObject {
         self.exclusionProvider = exclusionProvider
         self.studioRouter = studioRouter
         self.originTracker = originTracker
+        self.stageRacer = stageRacer
     }
 
-    var canBeginCapture: Bool { !isShutDown && captureTask == nil }
+    var canBeginCapture: Bool { !isShutDown && !isCaptureInFlight }
 
     /// Begins visible target selection. Shortcut bursts are coalesced while one session is active.
     func beginCapture() {
         guard canBeginCapture else { return }
+        isCaptureInFlight = true
         sessionGeneration &+= 1
         let generation = sessionGeneration
         let taskID = UUID()
@@ -62,7 +68,9 @@ final class ScreenCaptureCoordinator: ObservableObject {
         captureTask?.cancel()
         captureTask = nil
         captureTaskID = nil
+        isCaptureInFlight = false
         selectionController.dismissSelection()
+        restoreHiddenSurfaces()
         restoreAndClearOrigin()
         state = .idle
     }
@@ -75,6 +83,8 @@ final class ScreenCaptureCoordinator: ObservableObject {
         captureTask?.cancel()
         captureTask = nil
         captureTaskID = nil
+        isCaptureInFlight = false
+        hiddenSurfaceToken = nil
         selectionController.shutdown()
         studioRouter.shutdown()
         origin = nil
@@ -94,6 +104,7 @@ final class ScreenCaptureCoordinator: ObservableObject {
     func handleFailure(_ error: ScreenCaptureError, generation: UInt64) {
         guard !isShutDown, generation == sessionGeneration else { return }
         selectionController.dismissSelection()
+        restoreHiddenSurfaces()
         restoreAndClearOrigin()
         state = error == .cancelled ? .idle : .failed(session: generation, error: error)
     }
@@ -103,9 +114,15 @@ final class ScreenCaptureCoordinator: ObservableObject {
         origin = nil
     }
 
+    func restoreHiddenSurfaces() {
+        hiddenSurfaceToken?.restore()
+        hiddenSurfaceToken = nil
+    }
+
     func finishSession(generation: UInt64, taskID: UUID) {
         guard generation == sessionGeneration, captureTaskID == taskID else { return }
         captureTask = nil
         captureTaskID = nil
+        isCaptureInFlight = false
     }
 }

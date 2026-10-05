@@ -286,7 +286,7 @@ struct AppShortcutVibeSpaceContext {
 
 enum AppShortcutRegistry {
     static let descriptors: [AppShortcutDescriptor] = [
-        .init(action: .captureScreen, title: AppStrings.ScreenCapture.captureScreenshot, section: .screenCapture, defaultBinding: .init(keyCode: AppShortcutKeyCode.two, modifiers: [.command, .shift]), isEditable: true, scope: .systemWide),
+        .init(action: .captureScreen, title: AppStrings.ScreenCapture.captureScreenshot, section: .screenCapture, defaultBinding: .init(keyCode: AppShortcutKeyCode.four, modifiers: [.control, .shift]), isEditable: true, scope: .systemWide),
         .init(action: .saveDocument, title: "Save Document", section: .editor, defaultBinding: .init(keyCode: AppShortcutKeyCode.s, modifiers: [.command]), isEditable: true),
         .init(action: .findInDocument, title: "Find in Document", section: .editor, defaultBinding: .init(keyCode: AppShortcutKeyCode.f, modifiers: [.command]), isEditable: true),
         .init(action: .replaceInDocument, title: "Replace in Document", section: .editor, defaultBinding: .init(keyCode: AppShortcutKeyCode.h, modifiers: [.command, .shift]), isEditable: true),

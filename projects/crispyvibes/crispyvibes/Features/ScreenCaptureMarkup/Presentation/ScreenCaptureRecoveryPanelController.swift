@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+private final class ScreenCaptureRecoveryPanel: NSPanel {
+  override var canBecomeKey: Bool { true }
+  override var canBecomeMain: Bool { false }
+}
+
 /// Presents permission and structured recovery commands without navigating the main IDE.
 @MainActor
 final class ScreenCaptureRecoveryPanelController: NSObject, NSWindowDelegate,
@@ -15,16 +20,22 @@ final class ScreenCaptureRecoveryPanelController: NSObject, NSWindowDelegate,
 
   private let registry: ScreenCaptureSurfaceRegistry
   private let authorizer: any ScreenCaptureAuthorizing
+  private let applicationActivator: any ScreenCaptureApplicationActivating
+  private let windowFocuser: any ScreenCaptureWindowFocusing
   private let viewModelFactory: ViewModelFactory
-  private var panel: NSPanel?
+  private(set) var panel: NSPanel?
 
   init(
     registry: ScreenCaptureSurfaceRegistry,
     authorizer: any ScreenCaptureAuthorizing,
+    applicationActivator: any ScreenCaptureApplicationActivating,
+    windowFocuser: any ScreenCaptureWindowFocusing,
     viewModelFactory: @escaping ViewModelFactory
   ) {
     self.registry = registry
     self.authorizer = authorizer
+    self.applicationActivator = applicationActivator
+    self.windowFocuser = windowFocuser
     self.viewModelFactory = viewModelFactory
     super.init()
   }
@@ -85,20 +96,23 @@ final class ScreenCaptureRecoveryPanelController: NSObject, NSWindowDelegate,
 
   private func present(_ viewModel: ScreenCaptureRecoveryViewModel) {
     dismiss()
-    let panel = NSPanel(
+    let panel = ScreenCaptureRecoveryPanel(
       contentRect: CGRect(x: 0, y: 0, width: 420, height: 180),
       styleMask: [.titled, .closable, .utilityWindow],
       backing: .buffered,
       defer: false
     )
     panel.title = viewModel.title
+    panel.hidesOnDeactivate = false
+    panel.isReleasedWhenClosed = false
     panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
     panel.contentView = NSHostingView(rootView: ScreenCaptureRecoveryView(viewModel: viewModel))
     panel.center()
     self.panel = panel
     panel.delegate = self
     registry.register(panel)
-    panel.makeKeyAndOrderFront(nil)
-    panel.orderFrontRegardless()
+    applicationActivator.activateApplication()
+    windowFocuser.makeKeyAndOrderFront(panel)
+    windowFocuser.orderFrontRegardless(panel)
   }
 }
