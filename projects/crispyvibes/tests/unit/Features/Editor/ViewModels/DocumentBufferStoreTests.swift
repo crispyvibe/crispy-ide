@@ -70,4 +70,68 @@ final class DocumentBufferStoreTests: XCTestCase {
         let buf = store.openBuffer(for: ref)
         XCTAssertTrue(store.buffer(for: buf.id) === buf)
     }
+
+    func test_migrateBuffer_rekeysLiveDirtyBufferWithoutLosingState() {
+        let store = DocumentBufferStore()
+        let oldReference = makeRef("/tmp/migrate.md")
+        let newReference = FileDocumentReference(
+            url: oldReference.url,
+            projectIdentifier: "/tmp"
+        )
+        let buffer = store.openBuffer(for: oldReference)
+        buffer.didLoad(content: "base")
+        buffer.applyEdit("dirty")
+
+        let migrated = store.migrateBuffer(from: oldReference.documentIdentity, to: newReference)
+
+        XCTAssertTrue(migrated === buffer)
+        XCTAssertNil(store.buffer(for: oldReference.documentIdentity))
+        XCTAssertTrue(store.buffer(for: newReference.documentIdentity) === buffer)
+        XCTAssertEqual(buffer.id, newReference.documentIdentity)
+        XCTAssertEqual(buffer.displayContent, "dirty")
+        XCTAssertTrue(buffer.isDirty)
+    }
+
+    func test_migrateBuffer_collisionRemovesOldIdentityAndPreservesUnsavedSource() {
+        let store = DocumentBufferStore()
+        let oldReference = makeRef("/tmp/collision.md")
+        let newReference = FileDocumentReference(
+            url: oldReference.url,
+            projectIdentifier: "/tmp"
+        )
+        let oldBuffer = store.openBuffer(for: oldReference)
+        oldBuffer.didLoad(content: "base")
+        oldBuffer.applyEdit("unsaved source")
+        let destinationBuffer = store.openBuffer(for: newReference)
+        destinationBuffer.didLoad(content: "base")
+
+        let migrated = store.migrateBuffer(from: oldReference.documentIdentity, to: newReference)
+
+        XCTAssertTrue(migrated === destinationBuffer)
+        XCTAssertNil(store.buffer(for: oldReference.documentIdentity))
+        XCTAssertEqual(destinationBuffer.displayContent, "unsaved source")
+        XCTAssertTrue(destinationBuffer.isDirty)
+    }
+
+    func test_migrateBuffer_returnsInFlightSaveToDirtyStateUnderNewIdentity() {
+        let store = DocumentBufferStore()
+        let oldReference = makeRef("/tmp/saving-migration.md")
+        let newReference = FileDocumentReference(
+            url: URL(fileURLWithPath: "/tmp/renamed-saving-migration.md")
+        )
+        let buffer = store.openBuffer(for: oldReference)
+        buffer.didLoad(content: "base")
+        buffer.applyEdit("saving content")
+        XCTAssertNotNil(buffer.beginSave())
+        XCTAssertTrue(buffer.isSaving)
+
+        store.migrateBuffer(from: oldReference.documentIdentity, to: newReference)
+
+        XCTAssertNil(buffer.activeSaveToken)
+        XCTAssertTrue(buffer.isDirty)
+        XCTAssertEqual(buffer.displayContent, "saving content")
+        XCTAssertEqual(buffer.id, newReference.documentIdentity)
+        XCTAssertEqual(buffer.fileURL, newReference.url)
+    }
+
 }

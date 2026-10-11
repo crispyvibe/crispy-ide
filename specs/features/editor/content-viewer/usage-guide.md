@@ -1,9 +1,9 @@
 ---
-title: Content Viewer
-domain: Editor
-feature: F006
-audience: user
-version: "1.0"
+title: "Content Viewer"
+domain: "editor"
+feature: "F006"
+audience: "user"
+version: "1.2"
 sidebar:
   label: Content Viewer
   order: 1
@@ -49,6 +49,10 @@ When you close a tab, CrispyVibes selects the nearest remaining tab. Closing the
 
 File tabs show a color accent matching their parent project. If a file doesn't belong to a recognized project, no color is shown.
 
+## Navigating Linked Markdown Files
+
+When you follow a section link or a link to another Markdown file, the same viewer keeps a Back/Forward history. Use **⌘[** and **⌘]**; compact Spotlight and board views also show Back and Forward buttons. The current linked file controls the title, folder, comments, and file actions. Pinning or moving the presentation keeps that current file and history instead of returning to the file where navigation began.
+
 ## Split Panes
 
 You can split the editor into up to 4 independent panes, each with its own set of tabs.
@@ -79,8 +83,10 @@ You can also drag a file from Finder or the explorer sidebar onto a pane edge to
 
 Control which tabs appear in the tab strip:
 
-- **Focused Project** — shows only file tabs belonging to the currently focused project. VibeCast, terminal, web page, and ACP tabs always remain visible.
+- **Focused Project** — shows file and browser tabs belonging to the currently focused project. VibeCast, terminal, Vibe Lanes, Todos, and ACP tabs remain visible because they are not filtered as project-owned file/browser tabs. If the selected tab becomes hidden while another visible tab remains, Crispy selects that visible tab once; if no tabs are visible, it preserves your hidden selection for when the scope changes back.
 - **All Projects** — shows every tab regardless of project.
+
+A single tab click updates the selected content. Switching directly between two files or two browser tabs does not require clicking twice and does not leave the previous tab's content attached.
 
 ## Detached Editor Windows
 
@@ -109,6 +115,8 @@ Renaming or moving a file (or a directory containing open files) automatically u
 |----------|--------|
 | ⌘W | Close tab |
 | ⌘S | Save (if applicable) |
+| ⌘[ | Back through Markdown sections/files |
+| ⌘] | Forward through Markdown sections/files |
 
 ## Related Guides
 
@@ -119,3 +127,10 @@ Renaming or moving a file (or a directory containing open files) automatically u
 ### Git Diff Line Numbers
 
 Git Changes shows old and new line columns with **Source Editors** (the default) and **All Text Views**. Choose **Off** in App Settings → General to hide both columns; additions, deletions, and hunk parsing are unchanged.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-09 | Version 1.2: clarified focused-project active-tab fallback and one-click same-kind content routing. | — |
+| 2026-10-06 | Version 1.1: documented linked Markdown Back/Forward, current-file title/comments/actions, and continuity across pinning and presentation changes. | — |

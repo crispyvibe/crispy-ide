@@ -2,21 +2,34 @@ import Foundation
 import WebKit
 import AppKit
 
+struct BrowserMainFrameNavigationAction {
+    let url: URL
+    let navigationType: WKNavigationType
+    let sourceURL: URL?
+}
+
 final class BrowserNavigationDelegate: NSObject, WKNavigationDelegate {
-    var onDidFinish: ((URL?, String?) -> Void)?
+    var onDidStart: ((WKNavigation) -> Void)?
+    var onDidFinish: ((URL?, String?, WKNavigation?) -> Void)?
+    var onMainFrameNavigationAction: ((BrowserMainFrameNavigationAction) -> Bool)?
     var onWebContentProcessTerminated: ((WKWebView) -> Void)?
     var onOpenInNewTab: ((URL) -> Void)?
     var shouldBlockInsecureHTTP: ((URL) -> Bool)?
     var onInsecureHTTPBlocked: ((URL) -> Void)?
-    var onNavigationFailed: ((URL?, NSError) -> Void)?
+    var onNavigationFailed: ((URL?, NSError, WKNavigation?) -> Void)?
+    var onNavigationCancelled: ((WKNavigation?) -> Void)?
     var onExternalScheme: ((URL) -> Void)?
     var onExternalPattern: ((URL) -> Bool)?
     var downloadDelegate: BrowserDownloadDelegate?
 
     private static let internalSchemes: Set<String> = ["http", "https", "about", "blob", "data", "file"]
 
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if let navigation { onDidStart?(navigation) }
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        onDidFinish?(webView.url, webView.title)
+        onDidFinish?(webView.url, webView.title, navigation)
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -48,6 +61,18 @@ final class BrowserNavigationDelegate: NSObject, WKNavigationDelegate {
             decisionHandler(.cancel)
             return
         }
+        if let url = navigationAction.request.url,
+           navigationAction.targetFrame?.isMainFrame != false {
+            let action = BrowserMainFrameNavigationAction(
+                url: url,
+                navigationType: navigationAction.navigationType,
+                sourceURL: navigationAction.sourceFrame.request.url
+            )
+            if onMainFrameNavigationAction?(action) == false {
+                decisionHandler(.cancel)
+                return
+            }
+        }
         decisionHandler(.allow)
     }
 
@@ -76,17 +101,20 @@ final class BrowserNavigationDelegate: NSObject, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         let nsError = error as NSError
-        // Suppress user-cancelled and frame-load-interrupted errors
-        guard nsError.code != NSURLErrorCancelled,
-              nsError.code != 102 /* WebKitErrorFrameLoadInterruptedByPolicyChange */ else { return }
-        onNavigationFailed?(webView.url, nsError)
+        if nsError.code == NSURLErrorCancelled || nsError.code == 102 {
+            onNavigationCancelled?(navigation)
+            return
+        }
+        onNavigationFailed?(webView.url, nsError, navigation)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         let nsError = error as NSError
-        guard nsError.code != NSURLErrorCancelled,
-              nsError.code != 102 else { return }
-        onNavigationFailed?(webView.url, nsError)
+        if nsError.code == NSURLErrorCancelled || nsError.code == 102 {
+            onNavigationCancelled?(navigation)
+            return
+        }
+        onNavigationFailed?(webView.url, nsError, navigation)
     }
 
     func webView(_ webView: WKWebView, authenticationChallenge challenge: URLAuthenticationChallenge, shouldAllowDeprecatedTLS decisionHandler: @escaping (Bool) -> Void) {

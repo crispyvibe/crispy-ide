@@ -41,7 +41,7 @@ struct BrowserTabReference: Codable, Equatable {
         projectPath: String? = nil,
         linkedTileID: UUID? = nil
     ) {
-        self.browserID = browserID
+        self.browserID = linkedTileID ?? browserID
         self.seedURLString = url?.absoluteString
         self.projectPath = projectPath
         self.linkedTileID = linkedTileID

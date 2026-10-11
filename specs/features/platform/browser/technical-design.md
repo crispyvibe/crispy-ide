@@ -62,13 +62,21 @@ Frecency scoring weights several factors: exact URL match, host prefix match, su
 
 WKWebView maintains its own back/forward list internally, but this list is not serializable and cannot be restored across app launches. To support session persistence, the browser maintains parallel back and forward stacks alongside WebKit's native history.
 
-During normal browsing, the native WebKit history is authoritative. On session restore, the parallel stacks are populated from the persisted snapshot and a flag switches navigation methods to use them instead. Back and forward operations pop from one stack and push to the other, then load the target URL.
+During normal browsing, native WebKit history is authoritative. On session restore, the parallel stacks are populated from the persisted snapshot and remain the logical history owner for the life of that restored chain. Back and Forward pop from one stack, push the source URL to the other, and perform a synthetic load without recording a second transition. Toolbar controls and mouse buttons 3/4 both dispatch to `BrowserPanelViewModel.goBack()` / `goForward()`. WebKit swipe gestures remain enabled; main-frame `.backForward` actions are intercepted and reconciled into the same logical history before a synthetic load.
 
-The parallel stacks are abandoned on any new user-initiated navigation — at that point, WebKit's native history takes over again. This avoids the complexity of keeping two history models in sync during active browsing.
+Later ordinary navigation extends rather than abandons restored history. A generation-tagged pending transition records its expected target; only that target (or an explicitly recognized redirect whose source is the expected target) can complete a synthetic traversal. Typed or clicked navigation supersedes a pending restore/Back/Forward load, rolls back its provisional stack mutation, and records the last committed URL as the source. WKNavigation identities guard finish/failure callbacks so stale loads cannot commit or clear newer transitions. Main-frame typed and page-link actions record the last committed source, successful redirects commit the final URL once, and the forward stack clears only for a new branch. Both logical stacks are limited to 100 entries: Back retains the newest chronological suffix, while persisted Forward is nearest-to-farthest and reverses internally so the nearest destination remains at `popLast`. The comments bridge observes `pushState`, `replaceState`, `popstate`, and other URL changes used by single-page applications; push/unknown changes append, replace changes update in place, and matching pop changes move between bounded stacks. `currentURL`, address text, page title, comments key, navigation availability, and snapshots update from the same owner. The immutable `BrowserTabReference.seedURL` is fallback-only and is never loaded over a live or restored current URL during render lookup.
 
 ### Session Snapshot
 
-A session snapshot captures the current URL, back/forward URL stacks, zoom level, and theme mode. Snapshots are taken on a debounced schedule and before coordinator teardown. On restore, zoom is clamped to safe bounds and the URL is loaded if it's not blank.
+A session snapshot captures the current URL, back/forward URL stacks, zoom level, and theme mode. Snapshots are taken on a debounced schedule and before coordinator teardown. On restore, zoom is clamped to safe bounds and the URL is loaded if it is not blank; logical history tracking is reset and anchored to that current URL before later navigation is observed.
+
+### Canonical Multi-Surface Session
+
+`DockedBrowserCoordinator` is the sole session owner for preview, board tile, Spotlight, and detailed presentations. A linked tile and detailed tab resolve to the same `BrowserPanelViewModel` when either presentation is live; otherwise the coordinator chooses the latest revisioned authoritative snapshot. Spotlight borrows that session through host-ownership arbitration rather than creating a competing history owner. Closing a linked detailed tab captures its latest snapshot back into the live tile or a pending tile snapshot before removing detailed caches, so the board cannot revert to its seed or an older render-time snapshot.
+
+Explicit preview restore/reconstruction requires both project path and complete session snapshot identity; a matching URL alone cannot reuse another project's restored preview. Once a same-project preview is live in Spotlight, render updates retain that view model even when navigation changes its current snapshot, preventing the original snapshot from resetting live state. Pinning captures the latest URL, history, zoom, theme, and presentation state, inserts that snapshot with a preselected tile ID, commits board persistence, and only then promotes the preview into a persistent view model; failed insertion never invokes promotion, leaving the ephemeral preview intact. Comments presentation state transfers to the persistent owner. Session-change callbacks discover all surfaces referencing the emitting view model and schedule both board and detailed persistence from that one source.
+
+Hydration reads the full `VibeSpaceTerminalBoardState`, traverses every surface, and restores visible plus minimized browser tiles by stable tile ID. This includes primary and detached board windows. Render-time tile lookup accepts the persisted snapshot as a fallback but reuses a linked detailed live owner or pending newer snapshot first.
 
 ### Crash Recovery
 
@@ -204,7 +212,7 @@ A JavaScript bridge intercepts WebAuthn credential creation and assertion reques
 |---|---|
 | NSViewRepresentable for address bar | SwiftUI TextField can't intercept arrow keys reliably |
 | JS-based find-in-page | WKWebView's native find has no API for custom UI |
-| Dual-stack session history | WKWebView doesn't expose a session restore API |
+| Continuous dual-stack session history | WKWebView doesn't expose a session restore API; restored logical history must absorb later native and SPA navigation |
 | Custom JS element picker | No dependency on third-party tools; works offline |
 | Callback-based delegates | Keeps delegate objects stateless; view model controls all behavior |
 | Priority-based WebView ownership | Single WKWebView can only attach to one NSView; arbitration avoids cloning |
@@ -247,3 +255,9 @@ For active (non-parked) projects, the existing per-vibespace board layout and pe
 - Download progress is boolean only — no percentage indication.
 - Console capture has no viewer UI — flush-only for agent consumption.
 - History import requires file system access permissions for Chrome/Safari databases.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-06 | Replaced abandoned restored-history design with continuous logical history; documented one canonical multi-surface session, detail-close writeback, atomic preview promotion, project/snapshot isolation, and detached/minimized hydration. | — |

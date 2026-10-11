@@ -70,6 +70,12 @@ File tabs display a project accent color resolved by matching the file path agai
 - **Persistent** (`openFileInTab(at:)`) — adds file to tab strip, sets as active. If already exists, activates it. Opening converts any existing preview into a persistent tab.
 - **Close** — removes from tab strip, clears markup view mode. Falls back to nearest tab by index (clamped to last). If no tabs remain, document cleared. In split mode, closing the last tab in a pane auto-closes the pane.
 
+### Linked Markdown Navigation and Context
+
+Each `EditorGroupStore` owns two file-tab history stacks in addition to the Markdown runtime's document-local fragment history. Opening a local Markdown link pushes the source tab onto group Back history and clears Forward history. `navigateBack()` / `navigateForward()` first delegate to the current rendered document when it reports availability; the runtime calls the group's fallback only after local positions are exhausted. Group traversal pops until it finds a still-open, non-current tab and pushes the outgoing active tab onto the opposite stack. Closing a tab removes it from both stacks.
+
+The active `FileDocumentReference` is the mutable current-document identity. It selects the tab-specific `FileContentProviding` instance and drives render content, comments path, title/directory, accessibility, and promotion. Dock persistence separately retains an immutable root reference for tile reconstruction. `DockedFileViewerCoordinator.editorGroup(...)` may upgrade that root from a path-only reference to a project-qualified reference or attach its provider, but reuses the existing group and does not activate the root over a linked current tab. Pinning transfers the live group and its navigation stacks.
+
 ### Git Integration
 
 - `previewGitDiff` — loads unified diff via pane worker `.gitDiff` command (12-second timeout). Title: `<relativePath> (Changes)`. Empty diff falls back to markdown message with status code.
@@ -82,6 +88,12 @@ File tabs display a project accent color resolved by matching the file path agai
 When a file or directory is renamed/moved, all open documents, tabs, editor tab strips, and markup view mode preferences are retargeted from old path to new path across all panes. Uses standardized file URLs with exact match and prefix-based child path remapping.
 
 ## State Management
+
+### Direct Group Observation and Route Identity
+
+Single-pane and split-pane observer scopes hold their owning `EditorGroupStore` as `@ObservedObject`; routed content is recomputed from that group's published `activeTabID`. `reconcileActiveSelection` enforces the active-visible invariant: it does nothing when active is visible, preserves a hidden active selection when the visible set is empty, and otherwise activates the first visible ID using reconciliation mode. Reconciliation mode rejects same-ID work, preventing notification recursion. User-initiated mode may intentionally reactivate the same ID to restore its tab-scoped provider/model and republish `.contentViewerTabActivated` for project-focus repair.
+
+`ContentTabRoutedContentScope` keys its content by tab ID. This destroys A-scoped `StateObject`/representable state before rendering a same-kind B route. Browser containers additionally detach the previous model's `WKWebView`, unregister ownership, and attach only the target model's web view. `NativeSplitView.makeNSView` synchronously populates both stable holder roots before returning; later updates are coalesced without replacing those roots.
 
 ### Split Pane Layout
 
@@ -147,7 +159,7 @@ Restore behavior: split tree rebuilt, editor groups recreated per leaf, files re
 ## Dependencies (frameworks, libraries)
 
 - `SplitViewStore` — binary tree layout engine
-- `EditorGroupStore` — per-pane tab and document management
+- `EditorGroupStore` — per-pane tabs, current-file/provider context, and cross-file Markdown history
 - `MarkdownViewModel` — document rendering
 - `PaneWorkerClient` — file I/O and git operations
 - `PDFKit` — PDF rendering
@@ -183,3 +195,10 @@ The detailed bottom terminal tray is a source of terminal-session drags into the
 ## Git Diff Line Numbers
 
 `GitDiffPreview` observes `AppPreferences.editorLineNumberModeKey`. It conditionally emits the existing fixed-width old/new number views from `ParsedGitDiffRow` when `EditorLineNumberMode.showsGitDiff` is true; it does not alter `ParsedGitDiffDocument` parsing. Invalid stored values use the source-mode fallback and retain columns.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-09 | Documented direct group observation, reconciliation versus user activation semantics, target-keyed routed state/browser attachment, and synchronous stable NativeSplit holders. | — |
+| 2026-10-06 | Documented editor-group ownership of combined Markdown history, immutable dock root versus current file identity, provider restoration, and current-context promotion/comments behavior. | — |

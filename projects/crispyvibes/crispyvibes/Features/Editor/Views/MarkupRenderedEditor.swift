@@ -15,9 +15,16 @@ struct MarkupRenderedEditor: NSViewRepresentable {
     let mode: Mode
     let baseDirectoryURL: URL?
     let commandRequest: EditorCommandRequest?
+    var commandClaimTracker = EditorCommandClaimTracker()
     var webLinkPreference: MarkdownWebLinkPreference = .ask
+    var documentID: String? = nil
     var navigationRequest: MarkdownRichNavigationRequest? = nil
-    var onNavigationRequestConsumed: ((UUID) -> Void)? = nil
+    var navigationState: MarkdownNavigationState? = nil
+    var navigationCommandRequest: MarkdownNavigationCommandRequest? = nil
+    var onNavigationRequestClaimed: ((UUID) -> Bool)? = nil
+    var onNavigationCommandClaimed: ((UUID) -> Bool)? = nil
+    var onNavigationStateChanged: ((MarkdownNavigationState) -> Void)? = nil
+    var onNavigationFallback: ((MarkdownNavigationDirection) -> Void)? = nil
     var onLinkAction: ((MarkdownLinkActionRequest) -> Void)? = nil
     var isBufferLoading: Bool = false
     var embeddedDropBridge: ContentViewerEmbeddedDropBridge? = nil
@@ -42,8 +49,8 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         var lastInjectedContent = ""
         var lastInjectedThemeTokens = ""
         var lastMode: Mode?
-        var lastHandledCommandID: UUID?
-        var lastHandledNavigationID: UUID?
+        var didRestoreNavigationState = false
+        var isRestoringNavigationState = false
         var lastWebLinkPreference: MarkdownWebLinkPreference?
         var lastLineNumbersVisible: Bool?
         var lastImageCandidateRequestID = 0
@@ -128,12 +135,11 @@ struct MarkupRenderedEditor: NSViewRepresentable {
 
         func applyFormattingCommandIfNeeded() {
             guard isEditorReady, let webView, let request = parent.commandRequest else { return }
-            guard request.id != lastHandledCommandID else { return }
+            guard parent.commandClaimTracker.claim(request.id) else { return }
 
             let serializedCommand = Self.serializeForJavaScript(request.command.rawValue)
             let script = "window.crispyvibesApplyFormattingCommand(\(serializedCommand));"
             webView.evaluateJavaScript(script)
-            lastHandledCommandID = request.id
         }
 
         func syncWebLinkPreferenceIfNeeded(force: Bool = false) {
@@ -163,16 +169,54 @@ struct MarkupRenderedEditor: NSViewRepresentable {
                   let webView,
                   parent.mode == .markdown,
                   let request = parent.navigationRequest,
-                  request.id != lastHandledNavigationID else { return }
-            lastHandledNavigationID = request.id
+                  parent.onNavigationRequestClaimed?(request.id) == true else { return }
             let serializedFragment = Self.serializeForJavaScript(request.fragment)
+            let recordsHistory = request.recordsHistory ? "true" : "false"
             webView.evaluateJavaScript(
-                "window.crispyvibesNavigateToAnchor(\(serializedFragment));"
-            ) { [weak self] _, _ in
+                "window.crispyvibesNavigateToAnchor(\(serializedFragment), \(recordsHistory));"
+            )
+        }
+
+        func restoreNavigationStateIfNeeded() {
+            guard isEditorReady,
+                  !didRestoreNavigationState,
+                  let webView,
+                  parent.mode == .markdown,
+                  let state = parent.navigationState,
+                  state.documentID == parent.documentID else { return }
+            didRestoreNavigationState = true
+            isRestoringNavigationState = true
+            guard let script = Self.navigationStateRestoreScript(state) else {
+                isRestoringNavigationState = false
+                return
+            }
+            webView.evaluateJavaScript(script) { [weak self] _, _ in
                 DispatchQueue.main.async { [weak self] in
-                    self?.parent.onNavigationRequestConsumed?(request.id)
+                    guard let self else { return }
+                    self.isRestoringNavigationState = false
+                    self.parent.onNavigationStateChanged?(state)
+                    self.applyNavigationCommandIfNeeded()
                 }
             }
+        }
+
+        func applyNavigationCommandIfNeeded() {
+            guard isEditorReady,
+                  !isRestoringNavigationState,
+                  let webView,
+                  parent.mode == .markdown,
+                  let request = parent.navigationCommandRequest,
+                  parent.onNavigationCommandClaimed?(request.id) == true else { return }
+            let serializedDirection = Self.serializeForJavaScript(request.direction.rawValue)
+            webView.evaluateJavaScript(
+                "window.crispyvibesNavigateHistory(\(serializedDirection));"
+            )
+        }
+
+        static func navigationStateRestoreScript(_ state: MarkdownNavigationState) -> String? {
+            guard let data = try? JSONEncoder().encode(state),
+                  let payload = String(data: data, encoding: .utf8) else { return nil }
+            return "window.crispyvibesRestoreMarkdownNavigationState(\(payload));"
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -183,8 +227,10 @@ struct MarkupRenderedEditor: NSViewRepresentable {
                 syncWebLinkPreferenceIfNeeded(force: true)
                 syncLineNumberVisibilityIfNeeded(force: true)
                 syncContentToEditor(force: true)
+                restoreNavigationStateIfNeeded()
                 applyFormattingCommandIfNeeded()
                 applyNavigationRequestIfNeeded()
+                applyNavigationCommandIfNeeded()
                 // F049: register the webview with the bridge as soon as the
                 // editor reports ready, so scrollToLine etc. work.
                 if let bridge = parent.commentBridge, let webView {
@@ -206,6 +252,20 @@ struct MarkupRenderedEditor: NSViewRepresentable {
 
             case "markdownLinkAction":
                 handleMarkdownLinkAction(message.body)
+
+            case "markdownNavigationState":
+                guard !isRestoringNavigationState,
+                      let documentID = parent.documentID,
+                      let state = MarkdownNavigationState.decodeBridgePayload(
+                        documentID: documentID,
+                        body: message.body
+                      ) else { return }
+                parent.onNavigationStateChanged?(state)
+
+            case "markdownNavigationFallback":
+                guard let rawDirection = message.body as? String,
+                      let direction = MarkdownNavigationDirection(rawValue: rawDirection) else { return }
+                parent.onNavigationFallback?(direction)
 
             case "commentsRichSelectionChanged":
                 // Selection moved; we don't store it on the Swift side
@@ -290,7 +350,8 @@ struct MarkupRenderedEditor: NSViewRepresentable {
             lastMode = nil
             lastWebLinkPreference = nil
             lastLineNumbersVisible = nil
-            lastHandledNavigationID = nil
+            didRestoreNavigationState = false
+            isRestoringNavigationState = false
             MarkupRenderedEditor.loadLocalEditor(into: webView, readAccessURL: readAccessURL())
         }
 
@@ -392,6 +453,8 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         contentController.add(context.coordinator, name: "contentChanged")
         contentController.add(context.coordinator, name: "requestImageCandidates")
         contentController.add(context.coordinator, name: "markdownLinkAction")
+        contentController.add(context.coordinator, name: "markdownNavigationState")
+        contentController.add(context.coordinator, name: "markdownNavigationFallback")
         contentController.add(context.coordinator, name: "commentsRichSelectionChanged")
         contentController.add(context.coordinator, name: "commentsRichRequestAdd")
         contentController.add(context.coordinator, name: "commentsRichGutterClick")
@@ -419,8 +482,10 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         context.coordinator.syncWebLinkPreferenceIfNeeded()
         context.coordinator.syncLineNumberVisibilityIfNeeded()
         context.coordinator.syncContentToEditor()
+        context.coordinator.restoreNavigationStateIfNeeded()
         context.coordinator.applyFormattingCommandIfNeeded()
         context.coordinator.applyNavigationRequestIfNeeded()
+        context.coordinator.applyNavigationCommandIfNeeded()
         // F049: ensure the bridge has the live webView reference and that
         // decorations reflect the latest threads + selection state.
         if let bridge = commentBridge {
@@ -448,6 +513,8 @@ struct MarkupRenderedEditor: NSViewRepresentable {
         contentController.removeScriptMessageHandler(forName: "contentChanged")
         contentController.removeScriptMessageHandler(forName: "requestImageCandidates")
         contentController.removeScriptMessageHandler(forName: "markdownLinkAction")
+        contentController.removeScriptMessageHandler(forName: "markdownNavigationState")
+        contentController.removeScriptMessageHandler(forName: "markdownNavigationFallback")
         contentController.removeScriptMessageHandler(forName: "commentsRichSelectionChanged")
         contentController.removeScriptMessageHandler(forName: "commentsRichRequestAdd")
         contentController.removeScriptMessageHandler(forName: "commentsRichGutterClick")

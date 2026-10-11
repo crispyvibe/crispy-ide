@@ -5,6 +5,17 @@ Status: draft
 
 ---
 
+## Overview
+
+Content Viewer owns pane-local tabs, providers, comments context, split layouts, and linked Markdown navigation across detailed and compact presentations.
+
+## Dependencies
+
+- F008 (Markdown) — rendered fragment history and linked-file requests
+- F003 (Terminal Spotlight) — compact file presentation and detailed promotion
+- F037 (Terminal Board Dock) — immutable file roots and transferred live editor groups
+- F012 (Browser) — linked browser tab lifecycle
+
 ## Requirements
 
 ### F006-R01: Editor Pane Lifecycle
@@ -60,6 +71,14 @@ Renaming a file or directory remaps all affected open tabs, content providers, a
 
 ### F006-R18: Detailed Tray Terminals Can Be Docked Into the Main View
 The content viewer MUST accept the active terminal from the detailed bottom tray as a draggable terminal source. Dropping that terminal into an existing pane or pane split target MUST open or activate a terminal tab for the same live session using the normal content-viewer split rules. Closing that content-viewer terminal tab MUST only remove that presentation and MUST NOT terminate the terminal session.
+
+### F006-R19: Editor-Group Navigation Ownership and Current Context
+
+Each `EditorGroupStore` MUST own cross-file navigation for linked Markdown documents and combine it with rendered same-document history through one Back/Forward contract. Stable origin/root references used by dock persistence MUST remain distinct from the group's mutable active file reference. Render lookup, provider refresh, or root-reference upgrade MUST NOT reactivate the root over the active linked file. The active file reference and its provider MUST drive rendering, comments key, title, directory, accessibility, and promotion to another presentation. Closed or missing history destinations MUST be pruned without changing the current document.
+
+### F006-R20: Direct Group Observation and Keyed Route Convergence
+
+Every single and split pane MUST directly observe its owning `EditorGroupStore`. After one tab activation and one normal layout turn, the selected tab, routed content identity, provider/model state, and attached AppKit/WebKit host MUST all represent the same target without a second activation. Under focused-project filtering, an active tab hidden while visible tabs remain MUST reconcile to the first visible tab exactly once; an empty visible set MUST preserve the hidden active selection; an already-visible active tab MUST not recurse or emit duplicate activation notifications. Explicit user activation of the already-active tab MUST remain able to reassert provider and project-focus synchronization. Same-kind routes MUST be keyed by target tab identity so an A→B switch cannot retain A-scoped `StateObject`, representable, or browser attachment.
 
 ---
 
@@ -124,7 +143,8 @@ And no duplicate tab is created
 ### F006-S11: Closing tabs updates active document predictably
 Given multiple editor tabs are open
 When active tab is closed
-Then editor selects adjacent fallback tab when available
+Then editor selects adjacent fallback tab when available through the common activation pipeline
+And emits exactly one selection commit and activation notification for the fallback
 When last tab is closed
 Then editor clears current document state
 
@@ -384,6 +404,11 @@ And leaf nodes render the pane content closure keyed by pane ID
 And split ratios are bound via store.ratioBinding / store.setRatio
 And NativeSplitView enforces minPrimary=100 and minSecondary=100
 
+### F006-S53: Active pane indicator
+Given a split layout with multiple panes
+Then the active pane shows a 2px accent-colored bar at the top
+And tapping any pane activates it via the simultaneousGesture tap handler
+
 ### F006-S54: Content area drop surface excludes file URLs when active tab is a terminal
 
 **Given** the active tab in a pane is a terminal tab
@@ -391,11 +416,6 @@ And NativeSplitView enforces minPrimary=100 and minSecondary=100
 **Then** the drop is rejected by the content area delegate
 **And** only tab drag types are accepted
 **So that** file drops pass through to the underlying terminal view
-
-### F006-S53: Active pane indicator
-Given a split layout with multiple panes
-Then the active pane shows a 2px accent-colored bar at the top
-And tapping any pane activates it via the simultaneousGesture tap handler
 
 ### F006-S55: Dragging the detailed tray terminal into a pane centers it as a terminal tab
 
@@ -424,6 +444,83 @@ And tapping any pane activates it via the simultaneousGesture tap handler
 **Then** only the content-viewer presentation is removed
 **And** the underlying terminal session continues running
 
+### F006-S58: Linked Markdown navigation preserves current group context
+
+Given an editor group opens `A.md` and follows a link to `B.md#fragment`
+When Back and Forward cross between rendered fragment positions and file tabs
+Then the group resolves same-document history before cross-file history
+And each activated file restores its own provider and project-qualified identity
+And title, directory, comments, accessibility, and promotion use the active file
+And a render lookup or provider upgrade does not reactivate `A.md` merely because it is the stable root
+
+### F006-S59: Closing a history tab prunes stale navigation destinations
+
+Given linked-file Back or Forward history references a tab that is later closed
+When the user invokes the corresponding navigation action
+Then the missing destination is skipped
+And the active document and provider remain unchanged if no valid destination remains
+
+### F006-S60: Focused-project filtering reconciles active selection exactly once
+
+Given a pane's active tab becomes hidden by focused-project filtering
+When at least one visible tab remains
+Then the first visible tab activates exactly once
+And Markdown current document and tab-scoped provider synchronize to it
+When no visible tab remains
+Then the hidden active selection and provider are preserved
+When the active tab is already visible
+Then reconciliation emits no activation loop
+
+### F006-S61: One activation updates a directly observed mounted pane
+
+Given a mounted single or split pane directly observes its editor group with tabs A and B
+When B is activated once
+Then after one normal layout turn the selected and routed accessibility identity is B
+And one selection commit is emitted
+And no second activation is required
+And explicitly reactivating B can still reassert project focus and provider synchronization
+
+### F006-S62: Same-kind A-to-B routes attach only the target host
+
+Given route A and route B use the same content kind
+When selection changes from A to B
+Then the routed boundary is keyed by B's tab identity
+And B receives target-scoped state/representable updates
+And no A content remains displayed
+And a browser route detaches A's `WKWebView` before attaching B's actual `WKWebView`
+
+## Test Coverage
+
+| Scenario | Coverage |
+|----------|----------|
+| F006-S58 | Unit: `EditorGroupNavigationRegressionTests` covers linked `A.md → B.md#fragment → Back → Forward`, project-qualified providers, active-reference preservation, and retargeted history. Required UI/manual: title, comments, accessibility, and promotion follow the active file across compact/detailed presentation changes. |
+| F006-S59 | Unit: `EditorGroupNavigationRegressionTests` covers stale closed-tab history pruning without root reactivation. |
+| F006-S11 | Unit: `ContentViewerGroupReconciliationTests.testClosingActiveTabUsesOneLifecycleActivationAndSynchronizesFallbackProjectProvider` verifies exactly one fallback selection commit/activation plus project-qualified provider/model convergence. Existing group tests retain non-active close and empty-last-tab behavior. |
+| F006-S60 | Pure/store: `ContentViewerGroupReconciliationTests` covers first-visible activation exactly once, Markdown/provider synchronization, empty-visible preservation, and visible-active no-loop behavior. UI-only: visible scope-toggle interaction and final paint. |
+| F006-S61 | Pure/store: reconciliation, explicit same-ID reassertion, and active-close fallback are covered by `ContentViewerGroupReconciliationTests`. Mounted synthetic single-pane: `testDirectObserverRoutesOneActivationOnNextLayoutTurn`. Mounted synthetic production split boundary: `testMountedSplitPaneObserverRoutesBWithOneActivationAfterOneTurn`. Both use a real `NSHostingView`/`NSWindow` and verify one activation routes B after one turn. Remaining production-input/UI gaps: click hit-testing and visual selected-tab paint. |
+| F006-S62 | Mounted synthetic route at the production `ContentTabRoutedContentScope`: `testKeyedRouteRecreatesTargetScopedStateForSameKindSwitch` asserts initial A, A→B, and B→A target-scoped state. Mounted real browser host: `testBrowserContainerSwitchesActualWKWebViewAttachmentFromAToB` verifies actual WebView detachment/attachment. Production input callbacks, live webpage paint, and responder transfer remain UI-only gaps. |
+
 ### Git Diff Line-Number Policy (F006-R05)
 
 Structured Git diff previews retain their existing old/new logical line-number columns when the global mode is `Source Editors` or `All Text Views`. Both columns are omitted in `Off`; diff parsing and hunk row content are unchanged.
+
+## Acceptance Criteria
+
+- Linked Markdown navigation restores the correct project-qualified provider and current-file context.
+- Immutable dock roots never replace the active linked file during render lookup.
+- Closed history entries are skipped without disturbing the current document.
+- Focused-project filtering preserves the active-visible invariant with at most one reconciliation commit.
+- One activation updates directly observed selected/routed state after one normal layout turn.
+- Same-kind routes and attached AppKit/WebKit hosts are keyed to the target tab and never display the prior tab.
+
+## Open Questions
+
+_None._
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-09 | Routed active-close fallback through one activation commit and added mounted split-observer plus initial/forward/reverse keyed-route coverage with explicit UI-only gaps. | — |
+| 2026-10-09 | Added direct group observation, active-visible filtered reconciliation, explicit same-tab reassertion, one-click keyed route/host convergence, and unit/mounted/UI mappings (R20, S60–S62). | — |
+| 2026-10-06 | Added editor-group ownership for combined fragment/cross-file navigation, stable root versus mutable current-file context, stale-history pruning, and scenario mappings (R19, S58–S59). | — |

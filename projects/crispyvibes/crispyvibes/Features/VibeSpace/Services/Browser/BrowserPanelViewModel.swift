@@ -77,10 +77,36 @@ final class BrowserPanelViewModel: ObservableObject {
     private var uiDelegate: BrowserUIDelegate?
     let hostOwnershipCoordinator = BrowserHostOwnershipCoordinator()
 
+    static let logicalHistoryLimit = 100
+
+    private struct PendingLogicalNavigation {
+        enum Kind: Equatable {
+            case synthetic
+            case ordinary
+        }
+
+        let generation: Int
+        let kind: Kind
+        var expectedTargetURL: URL
+        let sourceURL: URL?
+        let rollbackBackStack: [URL]?
+        let rollbackForwardStack: [URL]?
+    }
+
     // Session history (accessed from BrowserPanelViewModelSession)
     var usesRestoredSessionHistory = false
     var restoredBackStack: [URL] = []
     var restoredForwardStack: [URL] = []
+    private var lastCommittedURL: URL?
+    private var pendingLogicalNavigation: PendingLogicalNavigation?
+    private var latestNavigationGeneration = 0
+    private let navigationGenerations = NSMapTable<WKNavigation, NSNumber>(
+        keyOptions: .weakMemory,
+        valueOptions: .strongMemory
+    )
+
+    var pendingNavigationGeneration: Int? { pendingLogicalNavigation?.generation }
+    var trackedNavigationGenerationCount: Int { navigationGenerations.count }
 
     var onOpenNewBrowser: ((URL) -> Void)?
     var onSessionStateChanged: (() -> Void)?
@@ -122,19 +148,20 @@ final class BrowserPanelViewModel: ObservableObject {
         self.webView = webView
 
         let navDelegate = BrowserNavigationDelegate()
-        navDelegate.onDidFinish = { [weak self] url, title in
-            guard url?.absoluteString != "about:blank" else { return }
-            self?.currentURL = url
-            if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                self?.pageTitle = title
-            }
-            (self?.historyStore)?.recordVisit(url: url, title: title)
-            self?.refreshFavicon()
-            self?.onSessionStateChanged?()
-            // F049-v2: re-inject the comments bundle and re-decorate for the
-            // newly-loaded URL.
-            self?.commentsBridge.pageDidLoad(url: url)
-            Task { @MainActor [weak self] in await self?.refreshCommentsForCurrentPage() }
+        navDelegate.onDidStart = { [weak self] navigation in
+            self?.handleNavigationStarted(navigation)
+        }
+        navDelegate.onDidFinish = { [weak self] url, title, navigation in
+            guard let self else { return }
+            let generation = self.consumeNavigationGeneration(for: navigation)
+            self.handleNavigationFinished(
+                url: url,
+                title: title,
+                navigationGeneration: generation
+            )
+        }
+        navDelegate.onMainFrameNavigationAction = { [weak self] action in
+            self?.handleMainFrameNavigationAction(action) ?? true
         }
         navDelegate.onWebContentProcessTerminated = { [weak self] terminatedWebView in
             self?.replaceWebViewAfterTermination(terminatedWebView)
@@ -148,8 +175,19 @@ final class BrowserPanelViewModel: ObservableObject {
         navDelegate.onInsecureHTTPBlocked = { [weak self] url in
             self?.presentInsecureHTTPAlert(for: url)
         }
-        navDelegate.onNavigationFailed = { [weak self] url, error in
-            self?.handleNavigationFailure(url: url, error: error)
+        navDelegate.onNavigationFailed = { [weak self] url, error, navigation in
+            guard let self else { return }
+            let generation = self.consumeNavigationGeneration(for: navigation)
+            self.handleNavigationFailure(
+                url: url,
+                error: error,
+                navigationGeneration: generation
+            )
+        }
+        navDelegate.onNavigationCancelled = { [weak self] navigation in
+            guard let self else { return }
+            let generation = self.consumeNavigationGeneration(for: navigation)
+            self.handleNavigationCancellation(navigationGeneration: generation)
         }
         navDelegate.onExternalScheme = { url in
             NSWorkspace.shared.open(url)
@@ -172,9 +210,7 @@ final class BrowserPanelViewModel: ObservableObject {
         self.uiDelegate = browserUIDelegate
         webView.uiDelegate = browserUIDelegate
 
-        webView.onOpenInNewTab = { [weak self] url in
-            self?.onOpenNewBrowser?(url)
-        }
+        wireWebViewCallbacks(webView)
 
         setupObservers()
 
@@ -204,7 +240,8 @@ final class BrowserPanelViewModel: ObservableObject {
                 await self.refreshCommentsForCurrentPage()
             }
         }
-        commentsBridge.onURLChanged = { [weak self] _ in
+        commentsBridge.onURLChanged = { [weak self] url, kind in
+            self?.handleObservedRouteChange(to: url, kind: kind)
             Task { @MainActor [weak self] in await self?.refreshCommentsForCurrentPage() }
         }
         // F049-v2: subscribe to cross-file navigation so a row tap in the
@@ -286,6 +323,226 @@ final class BrowserPanelViewModel: ObservableObject {
             }
     }
 
+    private func wireWebViewCallbacks(_ webView: CrispyVibesBrowserWebView) {
+        webView.onOpenInNewTab = { [weak self] url in
+            self?.onOpenNewBrowser?(url)
+        }
+        webView.onNavigateBack = { [weak self] in
+            self?.goBack()
+        }
+        webView.onNavigateForward = { [weak self] in
+            self?.goForward()
+        }
+    }
+
+    func handleMainFrameNavigationAction(_ action: BrowserMainFrameNavigationAction) -> Bool {
+        guard usesRestoredSessionHistory else { return true }
+
+        if var pending = pendingLogicalNavigation {
+            if urlsMatch(action.url, pending.expectedTargetURL) {
+                return true
+            }
+            if action.navigationType == .other,
+               urlsMatch(action.sourceURL, pending.expectedTargetURL) {
+                pending.expectedTargetURL = action.url
+                pendingLogicalNavigation = pending
+                return true
+            }
+            supersedePendingLogicalNavigation()
+        }
+
+        if action.navigationType == .reload || urlsMatch(action.url, lastCommittedURL) {
+            return true
+        }
+        if action.navigationType == .backForward {
+            let sourceURL = lastCommittedURL ?? action.sourceURL ?? currentURL
+            let rollbackBackStack = restoredBackStack
+            let rollbackForwardStack = restoredForwardStack
+            if let sourceURL,
+               reconcileRestoredPop(to: action.url, from: sourceURL) {
+                refreshNavigationState()
+                loadWithoutAbandoningHistory(
+                    action.url,
+                    rollbackBackStack: rollbackBackStack,
+                    rollbackForwardStack: rollbackForwardStack
+                )
+            }
+            return false
+        }
+        beginOrdinaryNavigation(
+            to: action.url,
+            sourceURL: lastCommittedURL ?? action.sourceURL ?? currentURL
+        )
+        return true
+    }
+
+    func handleNavigationStarted(_ navigation: WKNavigation) {
+        guard navigationGenerations.object(forKey: navigation) == nil,
+              let generation = pendingLogicalNavigation?.generation else { return }
+        navigationGenerations.setObject(NSNumber(value: generation), forKey: navigation)
+    }
+
+    func handleNavigationFinished(
+        url: URL?,
+        title: String?,
+        navigationGeneration: Int? = nil
+    ) {
+        guard let url, url.absoluteString != "about:blank" else { return }
+        if let navigationGeneration,
+           navigationGeneration < latestNavigationGeneration,
+           navigationGeneration != pendingLogicalNavigation?.generation {
+            return
+        }
+
+        if usesRestoredSessionHistory, let pending = pendingLogicalNavigation {
+            guard navigationGeneration == nil || navigationGeneration == pending.generation,
+                  urlsMatch(url, pending.expectedTargetURL) else { return }
+            if pending.kind == .ordinary,
+               let sourceURL = pending.sourceURL,
+               !urlsMatch(sourceURL, url) {
+                appendToRestoredBackStack(sourceURL)
+                restoredForwardStack.removeAll()
+            }
+            pendingLogicalNavigation = nil
+        }
+        lastCommittedURL = url
+        currentURL = url
+        addressBarText = url.absoluteString
+        if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            pageTitle = title
+        }
+        historyStore?.recordVisit(url: url, title: title)
+        refreshNavigationState()
+        refreshFavicon()
+        onSessionStateChanged?()
+        commentsBridge.pageDidLoad(url: url)
+        Task { @MainActor [weak self] in
+            await self?.refreshCommentsForCurrentPage()
+        }
+    }
+
+    func handleObservedRouteChange(to url: URL, kind: BrowserSurfaceRouteChangeKind) {
+        guard url.absoluteString != "about:blank" else { return }
+        if let pending = pendingLogicalNavigation,
+           urlsMatch(url, pending.expectedTargetURL) {
+            currentURL = url
+            addressBarText = url.absoluteString
+            return
+        }
+        if pendingLogicalNavigation != nil {
+            supersedePendingLogicalNavigation()
+        }
+        let sourceURL = lastCommittedURL ?? currentURL
+        if usesRestoredSessionHistory, let sourceURL, !urlsMatch(sourceURL, url) {
+            switch kind {
+            case .replace:
+                break
+            case .pop:
+                if !reconcileRestoredPop(to: url, from: sourceURL) {
+                    appendToRestoredBackStack(sourceURL)
+                    restoredForwardStack.removeAll()
+                }
+            case .push, .unknown:
+                appendToRestoredBackStack(sourceURL)
+                restoredForwardStack.removeAll()
+            }
+        }
+        lastCommittedURL = url
+        currentURL = url
+        addressBarText = url.absoluteString
+        refreshNavigationState()
+        onSessionStateChanged?()
+    }
+
+    @discardableResult
+    private func reconcileRestoredPop(to targetURL: URL, from sourceURL: URL) -> Bool {
+        if let targetIndex = restoredBackStack.lastIndex(where: { urlsMatch($0, targetURL) }) {
+            let traversed = restoredBackStack.index(after: targetIndex)..<restoredBackStack.endIndex
+            let crossedURLs = restoredBackStack[traversed]
+            restoredBackStack = Array(restoredBackStack[..<targetIndex])
+            appendToRestoredForwardStack(sourceURL)
+            for crossedURL in crossedURLs.reversed() {
+                appendToRestoredForwardStack(crossedURL)
+            }
+            return true
+        }
+
+        if let targetIndex = restoredForwardStack.lastIndex(where: { urlsMatch($0, targetURL) }) {
+            let traversed = restoredForwardStack.index(after: targetIndex)..<restoredForwardStack.endIndex
+            let crossedURLs = restoredForwardStack[traversed]
+            appendToRestoredBackStack(sourceURL)
+            for crossedURL in crossedURLs.reversed() {
+                appendToRestoredBackStack(crossedURL)
+            }
+            restoredForwardStack = Array(restoredForwardStack[..<targetIndex])
+            return true
+        }
+
+        return false
+    }
+
+    private func appendToRestoredBackStack(_ url: URL) {
+        Self.appendBounded(url, to: &restoredBackStack)
+    }
+
+    private func appendToRestoredForwardStack(_ url: URL) {
+        Self.appendBounded(url, to: &restoredForwardStack)
+    }
+
+    private static func appendBounded(_ url: URL, to history: inout [URL]) {
+        guard history.last?.absoluteString != url.absoluteString else { return }
+        history.append(url)
+        if history.count > logicalHistoryLimit {
+            history.removeFirst(history.count - logicalHistoryLimit)
+        }
+    }
+
+    private func urlsMatch(_ lhs: URL?, _ rhs: URL?) -> Bool {
+        lhs?.absoluteString == rhs?.absoluteString
+    }
+
+    private func beginOrdinaryNavigation(to targetURL: URL, sourceURL: URL?) {
+        supersedePendingLogicalNavigation()
+        latestNavigationGeneration += 1
+        pendingLogicalNavigation = PendingLogicalNavigation(
+            generation: latestNavigationGeneration,
+            kind: .ordinary,
+            expectedTargetURL: targetURL,
+            sourceURL: sourceURL,
+            rollbackBackStack: nil,
+            rollbackForwardStack: nil
+        )
+    }
+
+    private func beginSyntheticNavigation(
+        to targetURL: URL,
+        rollbackBackStack: [URL],
+        rollbackForwardStack: [URL]
+    ) {
+        supersedePendingLogicalNavigation()
+        latestNavigationGeneration += 1
+        pendingLogicalNavigation = PendingLogicalNavigation(
+            generation: latestNavigationGeneration,
+            kind: .synthetic,
+            expectedTargetURL: targetURL,
+            sourceURL: lastCommittedURL,
+            rollbackBackStack: rollbackBackStack,
+            rollbackForwardStack: rollbackForwardStack
+        )
+    }
+
+    private func supersedePendingLogicalNavigation() {
+        guard let pending = pendingLogicalNavigation else { return }
+        if pending.kind == .synthetic,
+           let rollbackBackStack = pending.rollbackBackStack,
+           let rollbackForwardStack = pending.rollbackForwardStack {
+            restoredBackStack = rollbackBackStack
+            restoredForwardStack = rollbackForwardStack
+            refreshNavigationState()
+        }
+        pendingLogicalNavigation = nil
+    }
+
     static func makeWebView(usesEphemeralDataStore: Bool = false) -> CrispyVibesBrowserWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = usesEphemeralDataStore ? .nonPersistent() : .default()
@@ -342,6 +599,7 @@ final class BrowserPanelViewModel: ObservableObject {
     }
 
     func refreshNavigationState() {
+        webView.allowsBackForwardNavigationGestures = true
         if usesRestoredSessionHistory {
             canGoBack = !restoredBackStack.isEmpty
             canGoForward = !restoredForwardStack.isEmpty
@@ -358,7 +616,7 @@ final class BrowserPanelViewModel: ObservableObject {
             presentInsecureHTTPAlert(for: url)
             return
         }
-        load(url, abandoningRestoredHistory: true)
+        load(url, isSyntheticHistoryTraversal: false)
     }
 
     func navigateSmart(_ input: String) {
@@ -404,10 +662,19 @@ final class BrowserPanelViewModel: ObservableObject {
 
     func goBack() {
         guard canGoBack else { return }
-        if usesRestoredSessionHistory, let target = restoredBackStack.popLast() {
-            if let current = currentURL { restoredForwardStack.append(current) }
+        if usesRestoredSessionHistory, !restoredBackStack.isEmpty {
+            supersedePendingLogicalNavigation()
+            guard let target = restoredBackStack.last else { return }
+            let rollbackBackStack = restoredBackStack
+            let rollbackForwardStack = restoredForwardStack
+            restoredBackStack.removeLast()
+            if let current = currentURL { appendToRestoredForwardStack(current) }
             refreshNavigationState()
-            loadWithoutAbandoningHistory(target)
+            loadWithoutAbandoningHistory(
+                target,
+                rollbackBackStack: rollbackBackStack,
+                rollbackForwardStack: rollbackForwardStack
+            )
             return
         }
         webView.goBack()
@@ -415,10 +682,19 @@ final class BrowserPanelViewModel: ObservableObject {
 
     func goForward() {
         guard canGoForward else { return }
-        if usesRestoredSessionHistory, let target = restoredForwardStack.popLast() {
-            if let current = currentURL { restoredBackStack.append(current) }
+        if usesRestoredSessionHistory, !restoredForwardStack.isEmpty {
+            supersedePendingLogicalNavigation()
+            guard let target = restoredForwardStack.last else { return }
+            let rollbackBackStack = restoredBackStack
+            let rollbackForwardStack = restoredForwardStack
+            restoredForwardStack.removeLast()
+            if let current = currentURL { appendToRestoredBackStack(current) }
             refreshNavigationState()
-            loadWithoutAbandoningHistory(target)
+            loadWithoutAbandoningHistory(
+                target,
+                rollbackBackStack: rollbackBackStack,
+                rollbackForwardStack: rollbackForwardStack
+            )
             return
         }
         webView.goForward()
@@ -456,8 +732,31 @@ final class BrowserPanelViewModel: ObservableObject {
         zoomScale = clampedZoom
     }
 
-    private func loadWithoutAbandoningHistory(_ url: URL) {
-        load(url, abandoningRestoredHistory: false)
+    func resetLogicalHistoryTracking() {
+        supersedePendingLogicalNavigation()
+        navigationGenerations.removeAllObjects()
+        latestNavigationGeneration += 1
+        lastCommittedURL = nil
+    }
+
+    func restoreCurrentPage(_ url: URL) {
+        lastCommittedURL = url
+        loadWithoutAbandoningHistory(url)
+        currentURL = url
+        addressBarText = url.absoluteString
+    }
+
+    private func loadWithoutAbandoningHistory(
+        _ url: URL,
+        rollbackBackStack: [URL]? = nil,
+        rollbackForwardStack: [URL]? = nil
+    ) {
+        load(
+            url,
+            isSyntheticHistoryTraversal: true,
+            rollbackBackStack: rollbackBackStack ?? restoredBackStack,
+            rollbackForwardStack: rollbackForwardStack ?? restoredForwardStack
+        )
     }
 
     // MARK: - Insecure HTTP
@@ -488,19 +787,38 @@ final class BrowserPanelViewModel: ObservableObject {
         case .alertFirstButtonReturn:
             NSWorkspace.shared.open(url)
         case .alertSecondButtonReturn:
-            load(url, abandoningRestoredHistory: true)
+            load(url, isSyntheticHistoryTraversal: false)
         default:
             break
         }
     }
 
-    private func load(_ url: URL, abandoningRestoredHistory: Bool) {
-        if abandoningRestoredHistory {
-            abandonRestoredHistory()
+    private func load(
+        _ url: URL,
+        isSyntheticHistoryTraversal: Bool,
+        rollbackBackStack: [URL]? = nil,
+        rollbackForwardStack: [URL]? = nil
+    ) {
+        if usesRestoredSessionHistory {
+            if isSyntheticHistoryTraversal {
+                beginSyntheticNavigation(
+                    to: url,
+                    rollbackBackStack: rollbackBackStack ?? restoredBackStack,
+                    rollbackForwardStack: rollbackForwardStack ?? restoredForwardStack
+                )
+            } else {
+                beginOrdinaryNavigation(
+                    to: url,
+                    sourceURL: lastCommittedURL ?? currentURL
+                )
+            }
         }
         navigationError = nil
         webView.customUserAgent = Self.safariUserAgent
-        webView.load(URLRequest(url: url))
+        if let navigation = webView.load(URLRequest(url: url)),
+           let generation = pendingLogicalNavigation?.generation {
+            navigationGenerations.setObject(NSNumber(value: generation), forKey: navigation)
+        }
         addressBarText = url.absoluteString
     }
 
@@ -510,9 +828,12 @@ final class BrowserPanelViewModel: ObservableObject {
 
     func abandonRestoredHistory() {
         guard usesRestoredSessionHistory else { return }
+        supersedePendingLogicalNavigation()
+        navigationGenerations.removeAllObjects()
         usesRestoredSessionHistory = false
         restoredBackStack.removeAll()
         restoredForwardStack.removeAll()
+        refreshNavigationState()
     }
 
     // MARK: - Display
@@ -525,10 +846,52 @@ final class BrowserPanelViewModel: ObservableObject {
 
     // MARK: - Navigation Failure
 
-    private func handleNavigationFailure(url: URL?, error: NSError) {
+    private func handleNavigationFailure(
+        url: URL?,
+        error: NSError,
+        navigationGeneration: Int? = nil
+    ) {
+        if let navigationGeneration,
+           navigationGeneration < latestNavigationGeneration,
+           navigationGeneration != pendingLogicalNavigation?.generation {
+            return
+        }
+        retirePendingNavigation(navigationGeneration: navigationGeneration, allowsMissingGeneration: true)
         isLoading = false
         navigationError = error
         pageTitle = AppStrings.Browser.failedToLoad
+    }
+
+    func handleNavigationCancellation(navigationGeneration: Int?) {
+        guard navigationGeneration != nil else { return }
+        retirePendingNavigation(navigationGeneration: navigationGeneration, allowsMissingGeneration: false)
+    }
+
+    private func retirePendingNavigation(
+        navigationGeneration: Int?,
+        allowsMissingGeneration: Bool
+    ) {
+        guard let pending = pendingLogicalNavigation else { return }
+        if let navigationGeneration {
+            guard navigationGeneration == pending.generation else { return }
+        } else if !allowsMissingGeneration {
+            return
+        }
+        if pending.kind == .synthetic,
+           let rollbackBackStack = pending.rollbackBackStack,
+           let rollbackForwardStack = pending.rollbackForwardStack {
+            restoredBackStack = rollbackBackStack
+            restoredForwardStack = rollbackForwardStack
+        }
+        pendingLogicalNavigation = nil
+        refreshNavigationState()
+    }
+
+    private func consumeNavigationGeneration(for navigation: WKNavigation?) -> Int? {
+        guard let navigation,
+              let generation = navigationGenerations.object(forKey: navigation) else { return nil }
+        navigationGenerations.removeObject(forKey: navigation)
+        return generation.intValue
     }
 
     // MARK: - Element Picker
@@ -754,9 +1117,7 @@ final class BrowserPanelViewModel: ObservableObject {
         webView = replacement
         replacement.navigationDelegate = navigationDelegate
         replacement.uiDelegate = uiDelegate
-        replacement.onOpenInNewTab = { [weak self] url in
-            self?.onOpenNewBrowser?(url)
-        }
+        wireWebViewCallbacks(replacement)
         setupObservers()
         // F049-v2: re-bind the comments bridge to the new webView.
         attachCommentsBridge()
@@ -802,6 +1163,7 @@ final class BrowserPanelViewModel: ObservableObject {
 
     deinit {
         MainActor.assumeIsolated {
+            navigationGenerations.removeAllObjects()
             webViewObservers.removeAll()
             webView.stopLoading()
             webView.navigationDelegate = nil

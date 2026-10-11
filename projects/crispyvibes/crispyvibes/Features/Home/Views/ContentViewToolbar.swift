@@ -532,7 +532,8 @@ extension ContentView {
                 primarySize: vibespaceSidebarPrimarySizeBinding,
                 minPrimary: vibespaceSidebarMinPrimary,
                 maxPrimary: vibespaceSidebarMaxPrimary,
-                minSecondary: 400
+                minSecondary: 400,
+                accessibilityIdentifier: "app.sidebar.split"
             ) {
                 sidebarPrimaryPane
             } secondary: {

@@ -25,7 +25,10 @@ extension VibeSpaceTerminalOnlyView {
                         editorGroup: group,
                         containerSize: proxy.size,
                         onPin: {
-                            if let tileID = boardStore.pinPreviewToDock(fileURL: fileURL, surfaceID: surfaceID) {
+                            if let tileID = boardStore.pinPreviewToDock(
+                                fileURL: fileURL,
+                                surfaceID: surfaceID
+                            ) {
                                 coordinator.promotePreview(to: tileID)
                             }
                         },

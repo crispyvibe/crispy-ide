@@ -26,6 +26,7 @@ struct MarkdownEditorView: View {
     @State var cachedFindQuery = ""
     @State var cachedFindRanges: [Range<String.Index>] = []
     @State private var commandRequest: EditorCommandRequest?
+    @State private var commandClaimTracker = EditorCommandClaimTracker()
     @AppStorage(AppPreferences.markdownWebLinkPreferenceKey)
     private var markdownWebLinkPreferenceRaw = AppPreferences.defaultMarkdownWebLinkPreference
     @FocusState var isFindFieldFocused: Bool
@@ -171,6 +172,7 @@ struct MarkdownEditorView: View {
         .onChange(of: viewModel.fileURL) { _, _ in
             resetFindUI()
             commandRequest = nil
+            commandClaimTracker.reset()
         }
         .alert(
             "Document Error",
@@ -477,6 +479,7 @@ struct MarkdownEditorView: View {
                 context: EditorPluginContext(
                     viewModel: viewModel,
                     commandRequest: $commandRequest,
+                    commandClaimTracker: commandClaimTracker,
                     embeddedDropBridge: embeddedDropBridge,
                     markdownWebLinkPreference: MarkdownWebLinkPreference(
                         rawValue: markdownWebLinkPreferenceRaw

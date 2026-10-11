@@ -205,6 +205,22 @@ final class TerminalSessionRestorerTests: XCTestCase {
         XCTAssertEqual(decoded, entry)
     }
 
+    func testSessionEntryRejectsNonconformingNonfiniteMagnificationJSON() throws {
+        for token in ["NaN", "Infinity", "-Infinity"] {
+            let payload = """
+            {
+              "workingDirectoryPath": "/projects/test",
+              "origin": { "adHoc": {} },
+              "displayMagnification": \(token)
+            }
+            """
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(TerminalSessionEntry.self, from: Data(payload.utf8)),
+                "Strict JSON decoding must reject \(token) before session normalization."
+            )
+        }
+    }
+
     // MARK: - VibeSpaceSessionState Codable roundtrip
 
     func testVibeSpaceSessionStateCodableRoundtrip() throws {

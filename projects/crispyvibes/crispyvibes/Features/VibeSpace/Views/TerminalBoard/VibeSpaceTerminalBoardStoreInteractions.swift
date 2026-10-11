@@ -30,9 +30,9 @@ extension VibeSpaceTerminalBoardStore {
     }
 
     @discardableResult
-    func moveTerminalTabTile(
-        _ tabID: UUID,
-        relativeTo targetTabID: UUID,
+    func moveTerminalTile(
+        _ tileID: UUID,
+        relativeTo targetTileID: UUID,
         placement: TerminalTabMovePlacement,
         surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID
     ) -> Bool {
@@ -40,12 +40,8 @@ extension VibeSpaceTerminalBoardStore {
         mutate { state in
             guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
             var layout = state.surfaces[index].layout
-            guard let sourceTileID = layout.tiles.first(where: { $0.terminalTabID == tabID })?.id,
-                  let targetTileID = layout.tiles.first(where: { $0.terminalTabID == targetTabID })?.id else {
-                return
-            }
             guard layout.moveTileInLinearOrder(
-                sourceTileID,
+                tileID,
                 relativeTo: targetTileID,
                 placement: placement
             ) else { return }
@@ -53,6 +49,53 @@ extension VibeSpaceTerminalBoardStore {
             didMove = true
         }
         return didMove
+    }
+
+    @discardableResult
+    func moveTerminalTabTile(
+        projectPath: String,
+        tabID: UUID,
+        relativeToProjectPath targetProjectPath: String,
+        targetTabID: UUID,
+        placement: TerminalTabMovePlacement,
+        surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID
+    ) -> Bool {
+        let layout = layout(for: surfaceID)
+        guard let sourceTileID = layout.tiles.first(where: {
+            $0.projectPath == projectPath && $0.terminalTabID == tabID
+        })?.id,
+        let targetTileID = layout.tiles.first(where: {
+            $0.projectPath == targetProjectPath && $0.terminalTabID == targetTabID
+        })?.id else {
+            return false
+        }
+        return moveTerminalTile(
+            sourceTileID,
+            relativeTo: targetTileID,
+            placement: placement,
+            surfaceID: surfaceID
+        )
+    }
+
+    /// Legacy compatibility for callers whose board cannot contain duplicate tab IDs.
+    @discardableResult
+    func moveTerminalTabTile(
+        _ tabID: UUID,
+        relativeTo targetTabID: UUID,
+        placement: TerminalTabMovePlacement,
+        surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID
+    ) -> Bool {
+        let layout = layout(for: surfaceID)
+        guard let sourceTileID = layout.tiles.first(where: { $0.terminalTabID == tabID })?.id,
+              let targetTileID = layout.tiles.first(where: { $0.terminalTabID == targetTabID })?.id else {
+            return false
+        }
+        return moveTerminalTile(
+            sourceTileID,
+            relativeTo: targetTileID,
+            placement: placement,
+            surfaceID: surfaceID
+        )
     }
 
     // MARK: - Resize (live + commit)

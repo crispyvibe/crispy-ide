@@ -145,10 +145,12 @@ extension VibeSpaceTerminalOnlyView {
                 )
             } else if tile.isFile, let fileURL = tile.fileURL,
                       let coordinator = dockedFileViewerCoordinator {
+                let fileContext = fileOpenContext(forDockedFileURL: fileURL)
                 let group = coordinator.editorGroup(
                     for: tile.id,
                     fileURL: fileURL,
-                    fileContentProvider: fileContentProvider(forDockedFileURL: fileURL)
+                    documentReference: fileContext.reference,
+                    fileContentProvider: fileContext.provider
                 )
                 DockPinnedFileView(
                     fileURL: fileURL,
@@ -170,7 +172,11 @@ extension VibeSpaceTerminalOnlyView {
             } else if tile.isBrowser, let url = tile.browserURL,
                       let coordinator = dockedBrowserCoordinator {
                 BrowserBoardTileView(
-                    viewModel: coordinator.viewModel(for: tile.id, url: url),
+                    viewModel: coordinator.viewModel(
+                        for: tile.id,
+                        url: url,
+                        snapshot: tile.browserSession
+                    ),
                     isActive: isActive,
                     projectAccentColor: tile.projectPath.flatMap { accentColor(for: $0) },
                     onSelect: { boardStore.activateTile(tile.id, requestFocus: false, surfaceID: surfaceID) },

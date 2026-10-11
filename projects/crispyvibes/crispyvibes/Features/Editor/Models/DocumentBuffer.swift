@@ -8,10 +8,10 @@ import Foundation
 final class DocumentBuffer: ObservableObject, Identifiable {
 
     /// The document identity string (matches `FileDocumentReference.documentIdentity`).
-    let id: String
+    private(set) var id: String
 
     /// On-disk location of the document.
-    let fileURL: URL
+    private(set) var fileURL: URL
 
     /// Current buffer lifecycle state.
     @Published private(set) var state: BufferState = .loading
@@ -25,6 +25,12 @@ final class DocumentBuffer: ObservableObject, Identifiable {
     init(id: String, fileURL: URL) {
         self.id = id
         self.fileURL = fileURL
+    }
+
+    /// Retargets this live buffer without replacing its content or lifecycle state.
+    func retarget(to reference: FileDocumentReference) {
+        id = reference.documentIdentity
+        fileURL = reference.url
     }
 
     // MARK: - Computed Properties
@@ -160,6 +166,23 @@ final class DocumentBuffer: ObservableObject, Identifiable {
         activeSaveToken = token
         state = .saving(content: content, baseline: baseline, token: token)
         return token
+    }
+
+    /// Merges unsaved source content when two identities converge during migration.
+    func absorbUnsavedEdits(from source: DocumentBuffer) {
+        guard source.isDirty || source.isSaving else { return }
+        let content = source.displayContent
+        if isLoading || isFailed {
+            cancelLoad()
+            state = .clean(content: source.baseline ?? content)
+        }
+        applyEdit(content)
+    }
+
+    /// Returns an in-flight save to dirty state before its file identity changes.
+    func prepareForIdentityMigration() {
+        guard let activeSaveToken else { return }
+        didFailSave(token: activeSaveToken)
     }
 
     /// Completes a save. Guards on token match.

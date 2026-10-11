@@ -5,6 +5,16 @@ Status: draft
 
 ---
 
+## Overview
+
+Markdown provides rich/source editing, target-aware links, and continuous section/file navigation across detailed and compact content surfaces.
+
+## Dependencies
+
+- F006 (Content Viewer) — editor-group tabs, providers, comments context, and cross-file history ownership
+- F003 (Terminal Spotlight) — compact file presentation and dismissal/return semantics
+- F037 (Terminal Board Dock) — live-group pinning and immutable root persistence
+
 ## Requirements
 
 ### F008-R01: Markdown Opening and Editing
@@ -240,6 +250,10 @@ And content, caret/selection, scroll state, and unsaved edits remain intact
 
 When the global line-number mode is `All Text Views`, Markdown rich mode MUST label each annotated top-level logical block with its 1-based starting source line. Labels MUST use theme tokens and WebView presentation scaling, coexist with the independent comment gutter, add no serializable child nodes, and leave Turndown output unchanged. Source annotations MUST be cleared and recomputed after rich edits. Arbitrary HTML iframe mode MUST NOT display Markdown source-line labels.
 
+### F008-R17: Continuous Rendered Markdown Navigation Context
+
+A Markdown surface MUST keep its immutable origin/root document identity separate from the editor group's mutable current document. Same-document fragment history and cross-document linked-file history MUST form one presentation-appropriate Back/Forward contract: rendered history is consumed first, then navigation falls back to the owning editor group's file history. Compact Spotlight and dock surfaces MUST expose visible Back and Forward controls and support ⌘[ and ⌘]. The current file, not the root, MUST drive title, directory, comments key, content provider, accessibility context, and detailed-view promotion. Pinning to the board MUST preserve the live editor group on its current linked file while the persisted root remains stable, and a later render lookup MUST NOT reactivate that root.
+
 ### F008-S22: Rich line labels preserve Markdown
 
 Given a Markdown document is open in rich mode and `All Text Views` is selected
@@ -248,3 +262,38 @@ Then labels show current logical source-block starting lines
 And wrapped visual rows receive no additional labels
 And Turndown produces the same Markdown it would produce without labels
 And switching to HTML mode removes the Markdown line-number presentation class.
+
+### F008-S23: Linked-file and fragment history survives pinning and rerender
+
+Given `A.md` is the immutable root of a compact Markdown surface
+When the user follows a link to `B.md#fragment`, pins the surface to the board, and the tile rerenders
+Then the same live editor group remains current on `B.md` at `fragment`
+And the visible title, directory, comments, provider, and accessibility context identify `B.md`
+And Back returns through fragment history before cross-document history to `A.md`
+And Forward returns to `B.md#fragment`
+And the persisted root remains `A.md` without being reactivated by render lookup
+
+### F008-S24: Compact Markdown navigation uses content history
+
+Given a Markdown file is shown in Spotlight or a dock tile
+When content history is available
+Then visible Back and Forward controls reflect the combined rendered and cross-file history
+And ⌘[ and ⌘] invoke the same content-history owner as those controls
+And using Back or Forward does not dismiss Spotlight or return to a prior terminal origin.
+
+## Test Coverage
+
+| Scenario | Coverage |
+|----------|----------|
+| F008-S23 | Unit: `MarkdownNavigationViewModelTests`, `MarkdownOneShotClaimTests`, `MarkdownNavigationRuntimeContractTests`, `EditorIdentityMigrationRegressionTests`, and `EditorGroupNavigationRegressionTests` cover atomic ID-aware claims, duplicate suppression across coordinator-remount equivalents, per-document stack restoration and identity migration, native post-open no-history behavior, linked Back/Forward, bounded history, stable root lookup, and provider identity. Required UI/manual: actual SwiftUI/WKWebView remount delivery, pin/rerender presentation continuity, plus title, comments, and accessibility context. |
+| F008-S24 | Unit: claim-helper and view-model/editor-group tests cover one-shot ownership, enabled-state ownership, and command dispatch state. Required UI/manual: JavaScript delivery through a live/remounted view host, visible Spotlight/dock controls, and ⌘[/⌘] parity. |
+
+## Open Questions
+
+_None._
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-06 | Added continuous same-document/cross-document Markdown navigation, immutable root versus current-file context, compact controls, pin/rerender continuity, and regression mappings (R17, S23–S24). | — |

@@ -11,6 +11,8 @@ In-app browser provides vibespace-integrated web browsing with full navigation c
 - F003 (Terminal Spotlight) — browser spotlight preview and pin workflows
 - F002 (Terminal Board) — browser tiles on terminal board
 - F001 (Sessions & Tabs) — terminal-originated browser links
+- F006 (Content Viewer) — linked detailed browser tabs and close lifecycle
+- F037 (Terminal Board Dock) — atomic preview pinning and all-surface tile hydration
 
 ## Requirements
 
@@ -86,7 +88,7 @@ Each browser instance MUST be owned by exactly one project. When a browser is cr
 
 ### F012-R18: Project Lifecycle Coupling
 
-When a project is removed from the vibespace OR parked (F021-R09 through R11), all browsers associated with that project MUST be closed. Lifecycle parity with terminals and files: the close request goes through the existing `.closeBrowserRequested` notification pipeline so board tiles, content-viewer tabs, and orphan view-models are torn down consistently.
+When a project is removed from the vibespace OR parked (F021-R09 through R11), all browsers associated with that project MUST be closed. Lifecycle parity with terminals and files: the close request goes through the existing `.closeBrowserRequested` notification pipeline. Global teardown MUST remove a matching board presentation without returning early, snapshot and close every matching content-viewer tab across all editor groups where `browserID` equals the requested ID or legacy `linkedTileID` equals it, and only then remove orphan coordinator state. Collection MUST precede mutation so no group is skipped and each presentation is closed once.
 
 ### F012-R19: Browser Tabs in Detailed View
 
@@ -95,6 +97,10 @@ In detailed view, project-associated browsers MUST appear as content-viewer tabs
 ### F012-R20: Browser Session Persistence per Project
 
 Browser session state (URL, history stacks, zoom, theme mode per F012-R07) MUST be persisted as part of the owning project's `ProjectConfigFile.browserSessionEntries`. On vibespace restore, browser tabs MUST be restored for active (non-parked) projects. Parked projects retain their browser session entries on disk; restoration occurs as part of unpark (F021-R11).
+
+### F012-R21: Continuous Canonical Browser Session Across Surfaces
+
+A browser's immutable seed URL and stable browser/tile/project identity MUST remain distinct from its mutable current URL and history snapshot. Restored back/forward history MUST remain continuous when followed by typed navigation, page links, redirects, and observable same-page application route changes; toolbar and mouse navigation MUST dispatch to the same history owner. Board, Spotlight, and detailed presentations linked to one browser MUST use one canonical live session or its latest authoritative snapshot, and closing detail MUST preserve the board's current state rather than revert it. Current URL and page title MUST drive chrome, comments context, accessibility, and persistence; seed URL MUST be fallback-only and render lookup MUST NOT reload it over live state. Explicit preview restore/reconstruction MUST match project context and complete snapshot identity before reusing restored state; an already-live same-project Spotlight preview MUST continue its current view model even after navigation changes it from the original snapshot. Preview pinning MUST capture and persist the complete live snapshot atomically before promotion, preserve the preview if insertion fails, and prevent cross-project reuse. Hydration MUST restore browser tiles on primary, detached, visible, and minimized board surfaces.
 
 
 ## Scenarios
@@ -128,7 +134,7 @@ Browser session state (URL, history stacks, zoom, theme mode per F012-R07) MUST 
 **Given** a browser has navigation history
 **When** the user activates back or forward
 **Then** the browser navigates using parallel back/forward URL stacks maintained in the view model
-**And** if a restored session history exists, it is consumed on first back/forward and then abandoned
+**And** restored history remains the active logical history and is extended by later ordinary or observable navigation
 
 ### Scenario F012-S05: Reload control reloads the current page
 
@@ -938,6 +944,50 @@ Browser session state (URL, history stacks, zoom, theme mode per F012-R07) MUST 
 **Then** the response is an error with code `no_focused_project` (rather than silently returning empty)
 **And** the error message hints to pass `scope=vibespace` for cross-project listings
 
+### Scenario F012-S104: Restored history remains continuous through later navigation
+
+**Given** a restored browser has history `A → B` and currently displays B
+**When** the user reaches C by typed URL, page link, redirect, or observable SPA route change
+**Then** Back and Forward traverse the resulting `A → B → C` logical sequence without abandoning restored entries
+**And** toolbar buttons and mouse buttons 3/4 dispatch to the same browser view-model owner
+**And** current URL, page title, comments key, accessibility context, and persisted snapshot identify C
+
+### Scenario F012-S105: Linked board, Spotlight, and detail presentations preserve one session
+
+**Given** a browser tile has navigated `A → B → C` and is linked to Spotlight or a detailed tab
+**When** the linked presentation opens, navigates, and the detailed tab closes
+**Then** each presentation observes the canonical live session or latest authoritative snapshot
+And closing detail preserves the board browser at its latest URL and history rather than reverting to the seed or an older tile snapshot
+And reopening or restoring continues Back/Forward from that latest state
+
+### Scenario F012-S106: Browser preview pin is atomic and failure preserves preview
+
+**Given** a project-scoped browser preview has live URL, history, zoom, theme, and comments presentation state
+**When** pinning to the board succeeds
+**Then** one complete snapshot is captured, inserted into board persistence, and committed before the preview presentation is retired
+And the promoted persistent session restores that same snapshot and project context
+**When** tile insertion fails
+**Then** no partial tile or stale snapshot is published and the preview remains available for retry
+
+### Scenario F012-S107: Hydration restores every board surface without stale preview reuse
+
+**Given** persisted browser tiles exist on primary or detached surfaces and may be visible or minimized
+When the vibespace hydrates
+Then every persisted browser snapshot is restored to its matching tile identity
+And explicit preview restore/reconstruction reuses state only when project context and complete snapshot identity match
+And an already-live same-project Spotlight preview continues its current view model after navigation changes the live snapshot
+And a stale preview from another project cannot supply the restored or promoted session
+
+### Scenario F012-S108: One global close removes board and all direct or legacy-linked details
+
+**Given** one requested browser identity has a board tile and matching detailed browser tabs in multiple editor groups
+**And** some restored tabs use distinct legacy `browserID` values linked by `linkedTileID`
+**When** `.closeBrowserRequested` is handled
+**Then** the board presentation is removed without ending teardown
+**And** every tab whose `browserID` or `linkedTileID` matches the request is collected and closed exactly once
+**And** unrelated browser tabs remain open
+**And** orphan coordinator cleanup runs after tab teardown
+
 ## Acceptance Criteria
 
 - Browser navigation loads pages within standard WebKit timelines.
@@ -966,6 +1016,9 @@ Browser session state (URL, history stacks, zoom, theme mode per F012-R07) MUST 
 - Browser tabs in detailed view respect viewer scope filtering by project (F012-R19, extends F006-R13).
 - Browser session state is persisted per-project in `ProjectConfigFile.browserSessionEntries`; restored for active projects on vibespace open and on unpark (F012-R20).
 - CLI `browser.open` resolves an owning project (env → focused project) before dispatching, returning `no_focused_project` when neither resolves (F012-R17 CLI parity).
+- Restored history remains continuous across typed, page, redirect, and observable SPA navigation; toolbar and mouse controls use one owner (F012-R21).
+- Linked board, Spotlight, and detail presentations preserve the latest canonical session, including after detail close and restore (F012-R21).
+- Preview promotion persists one authoritative snapshot atomically; failed insertion preserves the preview; hydration includes detached and minimized surfaces (F012-R21).
 
 ## Test Coverage
 
@@ -975,6 +1028,11 @@ Browser session state (URL, history stacks, zoom, theme mode per F012-R07) MUST 
 | `browser.open` CLI handler: env-path takes precedence, focused-project fallback, structured error when neither resolves, browser_id tagged identifier | `tests/unit/Models/CLICommandRouterBrowserOpenTests.swift` |
 | `browser.list` CLI handler: default vibespace scope, project scope filtering, project_path per entry, no_focused_project for unresolvable callers | `tests/unit/Models/CLICommandRouterBrowserListTests.swift` |
 | Existing browser feature tests (preview reuse, agent API, restore flows) | `tests/unit/Features/VibeSpace/Services/Browser/BrowserFeatureTests.swift` |
+| F012-S104 restored `A → B → C` continuity | Unit: `BrowserNavigationRegressionTests` and `BrowserLogicalHistoryRaceTests` cover ordinary navigation, restore/Back/Forward supersession by immediate typed or clicked navigation, stale-generation finish suppression, 100-entry restore/append/snapshot bounds, external Forward ordering, arbitrary-depth SPA pop reconciliation, toolbar/mouse owner dispatch, and intercepted `.backForward` actions. Required UI/manual: real-page redirect delegate ordering and trackpad gesture delivery through WebKit. |
+| F012-S105 linked board/detail close continuity | Unit: `BrowserNavigationRegressionTests` covers shared live ownership plus decoded legacy multi-clone hydration and stale-close non-reversion. Required UI/manual: board/detail chrome remains synchronized during live navigation. |
+| F012-S106 immediate persistence and failed-pin preservation | Unit: `VibeSpaceTerminalBoardStoreBrowserPinTests` and coordinator tests cover supplied snapshot persistence, full-board rejection, and promotion state. Required UI/manual: preview remains visibly retryable after rejection. |
+| F012-S107 detached/minimized hydration and stale-preview isolation | Unit: browser board/coordinator regressions cover detached/minimized snapshot enrichment and project-scoped preview isolation. Required UI/manual: launch-time WebView hydration on every surface. |
+| F012-S96–S97 and F012-S108 project close/park/global teardown | Unit: `BrowserGlobalTeardownTests` verifies park-time project collection emits each owned ID once, captures owned snapshots, excludes other projects, and global teardown removes a simultaneous board presentation plus every direct or decoded legacy-linked detail across groups while retaining unrelated tabs. Notification mounting inside full `ContentView` remains integration-only. |
 
 ## Open Questions
 
@@ -988,4 +1046,6 @@ _None._
 | 2026-04-18 | Complete rewrite to reflect implemented code state with 86 scenarios | — |
 | 2026-04-18 | Fix BDD format: add Then clauses, split multi-When scenarios into S87–S93 | — |
 | 2026-05-22 | Add project ownership feature (F012-R17–R20, scenarios S94–S99) — 99 scenarios total | — |
+| 2026-10-09 | Made global close collect every direct or legacy-linked detail across groups after board removal and added project-park/global-teardown coverage (S108). | — |
+| 2026-10-06 | Replaced restored-history abandonment with continuous logical history; added canonical multi-surface session ownership, atomic preview promotion, all-surface hydration, stale-preview isolation, and S104–S107 test mappings (R21). | — |
 | 2026-05-22 | CLI parity: `browser.open` resolves owning project before dispatch (scenarios S100–S102; new error code `no_focused_project`) — 102 scenarios total | — |

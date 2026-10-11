@@ -12,7 +12,7 @@ Technical design pending. This document will cover the architecture, data flow, 
 
 Optical zoom and pan do not change `GhosttyTerminalView.frame`, `bounds`, `CAMetalLayer.drawableSize`, or the Ghostty surface size. The terminal grid therefore does not reflow during those interactions. Host layout changes may still establish a new canonical terminal frame; optical interaction itself only changes the ancestor compositor transform.
 
-The supported session magnification range is `1×...3×`. `TerminalSession.displayMagnification` owns the persisted per-session value, while each active host owns its bounded pan origin. Session replacement resets the host transform before applying the incoming session's saved magnification.
+The supported session magnification range is `0.5×...3×`. Scale above `1×` remains continuous and anchor-aware. Scale at or below `1×` uses a canonical centered origin in both axes and ignores pan, so the original fixed grid appears with noninteractive blank margins rather than reflowing. `TerminalSession.displayMagnification` owns the persisted per-session value, while each active host owns only above-normal bounded pan. Session replacement and ownership handoff reset gesture accumulation and the host transform before applying the incoming session's normalized magnification.
 
 Other terminal session architecture remains documented in the runtime structure below.
 
@@ -20,15 +20,29 @@ Other terminal session architecture remains documented in the runtime structure 
 
 ### Optical Input Flow
 
-1. Pinch input updates `TerminalSession.displayMagnification`; each recognizer delta is consumed once and reset.
-2. `TerminalOpticalViewport` updates its affine transform around the gesture anchor and clamps the visible origin.
-3. AppKit hit testing converts the incoming superview point to viewport coordinates, applies the inverse affine transform, and routes the event to the hosted terminal.
-4. `GhosttyTerminalView` forwards logical terminal coordinates to Ghostty. Presentation-only geometry such as context menus and IME candidate rectangles uses the forward transform.
-5. Selection preserves a balanced position → press → drag positions → final position → release sequence. Focus loss, app deactivation, detach, and ownership handoff cancel an outstanding forwarded press.
+1. `NSMagnificationGestureRecognizer` input is converted to a pure `TerminalMagnificationGestureState.Event`; each changed delta is consumed once and recognizer accumulation is reset.
+2. Above `1×`, the state applies continuous multiplicative deltas. Crossing inward clamps to exactly `1×` and enters a locked mode until end/cancel.
+3. A new gesture at or below `1×` accumulates signed deltas. Threshold crossings move one or more adjacent `0.1×` steps; reversal cancels opposing partial accumulation. Reaching `1×` from below locks until another gesture.
+4. Runtime/API calls to `TerminalSession.normalizedDisplayMagnification` map non-finite values to `1×`, clamp finite values to `0.5×...3×`, snap only below-normal values to tenths with midpoint ties toward `1×`, and leave finite above-normal values continuous.
+5. `TerminalOpticalViewport` updates its affine transform. Below normal it ignores the gesture anchor and centers fixed content; above normal it preserves the anchor and clamps pan.
+6. AppKit hit testing converts the incoming superview point to viewport coordinates, applies the inverse affine transform, rejects blank-margin points outside the fixed terminal frame, and routes displayed terminal points to the hosted terminal. At or below `1×`, scroll forwarding applies the same displayed-frame containment check, so vertical and horizontal scroll over blank margins are consumed by the viewport.
+7. `GhosttyTerminalView` forwards logical terminal coordinates to Ghostty. Presentation-only geometry such as context menus and IME candidate rectangles uses the forward transform.
+8. Selection preserves a balanced position → press → drag positions → final position → release sequence. Focus loss, app deactivation, detach, and ownership handoff cancel an outstanding forwarded press.
 
 ### Magnification Persistence
 
-`ProjectTerminalSessionPersistence.snapshot` writes `TerminalSessionEntry.displayMagnification`. Restore and session replacement clamp decoded values through `TerminalSession.setDisplayMagnification`; legacy values below `1×` normalize to `1×`.
+`ProjectTerminalSessionPersistence.snapshot` writes canonical `TerminalSessionEntry.displayMagnification`. Standard JSON decoding remains strict: malformed or nonconforming numeric tokens, including serialized non-finite spellings, fail the existing persistence integrity/decode handling before a session is restored. Successfully decoded values then pass through `TerminalSession.normalizedDisplayMagnification` during initialization, explicit set/adjust, restart replacement, and restore. Missing values restore at `1×`; finite out-of-range values clamp; finite below-normal values snap to the nearest tenth with exact midpoint ties toward normal. Runtime/API non-finite inputs normalize to `1×`. Valid `0.5×...0.9×` steps and continuous finite `1×...3×` values survive snapshot/restore and host handoff.
+
+### Magnification Gesture State Machine
+
+| Mode | Entry | Changed-event behavior | Exit |
+|------|-------|------------------------|------|
+| Inactive | End/cancel/reset | A changed event defensively begins from current normalized scale. | Begin |
+| Continuous above normal | Begin above `1×`, or a new outward gesture at `1×` | Apply continuous multiplicative delta while result remains above `1×`. | Crossing inward clamps to `1×` and locks. |
+| Discrete at/below normal | Begin at `0.5×...1×` | Accumulate signed delta; each threshold advances one adjacent tenth step; reversal cancels partial accumulation. | Reaching `1×` outward locks; end/cancel resets. |
+| Locked at normal | Crossing `1×` from either direction | Ignore all further inward and outward changes and return exactly `1×`. | End/cancel only. |
+
+Session or terminal replacement, detach, and ownership transfer reset host gesture accumulation. Mounted tests call a narrow pure-event seam rather than mutating `NSGestureRecognizer.state`, which is AppKit-owned.
 
 ## API / Command Contracts
 
@@ -65,8 +79,10 @@ _Pending._
 ## Migration / Rollout Notes
 
 - Existing session entries without `displayMagnification` restore at `1×`.
-- Values persisted by earlier builds below `1×` are accepted but normalized to `1×` on restore and the next snapshot.
-- SwiftTerm remains at normal optical scale; Ghostty owns transformed pointer and presentation geometry.
+- Standard JSON persistence decoding rejects malformed or nonconforming numeric tokens, including serialized non-finite spellings, through the existing integrity/decode failure path before session normalization; no permissive non-finite decoding is enabled.
+- Successfully decoded finite out-of-range values clamp to `0.5×...3×`; finite values below `1×` snap to the nearest tenth with midpoint ties toward `1×` and are rewritten canonically on the next snapshot. Runtime/API non-finite values normalize to `1×`.
+- Valid subnormal steps are preserved across init, set/adjust, restart replacement, host handoff, snapshot, and restore.
+- SwiftTerm remains at normal optical presentation; the gated compositor transform and transformed pointer geometry are Ghostty-host behavior.
 
 ## File Structure
 
@@ -96,7 +112,7 @@ _Pending._
   - Installed CLI tool detection and preset management.
 
 - `TerminalSessionAppearance.swift`
-  - `TerminalSession` extension for appearance, density, and `1×...3×` optical magnification bounds.
+  - `TerminalSession` extension for appearance, density, and `0.5×...3×` optical magnification bounds.
 
 - `TerminalSessionCommandDispatch.swift`
   - `TerminalSession` extension for command dispatch gating and pending command queue.
@@ -134,7 +150,7 @@ _Pending._
   - Output tracking for insight.
 
 - `GhosttyTerminalRuntime.swift`
-  - Ghostty runtime singleton.
+  - Lazily created runtime owned by the injected `TerminalServices` instance from `AppContainer`; it is not a production singleton.
 
 - `GhosttyTerminalSupport.swift`
   - Support types.
@@ -352,3 +368,9 @@ Behavior:
 - Starts shell from `SHELL` environment variable
 - Falls back to `/bin/zsh`
 - Maintains terminal state per tab session
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-09 | Documented pure gesture-state flow, `0.5×...3×` runtime normalization, hard `1×` gates, discrete below-normal steps, centered fixed-grid transform/input behavior, strict serialized JSON decoding with finite-value canonicalization, and mounted test seams. | — |

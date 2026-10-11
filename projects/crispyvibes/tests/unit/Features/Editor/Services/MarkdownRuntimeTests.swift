@@ -1,5 +1,6 @@
 import WebKit
 import XCTest
+@testable import CrispyVibes
 
 @MainActor
 final class MarkdownRuntimeTests: XCTestCase {
@@ -517,6 +518,32 @@ final class MarkdownRuntimeTests: XCTestCase {
         XCTAssertEqual(result, [["PRE", "1", "5"], ["P", "6", "6"]])
     }
 
+    func testMarkdownNavigationRestoreBridgeBoundsAndRehydratesBothStacks() async throws {
+        let (webView, _) = try await loadEditor()
+        let back = (0...MarkdownNavigationState.maximumHistoryCount).map {
+            ["x": $0, "y": $0 * 2]
+        }
+        let forward = [["x": 8, "y": 16], ["x": 12, "y": 24]]
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "backScrollPositions": back,
+            "forwardScrollPositions": forward
+        ])
+        let payloadJSON = try XCTUnwrap(String(data: payload, encoding: .utf8))
+
+        let result = try await evaluate(
+            "window.crispyvibesRestoreMarkdownNavigationState(\(payloadJSON));"
+                + "[markdownNavigationHistory.length, markdownNavigationHistory[0].x,"
+                + " markdownForwardNavigationHistory.length, markdownForwardNavigationHistory[1].y];",
+            in: webView
+        ) as? [NSNumber]
+
+        let values = try XCTUnwrap(result)
+        XCTAssertEqual(values[0].intValue, MarkdownNavigationState.maximumHistoryCount)
+        XCTAssertEqual(values[1].intValue, 1)
+        XCTAssertEqual(values[2].intValue, 2)
+        XCTAssertEqual(values[3].intValue, 24)
+    }
+
     private func loadEditor() async throws -> (WKWebView, MessageHandler) {
         let readyExpectation = expectation(description: "Markdown editor ready")
         let handler = MessageHandler(readyExpectation: readyExpectation)
@@ -562,5 +589,61 @@ final class MarkdownRuntimeTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("crispyvibes/Resources/MarkdownRuntime", isDirectory: true)
+    }
+}
+
+
+@MainActor
+final class MarkdownNavigationRuntimeContractTests: XCTestCase {
+    func testRuntimeDeclaresForwardHistoryStateCallbacksAndCommandFallback() throws {
+        let runtime = try String(contentsOf: runtimeURL, encoding: .utf8)
+
+        XCTAssertTrue(runtime.contains("var markdownForwardNavigationHistory = [];"))
+        XCTAssertTrue(runtime.contains("canForward: markdownForwardNavigationHistory.length > 0"))
+        XCTAssertTrue(runtime.contains("markdownForwardNavigationHistory = [];"))
+        XCTAssertTrue(runtime.contains("window.crispyvibesNavigateHistory = function(direction)"))
+        XCTAssertTrue(runtime.contains("window.webkit.messageHandlers.markdownNavigationState"))
+        XCTAssertTrue(runtime.contains("window.webkit.messageHandlers.markdownNavigationFallback"))
+        XCTAssertTrue(runtime.contains("event.metaKey && !event.shiftKey && !event.altKey"))
+        XCTAssertTrue(runtime.contains("event.key === \"[\" || event.key === \"]\""))
+        XCTAssertTrue(runtime.contains("postMarkdownNavigationFallback(direction);"))
+    }
+
+    func testNativeBridgeRegistersStateAndFallbackHandlersAndPostOpenSkipsSameDocumentHistory() throws {
+        let renderedEditor = try source("Features/Editor/Views/MarkupRenderedEditor.swift")
+        let lifecycle = try source("Features/Editor/ViewModels/MarkdownViewModelFileLifecycle.swift")
+        let plugin = try source("Features/Editor/Views/MarkdownEditorPlugins.swift")
+
+        XCTAssertTrue(renderedEditor.contains("case \"markdownNavigationState\":"))
+        XCTAssertTrue(renderedEditor.contains("case \"markdownNavigationFallback\":"))
+        XCTAssertTrue(renderedEditor.contains("contentController.add(context.coordinator, name: \"markdownNavigationState\")"))
+        XCTAssertTrue(renderedEditor.contains("contentController.add(context.coordinator, name: \"markdownNavigationFallback\")"))
+        XCTAssertTrue(renderedEditor.contains("window.crispyvibesNavigateToAnchor"))
+        XCTAssertTrue(renderedEditor.contains("request.recordsHistory ? \"true\" : \"false\""))
+        XCTAssertTrue(lifecycle.contains("recordsHistory: false"))
+        XCTAssertTrue(plugin.contains("viewModel.updateRenderedNavigationState("))
+        XCTAssertTrue(plugin.contains("viewModel.handleRenderedNavigationFallback(direction)"))
+    }
+
+    private var projectSourceRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("crispyvibes", isDirectory: true)
+    }
+
+    private var runtimeURL: URL {
+        projectSourceRoot.appendingPathComponent("Resources/MarkdownRuntime/editor.html")
+    }
+
+    private func source(_ relativePath: String) throws -> String {
+        try String(
+            contentsOf: projectSourceRoot.appendingPathComponent(relativePath),
+            encoding: .utf8
+        )
     }
 }

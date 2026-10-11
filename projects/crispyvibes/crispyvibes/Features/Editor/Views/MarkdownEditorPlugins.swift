@@ -3,6 +3,7 @@ import SwiftUI
 struct EditorPluginContext {
     let viewModel: MarkdownViewModel
     let commandRequest: Binding<EditorCommandRequest?>
+    let commandClaimTracker: EditorCommandClaimTracker
     let embeddedDropBridge: ContentViewerEmbeddedDropBridge?
     let markdownWebLinkPreference: MarkdownWebLinkPreference
 }
@@ -55,16 +56,32 @@ private struct MarkupEditorPlugin: EditorContentPlugin {
         }
 
         let renderedMode: MarkupRenderedEditor.Mode = viewModel.documentType == .markdown ? .markdown : .html
+        let documentID = viewModel.currentDocumentID
         let renderedEditor = MarkupRenderedEditor(
             mode: renderedMode,
             baseDirectoryURL: viewModel.fileURL?.deletingLastPathComponent(),
             commandRequest: context.commandRequest.wrappedValue,
+            commandClaimTracker: context.commandClaimTracker,
             webLinkPreference: context.markdownWebLinkPreference,
+            documentID: documentID,
             navigationRequest: viewModel.richNavigationRequest(
-                for: viewModel.currentDocumentID
+                for: documentID
             ),
-            onNavigationRequestConsumed: { requestID in
-                viewModel.consumeRichNavigationRequest(id: requestID)
+            navigationState: viewModel.renderedNavigationState(for: documentID),
+            navigationCommandRequest: viewModel.renderedNavigationCommand(
+                for: documentID
+            ),
+            onNavigationRequestClaimed: { requestID in
+                viewModel.claimRichNavigationRequest(id: requestID)
+            },
+            onNavigationCommandClaimed: { requestID in
+                viewModel.claimRenderedNavigationCommand(id: requestID)
+            },
+            onNavigationStateChanged: { state in
+                viewModel.updateRenderedNavigationState(state)
+            },
+            onNavigationFallback: { direction in
+                viewModel.handleRenderedNavigationFallback(direction)
             },
             onLinkAction: { request in
                 viewModel.handleMarkdownLinkAction(request)
@@ -76,7 +93,7 @@ private struct MarkupEditorPlugin: EditorContentPlugin {
                 set: { viewModel.userDidEdit($0) }
             )
         )
-        .id("\(renderedMode == .markdown ? "markdown" : "html")-editor-\(viewModel.fileURL?.path ?? "")")
+        .id("\(renderedMode == .markdown ? "markdown" : "html")-editor-\(viewModel.currentDocumentID ?? "")")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         return AnyView(renderedEditor)

@@ -16,6 +16,7 @@ The in-app browser embeds WKWebView to render arbitrary web content within the v
 | Browser ↔ SSH SOCKS5 proxy | Traffic routed through SSH tunnel for remote browsing. |
 | JavaScript bridge ↔ ASAuthorizationController | WebAuthn passkey operations bridge between web content and system auth. |
 | Browser ↔ BrowserHistoryStore | Frecency-ranked history persisted as JSON; contains visited URLs. |
+| Preview/board/detail session coordinator ↔ Persistence | Project-scoped preview snapshots and linked tile/detail snapshots cross presentation and persistence boundaries. |
 
 ## Attack Surfaces
 
@@ -37,77 +38,84 @@ The in-app browser embeds WKWebView to render arbitrary web content within the v
 - **Vector:** Crispy injects JavaScript for find-in-page, console capture, and element picker. If page content can influence the injected script (e.g., via DOM manipulation that alters expected element structure), it could hijack the injection context.
 - **Impact:** Page-level XSS within the WKWebView sandbox; potential data exfiltration from the page.
 - **Likelihood:** Low — injected scripts use `WKUserScript` or `evaluateJavaScript` with static templates; page content cannot modify the injection source.
-- **Mitigation:** All injected JavaScript MUST be static templates that do not interpolate page-derived values into executable code. `TreeWalker`-based find uses text node comparison, not innerHTML parsing. Console capture overrides are set at document-start. Linked NFR: SEC-Input-Sanitization.
+- **Mitigation:** All injected JavaScript MUST be static templates that do not interpolate page-derived values into executable code. `TreeWalker`-based find uses text node comparison, not innerHTML parsing. Console capture overrides are set at document-start. Linked NFR: SEC-3a.
 
 ### F012-T02: Agent API enables arbitrary JavaScript execution
 
 - **Vector:** The `browser.eval` command executes arbitrary JavaScript provided by the agent. A compromised or malicious agent could exfiltrate page data, modify DOM, or interact with authenticated sessions.
 - **Impact:** Full page-context control — cookie theft, form manipulation, data exfiltration.
 - **Likelihood:** Medium — by design, the agent API has full page control. Risk depends on agent trust model.
-- **Mitigation:** Agent API access MUST be gated by the ACP permission system. The `browser.eval` command SHOULD be logged in ACP observability. Agent sessions require explicit user initiation. The browser runs in WKWebView's process sandbox, limiting system-level impact. Linked NFR: SEC-Input-Sanitization.
+- **Mitigation:** Agent sessions require explicit user initiation, browser commands resolve a live browser ID through the local Agent CLI router, and the browser remains inside WKWebView's process sandbox. The current dispatch path does not add an ACP permission check or dedicated per-action structured audit event before `BrowserAgentAPI.dispatch`; those controls remain required hardening, especially for `browser.eval`. Linked NFRs: SEC-3a, OBS-1.
 
 ### F012-T03: URL spoofing via address bar resolution logic
 
 - **Vector:** Crafted input that looks like a search query but resolves as a URL (or vice versa) could navigate the user to a phishing site. For example, input like `evil.com login.bank.com` might be treated as a URL.
 - **Impact:** User navigates to attacker-controlled site believing it's a search result.
 - **Likelihood:** Low — resolution logic checks for dots/colons (URL) vs. spaces (search).
-- **Mitigation:** Address bar resolution follows explicit rules: contains "localhost" → http://, contains dot or colon → https://, contains spaces or no pattern match → search query. The address bar MUST always display the actual loaded URL after navigation completes. Linked NFR: SEC-Input-Sanitization.
+- **Mitigation:** Address bar resolution follows explicit rules: contains "localhost" → http://, contains dot or colon → https://, contains spaces or no pattern match → search query. The address bar MUST always display the actual loaded URL after navigation completes. Linked NFR: SEC-3a.
 
 ### F012-T04: Browsing history leakage from JSON persistence
 
 - **Vector:** The `BrowserHistoryStore` persists up to 5000 URL entries as JSON in the app's data directory. Any same-user process can read this file.
 - **Impact:** Disclosure of user's browsing history within Crispy.
 - **Likelihood:** Medium — file is plaintext, accessible to same-user processes.
-- **Mitigation:** History is stored in the app's sandboxed data directory. `clearBrowsingData()` removes both history JSON and WKWebsiteDataStore data. Users can clear history on demand. No history is transmitted externally. Linked NFR: SEC-Data-Protection.
+- **Mitigation:** History is stored in the app's sandboxed data directory. `clearBrowsingData()` removes both history JSON and WKWebsiteDataStore data. Users can clear history on demand. No history is transmitted externally. Linked NFR: SEC-2.
 
 ### F012-T05: SQL injection in browser history import
 
 - **Vector:** `BrowserDataImporter` reads Chrome/Safari SQLite databases using hardcoded SQL queries. If the query construction were dynamic, malicious database content could inject SQL.
 - **Impact:** Arbitrary SQLite operations on the imported database (read-only risk since import only reads).
 - **Likelihood:** Very low — queries are static string literals with no interpolation of external values.
-- **Mitigation:** Import queries are compile-time constants (confirmed in `BrowserDataImporter`). No user input is interpolated into SQL. The databases are opened read-only. Safari import uses a temp file copy to avoid locking the live database. Linked NFR: SEC-Input-Sanitization.
+- **Mitigation:** Import queries are compile-time constants (confirmed in `BrowserDataImporter`). No user input is interpolated into SQL. The databases are opened read-only. Safari import uses a temp file copy to avoid locking the live database. Linked NFR: SEC-3a.
 
 ### F012-T06: Insecure HTTP allowlist bypass
 
 - **Vector:** Overly broad wildcard patterns in `customInsecureHTTPAllowlist` (e.g., `*`) could disable HTTP blocking entirely, exposing the user to network sniffing on all HTTP connections.
 - **Impact:** Credentials and data transmitted in cleartext.
 - **Likelihood:** Low — requires user to explicitly configure broad patterns.
-- **Mitigation:** Default allowlist is limited to localhost variants (127.0.0.1, ::1, 0.0.0.0, localhost). Custom patterns require explicit user action. The insecure HTTP alert provides three options (Open in Default Browser, Proceed, Cancel) for non-allowlisted hosts. Linked NFR: SEC-Data-Protection.
+- **Mitigation:** Default allowlist is limited to localhost variants (127.0.0.1, ::1, 0.0.0.0, localhost). Custom patterns require explicit user action. The insecure HTTP alert provides three options (Open in Default Browser, Proceed, Cancel) for non-allowlisted hosts. Linked NFR: SEC-2.
 
 ### F012-T07: Download path traversal or overwrite
 
 - **Vector:** A malicious server sends a `Content-Disposition` header with a filename containing path traversal characters (e.g., `../../.ssh/authorized_keys`).
 - **Impact:** File written to unexpected location.
 - **Likelihood:** Very low — downloads use NSSavePanel which shows the user the exact save location; WebKit sanitizes suggested filenames.
-- **Mitigation:** Downloads use a two-phase flow: temporary file then NSSavePanel for final location. The user explicitly confirms the save path. WebKit's download delegate sanitizes the suggested filename. Linked NFR: SEC-Input-Sanitization.
+- **Mitigation:** Downloads use a two-phase flow: temporary file then NSSavePanel for final location. The user explicitly confirms the save path. WebKit's download delegate sanitizes the suggested filename. Linked NFR: SEC-3a.
 
 ### F012-T08: Search suggestion privacy leakage
 
 - **Vector:** Address bar keystrokes are sent to Google Suggest API after 250ms debounce when `searchSuggestionsEnabled` is true. This leaks partial queries to Google.
 - **Impact:** Privacy — partial URLs, search terms, and potentially sensitive text sent to third party.
 - **Likelihood:** Medium — enabled by default (per spec).
-- **Mitigation:** Search suggestions are configurable (`searchSuggestionsEnabled`). Requests time out after 1 second. Users can disable remote suggestions. Only the query text is sent, not browsing context. Linked NFR: SEC-Data-Protection.
+- **Mitigation:** Search suggestions are configurable (`searchSuggestionsEnabled`). Requests time out after 1 second. Users can disable remote suggestions. Only the query text is sent, not browsing context. Linked NFR: SEC-2.
 
 ### F012-T09: WebAuthn relay attack via JavaScript bridge
 
 - **Vector:** A malicious page crafts a `navigator.credentials.create/get` call with attacker-controlled parameters, attempting to register a passkey for an attacker's relying party or authenticate to an unintended service.
 - **Impact:** Credential confusion — user creates passkey for wrong relying party.
 - **Likelihood:** Low — ASAuthorizationController shows the relying party domain to the user for confirmation.
-- **Mitigation:** WebAuthn operations are delegated to `ASAuthorizationController` which displays the relying party to the user. The system enforces origin validation. The `LeakAvoider` pattern prevents retain cycles but does not affect security. Linked NFR: SEC-Data-Protection.
+- **Mitigation:** WebAuthn operations are delegated to `ASAuthorizationController` which displays the relying party to the user. The system enforces origin validation. The `LeakAvoider` pattern prevents retain cycles but does not affect security. Linked NFR: SEC-2.
 
 ### F012-T10: Resource exhaustion via console message flooding
 
 - **Vector:** A malicious page floods `console.log()` to fill the 512-entry capture buffer rapidly, consuming memory and potentially causing UI lag in the developer tools view.
 - **Impact:** Minor memory pressure; developer tools UI slowdown.
 - **Likelihood:** Low.
-- **Mitigation:** Console capture is capped at 512 entries with `flushConsoleMessages()`. The buffer is fixed-size. Developer tools auto-refresh is on a 2-second timer, not per-message. Linked NFR: PERF-Responsiveness.
+- **Mitigation:** Console capture is capped at 512 entries with `flushConsoleMessages()`. The buffer is fixed-size. Developer tools auto-refresh is on a 2-second timer, not per-message. Linked NFR: PERF-3.
 
 ### F012-T11: Browser session leakage across projects via path collision
 
 - **Vector:** Two projects mounted at paths that, after normalization, collide (e.g., one path is a prefix-extension of another, or a relinked path inadvertently re-uses a stale identifier) could surface browsers from one project to another.
 - **Impact:** Persisted browser sessions (URL history, captured state) appear under the wrong project, potentially exposing per-project context to a different ownership boundary.
 - **Likelihood:** Low. `VibeSpaceValidator.normalizedPath` standardizes paths before they become identifiers; the relink flow migrates path-keyed state via `moveProjectAssociatedState`.
-- **Mitigation:** All ownership comparisons use exact-match on normalized paths (`URL(fileURLWithPath:).standardizedFileURL.path`). `BrowserSessionEntry` is keyed by `browserID` (UUID) within `ProjectConfigFile.browserSessionEntries`; the file is itself integrity-signed (HMAC-SHA256) so cross-project tampering on disk is detectable. Linked NFR: SEC-2 (Data Integrity), SEC-Data-Protection.
+- **Mitigation:** All ownership comparisons use exact-match on normalized paths (`URL(fileURLWithPath:).standardizedFileURL.path`). `BrowserSessionEntry` is keyed by `browserID` (UUID) within `ProjectConfigFile.browserSessionEntries`; the file is itself integrity-signed (HMAC-SHA256) so cross-project tampering on disk is detectable. Linked NFRs: SEC-2 (Data Integrity), SEC-7.
+
+### F012-T12: Stale preview or linked snapshot crosses session identity
+
+- **Vector:** A preview is reused by URL alone across projects, a stale detail snapshot wins over a newer tile revision, or non-atomic promotion retires a preview before its complete history snapshot is persisted.
+- **Impact:** URLs, history, comments presentation state, or authenticated page context may appear in the wrong project; closing detail may silently roll a board browser back; failed pinning may lose the only live preview.
+- **Likelihood:** Medium without identity and ordering guards because one browser can be presented by preview, board, Spotlight, and detail hosts.
+- **Mitigation:** Explicit preview restore/reconstruction requires equal project path and complete snapshot identity, while an already-live same-project Spotlight preview continues its current view model as navigation changes the snapshot. Linked presentations share the same live view model when available; revision ordering and close-time writeback select the newest snapshot; tile ID is allocated before insertion; board persistence commits the complete live snapshot before preview retirement; failed insertion leaves preview state untouched. Hydration restores by tile ID across every surface. Linked NFRs: SEC-2, SEC-7, REL-1.
 
 ## Residual Risks
 
@@ -120,8 +128,15 @@ The in-app browser embeds WKWebView to render arbitrary web content within the v
 
 | NFR | Status | Notes |
 |-----|--------|-------|
-| SEC-Input-Sanitization | Compliant | Static JS templates; no SQL interpolation; URL resolution rules enforced. |
-| SEC-Data-Protection | Compliant | History clearable; downloads user-confirmed; suggestions configurable. |
-| PERF-Responsiveness | Compliant | Console capped; suggestions debounced; crash recovery transparent. |
-| A11Y | Partial | VoiceOver keyboard navigation planned (F012-S79). |
-| OBS | Compliant | Agent API actions logged via ACP observability when enabled. |
+| SEC-3a | Compliant | Static JS templates; no SQL interpolation; URL resolution rules enforced. |
+| SEC-2 | Compliant | History clearable; downloads user-confirmed; suggestions configurable; project/snapshot identity prevents stale cross-project preview reuse. |
+| PERF-3 | Compliant | Console capped; suggestions debounced; crash recovery transparent. |
+| A11Y-1, A11Y-2 | Partial | VoiceOver and keyboard navigation remain planned in F012-S79. |
+| OBS-1 | Partial | Session/navigation lifecycle emits structured events, but Agent API actions—including `browser.eval`—do not yet have a dedicated per-action structured audit event or ACP permission-gate record. |
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-11 | Canonicalized accessibility and observability NFR references during final documentation audit. | — |
+| 2026-10-06 | Added T12 for stale cross-project preview/linked-session identity, detail rollback, and non-atomic promotion; documented project/snapshot matching and commit-before-retire mitigation. | — |

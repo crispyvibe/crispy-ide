@@ -4,6 +4,8 @@ import WebKit
 final class CrispyVibesBrowserWebView: WKWebView {
     var allowsFirstResponderAcquisition: Bool = true
     var onOpenInNewTab: ((URL) -> Void)?
+    var onNavigateBack: (() -> Void)?
+    var onNavigateForward: (() -> Void)?
     private var pointerFocusAllowanceDepth: Int = 0
     private var middleClickTimestamp: Date?
 
@@ -70,10 +72,10 @@ final class CrispyVibesBrowserWebView: WKWebView {
         case 2: // Middle click — track for new-tab intent
             middleClickTimestamp = Date()
         case 3: // Back
-            goBack()
+            onNavigateBack?()
             return
         case 4: // Forward
-            goForward()
+            onNavigateForward?()
             return
         default:
             break

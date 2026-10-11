@@ -131,3 +131,32 @@ struct MarkupEditorThemeTokenBuilder {
         )
     }
 }
+
+/// Bounded one-shot ownership tracker shared across rendered-editor coordinator remounts.
+@MainActor
+final class EditorCommandClaimTracker {
+    static let maximumClaimCount = 100
+
+    private var claimedIDs: Set<UUID> = []
+    private var claimOrder: [UUID] = []
+
+    @discardableResult
+    func claim(_ id: UUID) -> Bool {
+        guard claimedIDs.insert(id).inserted else { return false }
+        claimOrder.append(id)
+        if claimOrder.count > Self.maximumClaimCount {
+            let overflowCount = claimOrder.count - Self.maximumClaimCount
+            let expired = claimOrder.prefix(overflowCount)
+            claimedIDs.subtract(expired)
+            claimOrder.removeFirst(overflowCount)
+        }
+        return true
+    }
+
+    func reset() {
+        claimedIDs.removeAll()
+        claimOrder.removeAll()
+    }
+
+    var retainedClaimCount: Int { claimedIDs.count }
+}

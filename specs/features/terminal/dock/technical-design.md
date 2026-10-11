@@ -66,11 +66,11 @@ TerminalSpotlightCoordinator
 2. Check board capacity:
    - If free capacity → create docked tile via standard `insertNewTile` placement strategy.
    - If no capacity → reject; spotlight preview remains visible.
-3. Assign live state to tile:
-   - File: editor group transferred to tile.
-   - Browser: live browser session transferred to tile.
-4. Dismiss spotlight preview.
-5. Persist layout.
+3. Capture and assign state:
+   - File: transfer the same live editor group and retain its original root reference separately from its current linked file.
+   - Browser: capture one complete authoritative preview snapshot, allocate the tile ID, and insert the snapshot into that tile.
+4. Commit board persistence. Only after successful insertion and commit, promote browser presentation state to the persistent session and dismiss the preview. A failed insertion leaves the preview unchanged.
+5. Subsequent board, Spotlight, and linked detailed browser presentations resolve through `DockedBrowserCoordinator` to one live view model or its latest snapshot.
 
 ### Nested Preview Restore Chain
 
@@ -82,8 +82,15 @@ TerminalSpotlightCoordinator
 ### Docked Tile Spotlight Flow
 
 1. User double-clicks docked file/browser tile content.
-2. File/browser opens in spotlight using same viewer state (not a copy).
-3. Spotlight chrome does NOT show a second pin action for already-docked content.
+2. File Spotlight reuses the tile's live `EditorGroupStore`; browser Spotlight acquires the tile's canonical browser session.
+3. File title, directory, comments, provider, accessibility, and detailed promotion follow the group's current linked file, not its persisted root. Browser title/comments follow the current URL.
+4. Spotlight chrome does NOT show a second pin action for already-docked content. Content Back/Forward remains distinct from Spotlight close/restore.
+
+### Immutable Roots and Current State
+
+File tiles persist the root URL that created the tile, while `DockedFileViewerCoordinator` stores the live group independently. Render lookup uses the root only to create or enrich a missing group; it never reopens the root over `activeFileDocumentReference`. Compact Back/Forward and ⌘[/⌘] dispatch to that group, so cross-document and same-document history survives pinning and SwiftUI rerender.
+
+Browser tile content kind URL is a seed/fallback. `browserSession` is the authoritative persisted current URL/history snapshot, and `DockedBrowserCoordinator` owns live linked board, Spotlight, and detailed presentations. Detailed close writes the latest state back to the linked tile owner or pending snapshot before discarding detail state.
 
 ## API / Command Contracts
 
@@ -128,9 +135,9 @@ On vibespace reopen:
 1. Layout decoded from persisted JSON.
 2. Terminal tiles: rebound to project/standalone VMs (existing board sync logic).
 3. File tiles: file content reopened from persisted path. Missing files pruned gracefully (removed from layout, no crash).
-4. Browser tiles: session snapshot restored.
+4. Browser tiles: traverse every primary/detached surface and restore visible plus minimized snapshots by tile ID.
 5. VibeCast/ACP tiles: restored from persisted state.
-6. Minimized tiles restored in minimized tab bar in previous order.
+6. Minimized tiles restore in the minimized tab bar in their previous order. Explicit preview restore/reconstruction reuses state only when project context and complete snapshot identity match; an already-live same-project Spotlight preview continues its current view model as navigation changes its snapshot.
 
 ### Layout Sync
 
@@ -160,3 +167,9 @@ Board layout state is persisted on every change: drag, resize, pin, minimize, re
 - Missing file tiles prune without crash on restore.
 - Spotlight carousel includes docked content without additional latency.
 - Board layout sync persists on every change within 200ms.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-06 | Documented stable file roots with live current groups, canonical linked browser sessions, commit-before-promotion pinning, failed-pin preservation, and detached/minimized hydration. | — |

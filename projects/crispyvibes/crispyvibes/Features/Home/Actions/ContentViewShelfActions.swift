@@ -130,6 +130,7 @@ extension ContentView {
             throw ShelfActionError("A file or folder named \(trimmedName) already exists.")
         }
 
+        contentViewerStore.flushUnsavedEdits(forFileURL: sourceURL)
         try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
         shelfStore.retargetFile(from: sourceURL, to: destinationURL)
         contentViewerStore.retargetFileSystemLocation(from: sourceURL, to: destinationURL)

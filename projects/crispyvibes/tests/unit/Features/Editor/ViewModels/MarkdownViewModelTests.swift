@@ -190,7 +190,7 @@ final class MarkdownViewModelTests: XCTestCase {
         let navigation = viewModel.richNavigationRequest(for: targetReference.documentIdentity)
         XCTAssertEqual(navigation?.fragment, "installation")
         if let navigation {
-            viewModel.consumeRichNavigationRequest(id: navigation.id)
+            XCTAssertTrue(viewModel.claimRichNavigationRequest(id: navigation.id))
         }
         XCTAssertNil(viewModel.pendingRichNavigationRequest)
     }
@@ -949,5 +949,166 @@ final class MarkdownViewModelTests: XCTestCase {
             self.viewModel.workerStatus == .ready && self.viewModel.rawContent == "after"
         }
         XCTAssertTrue(reloaded)
+    }
+}
+
+
+@MainActor
+final class MarkdownNavigationViewModelTests: XCTestCase {
+    private var container: AppContainer!
+    private var viewModel: MarkdownViewModel!
+
+    override func setUpWithError() throws {
+        container = AppContainer.makeDefault()
+        viewModel = container.makeMarkdownViewModel(bufferStore: DocumentBufferStore())
+    }
+
+    override func tearDownWithError() throws {
+        viewModel = nil
+        container = nil
+    }
+
+    func testNavigationCommandIsConsumedOnlyByMatchingRequestID() {
+        let documentURL = URL(fileURLWithPath: "/tmp/markdown-command.md")
+        let reference = FileDocumentReference(url: documentURL, projectIdentifier: "/tmp")
+        viewModel.openFileInTab(at: documentURL, documentReference: reference)
+        viewModel.requestRenderedNavigation(.back)
+        let request = viewModel.renderedNavigationCommand(for: reference.documentIdentity)
+
+        XCTAssertFalse(viewModel.claimRenderedNavigationCommand(id: UUID()))
+        XCTAssertEqual(viewModel.renderedNavigationCommand(for: reference.documentIdentity), request)
+
+        XCTAssertTrue(viewModel.claimRenderedNavigationCommand(id: request?.id ?? UUID()))
+        XCTAssertNil(viewModel.renderedNavigationCommand(for: reference.documentIdentity))
+    }
+
+    func testNavigationStateIsSavedAndRestoredPerDocumentThenClearedOnClose() {
+        let first = FileDocumentReference(
+            url: URL(fileURLWithPath: "/tmp/markdown-history-a.md"),
+            projectIdentifier: "/tmp"
+        )
+        let second = FileDocumentReference(
+            url: URL(fileURLWithPath: "/tmp/markdown-history-b.md"),
+            projectIdentifier: "/tmp"
+        )
+        let firstState = MarkdownNavigationState(
+            documentID: first.documentIdentity,
+            canNavigateBack: true,
+            canNavigateForward: true,
+            backScrollPositions: [MarkdownScrollPosition(x: 0, y: 120)],
+            forwardScrollPositions: [MarkdownScrollPosition(x: 4, y: 360)]
+        )
+        let secondState = MarkdownNavigationState(
+            documentID: second.documentIdentity,
+            canNavigateBack: true,
+            canNavigateForward: false,
+            backScrollPositions: [MarkdownScrollPosition(x: 0, y: 80)]
+        )
+
+        viewModel.openFileInTab(at: first.url, documentReference: first)
+        viewModel.updateRenderedNavigationState(firstState)
+        viewModel.openFileInTab(at: second.url, documentReference: second)
+        viewModel.updateRenderedNavigationState(secondState)
+
+        XCTAssertEqual(viewModel.renderedNavigationState(for: first.documentIdentity), firstState)
+        XCTAssertEqual(viewModel.renderedNavigationState(for: second.documentIdentity), secondState)
+        XCTAssertTrue(viewModel.canNavigateBackInRenderedDocument)
+        XCTAssertFalse(viewModel.canNavigateForwardInRenderedDocument)
+
+        viewModel.activateEditorTab(withID: first.documentIdentity)
+        XCTAssertTrue(viewModel.canNavigateBackInRenderedDocument)
+        XCTAssertTrue(viewModel.canNavigateForwardInRenderedDocument)
+        XCTAssertEqual(viewModel.renderedNavigationState(for: first.documentIdentity), firstState)
+
+        viewModel.requestRenderedNavigation(.forward)
+        viewModel.closeEditorTab(withID: first.documentIdentity)
+        XCTAssertNil(viewModel.renderedNavigationState(for: first.documentIdentity))
+        XCTAssertNil(viewModel.renderedNavigationCommand(for: first.documentIdentity))
+        XCTAssertEqual(viewModel.renderedNavigationState(for: second.documentIdentity), secondState)
+    }
+
+    func testBridgePayloadDecodingAndRestoreScriptAreBoundedAndJSONSafe() throws {
+        let positions = (0...MarkdownNavigationState.maximumHistoryCount).map {
+            ["x": NSNumber(value: $0), "y": NSNumber(value: $0 * 2)]
+        }
+        let state = try XCTUnwrap(MarkdownNavigationState.decodeBridgePayload(
+            documentID: "project|/tmp/quoted-\"document.md",
+            body: [
+                "canBack": true,
+                "canForward": true,
+                "backPositions": positions,
+                "forwardPositions": positions
+            ]
+        ))
+
+        XCTAssertEqual(state.backScrollPositions.count, MarkdownNavigationState.maximumHistoryCount)
+        XCTAssertEqual(state.backScrollPositions.first?.x, 1)
+        XCTAssertEqual(state.forwardScrollPositions.last?.y, 200)
+
+        let script = try XCTUnwrap(MarkupRenderedEditor.Coordinator.navigationStateRestoreScript(state))
+        let prefix = "window.crispyvibesRestoreMarkdownNavigationState("
+        XCTAssertTrue(script.hasPrefix(prefix))
+        XCTAssertTrue(script.hasSuffix(");"))
+        let payload = String(script.dropFirst(prefix.count).dropLast(2))
+        let decoded = try JSONDecoder().decode(
+            MarkdownNavigationState.self,
+            from: try XCTUnwrap(payload.data(using: .utf8))
+        )
+        XCTAssertEqual(decoded, state)
+    }
+}
+
+
+@MainActor
+final class MarkdownOneShotClaimTests: XCTestCase {
+    func testFormattingClaimTrackerSurvivesCoordinatorRemountAndStaysBounded() {
+        let tracker = EditorCommandClaimTracker()
+        let request = EditorCommandRequest(command: .bold)
+
+        XCTAssertTrue(tracker.claim(request.id), "The first mounted coordinator owns the request")
+        XCTAssertFalse(tracker.claim(request.id), "A remounted coordinator cannot redispatch it")
+
+        for _ in 0...EditorCommandClaimTracker.maximumClaimCount {
+            XCTAssertTrue(tracker.claim(UUID()))
+        }
+        XCTAssertEqual(tracker.retainedClaimCount, EditorCommandClaimTracker.maximumClaimCount)
+
+        tracker.reset()
+        XCTAssertEqual(tracker.retainedClaimCount, 0)
+        XCTAssertTrue(tracker.claim(request.id))
+    }
+
+    func testNavigationClaimsClearBeforeDeliveryAndStaleIDsCannotClearNewRequests() {
+        let container = AppContainer.makeDefault()
+        let viewModel = container.makeMarkdownViewModel(bufferStore: DocumentBufferStore())
+        let reference = FileDocumentReference(
+            url: URL(fileURLWithPath: "/tmp/one-shot-navigation.md"),
+            projectIdentifier: "/tmp"
+        )
+        viewModel.openFileInTab(at: reference.url, documentReference: reference)
+
+        let firstAnchor = MarkdownRichNavigationRequest(
+            documentID: reference.documentIdentity,
+            fragment: "first"
+        )
+        let secondAnchor = MarkdownRichNavigationRequest(
+            documentID: reference.documentIdentity,
+            fragment: "second"
+        )
+        viewModel.setPendingRichNavigationRequest(firstAnchor)
+        viewModel.setPendingRichNavigationRequest(secondAnchor)
+        XCTAssertFalse(viewModel.claimRichNavigationRequest(id: firstAnchor.id))
+        XCTAssertEqual(viewModel.pendingRichNavigationRequest, secondAnchor)
+        XCTAssertTrue(viewModel.claimRichNavigationRequest(id: secondAnchor.id))
+        XCTAssertFalse(viewModel.claimRichNavigationRequest(id: secondAnchor.id))
+
+        viewModel.requestRenderedNavigation(.back)
+        let firstCommand = viewModel.renderedNavigationCommandRequest
+        viewModel.requestRenderedNavigation(.forward)
+        let secondCommand = viewModel.renderedNavigationCommandRequest
+        XCTAssertFalse(viewModel.claimRenderedNavigationCommand(id: firstCommand?.id ?? UUID()))
+        XCTAssertEqual(viewModel.renderedNavigationCommandRequest, secondCommand)
+        XCTAssertTrue(viewModel.claimRenderedNavigationCommand(id: secondCommand?.id ?? UUID()))
+        XCTAssertFalse(viewModel.claimRenderedNavigationCommand(id: secondCommand?.id ?? UUID()))
     }
 }

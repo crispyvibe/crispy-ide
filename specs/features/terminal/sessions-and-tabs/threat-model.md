@@ -28,6 +28,7 @@ Terminal Sessions & Tabs manages shell process lifecycle, environment constructi
 7. **Compose history / insight recording** — Records typed commands including potentially sensitive input.
 8. **Shortcut command definitions** — User-defined shortcuts stored in UserDefaults as JSON. Command text is dispatched verbatim to the terminal.
 9. **Optical input transform and host handoff** — Incorrect inverse mapping or an unbalanced press during focus/ownership changes could select or activate a different terminal cell than the one shown.
+10. **Magnification event stream and persisted scale** — High-frequency or malformed runtime deltas, malformed serialized JSON, and finite out-of-range persisted values could create main-thread work, invalid transforms, or geometry churn if they bypass strict decode and the bounded state machine.
 
 ## Threats
 
@@ -104,6 +105,13 @@ Terminal Sessions & Tabs manages shell process lifecycle, environment constructi
 - **Likelihood:** Low — requires transform or lifecycle regression.
 - **Mitigation:** One affine model owns forward and inverse conversion; zoom/pan leaves Ghostty geometry fixed; interactive-target drags transition to a balanced Ghostty press/release; mouse-exit invalidation is suppressed during active drags; focus loss, app deactivation, detach, and host transfer release outstanding input; stale viewports require physical containment before routing. Scenario-linked host, transform, selection, and ownership tests cover these invariants. Linked NFRs: A11Y-4, PERF-3, TEST-2.
 
+### F001-T11: Magnification flood or malformed scale destabilizes presentation
+
+- **Vector:** A noisy gesture stream, changed events without a begin, very large runtime deltas, malformed serialized JSON, or finite out-of-range persisted values reaches presentation state.
+- **Impact:** Main-thread event backlog, invalid affine geometry, excessive surface resizing, inaccessible content, or a terminal scale outside the supported range.
+- **Likelihood:** Low — physical events are local, but malformed persisted state and lifecycle interruptions are plausible.
+- **Mitigation:** The pure gesture state consumes each delta once, defensively begins missing sequences, resets on end/cancel/detach/replacement, bounds discrete loops at `0.5×...1×`, and clamps finite outward multiplication overflow to `3×`. Standard JSON decoding rejects malformed/nonconforming numeric tokens before session normalization through existing persistence integrity/decode handling; permissive non-finite decoding is not enabled. Runtime/API non-finite values normalize to `1×`, while successfully decoded finite values clamp to `0.5×...3×` and snap below-normal values to tenths. Transform updates remain constant-time compositor operations and never resize the Ghostty frame/surface. Pure overflow/decode/boundary tests and mounted geometry tests cover the invariants. Linked NFRs: PERF-3, A11Y-4, TEST-2.
+
 ## Residual Risks
 
 - Terminal output is inherently attacker-controllable (any running process can write to stdout). Interactive target detection operates on this untrusted data but requires explicit user click to act.
@@ -119,7 +127,13 @@ Terminal Sessions & Tabs manages shell process lifecycle, environment constructi
 |-----|--------|-------|
 | SEC-3a | Compliant | Shell escaping via `ShellEscaping.singleQuote()`; terminal input remains scoped to the target PTY; interactive target token length is capped. |
 | SEC-2 | Compliant | HMAC-signed persistence; compose history is in-memory only; insight observer validates echo state. |
-| PERF-3 | Compliant | Optical transforms and pointer mapping stay on the UI path without resizing the Ghostty grid. |
-| A11Y-4 | Compliant | Terminal interaction, selection, and IME geometry remain functional through the supported magnification range. |
-| TEST-2 | Compliant | F001-S59 and F001-S60 map to automated transform, persistence, input lifecycle, and ownership regressions. |
+| PERF-3 | Compliant | Bounded gesture processing, optical transforms, and pointer mapping stay on the UI path without resizing the Ghostty grid or accumulating unbounded work. |
+| A11Y-4 | Compliant | Terminal interaction, centered shrink, selection, and IME geometry remain functional throughout `0.5×...3×`. |
+| TEST-2 | Compliant | F001-S59–S61 map to pure gesture/transform, session lifecycle/persistence, mounted AppKit host, input lifecycle, and ownership regressions; physical pinch delivery and final visual paint remain explicitly manual/UI gaps. |
 | OBS-1, OBS-2 | Compliant | Lifecycle events use `AppDiagnostics` and `TerminalLifecycleLogger`; command hashes are logged instead of plaintext. |
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-09 | Added F001-T11 for magnification event floods, runtime malformed values, strict serialized JSON rejection, finite persisted scale bounds, and compositor-only layered-test mitigations. | — |

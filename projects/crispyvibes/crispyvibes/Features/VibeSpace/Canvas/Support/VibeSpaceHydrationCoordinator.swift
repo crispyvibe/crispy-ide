@@ -310,8 +310,10 @@ final class VibeSpaceHydrationCoordinator: ObservableObject {
 
     private func restoreBrowserTilesFromLayout(for vibespaceID: UUID) {
         guard let coordinator = dockedBrowserCoordinator else { return }
-        let layout = layoutPersistence.terminalBoardLayout(for: vibespaceID)
-        let allBrowserTiles = layout.tiles.filter(\.isBrowser) + layout.minimizedTiles.filter(\.isBrowser)
+        let boardState = layoutPersistence.terminalBoardState(for: vibespaceID)
+        let allBrowserTiles = boardState.surfaces.flatMap { surface in
+            (surface.layout.tiles + surface.layout.minimizedTiles).filter(\.isBrowser)
+        }
         for tile in allBrowserTiles {
             if let snapshot = tile.browserSession {
                 coordinator.restoreTile(id: tile.id, snapshot: snapshot)

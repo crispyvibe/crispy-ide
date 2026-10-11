@@ -126,48 +126,6 @@ extension ContentView {
         )
     }
 
-    func spotlightItemIndex(for spotlight: TerminalSpotlightState) -> Int? {
-        let items = flatSpotlightItems
-        switch spotlight.source {
-        case let .persistent(_, tabID):
-            return items.firstIndex(where: {
-                if case let .terminal(_, tab) = $0 { return tab.id == tabID }
-                return false
-            })
-        case .vibeCast:
-            return items.firstIndex(where: {
-                if case .vibeCast = $0 { return true }
-                return false
-            })
-        case .vibeLanes:
-            return items.firstIndex(where: {
-                if case .vibeLanes = $0 { return true }
-                return false
-            })
-        case let .acp(tileID, _):
-            return items.firstIndex(where: {
-                if case let .acp(id, _, _, _) = $0 { return id == tileID }
-                return false
-            })
-        case .filePreview, .todos:
-            return nil
-        case let .file(_, fileURL):
-            return items.firstIndex(where: {
-                if case let .file(_, url) = $0 { return url == fileURL }
-                return false
-            })
-        case .browserPreview:
-            return nil
-        case let .browser(tileID, _):
-            return items.firstIndex(where: {
-                if case let .browser(id, _) = $0 { return id == tileID }
-                return false
-            })
-        case .transient:
-            return nil
-        }
-    }
-
     func installSpotlightScrollMonitor() {
         terminalSpotlightCoordinator.installScrollMonitor(onSwitchSpotlight: switchSpotlight(by:))
     }
@@ -178,26 +136,50 @@ extension ContentView {
 
     func switchSpotlight(by offset: Int) {
         guard let spotlight = terminalSpotlightCoordinator.spotlight,
-              spotlight.supportsCarouselNavigation else { return }
+              spotlight.supportsCarouselNavigation,
+              let currentIdentity = spotlight.navigationIdentity else { return }
         let items = flatSpotlightItems
         guard items.count > 1 else {
-            terminalSpotlightCoordinator.animateSwipeOffset(0, animation: .spring(response: 0.35, dampingFraction: 0.7))
+            terminalSpotlightCoordinator.animateSwipeOffset(
+                0,
+                animation: .spring(response: 0.35, dampingFraction: 0.7)
+            )
             return
         }
-        guard let currentIndex = spotlightItemIndex(for: spotlight) else { return }
-        let nextIndex = (currentIndex + offset + items.count) % items.count
-        let entryOffset = terminalSpotlightCoordinator.prepareSwitchTransition(offset: offset)
+        guard let selection = SpotlightNavigationResolver.relativeSelection(
+            offset: offset,
+            currentIdentity: currentIdentity,
+            items: items
+        ) else { return }
+        performSpotlightSwitch(selection)
+    }
 
-        switch items[nextIndex] {
+    func selectSpotlightItem(_ targetIdentity: SpotlightNavigationIdentity) {
+        guard let currentIdentity = terminalSpotlightCoordinator.spotlight?.navigationIdentity else { return }
+        let items = flatSpotlightItems
+        guard let selection = SpotlightNavigationResolver.selection(
+            targetIdentity: targetIdentity,
+            currentIdentity: currentIdentity,
+            items: items
+        ) else { return }
+        performSpotlightSwitch(selection)
+    }
+
+    private func performSpotlightSwitch(_ selection: SpotlightNavigationSelection) {
+        let previousSpotlightID = terminalSpotlightCoordinator.spotlight?.id
+        let transaction = terminalSpotlightCoordinator.beginCarouselSwitch(selection)
+
+        switch selection.item {
         case let .terminal(project, tab):
-            let accentColor = vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color ?? activeThemePalette.accentColor
+            let accentColor = vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color
+                ?? activeThemePalette.accentColor
             presentTerminalSpotlight(
                 terminalViewModel: project.terminalViewModel,
                 tabID: tab.id,
                 title: tab.title.isEmpty ? project.title : tab.title,
                 accentColor: accentColor,
                 owningProjectRootURL: project.rootURL,
-                surfaceID: spotlight.surfaceID,
+                surfaceID: terminalSpotlightCoordinator.spotlight?.surfaceID,
                 animated: false
             )
         case .vibeCast:
@@ -212,8 +194,9 @@ extension ContentView {
             presentBrowserSpotlight(tileID: tileID, url: url, animated: false)
         }
 
-        terminalSpotlightCoordinator.animateSwipeOffset(entryOffset)
-        terminalSpotlightCoordinator.animateSwipeOffset(0, animation: .spring(response: 0.35, dampingFraction: 0.82))
+        if terminalSpotlightCoordinator.spotlight?.id == previousSpotlightID {
+            terminalSpotlightCoordinator.cancelCarouselSwitch(transaction)
+        }
     }
 
     func presentVibeCastSpotlight(animated: Bool = true) {
@@ -284,8 +267,15 @@ extension ContentView {
             for: fileURL,
             preferredProjectRootURL: owningProjectRootURL
         )
+        let group = dockedFileViewerCoordinator.assignedEditorGroup(for: tileID)
+            ?? dockedFileViewerCoordinator.editorGroup(
+                for: tileID,
+                fileURL: fileURL,
+                documentReference: fileContext.reference,
+                fileContentProvider: fileContext.fileContentProvider
+            )
         let spotlight = makeSpotlightState(
-            source: .file(tileID: tileID, fileURL: fileURL),
+            source: .file(tileID: tileID, fileURL: fileURL, group: group),
             title: fileURL.lastPathComponent,
             workingDirectoryURL: fileURL.deletingLastPathComponent(),
             owningProjectRootURL: fileContext.owningProjectRootURL ?? owningProjectRootURL

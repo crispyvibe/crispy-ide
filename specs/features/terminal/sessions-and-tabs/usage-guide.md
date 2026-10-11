@@ -3,7 +3,7 @@ title: "Terminal Sessions & Tabs"
 feature: "F001"
 domain: "terminal"
 audience: "user"
-version: "1.1"
+version: "1.2"
 sidebar:
   label: "Sessions & Tabs"
   order: 1
@@ -72,13 +72,14 @@ Terminal Sessions & Tabs manages the full lifecycle of terminal sessions within 
 1. Select text in the terminal using the mouse. Selection remains aligned when the terminal is magnified or panned, including when a drag begins over a URL or file path.
 2. Use the app menu or notification-based commands to copy/paste (routed to the active tab session).
 
-### Magnifying and Panning a Terminal
+### Magnifying and Shrinking a Terminal
 
-1. Spread two fingers apart over a Ghostty terminal to magnify it, up to `3×`.
-2. Use a two-finger scroll gesture to pan around while magnified.
-3. Bring two fingers together to return toward normal size. The terminal stops at `1×` and never becomes smaller than its original size.
-4. Magnification is remembered for the terminal session. Zooming and panning do not change terminal line wrapping or grid dimensions.
-5. Hold `Option` while scrolling if you need to send the scroll gesture to terminal scrollback instead of panning the magnified viewport.
+1. Spread two fingers apart over a Ghostty terminal to magnify continuously, up to `3×`.
+2. Use a two-finger scroll gesture to pan while magnified above `1×`. Hold `Option` while scrolling to send the gesture to terminal scrollback instead.
+3. Bring two fingers together to return toward normal. If the pinch began above `1×`, it stops exactly at `1×` for the rest of that gesture.
+4. Lift your fingers, begin a new inward pinch at `1×`, and cross the activation threshold to shrink to `0.9×`. Continued inward movement steps through `0.8×`, `0.7×`, `0.6×`, and `0.5×`.
+5. Spread outward while below normal to step back toward `1×`. Reaching `1×` stops that gesture; lift and begin another outward pinch to magnify above normal.
+6. Below-normal content remains centered with blank margins and cannot be panned. Magnification is remembered for the terminal session, while zooming and shrinking do not change line wrapping or grid dimensions.
 
 ### Using Shortcut Commands
 
@@ -160,7 +161,7 @@ Unavailable candidates are skipped automatically. Shell is always launched with 
 - **Tab reordering**: Drag tabs in the tab bar to reorder them.
 - **Split mode**: In single-active-tab presentation, toggle split mode to view two terminal sessions side by side (requires 2+ tabs).
 - **Density switching**: The terminal automatically uses regular density in the focused pane and compact density in stacked rail cards.
-- **Optical zoom**: Magnification changes only presentation. It does not increase font size, resize the terminal grid, or rewrap output.
+- **Optical zoom**: Magnification changes only presentation. Above `1×` it is continuous and pannable; below `1×` it follows centered `0.1×` steps. Neither mode changes font size, terminal grid geometry, or line wrapping.
 
 ## Troubleshooting
 
@@ -172,5 +173,13 @@ Unavailable candidates are skipped automatically. Shell is always launched with 
 | Tab not restoring on relaunch | Ensure the vibespace was saved properly; check that the directory still exists |
 | Interactive links not working | Ensure the terminal host supports interactive targeting (Ghostty and SwiftTerm both support it) |
 | Commands queued but not executing | The session may not have reached interactive readiness yet — wait for the shell prompt or check startup command timing |
-| Terminal will not shrink below its original size | This is intentional. Bring two fingers together to return to normal `1×`; only magnification above normal is supported. |
-| Cannot scroll terminal history while magnified | Hold `Option` while scrolling to pass the gesture to terminal scrollback. |
+| Terminal stops at `1×` instead of shrinking | End the pinch completely, then start a new inward pinch at `1×`. Crossing normal from above intentionally locks until the next gesture. |
+| Terminal does not immediately step below `1×` | Continue the new inward pinch until the cumulative threshold is reached; below-normal changes occur in `0.1×` steps down to `0.5×`. |
+| Terminal has blank margins or will not pan below `1×` | This is intentional: the fixed terminal grid is optically centered without reflow, and pan is reserved for magnification above normal. |
+| Cannot scroll terminal history while magnified above `1×` | Hold `Option` while scrolling to pass the gesture to terminal scrollback. |
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-09 | Version 1.2: documented continuous above-normal magnification, the new-gesture gate at `1×`, centered tenth-step shrink to `0.5×`, persistence, and troubleshooting. | — |

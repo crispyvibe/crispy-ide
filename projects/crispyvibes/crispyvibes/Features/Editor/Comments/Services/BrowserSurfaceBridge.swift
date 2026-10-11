@@ -3,6 +3,13 @@ import Foundation
 import os
 import WebKit
 
+enum BrowserSurfaceRouteChangeKind: String {
+    case push
+    case replace
+    case pop
+    case unknown
+}
+
 /// F049-v2: comment-surface bridge for browser-window WKWebViews.
 ///
 /// Owns the JavaScript bundle that lives in the page (selection capture,
@@ -37,8 +44,8 @@ final class BrowserSurfaceBridge: NSObject, ObservableObject, CommentSurfaceBrid
     var onRequestAdd: ((CommentAnchor) -> Void)?
     var onRequestAddWithBody: ((CommentAnchor, String) -> Void)?
     /// Posted when the page's `pushState` / `popstate` reports a route
-    /// change so the panel can re-query for the new canonical URL.
-    var onURLChanged: ((String) -> Void)?
+    /// change so native history and comments can follow the observable route.
+    var onURLChanged: ((URL, BrowserSurfaceRouteChangeKind) -> Void)?
 
     // MARK: - Setup
 
@@ -193,11 +200,15 @@ final class BrowserSurfaceBridge: NSObject, ObservableObject, CommentSurfaceBrid
             onGutterClick?(id)
 
         case "commentsRichURLChanged":
-            guard let info = body as? [String: Any], let raw = info["url"] as? String else { return }
+            guard let info = body as? [String: Any],
+                  let raw = info["url"] as? String else { return }
             let canonical = BrowserCommentURLNormalizer.canonicalize(string: raw)
             canonicalURL = canonical
             geometryTick &+= 1
-            onURLChanged?(canonical)
+            guard let url = URL(string: raw) else { return }
+            let kind = (info["kind"] as? String)
+                .flatMap(BrowserSurfaceRouteChangeKind.init(rawValue:)) ?? .unknown
+            onURLChanged?(url, kind)
 
         default:
             break
@@ -638,21 +649,21 @@ final class BrowserSurfaceBridge: NSObject, ObservableObject, CommentSurfaceBrid
           }, true);
 
           // SPA route observer.
-          function postURLChange() {
+          function postURLChange(kind) {
             // Re-append the floating button if the SPA replaced document.body
             // (React, Vue full-page transitions, etc.). Without this, the
             // button disappears after route changes on SPAs.
             ensureStyles();
             ensureAddButton();
             if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.commentsRichURLChanged) {
-              window.webkit.messageHandlers.commentsRichURLChanged.postMessage({ url: window.location.href });
+              window.webkit.messageHandlers.commentsRichURLChanged.postMessage({ url: window.location.href, kind: kind || "unknown" });
             }
           }
           var origPushState = history.pushState;
           var origReplaceState = history.replaceState;
-          history.pushState = function() { var r = origPushState.apply(this, arguments); postURLChange(); return r; };
-          history.replaceState = function() { var r = origReplaceState.apply(this, arguments); postURLChange(); return r; };
-          window.addEventListener("popstate", postURLChange);
+          history.pushState = function() { var r = origPushState.apply(this, arguments); postURLChange("push"); return r; };
+          history.replaceState = function() { var r = origReplaceState.apply(this, arguments); postURLChange("replace"); return r; };
+          window.addEventListener("popstate", function() { postURLChange("pop"); });
           window.__crispyvibesCommentsBundleInstalled = true;
           postDebug("installed", { url: window.location.href });
         })();

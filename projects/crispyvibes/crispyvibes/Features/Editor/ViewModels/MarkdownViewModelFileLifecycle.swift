@@ -63,10 +63,49 @@ extension MarkdownViewModel {
         )
     }
 
+    func upgradeEditorTabReference(
+        from previousReference: FileDocumentReference,
+        to reference: FileDocumentReference,
+        suppressConnectionReadinessErrors: Bool = false
+    ) {
+        guard let index = editorTabs.firstIndex(where: {
+            $0.documentReference == previousReference
+        }) else { return }
+        let oldID = previousReference.documentIdentity
+        let migratedTabs = editorTabs.enumerated().map { tabIndex, tab in
+            tabIndex == index ? EditorTab(documentReference: reference) : tab
+        }
+        migrateOpenDocumentIdentities(
+            [oldID: reference],
+            editorTabs: migratedTabs,
+            fileURL: currentDocumentID == oldID ? reference.url : fileURL,
+            imageFileURL: imageFileURL,
+            pdfFileURL: pdfFileURL,
+            officeFileURL: officeFileURL
+        )
+
+        guard activeEditorTabID == reference.documentIdentity else { return }
+        fileURL = reference.url
+        let migratedBuffer = bufferStore.buffer(for: reference.documentIdentity)
+        observeActiveBuffer(migratedBuffer)
+        if migratedBuffer == nil {
+            openFile(
+                at: reference.url,
+                documentReference: reference,
+                suppressConnectionReadinessErrors: suppressConnectionReadinessErrors
+            )
+        } else if migratedBuffer?.isFailed == true || migratedBuffer?.isLoading == true {
+            reloadCurrentEditableFile(
+                suppressConnectionReadinessErrors: suppressConnectionReadinessErrors
+            )
+        }
+    }
+
     func closeEditorTab(withID tabID: String) {
         guard let closingIndex = editorTabs.firstIndex(where: { $0.id == tabID }) else { return }
         let closingWasActive = activeEditorTabID == tabID
         clearMarkupViewMode(forDocumentID: tabID)
+        clearRenderedNavigation(for: tabID)
 
         // Close the buffer for this tab
         autosave.cancel(for: tabID)
@@ -326,19 +365,21 @@ extension MarkdownViewModel {
                 self.workerStatus = .ready
                 return
             }
-            // Observe buffer load completion to update workerStatus
+            // Observe buffer load completion to update workerStatus. The provider may
+            // complete between the isLoading check above and AsyncPublisher subscription,
+            // so inspect the current state first before awaiting future values.
             openFileTask = Task { [weak self, weak buffer] in
                 guard let self, let buffer else { return }
-                for await state in buffer.$state.values {
-                    guard !Task.isCancelled else { return }
-                    guard self.currentDocumentID == buffer.id else { return }
+
+                @MainActor
+                func finishIfResolved(_ state: BufferState) -> Bool {
                     switch state {
                     case .clean:
                         if detectedType == .unsupported {
                             self.documentType = .plainText
                         }
                         self.workerStatus = .ready
-                        return
+                        return true
                     case .failed(let message):
                         if suppressConnectionReadinessErrors,
                            capturedProvider != nil {
@@ -350,10 +391,19 @@ extension MarkdownViewModel {
                             self.errorMessage = "Unable to open file: \(message)"
                             self.workerStatus = .unavailable("Editor worker unavailable")
                         }
-                        return
+                        return true
                     default:
-                        continue
+                        return false
                     }
+                }
+
+                guard self.currentDocumentID == buffer.id else { return }
+                if finishIfResolved(buffer.state) { return }
+
+                for await state in buffer.$state.values {
+                    guard !Task.isCancelled else { return }
+                    guard self.currentDocumentID == buffer.id else { return }
+                    if finishIfResolved(state) { return }
                 }
             }
         }
@@ -652,9 +702,11 @@ extension MarkdownViewModel {
         return request
     }
 
-    func consumeRichNavigationRequest(id: UUID) {
-        guard pendingRichNavigationRequest?.id == id else { return }
+    @discardableResult
+    func claimRichNavigationRequest(id: UUID) -> Bool {
+        guard pendingRichNavigationRequest?.id == id else { return false }
         setPendingRichNavigationRequest(nil)
+        return true
     }
 
     private func openMarkdownLocalLink(_ request: MarkdownLinkActionRequest) {
@@ -706,7 +758,8 @@ extension MarkdownViewModel {
             setPendingRichNavigationRequest(
                 MarkdownRichNavigationRequest(
                     documentID: reference.documentIdentity,
-                    fragment: fragment
+                    fragment: fragment,
+                    recordsHistory: false
                 )
             )
         } else {

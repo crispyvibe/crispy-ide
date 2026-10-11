@@ -45,7 +45,9 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
     var opticalViewportPointMapper: ((CGPoint) -> CGPoint)?
     var opticalViewportRectMapper: ((CGRect) -> CGRect)?
     var primaryMouseButtonSinkForTesting: ((Bool) -> Void)?
+    var scrollWheelSinkForTesting: ((NSEvent) -> Void)?
     var characterCoordinatesInvalidationSinkForTesting: (() -> Void)?
+    var allowsSurfaceCreationForTesting = true
     private(set) var isPrimaryMousePressForwarded = false
     private(set) var suppressesNextPrimaryMouseUp = false
     let interactiveHoverOverlay = TerminalInteractiveHoverOverlayView(frame: .zero)
@@ -442,6 +444,10 @@ final class GhosttyTerminalView: NSView, TerminalInteractiveTargeting {
     }
 
     override func scrollWheel(with event: NSEvent) {
+        if let scrollWheelSinkForTesting {
+            scrollWheelSinkForTesting(event)
+            return
+        }
         guard let surface else { return }
         var x = event.scrollingDeltaX
         var y = event.scrollingDeltaY

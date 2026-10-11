@@ -56,7 +56,10 @@ final class CommentsPanelStore: ObservableObject {
     /// `[minWidthFraction, maxWidthFraction]`).
     @Published var widthFraction: CGFloat = 0.30 {
         didSet {
-            widthFraction = min(Self.maxWidthFraction, max(Self.minWidthFraction, widthFraction))
+            let clamped = min(Self.maxWidthFraction, max(Self.minWidthFraction, widthFraction))
+            if widthFraction != clamped {
+                widthFraction = clamped
+            }
         }
     }
 
@@ -67,6 +70,15 @@ final class CommentsPanelStore: ObservableObject {
     @Published var searchQuery: String = ""
 
     // MARK: - State transitions
+
+    /// Copies user-visible panel presentation state into another pane without changing comment identity.
+    func transferPresentationState(to destination: CommentsPanelStore) {
+        destination.isOpen = isOpen
+        destination.selectedThreadID = selectedThreadID
+        destination.widthFraction = widthFraction
+        destination.statusFilter = statusFilter
+        destination.searchQuery = searchQuery
+    }
 
     /// Toggle the panel open/closed.
     func togglePanel() {

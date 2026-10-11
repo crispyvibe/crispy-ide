@@ -11,6 +11,7 @@ Terminal Board Dock provides dockable content on the terminal board including fi
 - F002 (Terminal Board) — dock tiles live on the terminal board
 - F003 (Terminal Spotlight) — spotlight preview and pin workflows
 - F012 (Browser) — browser tiles on board
+- F006 (Content Viewer) and F008 (Markdown) — live editor groups and combined file/fragment navigation
 - F007 (Editing) — file tiles use editor infrastructure
 - F028 (VibeCast) — VibeCast tiles on board
 
@@ -39,6 +40,10 @@ VibeCast and ACP sessions MUST be pinnable to board tiles with persistence and s
 ### F037-R06: Board Session and Layout Management
 
 Minimized tiles MUST persist; board MUST render drag/resize decorations; layout sync MUST update persisted state.
+
+### F037-R07: Pinned Navigation Continuity and Atomic Promotion
+
+A docked file tile MUST retain an immutable persisted root while preserving one live editor group whose mutable current linked file drives rendering, compact Back/Forward, title, directory, comments, provider, accessibility, Spotlight, and detailed promotion. Render lookup MUST NOT reopen the root. A browser tile, Spotlight, and linked detailed tab MUST share one canonical session or latest authoritative snapshot; closing detail MUST not revert the tile. Browser preview pinning MUST persist a complete snapshot before retiring the preview, and failed insertion MUST preserve the preview. Browser hydration MUST include primary and detached surfaces and both visible and minimized tiles; preview reuse MUST require matching project and snapshot identity.
 
 ## Scenarios
 
@@ -241,6 +246,46 @@ Minimized tiles MUST persist; board MUST render drag/resize decorations; layout 
 **When** board chrome toolbar renders
 **Then** it displays controls for board-level actions including layout management and tile operations
 
+### Scenario F037-S30: Pinned Markdown tile keeps current linked file through rerender
+
+**Given** a file preview rooted at `A.md` follows `B.md#fragment`
+When the preview is pinned and its dock tile rerenders
+Then the tile keeps the same live editor group current on `B.md`
+And the persisted root remains `A.md`
+And visible Back/Forward and ⌘[/⌘] traverse fragment and cross-file history
+And title, directory, comments, provider, accessibility, Spotlight, and detailed promotion use `B.md`
+
+### Scenario F037-S31: Linked browser detail close preserves board history
+
+**Given** a board browser navigates `A → B → C` and opens a linked detailed presentation
+When the detailed presentation closes
+Then the board remains at the latest canonical URL and history
+And Back/Forward continue from C rather than reverting to the seed or a stale board snapshot
+
+### Scenario F037-S32: Browser pin commits immediately and failed pin is non-destructive
+
+**Given** a temporary browser preview has current URL and history
+When board insertion succeeds
+Then its complete snapshot and tile identity are persisted in one promotion flow before preview retirement
+When board insertion fails because the target surface cannot accept the tile
+Then no partial tile is persisted and the live preview remains visible and retryable
+
+### Scenario F037-S33: Browser restore covers detached and minimized surfaces
+
+**Given** persisted browser tiles exist on primary or detached board surfaces in visible or minimized state
+When board hydration runs
+Then every matching tile snapshot is restored by stable tile identity
+And no stale preview from another project or snapshot is reused
+
+## Test Coverage
+
+| Scenario | Coverage |
+|----------|----------|
+| F037-S30 | Unit: editor-group and Markdown state regressions cover linked navigation, stable root lookup, command consumption, per-document history, and provider identity. Required UI/manual: pin/rerender continuity plus compact metadata, comments, accessibility, and controls. |
+| F037-S31 | Unit: browser coordinator regressions cover shared ownership and decoded legacy stale-clone close without board reversion. Required UI/manual: board/detail chrome remains synchronized. |
+| F037-S32 | Unit: board pin tests verify immediate persisted snapshots and non-mutating full-board rejection; coordinator tests verify promotion state. Required UI/manual: rejected pin leaves the preview visibly retryable. |
+| F037-S33 | Unit: board/coordinator regressions cover detached/minimized snapshot enrichment and cross-project preview isolation. Required UI/manual: launch-time hydration renders each WebView surface. |
+
 ## Acceptance Criteria
 
 - File and browser tiles pin to board within 100ms.
@@ -248,6 +293,8 @@ Minimized tiles MUST persist; board MUST render drag/resize decorations; layout 
 - Missing file tiles prune without crash.
 - Spotlight carousel includes docked content.
 - Board layout sync persists on every change.
+- File root identity remains stable while the live current linked file drives compact UI and promotion.
+- Browser promotion, linked detail close, and all-surface hydration preserve the latest canonical snapshot without stale preview reuse.
 
 ## Open Questions
 
@@ -257,4 +304,5 @@ _None._
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-06 | Added pinned Markdown current-file continuity, canonical browser session/detail-close behavior, atomic preview persistence, all-surface hydration, stale-preview isolation, and S30–S33 test mappings (R07). | — |
 | 2026-04-15 | Migrated from docs/features/terminal-board-dock/feature.md (DCK-001–026) | — |

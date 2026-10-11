@@ -44,7 +44,7 @@ extension GhosttyTerminalView {
             object: window,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated {
                 self?.handleWindowDidChangeScreen()
             }
         }
@@ -65,6 +65,7 @@ extension GhosttyTerminalView {
     }
 
     func createSurfaceIfNeeded() {
+        guard allowsSurfaceCreationForTesting else { return }
         guard surface == nil else { return }
         guard let engine, let app = engine.terminalServices.ghosttyRuntime.app else { return }
         guard engine.canCreateSurface else { return }

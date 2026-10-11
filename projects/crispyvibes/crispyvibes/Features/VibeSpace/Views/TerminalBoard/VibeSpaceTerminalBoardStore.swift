@@ -816,9 +816,16 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
     func pinBrowserToDock(
         url: URL,
         projectPath: String? = nil,
-        surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID
+        surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID,
+        browserSession: BrowserSessionSnapshot? = nil
     ) -> UUID? {
-        pinBrowserToDock(id: UUID(), url: url, projectPath: projectPath, surfaceID: surfaceID)
+        pinBrowserToDock(
+            id: UUID(),
+            url: url,
+            projectPath: projectPath,
+            surfaceID: surfaceID,
+            browserSession: browserSession
+        )
     }
 
     @discardableResult
@@ -826,13 +833,15 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         id tileID: UUID,
         url: URL,
         projectPath: String? = nil,
-        surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID
+        surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID,
+        browserSession: BrowserSessionSnapshot? = nil
     ) -> UUID? {
         let tile = VibeSpaceTerminalBoardTile(
             id: tileID,
             projectPath: projectPath,
             workingDirectoryPath: "",
-            contentKind: .browser(url)
+            contentKind: .browser(url),
+            browserSession: browserSession
         )
         var didInsert = false
         mutate { state in

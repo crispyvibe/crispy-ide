@@ -1507,7 +1507,6 @@ private struct DetachedTerminalBoardWindowContent: View {
                 projectColorTagsByPath[project.rootURL.standardizedFileURL.path]
             },
             onDismiss: closeSpotlight,
-            onFocusSpotlight: focusSpotlight,
             onInstallScrollMonitor: {
                 spotlightCoordinator.installScrollMonitor(onSwitchSpotlight: switchSpotlight)
             },
@@ -1515,14 +1514,17 @@ private struct DetachedTerminalBoardWindowContent: View {
                 spotlightCoordinator.removeScrollMonitor()
             },
             onSwitchSpotlight: switchSpotlight,
+            onSelectSpotlight: selectSpotlightItem,
             onReorderTerminalTab: { draggedItem, targetItem, placement in
-                guard case let .terminal(_, draggedTab) = draggedItem,
-                      case let .terminal(_, targetTab) = targetItem else {
+                guard case let .terminal(draggedProject, draggedTab) = draggedItem,
+                      case let .terminal(targetProject, targetTab) = targetItem else {
                     return false
                 }
                 return boardStore.moveTerminalTabTile(
-                    draggedTab.id,
-                    relativeTo: targetTab.id,
+                    projectPath: draggedProject.rootURL.standardizedFileURL.path,
+                    tabID: draggedTab.id,
+                    relativeToProjectPath: targetProject.rootURL.standardizedFileURL.path,
+                    targetTabID: targetTab.id,
                     placement: placement,
                     surfaceID: surfaceID
                 )
@@ -1579,7 +1581,8 @@ private struct DetachedTerminalBoardWindowContent: View {
                 items.append(.browser(tileID: tile.id, url: url))
             }
         }
-        if !items.isEmpty {
+        if !items.isEmpty,
+           !items.contains(where: { $0.navigationIdentity == .vibeLanes }) {
             items.append(.vibeLanes)
         }
         return items
@@ -1822,10 +1825,13 @@ private struct DetachedTerminalBoardWindowContent: View {
             column: target.column
         )
         let group = makePreviewEditorGroup()
+        let fileContext = detachedFileOpenContext(for: normalizedTarget.url)
         group.openFileInTab(
             at: normalizedTarget.url,
             line: normalizedTarget.line,
-            column: normalizedTarget.column
+            column: normalizedTarget.column,
+            documentReference: fileContext.reference,
+            fileContentProvider: fileContext.provider
         )
         setSpotlight(
             TerminalSpotlightState(
@@ -1843,11 +1849,38 @@ private struct DetachedTerminalBoardWindowContent: View {
         )
     }
 
+    private func detachedFileOpenContext(
+        for fileURL: URL
+    ) -> (reference: FileDocumentReference, provider: (any FileContentProviding)?) {
+        let path = fileURL.standardizedFileURL.path
+        let owner = projects
+            .filter { project in
+                let rootPath = project.rootURL.standardizedFileURL.path
+                return path == rootPath || path.hasPrefix(rootPath + "/")
+            }
+            .max { lhs, rhs in
+                lhs.rootURL.standardizedFileURL.path.count
+                    < rhs.rootURL.standardizedFileURL.path.count
+            }
+        return (
+            FileDocumentReference(url: fileURL, projectIdentifier: owner?.projectIdentifier),
+            owner?.sshConnection != nil ? owner?.fileContent : nil
+        )
+    }
+
     private func presentFileSpotlight(tileID: UUID, fileURL: URL, animated: Bool = true) {
+        let fileContext = detachedFileOpenContext(for: fileURL)
+        let group = dockedFileViewerCoordinator.assignedEditorGroup(for: tileID)
+            ?? dockedFileViewerCoordinator.editorGroup(
+                for: tileID,
+                fileURL: fileURL,
+                documentReference: fileContext.reference,
+                fileContentProvider: fileContext.provider
+            )
         setSpotlight(
             TerminalSpotlightState(
                 id: UUID(),
-                source: .file(tileID: tileID, fileURL: fileURL),
+                source: .file(tileID: tileID, fileURL: fileURL, group: group),
                 title: fileURL.lastPathComponent,
                 accentColor: activeThemePalette.accentColor,
                 workingDirectoryURL: fileURL.deletingLastPathComponent(),
@@ -1885,8 +1918,10 @@ private struct DetachedTerminalBoardWindowContent: View {
     private func focusSpotlight(_ spotlight: TerminalSpotlightState) {
         switch spotlight.source {
         case let .persistent(terminalViewModel, tabID):
-            guard let tab = terminalViewModel.tabs.first(where: { $0.id == tabID }) else { return }
+            guard let tab = terminalViewModel.tabs.first(where: { $0.id == tabID }),
+                  let session = terminalViewModel.session(for: tabID) else { return }
             terminalViewModel.selectTab(tab)
+            session.requestKeyboardFocus()
         case let .transient(session):
             session.startIfNeeded()
         case let .browser(tileID, url):
@@ -1897,13 +1932,32 @@ private struct DetachedTerminalBoardWindowContent: View {
     }
 
     private func switchSpotlight(by offset: Int) {
-        guard let spotlight = spotlightCoordinator.spotlight,
-              let currentIndex = spotlightItemIndex(for: spotlight) else { return }
+        guard let currentIdentity = spotlightCoordinator.spotlight?.navigationIdentity else { return }
         let items = flatSpotlightItems
-        guard !items.isEmpty else { return }
-        let nextIndex = (currentIndex + offset + items.count) % items.count
-        let entryOffset = spotlightCoordinator.prepareSwitchTransition(offset: offset)
-        switch items[nextIndex] {
+        guard let selection = SpotlightNavigationResolver.relativeSelection(
+            offset: offset,
+            currentIdentity: currentIdentity,
+            items: items
+        ) else { return }
+        performSpotlightSwitch(selection)
+    }
+
+    private func selectSpotlightItem(_ targetIdentity: SpotlightNavigationIdentity) {
+        guard let currentIdentity = spotlightCoordinator.spotlight?.navigationIdentity else { return }
+        let items = flatSpotlightItems
+        guard let selection = SpotlightNavigationResolver.selection(
+            targetIdentity: targetIdentity,
+            currentIdentity: currentIdentity,
+            items: items
+        ) else { return }
+        performSpotlightSwitch(selection)
+    }
+
+    private func performSpotlightSwitch(_ selection: SpotlightNavigationSelection) {
+        let previousSpotlightID = spotlightCoordinator.spotlight?.id
+        let transaction = spotlightCoordinator.beginCarouselSwitch(selection)
+
+        switch selection.item {
         case let .terminal(project, tab):
             presentTerminalSpotlight(
                 terminalViewModel: project.terminalViewModel,
@@ -1925,28 +1979,9 @@ private struct DetachedTerminalBoardWindowContent: View {
         case let .browser(tileID, url):
             presentBrowserSpotlight(tileID: tileID, url: url, animated: false)
         }
-        spotlightCoordinator.animateSwipeOffset(entryOffset)
-        spotlightCoordinator.animateSwipeOffset(0, animation: .spring(response: 0.35, dampingFraction: 0.82))
-    }
 
-    private func spotlightItemIndex(for spotlight: TerminalSpotlightState) -> Int? {
-        flatSpotlightItems.firstIndex { item in
-            switch (spotlight.source, item) {
-            case let (.persistent(_, tabID), .terminal(_, tab)):
-                return tab.id == tabID
-            case (.vibeCast, .vibeCast):
-                return true
-            case (.vibeLanes, .vibeLanes):
-                return true
-            case let (.acp(tileID, _), .acp(candidateTileID, _, _, _)):
-                return tileID == candidateTileID
-            case let (.file(tileID, _), .file(candidateTileID, _)):
-                return tileID == candidateTileID
-            case let (.browser(tileID, _), .browser(candidateTileID, _)):
-                return tileID == candidateTileID
-            default:
-                return false
-            }
+        if spotlightCoordinator.spotlight?.id == previousSpotlightID {
+            spotlightCoordinator.cancelCarouselSwitch(transaction)
         }
     }
 
@@ -2083,13 +2118,9 @@ private struct DetachedTerminalBoardWindowContent: View {
                 ContentUnavailableView(AppStrings.ACP.unavailableTitle, systemImage: "sparkles")
             }
         case let .filePreview(_, group):
-            MarkdownEditorView(viewModel: group.markdownViewModel, showsTopBar: false, headerLayout: .embedded)
-        case let .file(tileID, fileURL):
-            MarkdownEditorView(
-                viewModel: dockedFileViewerCoordinator.editorGroup(for: tileID, fileURL: fileURL).markdownViewModel,
-                showsTopBar: false,
-                headerLayout: .embedded
-            )
+            EditorGroupFileSurface(group: group)
+        case let .file(_, _, group):
+            EditorGroupFileSurface(group: group)
         case let .browser(tileID, url):
             BrowserContentView(
                 viewModel: dockedBrowserCoordinator.viewModel(for: tileID, url: url),

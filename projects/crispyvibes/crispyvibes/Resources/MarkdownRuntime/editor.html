@@ -683,7 +683,9 @@
     var markdownWebLinkPreference = "ask";
     var markdownLineNumbersVisible = false;
     var markdownLinkPopover = null;
+    const markdownNavigationHistoryLimit = 100;
     var markdownNavigationHistory = [];
+    var markdownForwardNavigationHistory = [];
     var lastSynchronizedMarkdown = null;
     var lastSynchronizedHTML = null;
     const imageCandidateRequestHandlers = new Map();
@@ -2390,6 +2392,55 @@
       return null;
     }
 
+    function boundedMarkdownPositions(values) {
+      if (!Array.isArray(values)) return [];
+      return values
+        .map((value) => {
+          if (!value || typeof value !== "object") return null;
+          const x = Number(value.x);
+          const y = Number(value.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+          return { x, y };
+        })
+        .filter((value) => value !== null)
+        .slice(-markdownNavigationHistoryLimit);
+    }
+
+    function pushMarkdownPosition(stack, position) {
+      stack.push(position);
+      if (stack.length > markdownNavigationHistoryLimit) {
+        stack.splice(0, stack.length - markdownNavigationHistoryLimit);
+      }
+    }
+
+    function postMarkdownNavigationState() {
+      const handler = window.webkit
+        && window.webkit.messageHandlers
+        && window.webkit.messageHandlers.markdownNavigationState;
+      if (!handler) return;
+      handler.postMessage({
+        canBack: markdownNavigationHistory.length > 0,
+        canForward: markdownForwardNavigationHistory.length > 0,
+        backPositions: boundedMarkdownPositions(markdownNavigationHistory),
+        forwardPositions: boundedMarkdownPositions(markdownForwardNavigationHistory)
+      });
+    }
+
+    function currentMarkdownScrollPosition() {
+      return { x: window.scrollX, y: window.scrollY };
+    }
+
+    window.crispyvibesRestoreMarkdownNavigationState = function(payload) {
+      const state = payload && typeof payload === "object" ? payload : {};
+      markdownNavigationHistory = boundedMarkdownPositions(state.backScrollPositions);
+      markdownForwardNavigationHistory = boundedMarkdownPositions(state.forwardScrollPositions);
+      postMarkdownNavigationState();
+      return {
+        canBack: markdownNavigationHistory.length > 0,
+        canForward: markdownForwardNavigationHistory.length > 0
+      };
+    };
+
     function navigateToMarkdownAnchor(fragment, recordHistory) {
       const target = markdownAnchorTarget(fragment);
       if (!target) {
@@ -2397,7 +2448,9 @@
         return false;
       }
       if (recordHistory !== false) {
-        markdownNavigationHistory.push({ x: window.scrollX, y: window.scrollY });
+        pushMarkdownPosition(markdownNavigationHistory, currentMarkdownScrollPosition());
+        markdownForwardNavigationHistory = [];
+        postMarkdownNavigationState();
       }
       target.scrollIntoView({ behavior: "smooth", block: "start" });
       target.classList.remove("crispyvibes-link-target-flash");
@@ -2407,16 +2460,40 @@
       return true;
     }
 
-    window.crispyvibesNavigateToAnchor = function(fragment) {
-      return navigateToMarkdownAnchor(fragment, true);
+    window.crispyvibesNavigateToAnchor = function(fragment, recordHistory) {
+      return navigateToMarkdownAnchor(fragment, recordHistory);
     };
 
-    function navigateBackInMarkdownDocument() {
-      const previous = markdownNavigationHistory.pop();
-      if (!previous) return false;
-      window.scrollTo({ left: previous.x, top: previous.y, behavior: "smooth" });
+    function navigateInMarkdownDocument(direction) {
+      const source = direction === "forward"
+        ? markdownForwardNavigationHistory
+        : markdownNavigationHistory;
+      const destination = source.pop();
+      if (!destination) return false;
+      const opposite = direction === "forward"
+        ? markdownNavigationHistory
+        : markdownForwardNavigationHistory;
+      pushMarkdownPosition(opposite, currentMarkdownScrollPosition());
+      window.scrollTo({ left: destination.x, top: destination.y, behavior: "smooth" });
+      postMarkdownNavigationState();
       return true;
     }
+
+    function postMarkdownNavigationFallback(direction) {
+      const handler = window.webkit
+        && window.webkit.messageHandlers
+        && window.webkit.messageHandlers.markdownNavigationFallback;
+      if (handler) handler.postMessage(direction);
+    }
+
+    window.crispyvibesNavigateHistory = function(direction) {
+      const normalized = direction === "forward" ? "forward" : "back";
+      if (!navigateInMarkdownDocument(normalized)) {
+        postMarkdownNavigationFallback(normalized);
+        return false;
+      }
+      return true;
+    };
 
     function markdownLinkTargetInfo(anchor) {
       const href = String(anchor && anchor.getAttribute("href") || "").trim();
@@ -2732,12 +2809,15 @@
       activateMarkdownLink(target, event, true);
     });
     editor.addEventListener("keydown", (event) => {
-      if (event.metaKey && !event.shiftKey && !event.altKey && event.key === "[") {
-        if (navigateBackInMarkdownDocument()) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
+      if (event.metaKey && !event.shiftKey && !event.altKey
+          && (event.key === "[" || event.key === "]")) {
+        const direction = event.key === "]" ? "forward" : "back";
+        if (!navigateInMarkdownDocument(direction)) {
+          postMarkdownNavigationFallback(direction);
         }
+        event.preventDefault();
+        event.stopPropagation();
+        return;
       }
       if (event.key === "Enter") {
         const focused = document.activeElement && document.activeElement.closest
@@ -3420,6 +3500,7 @@
 
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.editorReady) {
       window.webkit.messageHandlers.editorReady.postMessage("ready");
+      postMarkdownNavigationState();
     }
   </script>
 </body>

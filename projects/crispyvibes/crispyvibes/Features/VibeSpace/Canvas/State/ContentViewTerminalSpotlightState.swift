@@ -106,6 +106,145 @@ enum SpotlightItem {
     case acp(tileID: UUID, storeID: UUID, title: String, accentColor: Color?)
     case file(tileID: UUID, fileURL: URL)
     case browser(tileID: UUID, url: URL)
+
+    @MainActor
+    var navigationIdentity: SpotlightNavigationIdentity {
+        switch self {
+        case let .terminal(project, tab):
+            return .terminal(
+                projectScope: .projectPath(project.rootURL.standardizedFileURL.path),
+                tabID: tab.id
+            )
+        case .vibeCast:
+            return .vibeCast
+        case .vibeLanes:
+            return .vibeLanes
+        case let .acp(tileID, storeID, _, _):
+            return .acp(tileID: tileID, storeID: storeID)
+        case let .file(tileID, _):
+            return .file(tileID: tileID)
+        case let .browser(tileID, _):
+            return .browser(tileID: tileID)
+        }
+    }
+}
+
+enum SpotlightTerminalProjectScope: Hashable {
+    case projectPath(String)
+    case unscoped(UUID)
+
+    static func projectRoot(_ rootURL: URL) -> Self {
+        .projectPath(rootURL.standardizedFileURL.path)
+    }
+
+    var diagnosticToken: String {
+        switch self {
+        case let .projectPath(path):
+            return AppDiagnostics.pathToken(path)
+        case let .unscoped(identity):
+            return "unscoped#\(identity.uuidString)"
+        }
+    }
+}
+
+enum SpotlightNavigationIdentity: Hashable {
+    case terminal(projectScope: SpotlightTerminalProjectScope, tabID: UUID)
+    case vibeCast
+    case vibeLanes
+    case acp(tileID: UUID, storeID: UUID)
+    case file(tileID: UUID)
+    case browser(tileID: UUID)
+
+    var diagnosticToken: String {
+        switch self {
+        case let .terminal(projectScope, tabID):
+            return "terminal:\(projectScope.diagnosticToken):\(tabID.uuidString)"
+        case .vibeCast:
+            return "vibeCast"
+        case .vibeLanes:
+            return "vibeLanes"
+        case let .acp(tileID, storeID):
+            return "acp:\(tileID.uuidString):\(storeID.uuidString)"
+        case let .file(tileID):
+            return "file:\(tileID.uuidString)"
+        case let .browser(tileID):
+            return "browser:\(tileID.uuidString)"
+        }
+    }
+}
+
+struct SpotlightNavigationSelection {
+    let item: SpotlightItem
+    let sourceIdentity: SpotlightNavigationIdentity
+    let targetIdentity: SpotlightNavigationIdentity
+    let direction: Int
+}
+
+@MainActor
+enum SpotlightNavigationResolver {
+    static func hasNavigableCurrentItem(
+        currentIdentity: SpotlightNavigationIdentity?,
+        items: [SpotlightItem]
+    ) -> Bool {
+        guard let currentIdentity else { return false }
+        return items.contains { $0.navigationIdentity == currentIdentity }
+    }
+
+    static func carouselNavigationEnabled(
+        for spotlight: TerminalSpotlightState,
+        items: [SpotlightItem]
+    ) -> Bool {
+        spotlight.supportsCarouselNavigation
+            && items.count > 1
+            && hasNavigableCurrentItem(
+                currentIdentity: spotlight.navigationIdentity,
+                items: items
+            )
+    }
+
+    static func relativeSelection(
+        offset: Int,
+        currentIdentity: SpotlightNavigationIdentity,
+        items: [SpotlightItem]
+    ) -> SpotlightNavigationSelection? {
+        guard !items.isEmpty,
+              let currentIndex = items.firstIndex(where: { $0.navigationIdentity == currentIdentity }) else {
+            return nil
+        }
+        let targetIndex = (currentIndex + offset + items.count) % items.count
+        let targetItem = items[targetIndex]
+        guard targetItem.navigationIdentity != currentIdentity else { return nil }
+        return SpotlightNavigationSelection(
+            item: targetItem,
+            sourceIdentity: currentIdentity,
+            targetIdentity: targetItem.navigationIdentity,
+            direction: offset > 0 ? 1 : -1
+        )
+    }
+
+    static func selection(
+        targetIdentity: SpotlightNavigationIdentity,
+        currentIdentity: SpotlightNavigationIdentity,
+        items: [SpotlightItem]
+    ) -> SpotlightNavigationSelection? {
+        guard targetIdentity != currentIdentity,
+              let currentIndex = items.firstIndex(where: { $0.navigationIdentity == currentIdentity }),
+              let targetIndex = items.firstIndex(where: { $0.navigationIdentity == targetIdentity }) else {
+            return nil
+        }
+        return SpotlightNavigationSelection(
+            item: items[targetIndex],
+            sourceIdentity: currentIdentity,
+            targetIdentity: targetIdentity,
+            direction: targetIndex > currentIndex ? 1 : -1
+        )
+    }
+}
+
+struct SpotlightSwitchTransaction {
+    let generation: UInt64
+    let sourceIdentity: SpotlightNavigationIdentity
+    let targetIdentity: SpotlightNavigationIdentity
 }
 
 struct TerminalSpotlightState: Identifiable {
@@ -117,7 +256,7 @@ struct TerminalSpotlightState: Identifiable {
         case todos
         case acp(tileID: UUID, storeID: UUID)
         case filePreview(target: TerminalFileSystemTarget, group: EditorGroupStore)
-        case file(tileID: UUID, fileURL: URL)
+        case file(tileID: UUID, fileURL: URL, group: EditorGroupStore)
         case browserPreview(snapshot: BrowserSessionSnapshot)
         case browser(tileID: UUID, url: URL)
     }
@@ -184,8 +323,8 @@ enum SpotlightRestoreDescriptor {
         onSplitTerminalRequested: (() -> Void)?,
         owningProjectRootURL: URL?
     )
-    case filePreview(target: TerminalFileSystemTarget, projectPath: String?)
-    case file(tileID: UUID, fileURL: URL)
+    case filePreview(target: TerminalFileSystemTarget, group: EditorGroupStore, projectPath: String?)
+    case file(tileID: UUID, fileURL: URL, group: EditorGroupStore, projectPath: String?)
     case acp(tileID: UUID, storeID: UUID)
     case vibeCast
     case vibeLanes
@@ -207,9 +346,9 @@ extension TerminalSpotlightState.Source {
     var reservesScrollForTerminalViewport: Bool {
         switch self {
         case let .persistent(terminalViewModel, tabID):
-            return (terminalViewModel.session(for: tabID)?.displayMagnification ?? 1) > 1.001
+            return (terminalViewModel.session(for: tabID)?.displayMagnification ?? 1) > 1
         case let .transient(session):
-            return session.displayMagnification > 1.001
+            return session.displayMagnification > 1
         case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
             return false
         }
@@ -277,6 +416,27 @@ extension TerminalSpotlightState {
     var supportsCarouselNavigation: Bool { source.supportsCarouselNavigation }
     var showsTemporaryBadge: Bool { source.showsTemporaryBadge || isTemporary }
     var headerIconName: String { source.headerIconName }
+
+    var navigationIdentity: SpotlightNavigationIdentity? {
+        switch source {
+        case let .persistent(_, tabID):
+            let projectScope = owningProjectRootURL.map(SpotlightTerminalProjectScope.projectRoot)
+                ?? .unscoped(id)
+            return .terminal(projectScope: projectScope, tabID: tabID)
+        case .vibeCast:
+            return .vibeCast
+        case .vibeLanes:
+            return .vibeLanes
+        case let .acp(tileID, storeID):
+            return .acp(tileID: tileID, storeID: storeID)
+        case let .file(tileID, _, _):
+            return .file(tileID: tileID)
+        case let .browser(tileID, _):
+            return .browser(tileID: tileID)
+        case .transient, .todos, .filePreview, .browserPreview:
+            return nil
+        }
+    }
 }
 
 @MainActor
@@ -286,8 +446,14 @@ final class TerminalSpotlightCoordinator: ObservableObject {
     @Published var swipeDirection: SpotlightSwipeDirection = .none
     @Published var swipeOffset: CGFloat = 0
     @Published var tabPageOffset: Int = 0
+    @Published private(set) var activeSwitchGeneration: UInt64?
 
     private var scrollMonitor: Any?
+    private var nextSwitchGeneration: UInt64 = 0
+    private var pendingSwitchTransaction: SpotlightSwitchTransaction?
+    private var switchStartWorkItem: DispatchWorkItem?
+    private var switchCompletionWorkItem: DispatchWorkItem?
+    private var focusWorkItem: DispatchWorkItem?
     private(set) var restoreStack: [SpotlightRestoreDescriptor] = []
     private let maxRestoreStackDepth = 8
 
@@ -297,6 +463,9 @@ final class TerminalSpotlightCoordinator: ObservableObject {
 
     deinit {
         MainActor.assumeIsolated {
+            switchStartWorkItem?.cancel()
+            switchCompletionWorkItem?.cancel()
+            focusWorkItem?.cancel()
             removeScrollMonitor()
             releaseTerminalSpotlightIfNeeded(spotlight, replacingWith: nil)
         }
@@ -354,9 +523,46 @@ final class TerminalSpotlightCoordinator: ObservableObject {
         }
     }
 
-    func prepareSwitchTransition(offset: Int) -> CGFloat {
-        swipeDirection = offset > 0 ? .trailing : .leading
-        return offset > 0 ? 200 : -200
+    func beginCarouselSwitch(_ selection: SpotlightNavigationSelection) -> SpotlightSwitchTransaction {
+        cancelSpotlightFocusRequestIfNeeded(spotlight)
+        focusWorkItem?.cancel()
+        focusWorkItem = nil
+        switchStartWorkItem?.cancel()
+        switchCompletionWorkItem?.cancel()
+        nextSwitchGeneration &+= 1
+        let transaction = SpotlightSwitchTransaction(
+            generation: nextSwitchGeneration,
+            sourceIdentity: selection.sourceIdentity,
+            targetIdentity: selection.targetIdentity
+        )
+        activeSwitchGeneration = transaction.generation
+        pendingSwitchTransaction = transaction
+        swipeDirection = selection.direction > 0 ? .trailing : .leading
+        swipeOffset = selection.direction > 0 ? 200 : -200
+        return transaction
+    }
+
+    func cancelCarouselSwitch(_ transaction: SpotlightSwitchTransaction? = nil) {
+        if let transaction, activeSwitchGeneration != transaction.generation {
+            return
+        }
+        switchStartWorkItem?.cancel()
+        switchStartWorkItem = nil
+        switchCompletionWorkItem?.cancel()
+        switchCompletionWorkItem = nil
+        focusWorkItem?.cancel()
+        focusWorkItem = nil
+        pendingSwitchTransaction = nil
+        activeSwitchGeneration = nil
+        swipeDirection = .none
+        swipeOffset = 0
+    }
+
+    func isCurrentSelection(
+        _ identity: SpotlightNavigationIdentity,
+        generation: UInt64?
+    ) -> Bool {
+        spotlight?.navigationIdentity == identity && activeSwitchGeneration == generation
     }
 
     func animateSwipeOffset(_ offset: CGFloat, animation: Animation? = nil) {
@@ -370,8 +576,7 @@ final class TerminalSpotlightCoordinator: ObservableObject {
     }
 
     func dismiss(animated: Bool = true) {
-        swipeDirection = .none
-        swipeOffset = 0
+        cancelCarouselSwitch()
         tabPageOffset = 0
         removeScrollMonitor()
         restoreStack.removeAll()
@@ -412,13 +617,19 @@ final class TerminalSpotlightCoordinator: ObservableObject {
             return nil
         case let .acp(tileID, storeID):
             return .acp(tileID: tileID, storeID: storeID)
-        case let .filePreview(target, _):
+        case let .filePreview(target, group):
             return .filePreview(
                 target: target,
+                group: group,
                 projectPath: spotlight.owningProjectRootURL?.path
             )
-        case let .file(tileID, fileURL):
-            return .file(tileID: tileID, fileURL: fileURL)
+        case let .file(tileID, fileURL, group):
+            return .file(
+                tileID: tileID,
+                fileURL: fileURL,
+                group: group,
+                projectPath: spotlight.owningProjectRootURL?.path
+            )
         case let .browserPreview(snapshot):
             let previewSnapshot = browserPreviewSnapshotProvider?() ?? snapshot
             return .browserPreview(
@@ -448,25 +659,174 @@ final class TerminalSpotlightCoordinator: ObservableObject {
         restoreStack.popLast()
     }
 
+    @discardableResult
     func setSpotlight(
         _ nextSpotlight: TerminalSpotlightState?,
         animated: Bool = true,
+        switchTransaction: SpotlightSwitchTransaction? = nil,
         onFocusSpotlight: ((TerminalSpotlightState) -> Void)? = nil
-    ) {
-        releaseTerminalSpotlightIfNeeded(spotlight, replacingWith: nextSpotlight)
-        diagnosticsSnapshot.spotlightActive = nextSpotlight != nil
-        if animated {
-            withAnimation(.easeInOut(duration: 0.22)) {
-                spotlight = nextSpotlight
+    ) -> Bool {
+        let effectiveSwitchTransaction = switchTransaction
+            ?? pendingSwitchTransaction.flatMap { transaction in
+                nextSpotlight?.navigationIdentity == transaction.targetIdentity ? transaction : nil
+            }
+        if let effectiveSwitchTransaction {
+            guard activeSwitchGeneration == effectiveSwitchTransaction.generation,
+                  nextSpotlight?.navigationIdentity == effectiveSwitchTransaction.targetIdentity else {
+                recordFocusSuppression(
+                    spotlight: nextSpotlight,
+                    generation: effectiveSwitchTransaction.generation,
+                    sourceIdentity: effectiveSwitchTransaction.sourceIdentity
+                )
+                return false
             }
         } else {
-            spotlight = nextSpotlight
+            cancelCarouselSwitch()
         }
-        if let nextSpotlight {
-            DispatchQueue.main.async {
-                onFocusSpotlight?(nextSpotlight)
+
+        releaseTerminalSpotlightIfNeeded(spotlight, replacingWith: nextSpotlight)
+        diagnosticsSnapshot.spotlightActive = nextSpotlight != nil
+
+        if let effectiveSwitchTransaction, let nextSpotlight {
+            pendingSwitchTransaction = nil
+            spotlight = nextSpotlight
+            AppDiagnostics.record(
+                category: .terminalLifecycle,
+                level: .info,
+                event: "spotlight_switch_selection_commit",
+                metadata: [
+                    "generation": String(effectiveSwitchTransaction.generation),
+                    "source": effectiveSwitchTransaction.sourceIdentity.diagnosticToken,
+                    "target": effectiveSwitchTransaction.targetIdentity.diagnosticToken
+                ]
+            )
+            scheduleCarouselCommit(
+                spotlight: nextSpotlight,
+                transaction: effectiveSwitchTransaction,
+                onFocusSpotlight: onFocusSpotlight
+            )
+        } else {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    spotlight = nextSpotlight
+                }
+            } else {
+                spotlight = nextSpotlight
+            }
+            if let nextSpotlight {
+                let workItem = DispatchWorkItem { [weak self] in
+                    guard let self,
+                          self.spotlight?.id == nextSpotlight.id,
+                          self.activeSwitchGeneration == nil else {
+                        self?.recordFocusSuppression(
+                            spotlight: nextSpotlight,
+                            generation: nil,
+                            sourceIdentity: nextSpotlight.navigationIdentity
+                        )
+                        return
+                    }
+                    self.focusWorkItem = nil
+                    onFocusSpotlight?(nextSpotlight)
+                }
+                focusWorkItem = workItem
+                DispatchQueue.main.async(execute: workItem)
             }
         }
+        return true
+    }
+
+    private func scheduleCarouselCommit(
+        spotlight nextSpotlight: TerminalSpotlightState,
+        transaction: SpotlightSwitchTransaction,
+        onFocusSpotlight: ((TerminalSpotlightState) -> Void)?
+    ) {
+        switchStartWorkItem?.cancel()
+        let startWorkItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self.activeSwitchGeneration == transaction.generation,
+                  self.spotlight?.id == nextSpotlight.id,
+                  self.spotlight?.navigationIdentity == transaction.targetIdentity else {
+                self.recordAnimationSuppression(transaction)
+                self.recordFocusSuppression(
+                    spotlight: nextSpotlight,
+                    generation: transaction.generation,
+                    sourceIdentity: transaction.sourceIdentity
+                )
+                return
+            }
+
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                self.swipeOffset = 0
+            }
+            onFocusSpotlight?(nextSpotlight)
+            self.scheduleCarouselCompletion(
+                spotlightID: nextSpotlight.id,
+                transaction: transaction
+            )
+        }
+        switchStartWorkItem = startWorkItem
+        DispatchQueue.main.async(execute: startWorkItem)
+    }
+
+    private func scheduleCarouselCompletion(
+        spotlightID: UUID,
+        transaction: SpotlightSwitchTransaction
+    ) {
+        switchCompletionWorkItem?.cancel()
+        let completionWorkItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.activeSwitchGeneration == transaction.generation,
+                  self.spotlight?.id == spotlightID,
+                  self.spotlight?.navigationIdentity == transaction.targetIdentity else {
+                return
+            }
+            self.swipeDirection = .none
+            self.swipeOffset = 0
+            self.activeSwitchGeneration = nil
+            self.switchCompletionWorkItem = nil
+            AppDiagnostics.record(
+                category: .terminalLifecycle,
+                level: .info,
+                event: "spotlight_switch_animation_completed",
+                metadata: [
+                    "generation": String(transaction.generation),
+                    "source": transaction.sourceIdentity.diagnosticToken,
+                    "target": transaction.targetIdentity.diagnosticToken
+                ]
+            )
+        }
+        switchCompletionWorkItem = completionWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: completionWorkItem)
+    }
+
+    private func recordAnimationSuppression(_ transaction: SpotlightSwitchTransaction) {
+        AppDiagnostics.record(
+            category: .terminalLifecycle,
+            level: .info,
+            event: "spotlight_switch_animation_suppressed",
+            metadata: [
+                "generation": String(transaction.generation),
+                "source": transaction.sourceIdentity.diagnosticToken,
+                "target": transaction.targetIdentity.diagnosticToken
+            ]
+        )
+    }
+
+    private func recordFocusSuppression(
+        spotlight: TerminalSpotlightState?,
+        generation: UInt64?,
+        sourceIdentity: SpotlightNavigationIdentity?
+    ) {
+        AppDiagnostics.record(
+            category: .terminalLifecycle,
+            level: .info,
+            event: "spotlight_focus_suppressed",
+            metadata: [
+                "generation": generation.map(String.init) ?? "direct",
+                "source": sourceIdentity?.diagnosticToken ?? "non-carousel",
+                "target": spotlight?.navigationIdentity?.diagnosticToken ?? "non-carousel"
+            ]
+        )
     }
 
     private func releaseTerminalSpotlightIfNeeded(
@@ -475,9 +835,21 @@ final class TerminalSpotlightCoordinator: ObservableObject {
     ) {
         guard let spotlight else { return }
         guard spotlight.id != nextSpotlight?.id else { return }
+        cancelSpotlightFocusRequestIfNeeded(spotlight)
         guard case let .transient(session) = spotlight.source else { return }
         session.onProcessTerminated = nil
         session.terminate()
+    }
+
+    private func cancelSpotlightFocusRequestIfNeeded(_ spotlight: TerminalSpotlightState?) {
+        switch spotlight?.source {
+        case let .persistent(terminalViewModel, tabID):
+            terminalViewModel.session(for: tabID)?.cancelKeyboardFocusRequest()
+        case let .transient(session):
+            session.cancelKeyboardFocusRequest()
+        case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser, .none:
+            break
+        }
     }
 }
 
@@ -534,7 +906,11 @@ extension ContentView {
         surfaceID: UUID? = nil,
         animated: Bool = true
     ) {
-        if case let .persistent(_, existingTabID) = terminalSpotlightCoordinator.spotlight?.source, existingTabID == tabID {
+        if case let .persistent(existingViewModel, existingTabID) = terminalSpotlightCoordinator.spotlight?.source,
+           existingViewModel === terminalViewModel,
+           existingTabID == tabID,
+           terminalSpotlightCoordinator.spotlight?.owningProjectRootURL?.standardizedFileURL
+                == owningProjectRootURL?.standardizedFileURL {
             return
         }
         guard let resolvedTab = terminalViewModel.tabs.first(where: { $0.id == tabID }) else { return }
@@ -758,8 +1134,10 @@ extension ContentView {
     func focusSpotlightTerminal(_ spotlight: TerminalSpotlightState) {
         switch spotlight.source {
         case let .persistent(terminalViewModel, tabID):
-            guard let tab = terminalViewModel.tabs.first(where: { $0.id == tabID }) else { return }
+            guard let tab = terminalViewModel.tabs.first(where: { $0.id == tabID }),
+                  let session = terminalViewModel.session(for: tabID) else { return }
             terminalViewModel.selectTab(tab)
+            session.requestKeyboardFocus()
         case let .transient(session):
             session.startIfNeeded()
         case .vibeCast:
@@ -830,16 +1208,35 @@ extension ContentView {
                 pushCurrentToRestore: false
             )
             return true
-        case let .filePreview(target, projectPath):
-            presentFilePreviewSpotlight(
-                target: target,
-                owningProjectRootURL: projectPath.map(URL.init(fileURLWithPath:)),
-                animated: false
+        case let .filePreview(target, group, projectPath):
+            let activeURL = group.activeFileDocumentReference?.url ?? target.url
+            let restoredSpotlight = TerminalSpotlightState(
+                id: UUID(),
+                source: .filePreview(target: target, group: group),
+                title: activeURL.lastPathComponent,
+                accentColor: activeThemePalette.accentColor,
+                workingDirectoryURL: activeURL.deletingLastPathComponent(),
+                onSplitTerminalRequested: nil,
+                onTemporaryTerminalRequested: nil,
+                isTemporary: true,
+                owningProjectRootURL: projectPath.map(URL.init(fileURLWithPath:))
             )
+            setTerminalSpotlight(restoredSpotlight, animated: false)
             return true
-        case let .file(tileID, fileURL):
-            guard FileManager.default.fileExists(atPath: fileURL.path) else { return false }
-            presentFileSpotlight(tileID: tileID, fileURL: fileURL)
+        case let .file(tileID, fileURL, group, projectPath):
+            let activeURL = group.activeFileDocumentReference?.url ?? fileURL
+            let restoredSpotlight = TerminalSpotlightState(
+                id: UUID(),
+                source: .file(tileID: tileID, fileURL: fileURL, group: group),
+                title: activeURL.lastPathComponent,
+                accentColor: activeThemePalette.accentColor,
+                workingDirectoryURL: activeURL.deletingLastPathComponent(),
+                onSplitTerminalRequested: nil,
+                onTemporaryTerminalRequested: nil,
+                isTemporary: false,
+                owningProjectRootURL: projectPath.map(URL.init(fileURLWithPath:))
+            )
+            setTerminalSpotlight(restoredSpotlight, animated: false)
             return true
         case .vibeCast:
             presentVibeCastSpotlight()

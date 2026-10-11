@@ -7,10 +7,10 @@ struct TerminalSpotlightOverlayHostView<CardContent: View>: View {
     let items: [SpotlightItem]
     let projectColorTag: (AnyProjectSession) -> ProjectColorTag?
     let onDismiss: () -> Void
-    let onFocusSpotlight: (TerminalSpotlightState) -> Void
     let onInstallScrollMonitor: () -> Void
     let onRemoveScrollMonitor: () -> Void
     let onSwitchSpotlight: (Int) -> Void
+    let onSelectSpotlight: (SpotlightNavigationIdentity) -> Void
     let onReorderTerminalTab: (SpotlightItem, SpotlightItem, TerminalTabMovePlacement) -> Bool
     let cardContent: (TerminalSpotlightState) -> CardContent
 
@@ -21,6 +21,7 @@ struct TerminalSpotlightOverlayHostView<CardContent: View>: View {
                     spotlight: spotlight,
                     swipeDirection: coordinator.swipeDirection,
                     swipeOffset: coordinator.swipeOffset,
+                    switchGeneration: coordinator.activeSwitchGeneration,
                     tabPageOffset: Binding(
                         get: { coordinator.tabPageOffset },
                         set: { coordinator.tabPageOffset = $0 }
@@ -28,10 +29,13 @@ struct TerminalSpotlightOverlayHostView<CardContent: View>: View {
                     items: items,
                     projectColorTag: projectColorTag,
                     onDismiss: onDismiss,
-                    onFocus: { onFocusSpotlight(spotlight) },
                     onInstallScrollMonitor: onInstallScrollMonitor,
                     onRemoveScrollMonitor: onRemoveScrollMonitor,
                     onSwitchSpotlight: onSwitchSpotlight,
+                    onSelectSpotlight: onSelectSpotlight,
+                    isSelectionCurrent: { identity, generation in
+                        coordinator.isCurrentSelection(identity, generation: generation)
+                    },
                     onReorderTerminalTab: onReorderTerminalTab,
                     cardContent: { cardContent(spotlight) }
                 )
@@ -50,14 +54,16 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
     let spotlight: TerminalSpotlightState
     let swipeDirection: SpotlightSwipeDirection
     let swipeOffset: CGFloat
+    let switchGeneration: UInt64?
     let tabPageOffset: Binding<Int>
     let items: [SpotlightItem]
     let projectColorTag: (AnyProjectSession) -> ProjectColorTag?
     let onDismiss: () -> Void
-    let onFocus: () -> Void
     let onInstallScrollMonitor: () -> Void
     let onRemoveScrollMonitor: () -> Void
     let onSwitchSpotlight: (Int) -> Void
+    let onSelectSpotlight: (SpotlightNavigationIdentity) -> Void
+    let isSelectionCurrent: (SpotlightNavigationIdentity, UInt64?) -> Bool
     let onReorderTerminalTab: (SpotlightItem, SpotlightItem, TerminalTabMovePlacement) -> Bool
     let cardContent: () -> CardContent
 
@@ -83,33 +89,37 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
 
             spotlightContainer
                 .padding(24)
-                .transition(
-                    .asymmetric(
-                        insertion: swipeDirection == .none
-                            ? .opacity.combined(with: .scale(scale: 0.975))
-                            : .move(edge: swipeDirection == .trailing ? .trailing : .leading).combined(with: .opacity),
-                        removal: swipeDirection == .none
-                            ? .opacity.combined(with: .scale(scale: 0.985))
-                            : .move(edge: swipeDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
-                    )
-                )
+                .transition(.opacity.combined(with: .scale(scale: 0.975)))
 
         }
         .transition(.opacity)
         .zIndex(220)
         .onExitCommand(perform: onDismiss)
         .onAppear {
-            if !spotlight.source.showsComposeInputBar {
-                onFocus()
+            if carouselNavigationEnabled {
+                onInstallScrollMonitor()
             }
-            onInstallScrollMonitor()
+        }
+        .onChange(of: carouselNavigationEnabled) { _, isEnabled in
+            if isEnabled {
+                onInstallScrollMonitor()
+            } else {
+                onRemoveScrollMonitor()
+            }
         }
         .onDisappear(perform: onRemoveScrollMonitor)
     }
 
+    private var carouselNavigationEnabled: Bool {
+        SpotlightNavigationResolver.carouselNavigationEnabled(
+            for: spotlight,
+            items: flatSpotlightItems
+        )
+    }
+
     @ViewBuilder
     private var spotlightContainer: some View {
-        let showNav = spotlight.supportsCarouselNavigation && flatSpotlightItems.count > 1
+        let showNav = carouselNavigationEnabled
         HStack(spacing: 0) {
             if showNav {
                 Button { onSwitchSpotlight(-1) } label: {
@@ -126,6 +136,7 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("spotlight.navigation.previous")
                 .padding(.trailing, 12)
             }
 
@@ -134,7 +145,18 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
                     spotlightTabStrip
                 }
                 cardContent()
+                    .id(spotlight.id)
                     .offset(x: swipeOffset)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity,
+                            removal: swipeDirection == .none
+                                ? .opacity
+                                : .move(
+                                    edge: swipeDirection == .trailing ? .leading : .trailing
+                                ).combined(with: .opacity)
+                        )
+                    )
             }
 
             if showNav {
@@ -152,6 +174,7 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("spotlight.navigation.next")
                 .padding(.leading, 12)
             }
         }
@@ -160,7 +183,10 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
     @ViewBuilder
     private var spotlightTabStrip: some View {
         let items = flatSpotlightItems
-        let currentIdx = spotlightItemIndex ?? 0
+        let currentIdentity = spotlight.navigationIdentity
+        let currentIdx = currentIdentity.flatMap { identity in
+            items.firstIndex(where: { $0.navigationIdentity == identity })
+        } ?? 0
         // File-tab styling: the current tab is a solid canvas-colored card with
         // a border (matching the editor's file tabs), so it clearly pops off
         // the translucent capsule; inactive tabs stay flat and quiet.
@@ -180,10 +206,9 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
                             ForEach(tabStripEntries(items: items)) { entry in
                                 spotlightTabChip(
                                     entry: entry,
-                                    currentIdx: currentIdx,
                                     style: style
                                 )
-                                .id(entry.index)
+                                .id(entry.id)
                             }
                         }
                         .padding(.horizontal, 14)
@@ -193,11 +218,16 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .mask(scrollEdgeFade)
                     .onAppear {
-                        scrollProxy.scrollTo(currentIdx, anchor: .center)
+                        if let currentIdentity {
+                            scrollProxy.scrollTo(currentIdentity, anchor: .center)
+                        }
                     }
-                    .onChange(of: currentIdx) { _, newIdx in
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            scrollProxy.scrollTo(newIdx, anchor: .center)
+                    .onChange(of: currentIdentity) { _, newIdentity in
+                        guard let newIdentity else { return }
+                        let expectedGeneration = switchGeneration
+                        DispatchQueue.main.async {
+                            guard isSelectionCurrent(newIdentity, expectedGeneration) else { return }
+                            scrollProxy.scrollTo(newIdentity, anchor: .center)
                         }
                     }
                 }
@@ -223,6 +253,7 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
                     }
                     .shadow(color: Color.black.opacity(0.18), radius: 12, x: 0, y: 4)
             }
+            .accessibilityIdentifier("spotlight.navigation.tab-strip")
         }
     }
 
@@ -241,12 +272,10 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
     @ViewBuilder
     private func spotlightTabChip(
         entry: SpotlightTabStripEntry,
-        currentIdx: Int,
         style: TerminalTabChipStyle
     ) -> some View {
-        let index = entry.index
         let item = entry.item
-        let isCurrent = index == currentIdx
+        let isCurrent = item.navigationIdentity == spotlight.navigationIdentity
         let accent: TerminalTabChipAccent? = {
             switch item {
             case let .terminal(project, tab):
@@ -262,7 +291,7 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
         }()
         Button {
             guard !isCurrent else { return }
-            onSwitchSpotlight(index - currentIdx)
+            onSelectSpotlight(item.navigationIdentity)
         } label: {
             TerminalTabChipChrome(
                 isSelected: isCurrent,
@@ -386,7 +415,6 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
             seen[title, default: 0] += 1
             let ordinal = (totals[title] ?? 0) > 1 ? seen[title] : nil
             return SpotlightTabStripEntry(
-                index: index,
                 item: item,
                 displayTitle: title,
                 ordinal: ordinal
@@ -565,80 +593,24 @@ struct TerminalSpotlightOverlayView<CardContent: View>: View {
         return didReorder
     }
 
-    private var spotlightItemIndex: Int? {
-        switch spotlight.source {
-        case let .persistent(_, tabID):
-            return items.firstIndex(where: {
-                if case let .terminal(_, tab) = $0 { return tab.id == tabID }
-                return false
-            })
-        case .vibeCast:
-            return items.firstIndex(where: {
-                if case .vibeCast = $0 { return true }
-                return false
-            })
-        case .vibeLanes:
-            return items.firstIndex(where: {
-                if case .vibeLanes = $0 { return true }
-                return false
-            })
-        case let .acp(tileID, _):
-            return items.firstIndex(where: {
-                if case let .acp(id, _, _, _) = $0 { return id == tileID }
-                return false
-            })
-        case .transient:
-            return nil
-        case .todos:
-            return nil
-        case .filePreview:
-            return nil
-        case .file:
-            return items.firstIndex(where: {
-                if case let .file(_, url) = $0, case let .file(_, spotlightURL) = spotlight.source {
-                    return url == spotlightURL
-                }
-                return false
-            })
-        case .browserPreview:
-            return nil
-        case .browser(let tileID, _):
-            return items.firstIndex(where: {
-                if case let .browser(id, _) = $0 { return id == tileID }
-                return false
-            })
-        }
-    }
 }
 
 private struct SpotlightTabStripEntry: Identifiable {
-    let index: Int
     let item: SpotlightItem
     let displayTitle: String
     /// 1-based position among identically-titled items; nil when the title is unique.
     let ordinal: Int?
 
-    var id: String {
-        item.tabStripIdentity
+    @MainActor
+    var id: SpotlightNavigationIdentity {
+        item.navigationIdentity
     }
 }
 
 private extension SpotlightItem {
+    @MainActor
     var tabStripIdentity: String {
-        switch self {
-        case let .terminal(project, tab):
-            return "terminal:\(project.id.uuidString):\(tab.id.uuidString)"
-        case .vibeCast:
-            return "vibeCast"
-        case .vibeLanes:
-            return "vibeLanes"
-        case let .acp(tileID, storeID, _, _):
-            return "acp:\(tileID.uuidString):\(storeID.uuidString)"
-        case let .file(tileID, fileURL):
-            return "file:\(tileID.uuidString):\(fileURL.standardizedFileURL.path)"
-        case let .browser(tileID, url):
-            return "browser:\(tileID.uuidString):\(url.absoluteString)"
-        }
+        navigationIdentity.diagnosticToken
     }
 }
 
@@ -683,7 +655,7 @@ private struct SpotlightTabDropDelegate: DropDelegate {
     }
 
     private func updateDropTarget(_ info: DropInfo) {
-        guard case let .terminal(_, tab) = item else {
+        guard case .terminal = item else {
             clearDropTarget()
             return
         }
@@ -709,10 +681,10 @@ extension ContentView {
             items: flatSpotlightItems,
             projectColorTag: vibespaceCanvasActionsCoordinator.colorTag(for:),
             onDismiss: closeTerminalSpotlight,
-            onFocusSpotlight: focusSpotlightTerminal,
             onInstallScrollMonitor: installSpotlightScrollMonitor,
             onRemoveScrollMonitor: removeSpotlightScrollMonitor,
             onSwitchSpotlight: switchSpotlight(by:),
+            onSelectSpotlight: selectSpotlightItem(_:),
             onReorderTerminalTab: { draggedItem, targetItem, placement in
                 guard case let .terminal(draggedProject, draggedTab) = draggedItem,
                       case let .terminal(targetProject, targetTab) = targetItem else {

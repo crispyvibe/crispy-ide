@@ -5,16 +5,53 @@ import XCTest
 
 @MainActor
 final class GhosttyTerminalViewInputTests: XCTestCase {
-    private func makeWindowAndRoot() -> (NSWindow, NSView) {
+    private var mountedWindows: [NSWindow] = []
+
+    override func tearDown() {
+        for window in mountedWindows {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        mountedWindows.removeAll()
+        super.tearDown()
+    }
+
+    private func makeWindowAndRoot(
+        size: CGSize = CGSize(width: 320, height: 200)
+    ) -> (NSWindow, NSView) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled],
             backing: .buffered,
             defer: false
         )
         let root = NSView(frame: window.contentView?.bounds ?? .zero)
         window.contentView = root
+        mountedWindows.append(window)
         return (window, root)
+    }
+
+    private func makeScrollEvent(
+        in window: NSWindow,
+        at windowPoint: CGPoint,
+        deltaX: Int32,
+        deltaY: Int32,
+        modifierFlags: CGEventFlags = []
+    ) throws -> NSEvent {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let cgEvent = try XCTUnwrap(
+            CGEvent(
+                scrollWheelEvent2Source: source,
+                units: .pixel,
+                wheelCount: 2,
+                wheel1: deltaY,
+                wheel2: deltaX,
+                wheel3: 0
+            )
+        )
+        cgEvent.location = window.convertPoint(toScreen: windowPoint)
+        cgEvent.flags = modifierFlags
+        return try XCTUnwrap(NSEvent(cgEvent: cgEvent))
     }
 
     private func makeSessionAndEngine() -> (TerminalSession, GhosttyTerminalEngine) {
@@ -253,7 +290,7 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
     }
 
     /// F001-S59
-    func testOpticalTransformClampsPanAndPreventsShrinkingBelowNormal() {
+    func testOpticalTransformClampsAboveNormalPanAndCentersShrink() {
         let size = CGSize(width: 320, height: 200)
         var transform = TerminalOpticalTransform(scale: 2, visibleOrigin: .zero)
 
@@ -261,10 +298,14 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         XCTAssertEqual(transform.visibleOrigin.x, 160, accuracy: 0.001)
         XCTAssertEqual(transform.visibleOrigin.y, 100, accuracy: 0.001)
 
-        transform.setScale(0.75, anchoredAt: .zero, contentSize: size, viewportSize: size)
-        XCTAssertEqual(transform.scale, 1, accuracy: 0.001)
-        XCTAssertEqual(transform.visibleOrigin.x, 0, accuracy: 0.001)
-        XCTAssertEqual(transform.visibleOrigin.y, 0, accuracy: 0.001)
+        transform.setScale(0.5, anchoredAt: .zero, contentSize: size, viewportSize: size)
+        XCTAssertEqual(transform.scale, 0.5, accuracy: 0.001)
+        XCTAssertEqual(transform.visibleOrigin.x, -160, accuracy: 0.001)
+        XCTAssertEqual(transform.visibleOrigin.y, -100, accuracy: 0.001)
+
+        transform.pan(by: CGPoint(x: 10_000, y: -10_000), contentSize: size, viewportSize: size)
+        XCTAssertEqual(transform.visibleOrigin.x, -160, accuracy: 0.001)
+        XCTAssertEqual(transform.visibleOrigin.y, -100, accuracy: 0.001)
     }
 
     /// F001-S59, F001-S60
@@ -273,9 +314,14 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         defer { session.terminate() }
 
         let (window, root) = makeWindowAndRoot()
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
         let container = TerminalContainerView(
             ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
-            frame: root.bounds
+            frame: root.bounds,
+            allowsGhosttySurfaceRestorationForTesting: false
         )
         root.addSubview(container)
         container.attach(
@@ -292,8 +338,15 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         )
         root.layoutSubtreeIfNeeded()
 
+        let backingRect = engine.terminalView.convertToBacking(engine.terminalView.bounds)
+        engine.terminalView.lastSyncedSurfaceGeometry = GhosttyTerminalView.SurfaceGeometry(
+            pixelWidth: UInt32(max(backingRect.width, 1)),
+            pixelHeight: UInt32(max(backingRect.height, 1)),
+            backingScale: Double(window.backingScaleFactor)
+        )
         let terminalFrame = engine.terminalView.frame
-        let surfaceGeometry = engine.terminalView.lastSyncedSurfaceGeometry
+        let surfaceGeometry = try XCTUnwrap(engine.terminalView.lastSyncedSurfaceGeometry)
+        let gridDimensions = engine.currentDimensions()
         var characterCoordinateInvalidationCount = 0
         engine.terminalView.characterCoordinatesInvalidationSinkForTesting = {
             characterCoordinateInvalidationCount += 1
@@ -326,6 +379,8 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         XCTAssertGreaterThan(characterCoordinateInvalidationCount, 0)
         XCTAssertEqual(engine.terminalView.frame, terminalFrame)
         XCTAssertEqual(engine.terminalView.lastSyncedSurfaceGeometry, surfaceGeometry)
+        XCTAssertEqual(engine.currentDimensions().cols, gridDimensions.cols)
+        XCTAssertEqual(engine.currentDimensions().rows, gridDimensions.rows)
 
         let presentationPoint = engine.terminalView.presentationPoint(for: expectedPoint)
         let presentationWindowPoint = engine.terminalView.convert(presentationPoint, to: nil)
@@ -345,6 +400,592 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
             terminalPoint: rightEdgeTerminalPoint
         )
         XCTAssertTrue(root.hitTest(rightEdgeWindowPoint) === engine.terminalView)
+    }
+
+    /// F001-S59, F001-S60, F001-S61
+    func testHostAppliesCenteredShrinkWithoutChangingTerminalGeometryOrMarginHitTesting() throws {
+        let (session, engine) = makeSessionAndEngine()
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot()
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        let container = TerminalContainerView(
+            ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
+            frame: root.bounds,
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        root.addSubview(container)
+        container.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        let backingRect = engine.terminalView.convertToBacking(engine.terminalView.bounds)
+        engine.terminalView.lastSyncedSurfaceGeometry = GhosttyTerminalView.SurfaceGeometry(
+            pixelWidth: UInt32(max(backingRect.width, 1)),
+            pixelHeight: UInt32(max(backingRect.height, 1)),
+            backingScale: Double(window.backingScaleFactor)
+        )
+        let terminalFrame = engine.terminalView.frame
+        let surfaceGeometry = try XCTUnwrap(engine.terminalView.lastSyncedSurfaceGeometry)
+        let gridDimensions = engine.currentDimensions()
+        container.applyMagnificationGestureEventForTesting(.began)
+        container.applyMagnificationGestureEventForTesting(.changed(-10))
+
+        XCTAssertEqual(session.displayMagnification, 0.5, accuracy: 0.001)
+        XCTAssertEqual(container.opticalMagnificationForTesting, 0.5, accuracy: 0.001)
+        XCTAssertEqual(container.opticalVisibleOriginForTesting.x, -152, accuracy: 0.001)
+        XCTAssertEqual(container.opticalVisibleOriginForTesting.y, -100, accuracy: 0.001)
+        XCTAssertEqual(engine.terminalView.frame, terminalFrame)
+        XCTAssertEqual(engine.terminalView.lastSyncedSurfaceGeometry, surfaceGeometry)
+        XCTAssertEqual(engine.currentDimensions().cols, gridDimensions.cols)
+        XCTAssertEqual(engine.currentDimensions().rows, gridDimensions.rows)
+
+        let blankMarginPoint = container.opticalWindowPointForTesting(
+            terminalPoint: CGPoint(x: -50, y: 100)
+        )
+        XCTAssertFalse(root.hitTest(blankMarginPoint) === engine.terminalView)
+
+        let expectedTerminalPoint = CGPoint(x: 100, y: 75)
+        let displayedPoint = container.opticalWindowPointForTesting(terminalPoint: expectedTerminalPoint)
+        XCTAssertTrue(root.hitTest(displayedPoint) === engine.terminalView)
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .mouseMoved,
+                location: displayedPoint,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 0,
+                pressure: 0
+            )
+        )
+        let mappedPoint = engine.terminalView.terminalPoint(for: event)
+        XCTAssertEqual(mappedPoint.x, expectedTerminalPoint.x, accuracy: 0.001)
+        XCTAssertEqual(mappedPoint.y, expectedTerminalPoint.y, accuracy: 0.001)
+
+        let presentationRect = engine.terminalView.presentationRect(
+            for: CGRect(x: 100, y: 75, width: 20, height: 10)
+        )
+        XCTAssertEqual(presentationRect.width, 10, accuracy: 0.001)
+        XCTAssertEqual(presentationRect.height, 5, accuracy: 0.001)
+    }
+
+    /// F001-S59, F003-S17
+    func testCenteredShrinkConsumesVerticalAndHorizontalScrollInBlankMarginsOnly() throws {
+        let (session, engine) = makeSessionAndEngine()
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot()
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        let container = TerminalContainerView(
+            ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
+            frame: root.bounds,
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        root.addSubview(container)
+        container.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+        container.configureOpticalViewportForTesting(
+            magnification: 0.5,
+            centeredAt: CGPoint(x: 152, y: 100),
+            panDelta: .zero
+        )
+
+        var forwardedScrolls: [(x: CGFloat, y: CGFloat)] = []
+        engine.terminalView.scrollWheelSinkForTesting = {
+            forwardedScrolls.append((x: $0.scrollingDeltaX, y: $0.scrollingDeltaY))
+        }
+        let blankMarginPoint = container.opticalWindowPointForTesting(
+            terminalPoint: CGPoint(x: -50, y: 100)
+        )
+        let displayedContentPoint = container.opticalWindowPointForTesting(
+            terminalPoint: CGPoint(x: 100, y: 75)
+        )
+
+        container.deliverOpticalScrollWheelForTesting(
+            try makeScrollEvent(in: window, at: blankMarginPoint, deltaX: 0, deltaY: 18),
+            atWindowPoint: blankMarginPoint
+        )
+        container.deliverOpticalScrollWheelForTesting(
+            try makeScrollEvent(in: window, at: blankMarginPoint, deltaX: 14, deltaY: 0),
+            atWindowPoint: blankMarginPoint
+        )
+        XCTAssertTrue(forwardedScrolls.isEmpty)
+
+        container.deliverOpticalScrollWheelForTesting(
+            try makeScrollEvent(in: window, at: displayedContentPoint, deltaX: 0, deltaY: 18),
+            atWindowPoint: displayedContentPoint
+        )
+        container.deliverOpticalScrollWheelForTesting(
+            try makeScrollEvent(in: window, at: displayedContentPoint, deltaX: 14, deltaY: 0),
+            atWindowPoint: displayedContentPoint
+        )
+        XCTAssertEqual(forwardedScrolls.count, 2)
+        if forwardedScrolls.count == 2 {
+            XCTAssertNotEqual(forwardedScrolls[0].y, 0)
+            XCTAssertNotEqual(forwardedScrolls[1].x, 0)
+        }
+    }
+
+    /// F001-S59, F003-S17
+    func testViewportPanUsesStrictAboveNormalBoundaryAndOptionPassesThrough() throws {
+        let (session, engine) = makeSessionAndEngine()
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot()
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        let container = TerminalContainerView(
+            ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
+            frame: root.bounds,
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        root.addSubview(container)
+        container.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+        let displayedPoint = container.opticalWindowPointForTesting(
+            terminalPoint: CGPoint(x: 100, y: 75)
+        )
+        var forwardedCount = 0
+        engine.terminalView.scrollWheelSinkForTesting = { _ in forwardedCount += 1 }
+
+        container.configureOpticalViewportForTesting(
+            magnification: 1,
+            centeredAt: CGPoint(x: 152, y: 100),
+            panDelta: .zero
+        )
+        let normalOrigin = container.opticalVisibleOriginForTesting
+        container.deliverOpticalScrollWheelForTesting(
+            try makeScrollEvent(in: window, at: displayedPoint, deltaX: 12, deltaY: 16),
+            atWindowPoint: displayedPoint
+        )
+        XCTAssertEqual(forwardedCount, 1)
+        XCTAssertEqual(container.opticalVisibleOriginForTesting, normalOrigin)
+
+        container.configureOpticalViewportForTesting(
+            magnification: 0.9,
+            centeredAt: CGPoint(x: 152, y: 100),
+            panDelta: .zero
+        )
+        let shrinkOrigin = container.opticalVisibleOriginForTesting
+        container.deliverOpticalScrollWheelForTesting(
+            try makeScrollEvent(in: window, at: displayedPoint, deltaX: 12, deltaY: 16),
+            atWindowPoint: displayedPoint
+        )
+        XCTAssertEqual(forwardedCount, 2)
+        XCTAssertEqual(container.opticalVisibleOriginForTesting, shrinkOrigin)
+
+        container.configureOpticalViewportForTesting(
+            magnification: 1.0001,
+            centeredAt: CGPoint(x: 152, y: 100),
+            panDelta: .zero
+        )
+        let aboveNormalOrigin = container.opticalVisibleOriginForTesting
+        container.deliverOpticalScrollWheelForTesting(
+            try makeScrollEvent(in: window, at: displayedPoint, deltaX: -12, deltaY: 16),
+            atWindowPoint: displayedPoint
+        )
+        XCTAssertEqual(forwardedCount, 2)
+        XCTAssertNotEqual(container.opticalVisibleOriginForTesting, aboveNormalOrigin)
+
+        let pannedOrigin = container.opticalVisibleOriginForTesting
+        container.deliverOpticalScrollWheelForTesting(
+            try makeScrollEvent(
+                in: window,
+                at: displayedPoint,
+                deltaX: 12,
+                deltaY: 16,
+                modifierFlags: .maskAlternate
+            ),
+            atWindowPoint: displayedPoint
+        )
+        XCTAssertEqual(forwardedCount, 3)
+        XCTAssertEqual(container.opticalVisibleOriginForTesting, pannedOrigin)
+    }
+
+    /// F001-S60
+    func testHigherPriorityMountedHostBalancesPressBeforeReparenting() throws {
+        let services = TerminalServices()
+        let engine = GhosttyTerminalEngine(terminalServices: services)
+        let session = TerminalSession(
+            id: UUID(),
+            workingDirectory: FileManager.default.temporaryDirectory,
+            terminalServices: services,
+            engineFactory: { _ in engine }
+        )
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot(size: CGSize(width: 640, height: 200))
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        let oldHost = TerminalContainerView(
+            ownershipCoordinator: services.hostOwnershipCoordinator,
+            frame: NSRect(x: 0, y: 0, width: 320, height: 200),
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        let newHost = TerminalContainerView(
+            ownershipCoordinator: services.hostOwnershipCoordinator,
+            frame: NSRect(x: 320, y: 0, width: 320, height: 200),
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        root.addSubview(oldHost)
+        root.addSubview(newHost)
+        oldHost.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .compact,
+            isActive: false,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+        XCTAssertTrue(oldHost.hostsTerminalView(session.hostedView))
+
+        var forwardedPrimaryButtonStates: [Bool] = []
+        engine.terminalView.primaryMouseButtonSinkForTesting = {
+            forwardedPrimaryButtonStates.append($0)
+        }
+        let mouseDown = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown,
+                location: oldHost.opticalWindowPointForTesting(terminalPoint: CGPoint(x: 20, y: 20)),
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 0
+            )
+        )
+        engine.terminalView.mouseDown(with: mouseDown)
+        XCTAssertEqual(forwardedPrimaryButtonStates, [true])
+
+        var newHostDoubleClickCount = 0
+        newHost.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onDoubleClick: { newHostDoubleClickCount += 1 },
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(forwardedPrimaryButtonStates, [true, false])
+        XCTAssertFalse(engine.terminalView.isPrimaryMousePressForwarded)
+        XCTAssertTrue(newHost.hostsTerminalView(session.hostedView))
+        XCTAssertFalse(oldHost.hostsTerminalView(session.hostedView))
+        XCTAssertFalse(oldHost.hasOpticalDocumentReferenceForTesting)
+        XCTAssertNotNil(engine.terminalView.opticalViewportPointerMapper)
+        XCTAssertNotNil(engine.terminalView.opticalViewportPointMapper)
+        XCTAssertNotNil(engine.terminalView.opticalViewportRectMapper)
+        engine.terminalView.onDoubleClick?()
+        XCTAssertEqual(newHostDoubleClickCount, 1)
+    }
+
+    func testMountedSameSessionHandoffResetsPanAndReacquiresFromCanonicalTransform() {
+        let services = TerminalServices()
+        let engine = GhosttyTerminalEngine(terminalServices: services)
+        let session = TerminalSession(
+            id: UUID(),
+            workingDirectory: FileManager.default.temporaryDirectory,
+            terminalServices: services,
+            engineFactory: { _ in engine },
+            displayMagnification: 2
+        )
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot(size: CGSize(width: 640, height: 200))
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        let hostA = TerminalContainerView(
+            ownershipCoordinator: services.hostOwnershipCoordinator,
+            frame: NSRect(x: 0, y: 0, width: 320, height: 200),
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        let hostB = TerminalContainerView(
+            ownershipCoordinator: services.hostOwnershipCoordinator,
+            frame: NSRect(x: 320, y: 0, width: 320, height: 200),
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        root.addSubview(hostA)
+        root.addSubview(hostB)
+        hostA.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .compact,
+            isActive: false,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(hostA.hostsTerminalView(session.hostedView))
+        XCTAssertNil(engine.terminalView.surface)
+        XCTAssertEqual(hostA.opticalMagnificationForTesting, 2, accuracy: 0.001)
+        let initialScaledOrigin = hostA.opticalVisibleOriginForTesting
+        hostA.configureOpticalViewportForTesting(
+            magnification: 2,
+            centeredAt: CGPoint(x: 152, y: 100),
+            panDelta: CGPoint(x: 40, y: -30)
+        )
+        hostA.applyMagnificationGestureEventForTesting(.began)
+        let stalePannedOrigin = hostA.opticalVisibleOriginForTesting
+        XCTAssertNotEqual(stalePannedOrigin, initialScaledOrigin)
+        XCTAssertFalse(hostA.isMagnificationGestureStateResetForTesting)
+
+        hostB.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(session.displayMagnification, 2, accuracy: 0.001)
+        XCTAssertFalse(hostA.hostsTerminalView(session.hostedView))
+        XCTAssertFalse(hostA.hasOpticalDocumentReferenceForTesting)
+        XCTAssertEqual(hostA.opticalMagnificationForTesting, 1, accuracy: 0.001)
+        XCTAssertEqual(hostA.opticalVisibleOriginForTesting, .zero)
+        XCTAssertTrue(hostA.isMagnificationGestureStateResetForTesting)
+        XCTAssertTrue(hostB.hostsTerminalView(session.hostedView))
+        XCTAssertEqual(hostB.opticalMagnificationForTesting, 2, accuracy: 0.001)
+        XCTAssertEqual(hostB.opticalVisibleOriginForTesting.x, 76, accuracy: 0.001)
+        XCTAssertEqual(hostB.opticalVisibleOriginForTesting.y, 50, accuracy: 0.001)
+        let centeredHandoffOrigin = hostB.opticalVisibleOriginForTesting
+        XCTAssertNotEqual(centeredHandoffOrigin, stalePannedOrigin)
+        XCTAssertNotNil(engine.terminalView.opticalViewportPointerMapper)
+        XCTAssertNotNil(engine.terminalView.opticalViewportPointMapper)
+        XCTAssertNotNil(engine.terminalView.opticalViewportRectMapper)
+
+        hostB.applyMagnificationGestureEventForTesting(.began)
+        XCTAssertFalse(hostB.isMagnificationGestureStateResetForTesting)
+        hostB.removeFromSuperview()
+        root.layoutSubtreeIfNeeded()
+        XCTAssertEqual(session.displayMagnification, 2, accuracy: 0.001)
+        XCTAssertEqual(hostB.opticalMagnificationForTesting, 1, accuracy: 0.001)
+        XCTAssertEqual(hostB.opticalVisibleOriginForTesting, .zero)
+        XCTAssertTrue(hostB.isMagnificationGestureStateResetForTesting)
+
+        let reacquisitionDeadline = Date().addingTimeInterval(1)
+        while !hostA.hostsTerminalView(session.hostedView), Date() < reacquisitionDeadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+            root.layoutSubtreeIfNeeded()
+        }
+
+        XCTAssertTrue(hostA.hostsTerminalView(session.hostedView))
+        XCTAssertEqual(session.displayMagnification, 2, accuracy: 0.001)
+        XCTAssertEqual(hostA.opticalMagnificationForTesting, 2, accuracy: 0.001)
+        XCTAssertEqual(hostA.opticalVisibleOriginForTesting.x, centeredHandoffOrigin.x, accuracy: 0.001)
+        XCTAssertEqual(hostA.opticalVisibleOriginForTesting.y, centeredHandoffOrigin.y, accuracy: 0.001)
+        XCTAssertNotEqual(hostA.opticalVisibleOriginForTesting, stalePannedOrigin)
+    }
+
+    /// F001-S59, F001-S61
+    func testSubnormalScaleRestoresAcrossGhosttyHostHandoff() {
+        let services = TerminalServices()
+        let engine = GhosttyTerminalEngine(terminalServices: services)
+        let session = TerminalSession(
+            id: UUID(),
+            workingDirectory: FileManager.default.temporaryDirectory,
+            terminalServices: services,
+            engineFactory: { _ in engine },
+            displayMagnification: 0.9
+        )
+        defer { session.terminate() }
+
+        let (window, root) = makeWindowAndRoot(size: CGSize(width: 640, height: 200))
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        let primaryHost = TerminalContainerView(
+            ownershipCoordinator: services.hostOwnershipCoordinator,
+            frame: NSRect(x: 0, y: 0, width: 320, height: 200),
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        let secondaryHost = TerminalContainerView(
+            ownershipCoordinator: services.hostOwnershipCoordinator,
+            frame: NSRect(x: 320, y: 0, width: 320, height: 200),
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        root.addSubview(primaryHost)
+        root.addSubview(secondaryHost)
+
+        primaryHost.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .compact,
+            isActive: false,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+        XCTAssertTrue(primaryHost.hostsTerminalView(session.hostedView))
+        XCTAssertEqual(primaryHost.opticalMagnificationForTesting, 0.9, accuracy: 0.001)
+        let terminalFrame = engine.terminalView.frame
+
+        secondaryHost.attach(
+            session.hostedView,
+            session: session,
+            sessionID: session.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(secondaryHost.hostsTerminalView(session.hostedView))
+        XCTAssertEqual(secondaryHost.opticalMagnificationForTesting, 0.9, accuracy: 0.001)
+        XCTAssertEqual(engine.terminalView.frame, terminalFrame)
+
+        secondaryHost.removeFromSuperview()
+    }
+
+    /// F001-S59, F001-S61
+    func testHostSessionReplacementRestoresSubnormalScaleAndResetsPartialGesture() {
+        let services = TerminalServices()
+        let firstEngine = GhosttyTerminalEngine(terminalServices: services)
+        let secondEngine = GhosttyTerminalEngine(terminalServices: services)
+        let firstSession = TerminalSession(
+            id: UUID(),
+            workingDirectory: FileManager.default.temporaryDirectory,
+            terminalServices: services,
+            engineFactory: { _ in firstEngine }
+        )
+        let secondSession = TerminalSession(
+            id: UUID(),
+            workingDirectory: FileManager.default.temporaryDirectory,
+            terminalServices: services,
+            engineFactory: { _ in secondEngine },
+            displayMagnification: 0.7
+        )
+        defer {
+            firstSession.terminate()
+            secondSession.terminate()
+        }
+
+        let (window, root) = makeWindowAndRoot()
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        let container = TerminalContainerView(
+            ownershipCoordinator: services.hostOwnershipCoordinator,
+            frame: root.bounds,
+            allowsGhosttySurfaceRestorationForTesting: false
+        )
+        root.addSubview(container)
+        container.attach(
+            firstSession.hostedView,
+            session: firstSession,
+            sessionID: firstSession.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+        container.applyMagnificationGestureEventForTesting(.began)
+        container.applyMagnificationGestureEventForTesting(.changed(-0.04))
+
+        container.attach(
+            secondSession.hostedView,
+            session: secondSession,
+            sessionID: secondSession.id,
+            displayDensity: .regular,
+            isActive: true,
+            onSplitTerminalRequested: nil,
+            onTemporaryTerminalRequested: nil,
+            onOpenInEditorPaneRequested: nil,
+            onLinkTargetActivated: nil,
+            onFileSystemTargetActivated: nil
+        )
+        root.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(container.opticalMagnificationForTesting, 0.7, accuracy: 0.001)
+        container.applyMagnificationGestureEventForTesting(.changed(-0.04))
+        XCTAssertEqual(secondSession.displayMagnification, 0.7, accuracy: 0.001)
+        container.applyMagnificationGestureEventForTesting(.changed(-0.04))
+        XCTAssertEqual(secondSession.displayMagnification, 0.6, accuracy: 0.001)
+        XCTAssertTrue(container.hostsTerminalView(secondSession.hostedView))
     }
 
     func testHostSessionChangeResetsCompositorTransformBeforeRestoringMagnification() {
@@ -420,6 +1061,10 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         defer { session.terminate() }
 
         let (window, root) = makeWindowAndRoot()
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
         let container = TerminalContainerView(
             ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
             frame: root.bounds
@@ -527,6 +1172,10 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         defer { session.terminate() }
 
         let (window, root) = makeWindowAndRoot()
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
         let container = TerminalContainerView(
             ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
             frame: root.bounds
@@ -579,6 +1228,10 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         defer { session.terminate() }
 
         let (window, root) = makeWindowAndRoot()
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
         let container = TerminalContainerView(
             ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
             frame: root.bounds
@@ -633,6 +1286,10 @@ final class GhosttyTerminalViewInputTests: XCTestCase {
         defer { session.terminate() }
 
         let (window, root) = makeWindowAndRoot()
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
         let container = TerminalContainerView(
             ownershipCoordinator: session.terminalServices.hostOwnershipCoordinator,
             frame: root.bounds

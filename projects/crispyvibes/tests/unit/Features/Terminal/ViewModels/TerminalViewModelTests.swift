@@ -350,7 +350,7 @@ final class TerminalViewModelTests: XCTestCase {
     }
 
     /// F003-S17
-    func testSpotlightScrollRoutingReservesGesturesOnlyForMagnifiedTerminal() throws {
+    func testSpotlightScrollRoutingReservesGesturesOnlyAboveNormal() throws {
         viewModel.createTab(directoryURL: tempRoot, startImmediately: false)
         let tabID = try XCTUnwrap(viewModel.activeTabID)
         let session = try XCTUnwrap(viewModel.session(for: tabID))
@@ -359,60 +359,112 @@ final class TerminalViewModelTests: XCTestCase {
             tabID: tabID
         )
 
+        session.setDisplayMagnification(0.5)
         XCTAssertFalse(source.reservesScrollForTerminalViewport)
-
+        session.setDisplayMagnification(0.9)
+        XCTAssertFalse(source.reservesScrollForTerminalViewport)
+        session.setDisplayMagnification(1)
+        XCTAssertFalse(source.reservesScrollForTerminalViewport)
+        session.setDisplayMagnification(1.0001)
+        XCTAssertTrue(source.reservesScrollForTerminalViewport)
         session.setDisplayMagnification(1.5)
-
         XCTAssertTrue(source.reservesScrollForTerminalViewport)
         XCTAssertFalse(TerminalSpotlightState.Source.vibeCast.reservesScrollForTerminalViewport)
     }
 
-    /// F001-S59
-    func testTerminalSessionMagnificationClampsToNormalAndMaximum() throws {
-        viewModel.createTab(directoryURL: tempRoot, startImmediately: false)
-        let tabID = try XCTUnwrap(viewModel.activeTabID)
-        let session = try XCTUnwrap(viewModel.session(for: tabID))
+    /// F001-S59, F001-S61
+    func testTerminalSessionMagnificationNormalizationClampsSnapsAndPreservesAboveNormalValues() {
+        let cases: [(input: CGFloat, expected: CGFloat)] = [
+            (-100, 0.5),
+            (0.49, 0.5),
+            (0.54, 0.5),
+            (0.55, 0.6),
+            (0.65, 0.7),
+            (0.75, 0.8),
+            (0.85, 0.9),
+            (0.94, 0.9),
+            (0.95, 1),
+            (1, 1),
+            (1.234_567, 1.234_567),
+            (4, 3),
+            (.infinity, 1),
+            (-.infinity, 1),
+            (.nan, 1)
+        ]
 
-        session.setDisplayMagnification(0.5)
-        XCTAssertEqual(session.displayMagnification, 1)
-
-        session.adjustDisplayMagnification(by: -0.5)
-        XCTAssertEqual(session.displayMagnification, 1)
-
-        session.setDisplayMagnification(4)
-        XCTAssertEqual(session.displayMagnification, 3)
+        for testCase in cases {
+            XCTAssertEqual(
+                TerminalSession.normalizedDisplayMagnification(testCase.input),
+                testCase.expected,
+                accuracy: 0.000_001,
+                "Unexpected normalization for \(testCase.input)"
+            )
+        }
     }
 
-    /// F001-S59
-    func testRestoreTabsNormalizesLegacyMagnificationBelowNormal() throws {
+    /// F001-S59, F001-S61
+    func testTerminalSessionInitSetAndAdjustPreserveNormalizedSubnormalSteps() {
+        let session = TerminalSession(
+            id: UUID(),
+            workingDirectory: tempRoot,
+            terminalServices: container.terminalServices,
+            displayMagnification: 0.84
+        )
+        defer { session.terminate() }
+
+        XCTAssertEqual(session.displayMagnification, 0.8, accuracy: 0.000_001)
+        session.setDisplayMagnification(0.7)
+        XCTAssertEqual(session.displayMagnification, 0.7, accuracy: 0.000_001)
+        session.adjustDisplayMagnification(by: -0.1)
+        XCTAssertEqual(session.displayMagnification, 0.6, accuracy: 0.000_001)
+        session.adjustDisplayMagnification(by: -10)
+        XCTAssertEqual(session.displayMagnification, 0.5, accuracy: 0.000_001)
+        session.setDisplayMagnification(1.234_567)
+        XCTAssertEqual(session.displayMagnification, 1.234_567, accuracy: 0.000_001)
+        session.setDisplayMagnification(.nan)
+        XCTAssertEqual(session.displayMagnification, 1, accuracy: 0.000_001)
+    }
+
+    /// F001-S59, F001-S61
+    func testRestoreTabsNormalizesPersistedSubnormalValuesToNearestStep() throws {
+        let snappedID = UUID()
+        let exactID = UUID()
         let entries = [
             TerminalSessionEntry(
+                id: snappedID,
                 workingDirectoryPath: tempRoot.standardizedFileURL.path,
-                customName: "Legacy Zoom",
+                customName: "Snapped Zoom",
                 origin: .adHoc,
                 displayMagnification: 0.75
+            ),
+            TerminalSessionEntry(
+                id: exactID,
+                workingDirectoryPath: tempRoot.standardizedFileURL.path,
+                customName: "Exact Zoom",
+                origin: .adHoc,
+                displayMagnification: 0.7
             )
         ]
 
         viewModel.restoreTabsFromEntries(
             entries,
             activeDirectory: tempRoot,
-            activeIdentity: nil,
+            activeIdentity: TerminalViewModel.persistenceIdentity(tabID: snappedID),
             defaultDirectory: tempRoot
         )
 
-        let restoredID = try XCTUnwrap(viewModel.activeTabID)
-        XCTAssertEqual(viewModel.session(for: restoredID)?.displayMagnification, 1)
+        XCTAssertEqual(viewModel.session(for: snappedID)?.displayMagnification, 0.8)
+        XCTAssertEqual(viewModel.session(for: exactID)?.displayMagnification, 0.7)
     }
 
-    /// F001-S59
-    func testTerminalSessionMagnificationPersistsAcrossSnapshotAndRestore() throws {
-        viewModel.createTab(directoryURL: tempRoot, customName: "Zoomed", startImmediately: false)
+    /// F001-S59, F001-S61
+    func testTerminalSessionSubnormalMagnificationPersistsAcrossSnapshotAndRestore() throws {
+        viewModel.createTab(directoryURL: tempRoot, customName: "Shrunk", startImmediately: false)
         let tabID = try XCTUnwrap(viewModel.activeTabID)
-        try XCTUnwrap(viewModel.session(for: tabID)).adjustDisplayMagnification(by: 0.5)
+        try XCTUnwrap(viewModel.session(for: tabID)).setDisplayMagnification(0.7)
 
         let snapshot = ProjectTerminalSessionPersistence.snapshot(from: viewModel)
-        XCTAssertEqual(try XCTUnwrap(snapshot.terminalEntries.first?.displayMagnification), 1.5)
+        XCTAssertEqual(try XCTUnwrap(snapshot.terminalEntries.first?.displayMagnification), 0.7)
 
         viewModel.restoreTabsFromEntries(
             snapshot.terminalEntries,
@@ -422,7 +474,18 @@ final class TerminalViewModelTests: XCTestCase {
         )
 
         let restoredID = try XCTUnwrap(viewModel.activeTabID)
-        XCTAssertEqual(viewModel.session(for: restoredID)?.displayMagnification, 1.5)
+        XCTAssertEqual(viewModel.session(for: restoredID)?.displayMagnification, 0.7)
+    }
+
+    /// F001-S59, F001-S61
+    func testRestartTabPreservesSubnormalMagnificationStep() throws {
+        viewModel.createTab(directoryURL: tempRoot, startImmediately: false)
+        let tabID = try XCTUnwrap(viewModel.activeTabID)
+        try XCTUnwrap(viewModel.session(for: tabID)).setDisplayMagnification(0.6)
+
+        viewModel.restartTab(tabID, activateTab: false)
+
+        XCTAssertEqual(viewModel.session(for: tabID)?.displayMagnification, 0.6)
     }
 
     func testRestoreTabsFromEntriesPrefersPersistedActiveIdentityOverDirectoryMatch() {

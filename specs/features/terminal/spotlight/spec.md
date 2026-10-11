@@ -11,6 +11,9 @@ Terminal Spotlight provides a centered overlay mode for focusing on a single ter
 - F001 (Sessions & Tabs) — spotlight surfaces host terminal sessions
 - F002 (Terminal Board) — double-click tile opens spotlight; minimized tiles open in spotlight
 - F004 (Terminal Rail) — double-click rail card opens spotlight
+- F006 (Content Viewer) and F008 (Markdown) — current-file compact navigation ownership
+- F012 (Browser) — canonical browser history and mouse/toolbar navigation
+- F037 (Terminal Board Dock) — pinned file/browser presentation continuity
 
 ## Requirements
 
@@ -78,9 +81,25 @@ When a terminal represented in the spotlight tab strip is active, its tab chip M
 
 Double-clicking a Ghostty terminal that has a Spotlight action MUST invoke that action through the AppKit terminal host exactly once, including while the terminal is magnified or panned. The handled second Ghostty press and matching release MUST be suppressed so word selection and Spotlight activation do not race. SwiftTerm MUST retain the SwiftUI double-click fallback. A terminal host without a Spotlight action MUST leave Ghostty's native double-click word selection unchanged.
 
-### F003-R16: Magnified Terminal Pan Takes Priority Over Carousel Swipe
+### F003-R16: Only Above-Normal Terminal Pan Takes Priority Over Carousel Swipe
 
-While the active Spotlight terminal is magnified above `1×`, precise scroll gestures MUST be reserved for the terminal viewport and MUST NOT switch the Spotlight carousel. Any partial carousel offset and tracking state MUST reset when terminal pan takes ownership. At `1×`, horizontal trackpad swipe MUST continue to navigate the carousel according to F003-R02. Non-terminal and temporary Spotlight source behavior MUST remain unchanged.
+Only while the active Spotlight terminal is magnified above `1×` MUST precise scroll gestures be reserved for terminal viewport pan and prevented from switching the Spotlight carousel. Any partial carousel offset and tracking state MUST reset when above-normal terminal pan takes ownership. At exactly `1×` and throughout optical shrink (`0.5×...0.9×`), the terminal MUST NOT reserve scrolling for viewport pan: qualifying horizontal trackpad gestures remain available to the carousel and non-carousel/vertical scrolling continues through the normal terminal scrollback path. Non-terminal and temporary Spotlight source eligibility remains unchanged.
+
+### F003-R17: Compact Content Navigation and Spotlight Return Semantics
+
+When Spotlight presents Markdown or browser content, presentation-appropriate Back and Forward controls MUST be visible and MUST dispatch to that content's canonical navigation owner. Markdown MUST also support ⌘[ and ⌘] through that same owner; browser mouse Back/Forward MUST match its toolbar owner. For Markdown, the Spotlight title, directory, comments context, provider, accessibility context, and detailed promotion MUST follow the current linked file rather than the immutable root. Content Back/Forward MUST be distinct from closing Spotlight and restoring its prior terminal or Spotlight origin. The current implementation MUST NOT be documented as providing a separate visible Return control; Escape, close, backdrop dismissal, and the existing restore chain remain the return mechanism.
+
+### F003-R18: Single-Input Spotlight Generation Convergence
+
+Each arrow, qualifying swipe, or non-current tab-chip activation MUST select exactly one stable target identity. On the next normal main/layout turn, selected identity, rendered card identity, attached terminal/browser surface, project context, and focus owner MUST converge on that target without a second input. Scroll centering MUST use the same stable target identity and MUST NOT add a competing animation to the card transition. Every switch generation MUST publish direction and entry offset before target publication, and only the current generation may animate to zero, complete, or request focus. Rapid switches and any direct/non-carousel presentation MUST cancel older start, completion, centering, and focus work.
+
+### F003-R19: Project-Scoped Terminal Navigation Identity
+
+A persistent terminal's Spotlight navigation identity MUST combine its normalized owning-project path with its terminal tab ID, matching the project scope used by vibespace Spotlight reorder persistence. `TerminalSpotlightState` MUST derive the same scope from `owningProjectRootURL`. A persistent terminal without project scope MUST receive a unique unscoped identity that cannot alias another terminal and is not matched into the project carousel. Diagnostic metadata MUST tokenize or hash normalized project paths and MUST NOT record raw project paths.
+
+### F003-R20: Missing Current Identity Disables Carousel Navigation
+
+A persistent Spotlight whose navigation identity is absent from the current live item sequence MUST suppress previous/next controls, the tab strip, scroll-monitor installation, and carousel navigation. An unscoped persistent terminal MUST NOT be matched to a project item by terminal tab UUID alone.
 
 ## Scenarios
 
@@ -228,15 +247,71 @@ While the active Spotlight terminal is magnified above `1×`, precise scroll ges
 **And** a callback-free Ghostty terminal retains native word selection
 **And** SwiftTerm retains its SwiftUI double-click fallback
 
-### Scenario F003-S17: Magnified Spotlight terminal pans without switching the carousel
+### Scenario F003-S17: Only an above-normal Spotlight terminal reserves scrolling for pan
 
 **Given** Spotlight shows a persistent terminal at magnification above `1×`
 **When** the user performs a precise trackpad scroll gesture over Spotlight
 **Then** the terminal viewport receives the gesture for panning
 **And** the Spotlight carousel does not switch
 **And** any partial carousel offset is cleared
-**When** the terminal returns to `1×`
-**Then** a qualifying horizontal trackpad swipe switches to the previous or next carousel item
+**When** terminal scale is exactly `1×` or optically shrunk to `0.5×...0.9×`
+**Then** the terminal does not reserve scrolling for viewport pan
+**And** a qualifying horizontal trackpad swipe switches to the previous or next carousel item
+**And** ordinary non-carousel scrolling follows terminal scrollback behavior
+
+### Scenario F003-S18: Compact content surfaces expose Back and Forward
+
+**Given** Spotlight presents Markdown or browser content with content history
+When Spotlight chrome renders and the user activates a visible Back or Forward button
+Then controls report the canonical content history availability and invoke the same owner
+And Markdown ⌘[/⌘] and browser mouse Back/Forward match their respective toolbar actions
+And Markdown metadata and comments follow the current linked file
+And browser metadata and comments follow the current URL
+
+### Scenario F003-S19: Content Back does not close or return Spotlight
+
+**Given** content was opened from a terminal or prior Spotlight item
+When the user activates content Back
+Then only Markdown or browser content history changes
+And Spotlight remains open
+When the user presses Escape, uses close, or clicks the backdrop
+Then the existing Spotlight restore chain returns to the prior origin when available
+And no separate visible Return control is required in the current scope
+
+### Scenario F003-S20: One navigation input converges selection, card, attachment, and focus
+
+**Given** Spotlight has multiple persistent carousel items
+**When** the user presses one arrow, completes one qualifying swipe, or activates one non-current chip
+**Then** exactly one target stable identity is selected
+**And** direction and the signed entry offset are published before the target
+**And** after one normal main/layout turn the selected identity, rendered card sentinel, attached surface, project context, and focus owner all identify that target
+**And** no second navigation input is required
+**And** tab-strip centering uses the target identity without a competing animation
+
+### Scenario F003-S21: Rapid and direct presentations suppress stale generations
+
+**Given** a Spotlight switch from A to B has queued animation completion or focus work
+**When** the user rapidly switches to C or a direct/non-carousel presentation replaces B
+**Then** prior generation work is cancelled or ignored
+**And** B cannot later receive focus, reset C's offset, complete C's generation, or replace C's surface/project context
+**And** dismissal clears generation, direction, offset, and queued focus work
+
+### Scenario F003-S22: Duplicate terminal tab IDs remain project-scoped
+
+**Given** two projects contain persistent terminal tabs with the same tab UUID
+**When** Spotlight resolves, renders, reorders, or diagnoses those terminals
+**Then** normalized project path plus tab UUID keeps the identities distinct
+**And** state identity derived from `owningProjectRootURL` matches the corresponding item identity
+**And** an unscoped persistent terminal aliases neither project terminal nor another unscoped terminal
+**And** diagnostics contain only a hashed/tokenized project scope
+
+### Scenario F003-S23: Missing or unscoped current identity hides dead carousel controls
+
+**Given** persistent Spotlight state has no navigation identity in the live item sequence
+**When** Spotlight chrome renders or receives carousel input
+**Then** previous/next controls and the tab strip are hidden
+**And** the scroll monitor is not installed for carousel navigation
+**And** an unscoped terminal is not matched to a project terminal by tab UUID alone
 
 ## Test Coverage
 
@@ -248,7 +323,13 @@ While the active Spotlight terminal is magnified above `1×`, precise scroll ges
 | F003-S14 | `VibeSpaceTerminalBoardStoreAddTileTests.testMoveTerminalTabTileReordersBoardLinearOrder` covers terminal-board tile reorder state; persistence coverage MUST verify board layout restore preserves the reordered tile sequence. |
 | F003-S15 | View regression MUST verify the active-tab underline animates inside fixed chip bounds without changing tab-strip height or neighboring chip positions. |
 | F003-S16 | Automated core coverage: `GhosttyTerminalViewInputTests.testHostDoubleClickInvokesCallbackWithoutForwardingSecondGhosttyClick` and `testDoubleClickWithoutCallbackRetainsGhosttyMouseSequence` verify exact native routing, suppression, and callback-free Ghostty behavior under the host path. UI smoke coverage remains responsible for visible Spotlight open/close and SwiftTerm fallback. |
-| F003-S17 | Automated core coverage: `TerminalViewModelTests.testSpotlightScrollRoutingReservesGesturesOnlyForMagnifiedTerminal` verifies source policy, and `testSpotlightScrollGestureTrackerSwitchesAtNormalSizeAndResetsForZoomedPan` verifies phase accumulation, normal-size switch direction, terminal takeover, and partial-state reset. UI smoke coverage remains responsible for end-to-end NSEvent monitor delivery into viewport pan. |
+| F003-S17 | Pure policy/unit: `TerminalViewModelTests.testSpotlightScrollRoutingReservesGesturesOnlyAboveNormal` verifies `0.5×`, `0.9×`, and exactly `1×` do not reserve scroll while `1.0001×` and higher do; `testSpotlightScrollGestureTrackerSwitchesAtNormalSizeAndResetsForZoomedPan` verifies accumulation, switch direction, takeover, and reset. Mounted AppKit: `GhosttyTerminalViewInputTests.testViewportPanUsesStrictAboveNormalBoundaryAndOptionPassesThrough` proves `1.0001×` pan interception plus exactly/below-normal and Option pass-through, while `testCenteredShrinkConsumesVerticalAndHorizontalScrollInBlankMarginsOnly` proves blank-margin scroll consumption and displayed-content forwarding. Physical NSEvent monitor delivery, horizontal-vs-scrollback feel, and real trackpad arbitration remain UI/manual coverage. |
+| F003-S18 | Unit: Markdown/editor-group and browser regressions cover canonical history ownership, command/mouse dispatch, and current file/URL state. Required UI/manual: visible Spotlight controls, enabled-state changes, ⌘[/⌘], mouse-button parity, and metadata/comments rendering. |
+| F003-S19 | Unit: content-history owner tests verify Back mutates content state rather than the restore chain. Required UI/manual: Spotlight remains open after content Back and Escape/close/backdrop restores the prior origin. |
+| F003-S20 | Pure resolver/coordinator: `SpotlightNavigationResolverTests` verifies wrap, stale-index independence, current-item presence, tile identity, and no-op targets; `TerminalSpotlightCoordinatorSynchronizationTests` verifies publication order and generation state. Mounted synthetic card: `SpotlightMountedCardSynchronizationTests.testOneTargetSwitchUpdatesMountedCardWithoutRemountingOverlayLifecycle` verifies one-turn target sentinel/accessibility convergence and stable outer lifecycle. Mounted real browser host: `testMountedRealBrowserHostsSwitchForwardAndReverseWithoutStaleAttachment` verifies selected identity plus actual target `WKWebView` attachment and old-view detachment in both directions. Static audit only: `testStaticAuditTabStripCenteringUsesStableIdentityWithoutCompetingAnimation` inspects source wiring and is not behavioral coverage. Remaining production-input/UI gaps: physical trackpad delivery, arrow/chip callback hit-testing through the full `ContentView`, terminal first-responder focus, animation quality, and final UI paint. |
+| F003-S21 | Pure coordinator: `TerminalSpotlightCoordinatorSynchronizationTests` verifies rapid A→B→C, direct replacement, stale focus/completion suppression, target surface/project retention, and dismiss reset. Mounted synthetic and real-browser suites verify no-second-input and forward/reverse host convergence; rapid A→B→C is not mounted. Remaining production-input/UI gaps: callback hit-testing and focus behavior across a live Ghostty/browser responder chain. |
+| F003-S22 | Pure resolver/policy: `SpotlightNavigationResolverTests` verifies duplicate tab UUIDs across normalized project scopes, exact state/item identity agreement, unique nil-scope behavior, no invented project match, and tokenized diagnostics. Board-store regression verifies project-scoped reorder with duplicate tab UUIDs. Mounted/UI: no additional identity algorithm; UI smoke remains responsible only for distinguishable labels. |
+| F003-S23 | Pure policy: `SpotlightNavigationResolverTests.testUnscopedPersistentCurrentItemDoesNotInventProjectMatchOrEnableNavigation`. Mounted synthetic chrome: `SpotlightMountedCardSynchronizationTests.testMissingCurrentIdentityHidesMountedNavigationAndDoesNotInstallMonitor` verifies controls/strip are absent and no monitor callback is installed. Physical swipe and production `ContentView` callback delivery remain UI-only gaps. |
 
 ## Acceptance Criteria
 
@@ -263,8 +344,11 @@ While the active Spotlight terminal is magnified above `1×`, precise scroll ges
 - Spotlight terminal tab reordering preserves running sessions, active selection, and board grid shape.
 - Spotlight active-tab animation remains contained within existing tab-chip bounds.
 - A transformed Ghostty terminal double-click opens or closes Spotlight exactly once without forwarding an unmatched mouse event.
-- Magnified terminal panning cannot trigger carousel switching; `1×` horizontal swipe behavior remains available.
+- Only terminal magnification above `1×` can reserve precise scrolling from Spotlight; exactly/below normal leaves carousel and ordinary scrollback behavior available.
 - Spotlight operations logged (OBS-1).
+- Compact Markdown/browser controls use the canonical content-history owner, while Spotlight dismissal alone uses the prior-origin restore chain.
+- One arrow, swipe, or chip action converges stable selection, rendered card, attached surface, project context, and focus on one target generation without a second input.
+- Rapid/direct replacement cannot run stale animation completion or focus work, and diagnostic project scopes never expose raw paths.
 
 ## Open Questions
 
@@ -274,6 +358,10 @@ While the active Spotlight terminal is magnified above `1×`, precise scroll ges
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-09 | Clarified that only terminal scale above `1×` reserves precise scrolling; exactly `1×` and `0.5×...0.9×` leave carousel and ordinary scrollback arbitration available (R16, S17). | — |
+| 2026-10-09 | Added missing-current navigation suppression, project-scoped detached-board reorder coverage, mounted real-browser forward/reverse attachment coverage, and explicit static-audit/UI-gap classification (R20, S23). | — |
+| 2026-10-09 | Added one-input selection/render/attachment/focus generation convergence, rapid/direct stale-work cancellation, project-scoped terminal identity, path-safe diagnostics, and unit/mounted/UI mappings (R18–R19, S20–S22). | — |
+| 2026-10-06 | Added compact Markdown/browser Back/Forward controls and explicitly separated content history from Spotlight close/return semantics without claiming a new Return control (R17, S18–S19). | — |
 | 2026-10-02 | Added native transformed-terminal double-click routing and magnified-terminal pan precedence over carousel swipe. | — |
 | 2026-04-27 | Clarified cross-project vibespace Spotlight ordering and separate terminal-board Spotlight reorder persistence requirements. | — |
 | 2026-04-26 | Added tab-strip overflow, reorder, and prominent activity animation requirements. | — |

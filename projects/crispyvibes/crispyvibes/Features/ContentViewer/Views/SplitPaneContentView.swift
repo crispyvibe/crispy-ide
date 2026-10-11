@@ -34,12 +34,15 @@ struct SplitPaneContentView: View {
         group.filteredTabs(scope: viewerScope, focusedProjectRootPath: focusedProjectRootPath)
     }
 
+    private var visibleTabIDs: [String] {
+        visibleTabs.map(\.id)
+    }
+
     private var visibleActiveTab: ContentViewerTab? {
-        if let activeTab = group.activeTab,
-           visibleTabs.contains(where: { $0.id == activeTab.id }) {
-            return activeTab
-        }
-        return visibleTabs.first
+        guard let activeTabID = group.activeTabID,
+              let activeTab = visibleTabs.first(where: { $0.id == activeTabID }),
+              activeTab.id == group.activeTabID else { return nil }
+        return activeTab
     }
 
     private var paneDropTypes: [UTType] {
@@ -54,7 +57,14 @@ struct SplitPaneContentView: View {
                     Divider()
                 }
                 ZStack {
-                    paneBody.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    SplitPaneContentViewerObserverScope(
+                        group: group,
+                        viewerScope: viewerScope,
+                        focusedProjectRootPath: focusedProjectRootPath
+                    ) { activeTab in
+                        paneBody(activeTab: activeTab)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     if isDropTargeted { EditorDropZoneOverlay(hoveredZone: dropZone) }
                 }
             }
@@ -156,80 +166,10 @@ struct SplitPaneContentView: View {
     // MARK: - Body
 
     @ViewBuilder
-    private var paneBody: some View {
-        if let activeTab = visibleActiveTab {
-            switch activeTab.kind {
-            case .file(let reference):
-                fileContentArea(filePath: reference.url.path)
-            case .vibeCast:
-                if let vibeCastView { vibeCastView() }
-                else { vibeCastUnavailable }
-            case .todos:
-                if let todosView { todosView() }
-                else { vibeCastUnavailable }
-            case .vibeLanes:
-                VibeLaneSurfaceView(
-                    focusedProjectPath: focusedProjectRootPath,
-                    onOpenACPSession: {
-                        contentViewerStore.openVibeLaneACPPane(
-                            target: $0,
-                            projects: projects,
-                            vibespaceID: vibespaceID
-                        )
-                    },
-                    onOpenFileTarget: { target in
-                        contentViewerStore.openFileInTab(
-                            at: target.url,
-                            line: target.line,
-                            column: target.column
-                        )
-                    }
-                )
-            case .webPage(let reference):
-                if let coordinator = dockedBrowserCoordinator {
-                    let vm = coordinator.viewModel(for: reference)
-                    BrowserContentView(viewModel: vm)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    BrowserContentView(
-                        viewModel: BrowserPanelViewModel(
-                            initialURL: reference.seedURL
-                        )
-                    )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            case .terminal(let projectID, let tabID):
-                if let session = terminalSessionResolver?(projectID, tabID) {
-                    TerminalSessionHostView(
-                        session: session,
-                        displayDensity: .regular,
-                        isActive: true,
-                        accessibilityIdentifier: "content-viewer.terminal.host",
-                        onLinkTargetActivated: onLinkTargetActivated,
-                        onFileSystemTargetActivated: onFileSystemTargetActivated
-                    )
-                } else {
-                    ContentUnavailableView(
-                        String(localized: "contentViewer.terminalUnavailable"),
-                        systemImage: "terminal",
-                        description: Text(String(localized: "contentViewer.terminalUnavailable.description"))
-                    )
-                }
-            case .acpPane(let storeID):
-                if let acpStore = contentViewerStore.acpStore(for: storeID) {
-                    ACPStandalonePaneContentView(
-                        store: acpStore,
-                        projects: projects,
-                        onLinkTargetActivated: onLinkTargetActivated,
-                        onFileSystemTargetActivated: onFileSystemTargetActivated
-                    )
-                } else {
-                    ContentUnavailableView(
-                        AppStrings.ACP.unavailableTitle,
-                        systemImage: "sparkles",
-                        description: Text(AppStrings.ACP.unavailableDescription)
-                    )
-                }
+    private func paneBody(activeTab: ContentViewerTab?) -> some View {
+        if let activeTab {
+            ContentTabRoutedContentScope(tabID: activeTab.id, paneID: paneID) {
+                paneRoutedContent(activeTab)
             }
         } else {
             ContentUnavailableView(
@@ -240,10 +180,97 @@ struct SplitPaneContentView: View {
         }
     }
 
+    @ViewBuilder
+    private func paneRoutedContent(_ activeTab: ContentViewerTab) -> some View {
+        switch activeTab.kind {
+        case .file(let reference):
+            fileContentArea(filePath: reference.url.path)
+        case .vibeCast:
+            if let vibeCastView {
+                vibeCastView()
+            } else {
+                vibeCastUnavailable
+            }
+        case .todos:
+            if let todosView {
+                todosView()
+            } else {
+                vibeCastUnavailable
+            }
+        case .vibeLanes:
+            VibeLaneSurfaceView(
+                focusedProjectPath: focusedProjectRootPath,
+                onOpenACPSession: {
+                    contentViewerStore.openVibeLaneACPPane(
+                        target: $0,
+                        projects: projects,
+                        vibespaceID: vibespaceID
+                    )
+                },
+                onOpenFileTarget: { target in
+                    contentViewerStore.openFileInTab(
+                        at: target.url,
+                        line: target.line,
+                        column: target.column
+                    )
+                }
+            )
+        case .webPage(let reference):
+            if let coordinator = dockedBrowserCoordinator {
+                let viewModel = coordinator.viewModel(for: reference)
+                BrowserContentView(viewModel: viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                BrowserContentView(
+                    viewModel: BrowserPanelViewModel(initialURL: reference.seedURL)
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        case .terminal(let projectID, let tabID):
+            if let session = terminalSessionResolver?(projectID, tabID) {
+                TerminalSessionHostView(
+                    session: session,
+                    displayDensity: .regular,
+                    isActive: true,
+                    accessibilityIdentifier: "content-viewer.terminal.host",
+                    onLinkTargetActivated: onLinkTargetActivated,
+                    onFileSystemTargetActivated: onFileSystemTargetActivated
+                )
+            } else {
+                ContentUnavailableView(
+                    String(localized: "contentViewer.terminalUnavailable"),
+                    systemImage: "terminal",
+                    description: Text(
+                        String(localized: "contentViewer.terminalUnavailable.description")
+                    )
+                )
+            }
+        case .acpPane(let storeID):
+            if let acpStore = contentViewerStore.acpStore(for: storeID) {
+                ACPStandalonePaneContentView(
+                    store: acpStore,
+                    projects: projects,
+                    onLinkTargetActivated: onLinkTargetActivated,
+                    onFileSystemTargetActivated: onFileSystemTargetActivated
+                )
+            } else {
+                ContentUnavailableView(
+                    AppStrings.ACP.unavailableTitle,
+                    systemImage: "sparkles",
+                    description: Text(AppStrings.ACP.unavailableDescription)
+                )
+            }
+        }
+    }
+
     private var vibeCastUnavailable: some View {
         ContentUnavailableView(AppStrings.VibeCast.title,
                                systemImage: "antenna.radiowaves.left.and.right",
                                description: Text(AppStrings.VibeCast.noTerminalDescription))
+    }
+
+    private func reconcileActiveSelection() {
+        group.reconcileActiveSelection(visibleTabIDs: visibleTabIDs)
     }
 
     private var embeddedDropBridge: ContentViewerEmbeddedDropBridge {
@@ -360,5 +387,57 @@ private struct PaneSplitDropDelegate: DropDelegate {
             let orientation: SplitOrientation = (zone == .left || zone == .right) ? .horizontal : .vertical
             splitStore.splitActiveWithTab(tab, orientation: orientation)
         }
+    }
+}
+
+
+@MainActor
+struct SplitPaneContentViewerObserverScope<Content: View>: View {
+    @ObservedObject var group: EditorGroupStore
+    let viewerScope: ViewerScope
+    let focusedProjectRootPath: String?
+    let content: (ContentViewerTab?) -> Content
+
+    init(
+        group: EditorGroupStore,
+        viewerScope: ViewerScope,
+        focusedProjectRootPath: String?,
+        @ViewBuilder content: @escaping (ContentViewerTab?) -> Content
+    ) {
+        self.group = group
+        self.viewerScope = viewerScope
+        self.focusedProjectRootPath = focusedProjectRootPath
+        self.content = content
+    }
+
+    private var visibleTabs: [ContentViewerTab] {
+        group.filteredTabs(
+            scope: viewerScope,
+            focusedProjectRootPath: focusedProjectRootPath
+        )
+    }
+
+    private var visibleTabIDs: [String] {
+        visibleTabs.map(\.id)
+    }
+
+    private var visibleActiveTab: ContentViewerTab? {
+        guard let activeTabID = group.activeTabID else { return nil }
+        return visibleTabs.first { $0.id == activeTabID }
+    }
+
+    var body: some View {
+        content(visibleActiveTab)
+            .onAppear(perform: reconcileActiveSelection)
+            .onChange(of: visibleTabIDs) { _, _ in
+                reconcileActiveSelection()
+            }
+            .onChange(of: group.activeTabID) { _, _ in
+                reconcileActiveSelection()
+            }
+    }
+
+    private func reconcileActiveSelection() {
+        group.reconcileActiveSelection(visibleTabIDs: visibleTabIDs)
     }
 }

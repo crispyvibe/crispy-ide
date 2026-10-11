@@ -31,7 +31,9 @@ extension ContentView {
         snapshot: BrowserSessionSnapshot,
         projectPath: String?
     ) -> BrowserPanelViewModel {
-        if let existing = dockedBrowserCoordinator.previewViewModel {
+        if let existing = dockedBrowserCoordinator.previewViewModel,
+           dockedBrowserCoordinator.previewProjectPath == projectPath,
+           existing.projectPath == projectPath {
             return existing
         }
         return dockedBrowserCoordinator.restorePreview(from: snapshot, projectPath: projectPath)
@@ -54,10 +56,10 @@ extension ContentView {
         projectPath: String? = nil,
         animated: Bool = true
     ) {
-        let effectiveSnapshot = dockedBrowserCoordinator.previewSnapshot() ?? snapshot
-        let resolvedURL = effectiveSnapshot.urlString.flatMap(URL.init(string:))
+        _ = dockedBrowserCoordinator.restorePreview(from: snapshot, projectPath: projectPath)
+        let resolvedURL = snapshot.urlString.flatMap(URL.init(string:))
         let spotlight = browserSpotlightState(
-            source: .browserPreview(snapshot: effectiveSnapshot),
+            source: .browserPreview(snapshot: snapshot),
             title: browserSpotlightTitle(for: resolvedURL),
             projectPath: projectPath
         )

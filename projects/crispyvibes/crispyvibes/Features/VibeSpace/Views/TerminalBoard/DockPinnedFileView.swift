@@ -3,10 +3,8 @@ import SwiftUI
 struct DockPinnedFileView: View {
     @Environment(\.appThemePalette) private var appThemePalette
     @Environment(\.crispyvibesTheme) private var crispyvibesTheme
-    @AppStorage(AppPreferences.codeFontSizeKey) private var codeFontSize = AppPreferences.defaultCodeFontSize
-    /// F049: comment store comes from RootView-level env. When non-nil, the
-    /// file tile docks the comments panel + floating button + overlays.
-    @Environment(\.vibespaceCommentStoreEnvironment) private var commentStore: VibeSpaceCommentStore?
+    @AppStorage(AppPreferences.codeFontSizeKey)
+    private var codeFontSize = AppPreferences.defaultCodeFontSize
     let fileURL: URL
     let isActive: Bool
     @ObservedObject var editorGroup: EditorGroupStore
@@ -22,54 +20,50 @@ struct DockPinnedFileView: View {
     var interactionController: BoardInteractionController?
 
     var body: some View {
-        FileContentWithCommentsPanel(
-            panel: editorGroup.commentsPanel,
-            store: commentStore,
-            filePath: fileURL.standardizedFileURL.path,
-            editorContent: {
-                MarkdownEditorView(
-                    viewModel: editorGroup.markdownViewModel,
-                    showsTopBar: false,
-                    headerLayout: .embedded
-                )
-                .environment(\.vibespaceCommentStoreEnvironment, commentStore)
-                .environment(\.commentsPanelEnvironment, editorGroup.commentsPanel)
-                .environment(\.commentsFilePathEnvironment, fileURL.standardizedFileURL.path)
+        EditorGroupFileSurface(group: editorGroup)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 30)
+            .onTapGesture { onSelect() }
+            .overlay(alignment: .top) {
+                header
+                    .scrollAssistGlassBackground(
+                        in: UnevenRoundedRectangle(
+                            topLeadingRadius: crispyvibesTheme.borderShape.cornerRadius,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: crispyvibesTheme.borderShape.cornerRadius
+                        )
+                    )
             }
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 30)
-        .onTapGesture { onSelect() }
-        .overlay(alignment: .top) {
-            header
-                .scrollAssistGlassBackground(in: UnevenRoundedRectangle(
-                    topLeadingRadius: crispyvibesTheme.borderShape.cornerRadius,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: crispyvibesTheme.borderShape.cornerRadius
-                ))
-        }
-        .background(appThemePalette.canvasBackgroundColor)
-        .clipShape(RoundedRectangle(cornerRadius: crispyvibesTheme.borderShape.cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: crispyvibesTheme.borderShape.cornerRadius, style: .continuous)
+            .background(appThemePalette.canvasBackgroundColor)
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: crispyvibesTheme.borderShape.cornerRadius,
+                    style: .continuous
+                )
+            )
+            .overlay(
+                RoundedRectangle(
+                    cornerRadius: crispyvibesTheme.borderShape.cornerRadius,
+                    style: .continuous
+                )
                 .stroke(
                     crispyvibesTheme.borderVisible ? borderColor : borderColor.opacity(0),
                     lineWidth: isActive ? 0.9 : 0.2
                 )
-        )
-        .accessibilityIdentifier("vibespace.terminal-board.file-tile")
-        .accessibilityValue(isActive ? "active" : "inactive")
-        .contentShape(Rectangle())
-        .contextMenu {
-            Button(AppStrings.Terminal.Tile.minimize) { onMinimize() }
-            BoardWindowTransferContextMenuItems(
-                targets: boardWindowTransferTargets,
-                onSendToNewBoardWindow: onSendToNewBoardWindow,
-                onSendToBoardWindow: onSendToBoardWindow,
-                onSendAllFromProjectToNewBoardWindow: onSendAllFromProjectToNewBoardWindow
             )
-        }
+            .accessibilityIdentifier("vibespace.terminal-board.file-tile")
+            .accessibilityValue(isActive ? "active" : "inactive")
+            .contentShape(Rectangle())
+            .contextMenu {
+                Button(AppStrings.Terminal.Tile.minimize) { onMinimize() }
+                BoardWindowTransferContextMenuItems(
+                    targets: boardWindowTransferTargets,
+                    onSendToNewBoardWindow: onSendToNewBoardWindow,
+                    onSendToBoardWindow: onSendToBoardWindow,
+                    onSendAllFromProjectToNewBoardWindow: onSendAllFromProjectToNewBoardWindow
+                )
+            }
     }
 
     private var borderColor: Color {
@@ -86,7 +80,7 @@ struct DockPinnedFileView: View {
                 .font(CrispyVibesHeaderStyle.card.titleFont(scale: chromeScale))
                 .foregroundStyle(appThemePalette.accentColor)
 
-            Text(fileURL.lastPathComponent)
+            Text(activeFileURL.lastPathComponent)
                 .font(CrispyVibesHeaderStyle.card.titleFont(scale: chromeScale))
                 .lineLimit(1)
                 .foregroundStyle(appThemePalette.primaryTextColor)
@@ -94,7 +88,7 @@ struct DockPinnedFileView: View {
 
             Spacer(minLength: 6)
 
-            Text(fileURL.deletingLastPathComponent().lastPathComponent)
+            Text(activeFileURL.deletingLastPathComponent().lastPathComponent)
                 .font(CrispyVibesHeaderStyle.card.detailFont(scale: chromeScale))
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -139,9 +133,15 @@ struct DockPinnedFileView: View {
         )
     }
 
+    private var activeFileURL: URL {
+        editorGroup.activeFileDocumentReference?.url ?? fileURL
+    }
+
     private var iconName: String {
-        let ext = fileURL.pathExtension.lowercased()
-        if ["png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "tiff"].contains(ext) { return "photo" }
+        let ext = activeFileURL.pathExtension.lowercased()
+        if ["png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "tiff"].contains(ext) {
+            return "photo"
+        }
         if ext == "pdf" { return "doc.text.image" }
         if ["md", "markdown"].contains(ext) { return "doc.richtext" }
         if ["doc", "docx"].contains(ext) { return "doc.text.fill" }

@@ -11,7 +11,9 @@ struct DockedFileEntry: Identifiable {
 final class DockedFileViewerCoordinator: ObservableObject {
     private let editorGroupFactory: @MainActor (UUID) -> EditorGroupStore
     private var groups: [UUID: EditorGroupStore] = [:]
+    private var rootReferences: [UUID: FileDocumentReference] = [:]
     private var previewGroup: EditorGroupStore?
+    private var previewRootReference: FileDocumentReference?
 
     @Published var previewFileURL: URL?
     /// Tile identity list kept in sync by the board view — no editor state here.
@@ -29,11 +31,11 @@ final class DockedFileViewerCoordinator: ObservableObject {
         fileContentProvider: (any FileContentProviding)? = nil
     ) {
         let reference = documentReference ?? FileDocumentReference(url: fileURL)
-        let normalized = reference.url
-        previewFileURL = normalized
+        previewFileURL = reference.url
+        previewRootReference = reference
         let group = editorGroupFactory(UUID())
         group.openFileInTab(
-            at: normalized,
+            at: reference.url,
             documentReference: reference,
             fileContentProvider: fileContentProvider
         )
@@ -43,31 +45,36 @@ final class DockedFileViewerCoordinator: ObservableObject {
     func dismissPreview() {
         previewFileURL = nil
         previewGroup = nil
+        previewRootReference = nil
     }
 
     /// Promotes the live preview editor group into the pinned tile, avoiding a fresh load.
     func promotePreview(to tileID: UUID?) {
-        guard let tileID, let group = previewGroup else {
+        guard let tileID, let group = previewGroup, let rootReference = previewRootReference else {
             dismissPreview()
             return
         }
         groups[tileID] = group
+        rootReferences[tileID] = rootReference
         previewFileURL = nil
         previewGroup = nil
+        previewRootReference = nil
     }
 
     func assignEditorGroup(
         _ group: EditorGroupStore,
         for tileID: UUID?,
-        fileURL _: URL
+        fileURL: URL
     ) {
         guard let tileID else {
             dismissPreview()
             return
         }
         groups[tileID] = group
+        rootReferences[tileID] = FileDocumentReference(url: fileURL)
         previewFileURL = nil
         previewGroup = nil
+        previewRootReference = nil
     }
 
     var previewEditorGroup: EditorGroupStore? { previewGroup }
@@ -81,16 +88,23 @@ final class DockedFileViewerCoordinator: ObservableObject {
         fileContentProvider: (any FileContentProviding)? = nil
     ) -> EditorGroupStore {
         let reference = documentReference ?? FileDocumentReference(url: fileURL)
-        let targetTab = ContentViewerTab.file(reference: reference)
 
         if let existing = groups[tileID] {
-            if existing.activeTabID != targetTab.id
-                || existing.fileContentProvider(for: targetTab.id) == nil && fileContentProvider != nil {
-                existing.openFileInTab(
-                    at: reference.url,
-                    documentReference: reference,
+            if let rootReference = rootReferences[tileID],
+               rootReference.url == reference.url,
+               rootReference.projectIdentifier == nil,
+               reference.projectIdentifier != nil {
+                existing.upgradeFileReference(
+                    from: rootReference,
+                    to: reference,
                     fileContentProvider: fileContentProvider
                 )
+                rootReferences[tileID] = reference
+            } else {
+                existing.updateFileContentProvider(fileContentProvider, for: reference)
+                if rootReferences[tileID] == nil {
+                    rootReferences[tileID] = reference
+                }
             }
             return existing
         }
@@ -102,10 +116,16 @@ final class DockedFileViewerCoordinator: ObservableObject {
             fileContentProvider: fileContentProvider
         )
         groups[tileID] = group
+        rootReferences[tileID] = reference
         return group
+    }
+
+    func assignedEditorGroup(for tileID: UUID) -> EditorGroupStore? {
+        groups[tileID]
     }
 
     func removeGroup(for tileID: UUID) {
         groups.removeValue(forKey: tileID)
+        rootReferences.removeValue(forKey: tileID)
     }
 }

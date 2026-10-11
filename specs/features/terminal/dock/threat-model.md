@@ -29,56 +29,70 @@ Terminal Board Dock manages dockable content tiles (files, browsers, VibeCast, A
 - **Vector:** An attacker modifies the vibespace JSON to change a pinned file tile's path to a sensitive file (e.g., `~/.ssh/id_rsa`, `/etc/shadow`). On restore, the editor opens and renders that file's content.
 - **Impact:** Disclosure of sensitive file contents in the editor tile, visible on screen.
 - **Likelihood:** Very low — vibespace JSON is HMAC-signed; tampering invalidates the signature. The file must also be readable by the user.
-- **Mitigation:** Persistence uses HMAC integrity signing. `DockPreviewBridge.requestPreview(for:)` standardizes URLs via `.standardizedFileURL` (resolves `..` components). The editor infrastructure respects macOS file permissions — files not readable by the user cannot be opened. Missing files are pruned gracefully per F037-R03. Linked NFR: SEC-Data-Protection.
+- **Mitigation:** Persistence uses HMAC integrity signing. `DockPreviewBridge.requestPreview(for:)` standardizes URLs via `.standardizedFileURL` (resolves `..` components). The editor infrastructure respects macOS file permissions — files not readable by the user cannot be opened. Missing files are pruned gracefully per F037-R03. Linked NFR: SEC-2.
 
 ### F037-T02: XSS or local file access via WebView in pinned file tile
 
 - **Vector:** A pinned markdown or HTML file contains malicious JavaScript. When rendered in `MarkdownEditorView` (backed by `WKWebView`), the script could attempt to access local files, exfiltrate data, or manipulate the UI.
 - **Impact:** Potential local file read via `file://` URLs in WebView; JavaScript execution in the renderer context.
 - **Likelihood:** Low — requires the user to pin a file containing malicious content, or an attacker to modify a pinned file on disk.
-- **Mitigation:** `WKWebView` configuration should disable `allowsFileAccessFromFileURLs` and restrict navigation to the rendered content. The markdown runtime uses a bundled renderer that sanitizes HTML output. WebView is sandboxed by WebKit's process isolation. Content is rendered read-only (no form submission or navigation to external URLs from tile context). Linked NFR: SEC-Input-Sanitization.
+- **Mitigation:** `WKWebView` configuration should disable `allowsFileAccessFromFileURLs` and restrict navigation to the rendered content. The markdown runtime uses a bundled renderer that sanitizes HTML output. WebView is sandboxed by WebKit's process isolation. Content is rendered read-only (no form submission or navigation to external URLs from tile context). Linked NFR: SEC-3a.
 
 ### F037-T03: UI spoofing via crafted file tile content
 
 - **Vector:** A file pinned to the board contains content designed to mimic Crispy's UI chrome (fake buttons, fake terminal output, phishing prompts). The tile renders this content in a `MarkdownEditorView` that fills most of the tile area.
 - **Impact:** User confusion — may interact with fake UI elements thinking they are real Crispy controls.
 - **Likelihood:** Low — the tile has a distinct header with file name, close/minimize buttons, and border styling that distinguishes it from terminal tiles.
-- **Mitigation:** `DockPinnedFileView` renders a fixed header overlay (`CrispyVibesHeaderChrome`) above the content area showing the real filename and controls. The tile has a distinct border and clip shape. Content is padded below the header (`.padding(.top, 30)`). The header is not part of the rendered file content. Linked NFR: SEC-Input-Sanitization.
+- **Mitigation:** `DockPinnedFileView` renders a fixed header overlay (`CrispyVibesHeaderChrome`) above the content area showing the real filename and controls. The tile has a distinct border and clip shape. Content is padded below the header (`.padding(.top, 30)`). The header is not part of the rendered file content. Linked NFR: SEC-3a.
 
 ### F037-T04: Crash or hang from malformed board layout data
 
 - **Vector:** Tampered persistence data specifies extreme tile dimensions (e.g., width: 999999, negative positions) or an excessive number of tiles. On restore, SwiftUI attempts to render these, causing layout thrashing or memory exhaustion.
 - **Impact:** UI freeze or crash during vibespace restore.
 - **Likelihood:** Very low — HMAC signing prevents casual tampering.
-- **Mitigation:** Board metrics calculation (F037-S27) recalculates positions based on current board dimensions and tile count. Layout sync validates against board capacity (F037-R02 rejects pins when no free capacity exists). SwiftUI's layout system clamps views to available space. Persistence integrity is HMAC-protected. Linked NFR: PERF-Responsiveness.
+- **Mitigation:** Board metrics calculation (F037-S27) recalculates positions based on current board dimensions and tile count. Layout sync validates against board capacity (F037-R02 rejects pins when no free capacity exists). SwiftUI's layout system clamps views to available space. Persistence integrity is HMAC-protected. Linked NFR: PERF-3.
 
 ### F037-T05: Stale symlink exploitation during file tile restore
 
 - **Vector:** A persisted file tile path points to a symlink. Between sessions, an attacker replaces the symlink target with a sensitive file. On restore, the tile opens the new target.
 - **Impact:** Disclosure of the symlink target's content.
 - **Likelihood:** Very low — requires write access to the symlink location and knowledge of the persisted path.
-- **Mitigation:** `URL.standardizedFileURL` resolves symlinks to their canonical path. The editor opens whatever the resolved path points to, subject to standard macOS file permissions. This is equivalent to the user opening the file manually in any editor. Missing files are pruned (F037-R03) rather than retried. Linked NFR: SEC-Data-Protection.
+- **Mitigation:** `URL.standardizedFileURL` normalizes path syntax but does not resolve symbolic links. The editor opens the persisted path's current target subject to standard macOS file permissions, equivalent to the user opening that path manually. Missing files are pruned (F037-R03) rather than retried. Symlink-target replacement remains a residual same-user filesystem risk; stronger confinement would require explicit `resolvingSymlinksInPath()` plus an approved-root check. Linked NFRs: SEC-2, SEC-7.
 
 ### F037-T06: Resource exhaustion from excessive pinned tiles
 
 - **Vector:** A user (or tampered persistence) creates many pinned file/browser tiles, each holding an `EditorGroupStore` and potentially a `WKWebView` instance. Memory consumption grows with each tile.
 - **Impact:** Memory exhaustion, especially with large files or complex markdown rendering.
 - **Likelihood:** Low — board capacity limits (F037-R02) prevent unbounded tile creation through the UI.
-- **Mitigation:** Pin action is rejected when board has no free capacity (F037-S08). Minimized tiles move to a tab bar and may release their WebView. Board metrics enforce tile count limits based on board dimensions. Linked NFR: PERF-Responsiveness.
+- **Mitigation:** Pin action is rejected when board has no free capacity (F037-S08). Minimized tiles move to a tab bar and may release their WebView. Board metrics enforce tile count limits based on board dimensions. Linked NFR: PERF-3.
+
+### F037-T07: Stale preview or root state is pinned under the wrong context
+
+- **Vector:** File pinning rerenders the immutable root over a linked current file, or browser promotion reuses a stale preview/snapshot from another project or presentation before persistence commits.
+- **Impact:** Wrong-file comments/provider access, cross-project browser history or page-context disclosure, board rollback after detailed close, or loss of a failed preview promotion.
+- **Likelihood:** Medium without explicit root/current separation and atomic snapshot ordering.
+- **Mitigation:** File tiles transfer the live editor group and retain root separately; current file/provider drives UI and promotion. Explicit browser preview restore/reconstruction requires project plus complete snapshot equality, while an already-live same-project Spotlight preview continues its current view model. Successful insertion persists the authoritative live snapshot before preview retirement; failed insertion preserves preview; linked detail close writes latest state back; hydration restores stable tile IDs across visible, minimized, primary, and detached surfaces. Linked NFRs: SEC-2, SEC-7, REL-1.
 
 ## Residual Risks
 
 - File content rendered in `WKWebView` is subject to WebKit's security model. A WebKit vulnerability could be exploited via crafted file content, but this is a platform-level concern.
 - Pinned files are read from disk on restore. If the file has been modified externally to contain malicious content, the tile renders it. This is equivalent to opening any file in an editor.
 - The board layout is persisted as part of vibespace state. If HMAC signing is bypassed, arbitrary layout data could be injected. The impact is limited to UI rendering issues.
-- Browser tiles (not yet fully implemented in the reviewed code) will introduce additional WebView attack surface when they render arbitrary web content.
+- Browser tiles render arbitrary web content and therefore retain the Browser feature's WebKit, authenticated-session, and remote-content residual risks.
 
 ## NFR Compliance
 
 | NFR | Status | Notes |
 |-----|--------|-------|
-| SEC-Input-Sanitization | Compliant | URLs standardized; WebView content sandboxed; header overlay prevents content spoofing tile chrome. |
-| SEC-Data-Protection | Compliant | HMAC-signed persistence; missing files pruned gracefully; no secrets in tile metadata. |
-| PERF-Responsiveness | Compliant | Board capacity limits prevent unbounded tiles; layout sync is incremental. |
-| A11Y | Compliant | Tiles have accessibility identifiers and value labels; context menus for secondary actions. |
-| OBS | Compliant | Board layout changes trigger persistence sync; no additional logging needed for dock-specific events. |
+| SEC-3a | Compliant | URLs standardized; WebView content sandboxed; header overlay prevents content spoofing tile chrome. |
+| SEC-2 | Compliant | HMAC-signed persistence; missing files pruned gracefully; project/snapshot identity and current-file/provider coupling prevent stale cross-context reuse. |
+| PERF-3 | Compliant | Board capacity limits prevent unbounded tiles; layout sync is incremental. |
+| A11Y-1, A11Y-6 | Compliant | Tiles expose semantic values, context-menu actions, and stable accessibility identifiers. |
+| OBS-1 | Partial | Board mutations trigger persistence, but the dock layer does not yet emit dedicated structured operation events. |
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-11 | Canonicalized accessibility and observability NFR references and qualified the dock-specific logging gap. | — |
+| 2026-10-06 | Added T07 for stale file-root/browser-preview identity, cross-project session leakage, detail rollback, and non-atomic pin failure; updated browser-tile residual risk. | — |

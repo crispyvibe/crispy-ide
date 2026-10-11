@@ -42,16 +42,10 @@ struct TerminalSpotlightCardView<SpotlightContent: View, InputBarContent: View>:
                         .onExitCommand { isRenaming = false }
                         .onAppear { isRenameFieldFocused = true }
                     } else {
-                        Text(spotlight.title)
+                        spotlightHeaderTitle
                             .font(AppTypographyTokens.subheadlineSemibold)
                             .lineLimit(1)
                             .foregroundStyle(activeThemePalette.primaryTextColor)
-                            .onTapGesture(count: 2) {
-                                if case .persistent = spotlight.source {
-                                    renameText = spotlight.title
-                                    isRenaming = true
-                                }
-                            }
                     }
 
                     if spotlight.showsTemporaryBadge {
@@ -67,7 +61,7 @@ struct TerminalSpotlightCardView<SpotlightContent: View, InputBarContent: View>:
 
                 Spacer(minLength: 8)
 
-                Text(spotlight.workingDirectoryURL.path)
+                spotlightHeaderDirectory
                     .font(AppTypographyTokens.caption2)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -143,6 +137,74 @@ struct TerminalSpotlightCardView<SpotlightContent: View, InputBarContent: View>:
         .accessibilityIdentifier("terminal.spotlight.overlay")
         .onTapGesture(count: 2) {
             onDismiss()
+        }
+    }
+
+    @ViewBuilder
+    private var spotlightHeaderTitle: some View {
+        switch spotlight.source {
+        case let .filePreview(target, group):
+            TerminalSpotlightFileMetadataText(
+                group: group,
+                rootURL: target.url,
+                component: .title
+            )
+        case let .file(_, fileURL, group):
+            TerminalSpotlightFileMetadataText(
+                group: group,
+                rootURL: fileURL,
+                component: .title
+            )
+        case .persistent:
+            Text(spotlight.title)
+                .onTapGesture(count: 2) {
+                    renameText = spotlight.title
+                    isRenaming = true
+                }
+        case .transient, .vibeCast, .vibeLanes, .todos, .acp, .browserPreview, .browser:
+            Text(spotlight.title)
+        }
+    }
+
+    @ViewBuilder
+    private var spotlightHeaderDirectory: some View {
+        switch spotlight.source {
+        case let .filePreview(target, group):
+            TerminalSpotlightFileMetadataText(
+                group: group,
+                rootURL: target.url,
+                component: .directory
+            )
+        case let .file(_, fileURL, group):
+            TerminalSpotlightFileMetadataText(
+                group: group,
+                rootURL: fileURL,
+                component: .directory
+            )
+        case .persistent, .transient, .vibeCast, .vibeLanes, .todos, .acp, .browserPreview, .browser:
+            Text(spotlight.workingDirectoryURL.path)
+        }
+    }
+}
+
+@MainActor
+private struct TerminalSpotlightFileMetadataText: View {
+    enum Component {
+        case title
+        case directory
+    }
+
+    @ObservedObject var group: EditorGroupStore
+    let rootURL: URL
+    let component: Component
+
+    var body: some View {
+        let activeURL = group.activeFileDocumentReference?.url ?? rootURL
+        switch component {
+        case .title:
+            Text(activeURL.lastPathComponent)
+        case .directory:
+            Text(activeURL.deletingLastPathComponent().path)
         }
     }
 }
@@ -357,50 +419,14 @@ extension ContentView {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        case let .filePreview(target, group):
-            FileContentWithCommentsPanel(
-                panel: group.commentsPanel,
-                store: appContainer.vibespaceCommentStore,
-                filePath: target.standardizedFileURL.path,
-                editorContent: {
-                    MarkdownEditorView(
-                        viewModel: group.markdownViewModel,
-                        showsTopBar: false,
-                        headerLayout: .embedded
-                    )
-                    .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
-                    .environment(\.commentsPanelEnvironment, group.commentsPanel)
-                    .environment(\.commentsFilePathEnvironment, target.standardizedFileURL.path)
-                }
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case let .file(tileID, fileURL):
-            let fileContext = resolvedFileOpenContext(
-                for: fileURL,
-                preferredProjectRootURL: spotlight.owningProjectRootURL
-            )
-            let group = dockedFileViewerCoordinator.editorGroup(
-                for: tileID,
-                fileURL: fileURL,
-                documentReference: fileContext.reference,
-                fileContentProvider: fileContext.fileContentProvider
-            )
-            FileContentWithCommentsPanel(
-                panel: group.commentsPanel,
-                store: appContainer.vibespaceCommentStore,
-                filePath: fileURL.standardizedFileURL.path,
-                editorContent: {
-                    MarkdownEditorView(
-                        viewModel: group.markdownViewModel,
-                        showsTopBar: false,
-                        headerLayout: .embedded
-                    )
-                    .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
-                    .environment(\.commentsPanelEnvironment, group.commentsPanel)
-                    .environment(\.commentsFilePathEnvironment, fileURL.standardizedFileURL.path)
-                }
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case let .filePreview(_, group):
+            EditorGroupFileSurface(group: group)
+                .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case let .file(_, _, group):
+            EditorGroupFileSurface(group: group)
+                .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .browserPreview(snapshot):
             let vm = spotlightBrowserPreviewViewModel(
                 snapshot: snapshot,
@@ -474,27 +500,12 @@ extension ContentView {
 
     private func pinSpotlightToDetailedViewer(_ spotlight: TerminalSpotlightState) {
         switch spotlight.source {
-        case let .filePreview(target, _):
-            let fileContext = resolvedFileOpenContext(
-                for: target.url,
-                preferredProjectRootURL: spotlight.owningProjectRootURL
-            )
-            contentViewerStore.openFileInTab(
-                at: target.url,
-                line: target.line,
-                column: target.column,
-                projectIdentifier: fileContext.reference.projectIdentifier,
-                fileContentProvider: fileContext.fileContentProvider
-            )
-        case let .file(_, fileURL):
-            let fileContext = resolvedFileOpenContext(
-                for: fileURL,
-                preferredProjectRootURL: spotlight.owningProjectRootURL
-            )
-            contentViewerStore.openFileInTab(
-                at: fileURL,
-                projectIdentifier: fileContext.reference.projectIdentifier,
-                fileContentProvider: fileContext.fileContentProvider
+        case let .filePreview(_, group), let .file(_, _, group):
+            guard let reference = group.activeFileDocumentReference else { return }
+            contentViewerStore.activeGroup.openFileInTab(
+                at: reference.url,
+                documentReference: reference,
+                fileContentProvider: group.activeFileContentProvider
             )
         case let .browserPreview(snapshot):
             let fallbackURL = snapshot.urlString.flatMap(URL.init(string:)) ?? URL(string: "about:blank")!
@@ -530,16 +541,25 @@ extension ContentView {
         switch spotlight.source {
         case let .filePreview(target, group):
             guard let tileID = boardStore.pinPreviewToDock(fileURL: target.url) else { return }
-            dockedFileViewerCoordinator.assignEditorGroup(group, for: tileID, fileURL: target.url)
+            dockedFileViewerCoordinator.assignEditorGroup(
+                group,
+                for: tileID,
+                fileURL: target.url
+            )
         case let .browserPreview(snapshot):
             let fallbackURL = snapshot.urlString.flatMap(URL.init(string:)) ?? URL(string: "about:blank")!
             let effectiveSnapshot = dockedBrowserCoordinator.previewSnapshot(fallbackURL: fallbackURL) ?? snapshot
             let resolvedURL = effectiveSnapshot.urlString.flatMap(URL.init(string:)) ?? fallbackURL
-            guard let tileID = boardStore.pinBrowserToDock(
+            let tileID = UUID()
+            guard boardStore.pinBrowserToDock(
+                id: tileID,
                 url: resolvedURL,
-                projectPath: spotlight.owningProjectRootURL?.path
-            ) else { return }
-            dockedBrowserCoordinator.promotePreview(to: tileID)
+                projectPath: spotlight.owningProjectRootURL?.path,
+                surfaceID: spotlight.surfaceID ?? boardStore.primarySurfaceID,
+                browserSession: effectiveSnapshot
+            ) != nil else { return }
+            dockedBrowserCoordinator.promotePreview(to: tileID, snapshot: effectiveSnapshot)
+            boardStore.commit()
         case .vibeLanes:
             guard boardStore.addVibeLanesTile(
                 surfaceID: spotlight.surfaceID ?? boardStore.primarySurfaceID

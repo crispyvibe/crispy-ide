@@ -110,10 +110,7 @@ final class TerminalSession: NSObject {
         self.initialWorkingDirectory = workingDirectory
         self.currentWorkingDirectory = workingDirectory
         self.terminalServices = terminalServices
-        self.displayMagnification = min(
-            Self.maximumDisplayMagnification,
-            max(Self.minimumDisplayMagnification, displayMagnification)
-        )
+        self.displayMagnification = Self.normalizedDisplayMagnification(displayMagnification)
         self.shellResolutionProvider = shellResolutionProvider
         self.engine = engineFactory(terminalServices)
         super.init()

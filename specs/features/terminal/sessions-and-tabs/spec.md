@@ -268,13 +268,17 @@ The focused project's bottom terminal tray in `Detailed` canvas mode MUST NOT ex
 
 When the user docks the visible detailed-tray terminal into the main content view, Crispy MUST move that terminal's presentation using the existing terminal session identity rather than creating a duplicate session. After the move, the detailed tray MUST continue showing at most one project terminal session, advancing to the next available project terminal when one exists.
 
-### F001-R59: Optical Terminal Magnification Preserves Grid Geometry
+### F001-R59: Optical Terminal Magnification Preserves Fixed Grid Geometry
 
-Ghostty terminal hosts MUST support pinch magnification from normal size (`1×`) through `3×`. Spreading two fingers MUST magnify the terminal; bringing them together MUST return it toward `1×` and MUST NOT make it smaller than normal. Zoom and pan MUST be compositor-only operations that preserve terminal view bounds, Ghostty surface pixel geometry, row/column count, and line wrapping. Per-session magnification MUST survive host handoff, restart replacement, snapshot, and restore; persisted legacy values below `1×` MUST normalize to `1×`.
+Ghostty terminal hosts MUST support optical magnification across `0.5×...3×`. Magnification above `1×` MUST remain continuous and anchor-aware, with bounded viewport pan. At or below `1×`, the fixed terminal grid MUST remain centered in both axes, pan MUST be neutralized, and blank margins MUST NOT route pointer or scroll input to the terminal. Zoom and pan MUST be compositor-only operations that preserve terminal view bounds, Ghostty surface pixel geometry, row/column count, and line wrapping.
 
 ### F001-R60: Selection Remains Reliable Under Optical Transform
 
 Pointer hit testing, hover targets, context menus, IME geometry, and Ghostty mouse coordinates MUST map through the active optical transform. A selection drag MUST preserve one balanced position/press/drag/release sequence, including when it begins over an interactive URL or path. Leaving the visible viewport while dragging MUST NOT invalidate the pointer position, and focus loss, app deactivation, detach, or host ownership transfer MUST release any forwarded primary press. A stale host MUST NOT remove, route input to, or invalidate geometry for a terminal owned by another host.
+
+### F001-R61: Stepwise Shrink Requires A New-Gesture Gate At Normal Size
+
+A pinch that starts above `1×` MUST magnify continuously while it remains above `1×`; crossing inward MUST clamp to exactly `1×` and lock there for the rest of that gesture. Shrinking below normal MUST require a new inward gesture at `1×` and cumulative threshold activation, then advance only in ordered `0.1×` steps down to `0.5×`. Outward movement below normal MUST cancel opposing partial accumulation, step toward `1×`, and lock on reaching exactly `1×`; magnification above normal MUST require another gesture. Session initialization, setters, adjustments, tab restart, host handoff, snapshot, and restore MUST preserve valid below-normal steps. Runtime/API normalization MUST map non-finite values to `1×`. JSON persistence MUST reject malformed or nonconforming numeric tokens before session normalization through the existing integrity/decode failure path. Successfully decoded finite values MUST clamp to `0.5×...3×`, snap values below `1×` to the nearest tenth with midpoint ties toward `1×`, and leave values above `1×` continuous.
 
 ## Scenarios
 
@@ -755,16 +759,16 @@ Pointer hit testing, hover targets, context menus, IME geometry, and Ghostty mou
 **And** the detailed tray advances to the next available project terminal when one exists
 **And** otherwise the tray remains empty or collapsed without terminating the moved session
 
-### Scenario F001-S59: Terminal magnifies and pans without reflow or shrinking below normal
+### Scenario F001-S59: Terminal optical scaling preserves a centered fixed grid without reflow
 
-**Given** a Ghostty terminal is visible at normal `1×` size
-**When** the user spreads two fingers to magnify and then pans the terminal
-**Then** magnification remains between `1×` and `3×`
-**And** the terminal may be panned while magnified
-**And** terminal bounds, surface pixel geometry, rows, columns, and line wrapping remain unchanged by zoom and pan
-**When** the user brings two fingers together past normal size
-**Then** magnification stops at `1×`
-**And** persisted values below `1×` restore as `1×`
+**Given** a Ghostty terminal is visible at any supported magnification
+**When** the user magnifies above `1×`, pans, or shrinks to `0.9×...0.5×`
+**Then** magnification remains within `0.5×...3×`
+**And** above-normal scale and pan preserve the gesture anchor within bounded content
+**And** at-or-below-normal content remains centered in both axes and ignores pan
+**And** blank margins do not hit the terminal while displayed terminal points map to the fixed logical grid
+**And** terminal frame, surface pixel geometry, rows, columns, and line wrapping remain unchanged by optical interaction
+**And** valid per-session magnification survives host handoff, restart replacement, snapshot, and restore
 
 ### Scenario F001-S60: Text selection remains balanced while terminal is zoomed and panned
 
@@ -776,12 +780,26 @@ Pointer hit testing, hover targets, context menus, IME geometry, and Ghostty mou
 **And** focus loss, detach, or host handoff clears any outstanding primary press
 **And** context-menu and IME presentation geometry remains aligned with the transformed terminal
 
+### Scenario F001-S61: Crossing normal scale gates stepwise optical shrink
+
+**Given** a Ghostty terminal pinch begins above `1×`
+**When** inward movement reaches or crosses normal size
+**Then** scale becomes exactly `1×` and remains locked for the rest of that gesture
+**When** the user ends that gesture and begins another inward gesture at `1×`
+**Then** no shrink occurs until cumulative inward movement reaches the activation threshold
+**And** continued inward movement advances through `0.9×`, `0.8×`, `0.7×`, `0.6×`, and `0.5×` without leaving that ladder
+**And** reversing below normal first cancels opposing partial movement, then steps outward toward `1×`
+**And** reaching `1×` locks until a new gesture before continuous above-normal magnification resumes
+**And** finite persisted values normalize to the bounded canonical scale rules in F001-R61
+**And** malformed or nonconforming serialized numeric tokens fail the existing persistence integrity/decode path before session normalization
+
 ## Test Coverage
 
 | Scenario | Coverage |
 |----------|----------|
-| F001-S59 | Automated core coverage: `GhosttyTerminalViewInputTests.testOpticalTransformClampsPanAndPreventsShrinkingBelowNormal`, `testTerminalPointTracksDocumentCoordinatesUnderCompositorZoomAndPan`, `TerminalViewModelTests.testTerminalSessionMagnificationClampsToNormalAndMaximum`, `testRestoreTabsNormalizesLegacyMagnificationBelowNormal`, and `testTerminalSessionMagnificationPersistsAcrossSnapshotAndRestore`. UI smoke coverage remains responsible for physical pinch direction and visual quality. |
-| F001-S60 | Automated core coverage: `GhosttyTerminalViewInputTests.testDraggingInteractiveTargetTransitionsToBalancedGhosttySelection`, `testWindowFocusLossReleasesForwardedPrimaryMousePress`, `testHostDetachReleasesForwardedPrimaryMousePress`, transformed point/rectangle and hit-test assertions in `testTerminalPointTracksDocumentCoordinatesUnderCompositorZoomAndPan`, and ownership handoff regressions in `TerminalViewModelTestsExecutionFlows`. UI smoke coverage remains responsible for ordinary-text/file-path drags and physical viewport-exit behavior. |
+| F001-S59 | Pure unit: `TerminalOpticalTransformTests` covers centered `0.9×`/`0.5×` scale, neutral pan, canonical `1×`, above-normal anchor/pan, and shrink point/rect round trips. Mounted AppKit: `GhosttyTerminalViewInputTests.testHostAppliesCenteredShrinkWithoutChangingTerminalGeometryOrMarginHitTesting` requires nonnil surface geometry and verifies unchanged frame/surface/grid dimensions; `testCenteredShrinkConsumesVerticalAndHorizontalScrollInBlankMarginsOnly` verifies both scroll axes are consumed in blank margins and forwarded over displayed content; `testSubnormalScaleRestoresAcrossGhosttyHostHandoff` verifies subnormal restoration across ownership transfer. Physical pinch direction, perceived centering, and final compositor paint remain UI/manual coverage. |
+| F001-S60 | Automated core coverage: `GhosttyTerminalViewInputTests.testDraggingInteractiveTargetTransitionsToBalancedGhosttySelection`, `testWindowFocusLossReleasesForwardedPrimaryMousePress`, `testHostDetachReleasesForwardedPrimaryMousePress`, transformed point/rectangle and hit-test assertions, and `testHigherPriorityMountedHostBalancesPressBeforeReparenting`, which verifies synchronous release, new-host ownership/mappers/callback, and stale viewport cleanup during mounted preemption. UI/manual coverage remains responsible for ordinary-text/file-path drags and physical viewport-exit behavior. |
+| F001-S61 | Pure unit: `TerminalMagnificationGestureStateTests` covers continuous above-normal changes, both hard gates at `1×`, threshold accumulation, ordered tenth steps, reversal, defensive starts, reset, large deltas, finite multiplicative overflow clamping to `3×`, and boundary tolerance. Session unit: `TerminalViewModelTests` covers runtime/API normalization plus init/set/adjust/restart/snapshot/restore preservation; `TerminalSessionRestorerTests.testSessionEntryRejectsNonconformingNonfiniteMagnificationJSON` verifies strict serialized JSON rejection before normalization. Mounted AppKit: the Ghostty host replacement test feeds pure events through the safe test seam and verifies gesture reset. Physical gesture recognizer delivery and trackpad feel remain UI/manual coverage. |
 
 ## Acceptance Criteria
 
@@ -792,6 +810,8 @@ Pointer hit testing, hover targets, context menus, IME geometry, and Ghostty mou
 - Keyboard focus is always routable to the active terminal (A11Y-2).
 - All session lifecycle events logged (OBS-1, OBS-2).
 - Remote terminal activation does not block the main thread (PERF-3).
+- Optical magnification remains bounded to `0.5×...3×`, keeps the Ghostty grid fixed, and responds without event-backlog growth (A11Y-4, PERF-3).
+- Every magnification scenario has scenario-mapped automated unit or mounted coverage, with physical trackpad/UI gaps stated explicitly (TEST-2).
 
 ## Open Questions
 
@@ -802,6 +822,7 @@ Pointer hit testing, hover targets, context menus, IME geometry, and Ghostty mou
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-09 | Defined bounded `0.5×...3×` optical scale, continuous magnification above normal, hard new-gesture gates at `1×`, discrete tenth-step shrink, centered fixed-grid rendering, strict persistence decode with finite-value canonicalization, and layered regression coverage (R59, R61; S59, S61). | — |
 | 2026-10-02 | Added fixed-grid optical magnification/pan and transformed pointer-selection requirements with regression mappings. | — |
 | 2026-09-30 | Expanded terminal path drops to accept folders from standard file URLs, legacy filename lists, and validated absolute-path drag representations | — |
 | 2026-04-15 | Migrated from docs/features/terminal/feature.md (TRM-001–076) | — |

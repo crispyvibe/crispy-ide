@@ -81,7 +81,15 @@ The runtime popover owns user-gesture UI: Open in Crispy, Default Browser/App, E
 - Default browser/app actions call the injected `VibeSpaceInteractionService`.
 - Before posting a local-file action, the runtime calls `syncToNative()` so any debounced rich edit reaches the source document before its WebView can be replaced.
 - Local links remove the fragment, standardize the file URL, require an existing non-directory local target for both Crispy and Default App actions, reject Default App for remote-provider paths, and confine local targets to the resolved owning project root when an absolute project identity is available. `MarkdownViewModel` registers the fragment request, then invokes its owner callback; `EditorGroupStore` opens the file through its own `openFileInTab`, preserving the visible pane tab list, provider registry, comments context, and persistence. Detached standalone editors use the view model's direct-tab fallback. Remote providers validate paths through their normal authenticated read/confinement flow.
-- A linked Markdown fragment becomes a document-bound `MarkdownRichNavigationRequest`. After the target runtime renders, `MarkupRenderedEditor` invokes `window.crispyvibesNavigateToAnchor(fragment)` and consumes the one-shot request.
+- A linked Markdown fragment becomes a document-bound `MarkdownRichNavigationRequest`. After the target runtime renders, `MarkupRenderedEditor` atomically claims and clears the matching request ID before invoking `window.crispyvibesNavigateToAnchor(fragment)`. A remounted or stale coordinator therefore cannot dispatch the same request or clear a newer one.
+
+### Continuous Navigation Ownership
+
+The owning `EditorGroupStore` separates immutable presentation origin from mutable document context. A dock/Spotlight root reference identifies what was originally previewed and remains the persistence seed; `activeFileDocumentReference` identifies what the live group currently renders. Root lookup may enrich the root's project-qualified reference or provider, but it never activates that tab over a linked current document.
+
+Navigation is layered behind one group contract. The Markdown runtime owns same-document fragment positions and publishes document-bound `MarkdownNavigationState`. `EditorGroupStore` owns cross-document tab history, bounded to the newest 100 entries per direction. Back/Forward first issue a one-shot `MarkdownNavigationCommandRequest` when the current runtime can satisfy it; the runtime host must atomically claim and clear the exact request ID before JavaScript evaluation. When rendered history is exhausted, the runtime invokes the group's fallback so the group activates the next valid file-history tab. Cross-file activation restores that tab's provider and project-qualified `FileDocumentReference`. Project qualification and filesystem rename use one precomputed old-ID → new-reference migration that rekeys the live buffer and autosave ownership, current/active IDs, rendered state and its embedded ID, pending navigation, view mode, and source selection before stale old state is removed. Closed history entries are discarded. Visible compact controls and ⌘[/⌘] both call the same group methods.
+
+Every file-dependent presentation reads the mutable active reference: Spotlight title/directory, `FileContentWithCommentsPanel` key, provider, accessibility identity, and detailed promotion. Pinning a preview moves the same `EditorGroupStore` into the tile while retaining the root reference separately, so `A.md → B.md#fragment → pin → rerender` remains on B and preserves Back/Forward history.
 
 The preference is stored as `AppPreferences.markdownWebLinkPreferenceKey` with enum values `ask`, `crispy`, and `defaultBrowser`; `ask` is the default. `MarkdownEditorView` observes it with `@AppStorage` and synchronizes it into the runtime through `window.crispyvibesSetWebLinkPreference(...)`.
 
@@ -99,6 +107,7 @@ The preference is stored as `AppPreferences.markdownWebLinkPreferenceKey` with e
 - `markdownLinkAction` — validated user action payload containing action, target kind, original `href`, resolved URL, and fragment.
 - `window.crispyvibesSetWebLinkPreference(rawValue)` — synchronizes `ask` / `crispy` / `defaultBrowser` behavior.
 - `window.crispyvibesNavigateToAnchor(fragment)` — applies a one-shot same-document or post-open heading navigation.
+- Rendered navigation state/command bridge — reports current-document Back/Forward availability, executes document-bound Back/Forward, and falls back to `EditorGroupStore` only when local history is exhausted.
 - Format command payloads sent to web editor (one per unique request ID).
 - Content sync runs after each formatting or link mutation.
 
@@ -126,3 +135,9 @@ The preference is stored as `AppPreferences.markdownWebLinkPreferenceKey` with e
 ## Rich Logical Source-Line Gutter
 
 `MarkupRenderedEditor` observes `EditorLineNumberMode` and calls `window.crispyvibesSetLineNumbersVisible(...)` after readiness, updates, and recovery. The runtime applies `crispyvibes-line-numbers-visible` only when `editorMode === "markdown"`. Existing top-level `data-comment-source-line` attributes supply CSS `::before` content; no line-number elements enter the editable DOM. Gutter colors use `--fgColor-muted` and `--borderColor-muted`, and `pageZoom` scales labels with content. The line-number and comment lanes are independently reserved. `syncToNative()` reannotates the post-Turndown Markdown after clearing stale attributes, preserving canonical serialization.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-06 | Documented immutable root versus mutable current-file identity, layered fragment/cross-file navigation ownership, compact action parity, and current-context rendering/promotion. | — |

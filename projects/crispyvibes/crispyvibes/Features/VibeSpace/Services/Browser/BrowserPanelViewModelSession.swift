@@ -7,11 +7,15 @@ extension BrowserPanelViewModel {
         let back: [String]
         let forward: [String]
         if usesRestoredSessionHistory {
-            back = restoredBackStack.map(\.absoluteString)
-            forward = restoredForwardStack.reversed().map(\.absoluteString)
+            back = restoredBackStack.suffix(Self.logicalHistoryLimit).map(\.absoluteString)
+            forward = restoredForwardStack.reversed().prefix(Self.logicalHistoryLimit).map(\.absoluteString)
         } else {
-            back = webView.backForwardList.backList.compactMap { $0.url.absoluteString }
-            forward = webView.backForwardList.forwardList.compactMap { $0.url.absoluteString }
+            back = webView.backForwardList.backList
+                .suffix(Self.logicalHistoryLimit)
+                .map { $0.url.absoluteString }
+            forward = webView.backForwardList.forwardList
+                .prefix(Self.logicalHistoryLimit)
+                .map { $0.url.absoluteString }
         }
         return BrowserSessionSnapshot(
             urlString: currentURL?.absoluteString,
@@ -23,6 +27,7 @@ extension BrowserPanelViewModel {
     }
 
     func restoreSession(_ snapshot: BrowserSessionSnapshot) {
+        resetLogicalHistoryTracking()
         usesRestoredSessionHistory = false
         restoredBackStack.removeAll()
         restoredForwardStack.removeAll()
@@ -31,8 +36,8 @@ extension BrowserPanelViewModel {
         let forward = snapshot.forwardHistoryURLStrings.compactMap { URL(string: $0) }
         if !back.isEmpty || !forward.isEmpty {
             usesRestoredSessionHistory = true
-            restoredBackStack = back
-            restoredForwardStack = Array(forward.reversed())
+            restoredBackStack = Array(back.suffix(Self.logicalHistoryLimit))
+            restoredForwardStack = Array(forward.prefix(Self.logicalHistoryLimit).reversed())
         }
         if snapshot.pageZoom.isFinite {
             restoreZoom(snapshot.pageZoom)
@@ -41,9 +46,7 @@ extension BrowserPanelViewModel {
             setThemeMode(mode)
         }
         if let urlString = snapshot.urlString, urlString != "about:blank", let url = URL(string: urlString) {
-            webView.load(URLRequest(url: url))
-            addressBarText = urlString
-            currentURL = url
+            restoreCurrentPage(url)
         }
         if currentURL == nil {
             restoreZoom(Double(webView.pageZoom))

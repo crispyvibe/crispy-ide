@@ -3,7 +3,7 @@ title: "Terminal Board Dock"
 feature: "F037"
 domain: "terminal"
 audience: "user"
-version: "1.0"
+version: "1.1"
 sidebar:
   label: "Dock"
   order: 7
@@ -36,14 +36,15 @@ Terminal Board Dock lets you pin files, browser pages, VibeCast sessions, and AC
 
 1. Open a file in spotlight preview (from the explorer or another source).
 2. Click the **Pin** action in the spotlight chrome.
-3. A docked file tile is created on the board with the live editor content.
-4. The tile supports all standard board interactions: drag, resize, swap, minimize, restore, focus.
+3. A docked file tile is created on the board with the live editor content. If you followed a link to another Markdown file before pinning, the tile stays on that current file while remembering where the preview began.
+4. Use the tile's visible **Back** and **Forward** controls or **⌘[**/**⌘]** to move through section and linked-file history. Its title, folder, comments, and file actions follow the current file.
+5. The tile supports all standard board interactions: drag, resize, swap, minimize, restore, focus.
 
 ### Pinning a Browser to the Board
 
 1. Open a browser in spotlight preview.
 2. Click the **Pin** action in the spotlight chrome.
-3. A docked browser tile is created on the board with the live browser session.
+3. A docked browser tile is created on the board with the current page, Back/Forward history, zoom, theme, and comments context. If pinning cannot create a tile, the preview stays open so you can retry.
 
 ### Pin Behavior in Detailed Mode
 
@@ -67,8 +68,9 @@ When canvas mode is Detailed (not Terminal Board):
 ### Opening a Docked Tile in Spotlight
 
 1. Double-click the content area of a docked file or browser tile.
-2. The content opens in spotlight mode using the same viewer state.
-3. Docked tiles participate in spotlight carousel navigation alongside other persistent spotlight items.
+2. The content opens in spotlight mode using the same viewer state. Markdown stays on its current linked file, and a browser stays on its current page and history.
+3. Closing a linked detailed browser view does not roll the board tile back to an older page.
+4. Docked tiles participate in spotlight carousel navigation alongside other persistent spotlight items.
 
 ### Dragging and Resizing Tiles
 
@@ -91,6 +93,8 @@ When canvas mode is Detailed (not Terminal Board):
 | Open Terminal Board | ⌘T |
 | Navigate board left | ⌘⌥← |
 | Navigate board right | ⌘⌥→ |
+| Markdown content Back | ⌘[ |
+| Markdown content Forward | ⌘] |
 
 ## Settings
 
@@ -104,7 +108,7 @@ No dedicated settings for the dock feature. Board layout and pinned tiles are pe
 - **No duplicate pins**: When a docked tile is already in spotlight view, no second pin action is shown.
 - **Nested previews**: Opening a preview from within another spotlight item creates a nested stack. Dismissing the nested preview restores the previous spotlight item.
 - **Context menu**: Right-click any docked tile for actions including minimize and window transfer options.
-- **Board window transfer**: Docked tiles can be sent to detached board windows for multi-monitor workflows.
+- **Board window transfer**: Docked tiles can be sent to detached board windows for multi-monitor workflows. Browser tiles restore in detached windows and when minimized.
 
 ## Troubleshooting
 
@@ -114,4 +118,10 @@ No dedicated settings for the dock feature. Board layout and pinned tiles are pe
 | Pin rejected / nothing happens | The board may be at capacity. Close or minimize existing tiles to free space. |
 | File tile shows empty content | The file may have been moved or deleted. Close the tile and re-pin from the explorer. |
 | Minimized tiles missing after restart | Ensure the vibespace was saved properly before closing. |
-| Browser tile not restoring | Browser session snapshots are persisted; if the snapshot is invalid, the tile may need to be re-pinned. |
+| Browser tile not restoring | Browser session snapshots are persisted for visible, minimized, and detached board tiles. If a snapshot is invalid, the tile may need to be re-pinned. |
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-06 | Version 1.1: documented Markdown current-file navigation after pin, complete browser snapshot promotion, failed-pin preservation, linked-detail continuity, and detached/minimized restore. | — |

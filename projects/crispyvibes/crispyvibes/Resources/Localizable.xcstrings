@@ -1206,6 +1206,26 @@
         }
       }
     },
+    "editor.navigation.back": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
+    },
+    "editor.navigation.forward": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forward"
+          }
+        }
+      }
+    },
     "editor.numberedList": {
       "extractionState": "stale",
       "localizations": {

@@ -98,6 +98,12 @@ Transient session's `onProcessTerminated` callback calls `coordinator.dismiss()`
 | Header padding | 10pt horizontal, 7pt vertical |
 | Accessibility ID | `"terminal.spotlight.overlay"` |
 
+### Compact File and Browser Navigation
+
+File and browser content use presentation-appropriate compact navigation in the Spotlight card. File sources render `EditorGroupFileSurface`, whose visible Back/Forward actions and ⌘[/⌘] call the owning `EditorGroupStore`; browser sources render their existing chrome, whose toolbar and mouse Back/Forward actions call the canonical `BrowserPanelViewModel`. File header metadata observes the group's `activeFileDocumentReference`, falling back to the immutable root only before a current file exists. Comments, provider, accessibility context, and detailed promotion resolve from that same current reference. Browser title/comments resolve from its current URL and page state.
+
+These controls navigate content only. They do not pop `TerminalSpotlightCoordinator`'s restore descriptor. Escape, close, backdrop click, or other existing dismissal routes invoke the Spotlight restore chain and return to the prior terminal/Spotlight origin. There is no separate visible Return control in the current implementation.
+
 ### Backdrop Composition
 
 | Layer | Material | Opacity |
@@ -109,6 +115,14 @@ Transient session's `onProcessTerminated` callback calls `coordinator.dismiss()`
 All layers ignore safe area. Tapping backdrop dismisses spotlight.
 
 ## State Management
+
+### Project-Scoped Navigation Identity
+
+Persistent terminal identity is `(SpotlightTerminalProjectScope, tabID)`. Project scope stores `owningProjectRootURL.standardizedFileURL.path`, exactly matching `VibeSpaceSpotlightTerminalOrderEntry` normalization. Item identity derives from `AnyProjectSession.rootURL`; presented-state identity derives from `TerminalSpotlightState.owningProjectRootURL`. If a persistent state has no project root, its Spotlight instance ID supplies a unique `.unscoped` scope. Such a state cannot collide with another terminal and intentionally cannot resolve into the project carousel. Diagnostic tokens pass project paths through `AppDiagnostics.pathToken`; raw paths are never included.
+
+### Switch Generation Transaction
+
+`beginCarouselSwitch` cancels queued direct focus, start, and completion work; advances a monotonic generation; then publishes direction and signed ±200-point entry offset before presentation publishes the target. `setSpotlight` accepts a carousel target only when generation and target identity match. The next main turn animates the current target to zero and requests focus. Completion checks generation, Spotlight instance ID, and target identity before retiring direction and generation. Rapid switches cancel predecessor work. A direct/non-carousel `setSpotlight` also cancels the active generation and tracked focus callback before scheduling its own ID-guarded focus work. The keyed card boundary remounts only target-scoped card content; the outer overlay and scroll monitor remain mounted. Scroll centering uses the stable target identity after a generation guard and does not wrap `scrollTo` in a second animation.
 
 ### Carousel Navigation
 
@@ -126,7 +140,7 @@ Installed as `NSEvent.addLocalMonitorForEvents(matching: .scrollWheel)`.
 | `.changed` | Accumulate both axes. Horizontal gesture is recognized when cumulative X exceeds **20pt** and is more than twice cumulative Y. Offset is dampened by **0.35×**, applied with `.interactiveSpring(response: 0.08, dampingFraction: 0.9)`. A dominant Y gesture passes through. |
 | `.ended`/`.cancelled` | If cumulative > **50pt** → trigger switch (+1 or -1). Else snap back with `.spring(response: 0.35, dampingFraction: 0.7)` |
 
-Only precise scrolling deltas (trackpad) activate; mouse wheel events pass through. Horizontal carousel gestures are consumed (`nil`). When a persistent or transient terminal is magnified above `1×`, `TerminalSpotlightState.Source.reservesScrollForTerminalViewport` wins before carousel classification: cumulative carousel state and `swipeOffset` reset, and the event is returned for `TerminalOpticalViewport` to pan. Returning to `1×` restores normal carousel recognition. Unsupported sources, imprecise events, and terminal takeover reset partial tracking; momentum end/cancel also clears stale state.
+Only precise scrolling deltas (trackpad) activate; mouse wheel events pass through. `TerminalSpotlightState.Source.reservesScrollForTerminalViewport` returns true only for a persistent or transient terminal whose normalized session magnification is strictly above `1×`; there is no epsilon dead zone, so `1.0001×` reserves while exactly `1×` does not. Above normal, terminal ownership wins before carousel classification: cumulative carousel state and `swipeOffset` reset, and the event is returned for `TerminalOpticalViewport` pan. At exactly `1×` and below-normal optical steps, viewport pan is neutralized and does not reserve the event; qualifying horizontal gestures remain carousel candidates, while non-carousel/vertical events over displayed terminal content continue to terminal scrollback. Scroll events over centered blank optical margins are consumed by the viewport rather than forwarded to Ghostty. Unsupported sources, imprecise events, and terminal takeover reset partial tracking; momentum end/cancel also clears stale state.
 
 ### Switch Animation (`switchSpotlight(by:)`)
 
@@ -222,12 +236,12 @@ Only precise scrolling deltas (trackpad) activate; mouse wheel events pass throu
 
 ## Platform Considerations
 
-- Scroll monitor uses `NSEvent.addLocalMonitorForEvents` (macOS-only AppKit API) and must defer to a magnified terminal viewport before classifying carousel gestures.
+- Scroll monitor uses `NSEvent.addLocalMonitorForEvents` (macOS-only AppKit API) and must defer only to an above-normal terminal viewport. Exactly/below normal does not reserve viewport pan; horizontal carousel gestures may be consumed by the monitor and other scrolling passes to terminal scrollback.
 - Ghostty double-click routing crosses the SwiftUI/AppKit boundary explicitly; SwiftTerm uses the SwiftUI fallback.
 - Momentum phase events are consumed if horizontal gesture is active, otherwise passed through.
 - Keyboard shortcut `.escape` bound to close button for system-level Escape handling.
 - `.onExitCommand` on overlay provides additional Escape dismissal path.
-- Ownership priority: Spotlight hosts = 300 (highest), ensuring spotlight always wins terminal view ownership over rail/board hosts.
+- Ownership priority: Spotlight hosts = 300 (highest), ensuring spotlight always wins terminal or browser view ownership over rail/board hosts.
 
 ## Performance Constraints
 
@@ -243,3 +257,11 @@ Only precise scrolling deltas (trackpad) activate; mouse wheel events pass throu
 - Reorder changes must be tested in both Spotlight hosts because vibespace Spotlight and terminal-board Spotlight intentionally read from different ordering models.
 - VibeSpace Spotlight cross-project reorder requires a vibespace-scoped migration path: existing vibespaces without Spotlight order use default project/tab traversal until the first reorder writes a stable ordered identity list.
 - Terminal-board reorder persistence must keep board tile counts and column row counts stable; only the flattened tile sequence changes.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-09 | Clarified that the exact `>1×` terminal boundary reserves precise scrolling for viewport pan; `1.0001×` is intercepted while exactly/below normal retains carousel qualification and terminal scrollback pass-through, with blank optical margins consumed. | — |
+| 2026-10-09 | Documented project-scoped terminal identity, unique nil-scope behavior, path-token diagnostics, cancellable generation/focus transactions, stable keyed card rendering, and noncompeting identity-based centering. | — |
+| 2026-10-06 | Documented compact Markdown/browser Back/Forward ownership, current-context metadata, and the distinction between content history and Spotlight close/restore without a new Return control. | — |

@@ -63,13 +63,20 @@ Terminal Spotlight presents existing terminal sessions and related vibespace sur
 - Vector: A transformed native terminal and its SwiftUI wrapper both handle one double-click, or the application-level carousel monitor consumes a pan intended for a magnified terminal.
 - Impact: Spotlight can open and immediately close, switch to the wrong item, disturb terminal selection, or leave stale carousel offset.
 - Likelihood: Medium without explicit arbitration.
-- Mitigation: Ghostty uses one explicit AppKit double-click callback and suppresses the matching second press/up; its SwiftUI handler is gated off while SwiftTerm retains the fallback. Magnified terminal sources reserve precise scrolling before carousel classification, and all ineligible/takeover/momentum-end paths clear cumulative gesture state and visual offset. Linked NFRs: A11Y-4, PERF-3, TEST-2.
+- Mitigation: Ghostty uses one explicit AppKit double-click callback and suppresses the matching second press/up; its SwiftUI handler is gated off while SwiftTerm retains the fallback. The exact terminal scale boundary `>1×` reserves precise scrolling before carousel classification (`1.0001×` qualifies) and resets partial carousel state. At exactly/below normal, viewport pan is neutralized, horizontal gestures remain eligible for carousel navigation, and other scrolling over displayed terminal content follows terminal scrollback; blank optical margins consume scroll rather than forwarding it to Ghostty. Pure policy/tracker and mounted optical tests cover those boundaries; physical trackpad delivery remains UI/manual verification. Linked NFRs: A11Y-4, PERF-3, TEST-2.
+
+### F003-T07: Cross-project identity collision or stale generation redirects focus
+
+- Vector: Two projects reuse a terminal tab UUID, or queued completion/focus work from an older carousel generation runs after a rapid/direct replacement.
+- Impact: Spotlight can render or focus a terminal from the wrong project, expose misleading context, or mutate the current transition.
+- Likelihood: Medium without scoped identity and cancellation guards.
+- Mitigation: Persistent identity combines normalized owning-project path and tab UUID; missing scope receives a unique non-carousel identity. Generation, target identity, Spotlight instance, and surface/project state are validated before animation completion or focus. Direct presentation cancels queued generation/focus work. Diagnostics hash project scope through `AppDiagnostics.pathToken`. Linked NFRs: SEC-2, REL-1, OBS-1, TEST-2.
 
 ## Residual Risks
 
 - Reorder persistence is intentionally host-specific, so regression tests must cover both vibespace Spotlight and terminal-board Spotlight.
 - A stale tab UUID from legacy state can only be resolved if restored state has enough project scope and legacy identity fields to match a tab before the next stable-ID snapshot.
-- While a terminal remains magnified, horizontal trackpad gestures are intentionally unavailable for carousel switching; users can use the tab strip or chevrons, or return to `1×`.
+- While a terminal remains above `1×`, horizontal trackpad gestures are intentionally unavailable for carousel switching; users can use the tab strip or chevrons, or return to `1×`/below. At exactly/below normal, horizontal carousel classification can still win over terminal scrollback by design.
 
 ## NFR Compliance
 
@@ -78,5 +85,13 @@ Terminal Spotlight presents existing terminal sessions and related vibespace sur
 - A11Y-4 — Spotlight terminal interaction remains functional at supported magnification.
 - REL-1 — restore chains and persisted reorder state must survive view rebuilds and vibespace restore.
 - PERF-3 — double-click and scroll arbitration remain immediate UI interactions.
-- TEST-2 — native double-click and magnified scroll arbitration have scenario-mapped regression coverage.
+- TEST-2 — native double-click and scale-bounded scroll arbitration have scenario-mapped pure and mounted regression coverage; physical trackpad monitor delivery remains an explicit UI/manual gap.
 - OBS-1 — Spotlight operations should remain observable for diagnosis.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-09 | Clarified F003-T06 mitigation and residual behavior: the exact `>1×` boundary reserves terminal pan (`1.0001×` qualifies); exactly/below normal retains carousel/scrollback arbitration and consumes scroll over blank optical margins, with physical trackpad delivery stated as manual coverage. | — |
+| 2026-10-09 | Added T07 for cross-project terminal identity collisions and stale generation focus, including path-token diagnostic protection. | — |
+| 2026-10-06 | Reviewed compact Markdown/browser navigation and prior-origin close semantics. No new Spotlight-specific threat was added: content integrity/privacy risks are owned by F008-T09, F012-T12, F006-T07, and F037-T07; existing F003-T04 continues to cover restore-chain lifetime. | — |

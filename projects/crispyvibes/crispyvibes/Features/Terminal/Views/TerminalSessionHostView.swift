@@ -255,12 +255,14 @@ private struct TerminalSessionHostRepresentable: NSViewRepresentable {
 
 final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
     private let ownershipCoordinator: TerminalHostOwnershipCoordinator
+    private let allowsGhosttySurfaceRestorationForTesting: Bool
     private let hostOwnershipID = UUID()
     private let horizontalContentInset: CGFloat = 8
     private var diagnosticsSnapshot: TerminalDiagnosticsSnapshot?
     private var hasRegisteredDiagnosticsHost = false
     private var attachedTerminalView: NSView?
     private let opticalViewport = TerminalOpticalViewport(frame: .zero)
+    private var magnificationGestureState = TerminalMagnificationGestureState()
     private weak var desiredTerminalView: NSView?
     private weak var desiredSession: TerminalSession?
     private var desiredSessionID: UUID?
@@ -358,9 +360,11 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
 
     init(
         ownershipCoordinator: TerminalHostOwnershipCoordinator,
-        frame frameRect: NSRect = .zero
+        frame frameRect: NSRect = .zero,
+        allowsGhosttySurfaceRestorationForTesting: Bool = true
     ) {
         self.ownershipCoordinator = ownershipCoordinator
+        self.allowsGhosttySurfaceRestorationForTesting = allowsGhosttySurfaceRestorationForTesting
         super.init(frame: frameRect)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
@@ -388,22 +392,46 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
     }
 
     @objc private func handlePinchZoom(_ recognizer: NSMagnificationGestureRecognizer) {
-        guard recognizer.state == .changed,
-              attachedTerminalView is GhosttyTerminalView,
-              let session = desiredSession else {
+        let event: TerminalMagnificationGestureState.Event
+        switch recognizer.state {
+        case .began:
+            event = .began
+        case .changed:
+            event = .changed(recognizer.magnification)
+            recognizer.magnification = 0
+        case .ended:
+            event = .ended
+            recognizer.magnification = 0
+        case .cancelled, .failed:
+            event = .cancelled
+            recognizer.magnification = 0
+        default:
             return
         }
-        let delta = recognizer.magnification
-        recognizer.magnification = 0
-        guard delta.isFinite, delta > -1 else { return }
-        session.setDisplayMagnification(session.displayMagnification * (1 + delta))
-        applyOpticalMagnification(
-            session.displayMagnification,
-            centeredAt: recognizer.location(in: opticalViewport)
+        applyMagnificationGestureEvent(event, centeredAt: recognizer.location(in: opticalViewport))
+    }
+
+    private func applyMagnificationGestureEvent(
+        _ event: TerminalMagnificationGestureState.Event,
+        centeredAt point: CGPoint
+    ) {
+        guard attachedTerminalView is GhosttyTerminalView,
+              let session = desiredSession else {
+            magnificationGestureState.reset()
+            return
+        }
+        let targetScale = magnificationGestureState.targetScale(
+            for: event,
+            currentScale: session.displayMagnification
         )
+        session.setDisplayMagnification(targetScale)
+        if case .changed = event {
+            applyOpticalMagnification(session.displayMagnification, centeredAt: point)
+        }
     }
 
     deinit {
+        resetHostOpticalPresentation()
         relinquishOwnership(for: desiredSessionID)
         ownershipCoordinator.unregisterHost(ownershipID: hostOwnershipID)
         teardownOutputObserver()
@@ -447,7 +475,9 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
             || desiredOwnershipPriorityBoost != ownershipPriorityBoost
         if previousSessionID != sessionID {
             relinquishOwnership(for: previousSessionID)
-            opticalViewport.resetTransform()
+        }
+        if previousSessionID != sessionID || previousTerminalIdentifier != nextTerminalIdentifier {
+            resetHostOpticalPresentation()
         }
         if previousTerminalIdentifier != nextTerminalIdentifier {
             cachedTerminalScroller = nil
@@ -527,11 +557,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
         super.layout()
         if let attachedTerminalView,
            !isHostedInOpticalViewport(attachedTerminalView) {
-            if opticalViewport.documentView === attachedTerminalView {
-                opticalViewport.documentView = nil
-            }
-            self.attachedTerminalView = nil
-            appliedDisplayDensity = nil
+            detachTerminalForReparenting(attachedTerminalView)
         }
         layoutAttachedTerminalViewFrame()
         attemptAttachIfNeeded(trigger: "layout")
@@ -576,16 +602,7 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
 
     private func attemptAttachIfNeeded(trigger: String) {
         guard ensureDesiredSessionOwnership() else {
-            if let attachedTerminalView {
-                if isHostedInOpticalViewport(attachedTerminalView) {
-                    detachFromOpticalViewport(attachedTerminalView)
-                } else if opticalViewport.documentView === attachedTerminalView {
-                    opticalViewport.documentView = nil
-                }
-            }
-            self.attachedTerminalView = nil
-            appliedDisplayDensity = nil
-            refreshAccessibilityState()
+            detachAttachedTerminalIfNeeded()
             return
         }
         guard let terminalView = desiredTerminalView else { return }
@@ -615,7 +632,20 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
         }
 
         if !isHostedInOpticalViewport(terminalView) {
-            terminalView.removeFromSuperview()
+            if let ghosttyView = terminalView as? GhosttyTerminalView {
+                ghosttyView.allowsSurfaceCreationForTesting = allowsGhosttySurfaceRestorationForTesting
+                ghosttyView.cancelPointerInteraction()
+            }
+            if let previousViewport = terminalView.superview as? TerminalOpticalViewport {
+                if let previousHost = previousViewport.superview as? TerminalContainerView {
+                    previousHost.detachTerminalForReparenting(terminalView)
+                } else {
+                    previousViewport.resetTransform()
+                    previousViewport.documentView = nil
+                }
+            } else {
+                terminalView.removeFromSuperview()
+            }
             terminalView.frame = NSRect(origin: .zero, size: terminalViewFrame(in: bounds).size)
             terminalView.autoresizingMask = []
             opticalViewport.documentView = terminalView
@@ -653,18 +683,35 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
     }
 
     private func detachAttachedTerminalIfNeeded() {
-        guard let attachedTerminalView else { return }
-        detachFromOpticalViewport(attachedTerminalView)
-        if let ghosttyView = attachedTerminalView as? GhosttyTerminalView {
-            ghosttyView.engine?.syncOutputPollingToVisibility()
+        guard let attachedTerminalView else {
+            resetHostOpticalPresentation()
+            return
         }
-        self.attachedTerminalView = nil
+        detachFromOpticalViewport(attachedTerminalView)
+        (attachedTerminalView as? GhosttyTerminalView)?.engine?.syncOutputPollingToVisibility()
+        clearAttachedTerminalTracking()
+    }
+
+    private func detachTerminalForReparenting(_ terminalView: NSView) {
+        detachFromOpticalViewport(terminalView, clearsTerminalConfiguration: false)
+        guard attachedTerminalView === terminalView else { return }
+        (terminalView as? GhosttyTerminalView)?.engine?.syncOutputPollingToVisibility()
+        clearAttachedTerminalTracking()
+    }
+
+    private func clearAttachedTerminalTracking() {
+        attachedTerminalView = nil
         appliedDisplayDensity = nil
         cachedTerminalScroller = nil
         cachedTerminalScrollerOwnerID = nil
         lastAppliedTerminalFrame = nil
         lastScrollerVisibilitySignature = nil
         refreshAccessibilityState()
+    }
+
+    private func resetHostOpticalPresentation() {
+        magnificationGestureState.reset()
+        opticalViewport.resetTransform()
     }
 
     private func releaseDesiredTargets() {
@@ -926,9 +973,19 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
         terminalView.superview === opticalViewport
     }
 
-    private func detachFromOpticalViewport(_ terminalView: NSView) {
-        guard isHostedInOpticalViewport(terminalView) else { return }
-        if let ghosttyView = terminalView as? GhosttyTerminalView {
+    private func detachFromOpticalViewport(
+        _ terminalView: NSView,
+        clearsTerminalConfiguration: Bool = true
+    ) {
+        resetHostOpticalPresentation()
+        guard isHostedInOpticalViewport(terminalView) else {
+            if opticalViewport.documentView === terminalView {
+                opticalViewport.documentView = nil
+            }
+            return
+        }
+        if clearsTerminalConfiguration,
+           let ghosttyView = terminalView as? GhosttyTerminalView {
             ghosttyView.cancelPointerInteraction()
             ghosttyView.onDoubleClick = nil
             ghosttyView.opticalViewportPointerMapper = nil
@@ -966,12 +1023,14 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
             opticalViewport.setMagnification(1, centeredAt: .zero)
             return
         }
-        let center = point ?? CGPoint(x: opticalViewport.bounds.midX, y: opticalViewport.bounds.midY)
+        let viewportCenter = CGPoint(x: opticalViewport.bounds.midX, y: opticalViewport.bounds.midY)
+        let center = magnification < 1 ? viewportCenter : (point ?? viewportCenter)
         opticalViewport.setMagnification(magnification, centeredAt: center)
     }
 
     private func restoreGhosttySurfaceIfNeeded(for terminalView: NSView) {
-        guard let ghosttyView = terminalView as? GhosttyTerminalView else { return }
+        guard allowsGhosttySurfaceRestorationForTesting,
+              let ghosttyView = terminalView as? GhosttyTerminalView else { return }
         if ghosttyView.surface == nil {
             ghosttyView.createSurfaceIfNeeded()
         } else {
@@ -1040,6 +1099,13 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
             return density == .compact ? .rail : .detailed
         }
     }
+    func applyMagnificationGestureEventForTesting(
+        _ event: TerminalMagnificationGestureState.Event,
+        centeredAt point: CGPoint = .zero
+    ) {
+        applyMagnificationGestureEvent(event, centeredAt: point)
+    }
+
     func configureOpticalViewportForTesting(
         magnification: CGFloat,
         centeredAt point: CGPoint,
@@ -1047,6 +1113,16 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
     ) {
         opticalViewport.setMagnification(magnification, centeredAt: point)
         opticalViewport.pan(by: panDelta)
+    }
+
+    func deliverOpticalScrollWheelForTesting(
+        _ event: NSEvent,
+        atWindowPoint point: CGPoint
+    ) {
+        opticalViewport.scrollWheelForTesting(
+            with: event,
+            atViewportPoint: opticalViewport.convert(point, from: nil)
+        )
     }
 
     func opticalWindowPointForTesting(terminalPoint: CGPoint) -> CGPoint {
@@ -1057,6 +1133,9 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
     var opticalMagnificationForTesting: CGFloat { opticalViewport.magnification }
     var opticalVisibleOriginForTesting: CGPoint { opticalViewport.visibleOrigin }
     var hasOpticalDocumentReferenceForTesting: Bool { opticalViewport.documentView != nil }
+    var isMagnificationGestureStateResetForTesting: Bool {
+        magnificationGestureState == TerminalMagnificationGestureState()
+    }
 
     func hostsTerminalView(_ terminalView: NSView) -> Bool {
         attachedTerminalView === terminalView && isHostedInOpticalViewport(terminalView)
@@ -1081,6 +1160,146 @@ final class TerminalContainerView: NSView, TerminalSessionOwnershipHost {
 
     func retryOwnershipAcquisition() {
         attemptAttachIfNeeded(trigger: "ownershipReleased")
+    }
+}
+
+struct TerminalMagnificationGestureState: Equatable {
+    enum Event: Equatable {
+        case began
+        case changed(CGFloat)
+        case ended
+        case cancelled
+    }
+
+    static let stepThreshold: CGFloat = 0.08
+    private static let stepComparisonTolerance: CGFloat = 0.000_000_1
+
+    private enum Mode: Equatable {
+        case inactive
+        case continuousAboveNormal
+        case discreteAtOrBelowNormal
+        case lockedAtNormal
+    }
+
+    private var mode: Mode = .inactive
+    private var accumulatedDelta: CGFloat = 0
+
+    mutating func targetScale(for event: Event, currentScale: CGFloat) -> CGFloat {
+        switch event {
+        case .began:
+            return begin(currentScale: currentScale)
+        case let .changed(delta):
+            if mode == .inactive {
+                _ = begin(currentScale: currentScale)
+            }
+            return change(by: delta, currentScale: currentScale)
+        case .ended, .cancelled:
+            let normalizedScale = TerminalSession.normalizedDisplayMagnification(currentScale)
+            reset()
+            return normalizedScale
+        }
+    }
+
+    mutating func reset() {
+        mode = .inactive
+        accumulatedDelta = 0
+    }
+
+    private mutating func begin(currentScale: CGFloat) -> CGFloat {
+        let normalizedScale = TerminalSession.normalizedDisplayMagnification(currentScale)
+        accumulatedDelta = 0
+        mode = normalizedScale > 1 ? .continuousAboveNormal : .discreteAtOrBelowNormal
+        return normalizedScale
+    }
+
+    private mutating func change(by delta: CGFloat, currentScale: CGFloat) -> CGFloat {
+        let normalizedScale = TerminalSession.normalizedDisplayMagnification(currentScale)
+        guard delta.isFinite else { return normalizedScale }
+
+        switch mode {
+        case .inactive:
+            return normalizedScale
+        case .continuousAboveNormal:
+            guard normalizedScale > 1 else {
+                lockAtNormal()
+                return 1
+            }
+            let proposedScale = normalizedScale * max(0, 1 + delta)
+            if proposedScale.isInfinite, delta > 0 {
+                return TerminalSession.maximumDisplayMagnification
+            }
+            guard proposedScale > 1 else {
+                lockAtNormal()
+                return 1
+            }
+            return TerminalSession.normalizedDisplayMagnification(proposedScale)
+        case .discreteAtOrBelowNormal:
+            return changeDiscreteScale(by: delta, currentScale: normalizedScale)
+        case .lockedAtNormal:
+            return 1
+        }
+    }
+
+    private mutating func changeDiscreteScale(by delta: CGFloat, currentScale: CGFloat) -> CGFloat {
+        if currentScale == 1, delta > 0 {
+            if accumulatedDelta < 0 {
+                accumulatedDelta += delta
+                guard accumulatedDelta > 0 else { return 1 }
+                let outwardRemainder = accumulatedDelta
+                accumulatedDelta = 0
+                mode = .continuousAboveNormal
+                return TerminalSession.normalizedDisplayMagnification(1 + outwardRemainder)
+            }
+            mode = .continuousAboveNormal
+            return TerminalSession.normalizedDisplayMagnification(1 + delta)
+        }
+
+        accumulatedDelta += delta
+        var targetScale = currentScale
+
+        while accumulatedDelta <= -Self.stepThreshold + Self.stepComparisonTolerance {
+            guard targetScale > TerminalSession.minimumDisplayMagnification else {
+                accumulatedDelta = 0
+                break
+            }
+            targetScale = Self.adjacentStep(from: targetScale, direction: -1)
+            accumulatedDelta += Self.stepThreshold
+            clearThresholdResidue()
+        }
+
+        while accumulatedDelta >= Self.stepThreshold - Self.stepComparisonTolerance {
+            guard targetScale < 1 else {
+                lockAtNormal()
+                return 1
+            }
+            targetScale = Self.adjacentStep(from: targetScale, direction: 1)
+            accumulatedDelta -= Self.stepThreshold
+            clearThresholdResidue()
+            if targetScale == 1 {
+                lockAtNormal()
+                return 1
+            }
+        }
+
+        return targetScale
+    }
+
+    private mutating func clearThresholdResidue() {
+        if abs(accumulatedDelta) <= Self.stepComparisonTolerance {
+            accumulatedDelta = 0
+        }
+    }
+
+    private mutating func lockAtNormal() {
+        mode = .lockedAtNormal
+        accumulatedDelta = 0
+    }
+
+    private static func adjacentStep(from scale: CGFloat, direction: Int) -> CGFloat {
+        let currentTenths = Int((scale * 10).rounded())
+        let minimumTenths = Int((TerminalSession.minimumDisplayMagnification * 10).rounded())
+        let targetTenths = min(10, max(minimumTenths, currentTenths + direction))
+        return CGFloat(targetTenths) / 10
     }
 }
 
@@ -1109,6 +1328,23 @@ struct TerminalOpticalTransform: Equatable {
         )
     }
 
+    func terminalRect(fromViewport rect: CGRect) -> CGRect {
+        CGRect(
+            origin: terminalPoint(fromViewport: rect.origin),
+            size: CGSize(
+                width: rect.width / max(scale, 0.001),
+                height: rect.height / max(scale, 0.001)
+            )
+        )
+    }
+
+    func viewportRect(fromTerminal rect: CGRect) -> CGRect {
+        CGRect(
+            origin: viewportPoint(fromTerminal: rect.origin),
+            size: CGSize(width: rect.width * scale, height: rect.height * scale)
+        )
+    }
+
     mutating func setScale(
         _ newScale: CGFloat,
         anchoredAt anchor: CGPoint,
@@ -1116,7 +1352,18 @@ struct TerminalOpticalTransform: Equatable {
         viewportSize: CGSize
     ) {
         let terminalAnchor = terminalPoint(fromViewport: anchor)
-        scale = max(newScale, 1)
+        scale = min(
+            TerminalSession.maximumDisplayMagnification,
+            max(TerminalSession.minimumDisplayMagnification, newScale)
+        )
+        if scale <= 1 {
+            visibleOrigin = Self.centeredOrigin(
+                contentSize: contentSize,
+                viewportSize: viewportSize,
+                scale: scale
+            )
+            return
+        }
         visibleOrigin = CGPoint(
             x: terminalAnchor.x - anchor.x / scale,
             y: terminalAnchor.y - anchor.y / scale
@@ -1135,6 +1382,14 @@ struct TerminalOpticalTransform: Equatable {
     }
 
     mutating func constrain(contentSize: CGSize, viewportSize: CGSize) {
+        if scale <= 1 {
+            visibleOrigin = Self.centeredOrigin(
+                contentSize: contentSize,
+                viewportSize: viewportSize,
+                scale: scale
+            )
+            return
+        }
         visibleOrigin.x = Self.constrainedOrigin(
             visibleOrigin.x,
             contentLength: contentSize.width,
@@ -1146,6 +1401,17 @@ struct TerminalOpticalTransform: Equatable {
             contentLength: contentSize.height,
             viewportLength: viewportSize.height,
             scale: scale
+        )
+    }
+
+    private static func centeredOrigin(
+        contentSize: CGSize,
+        viewportSize: CGSize,
+        scale: CGFloat
+    ) -> CGPoint {
+        CGPoint(
+            x: (contentSize.width - viewportSize.width / max(scale, 0.001)) / 2,
+            y: (contentSize.height - viewportSize.height / max(scale, 0.001)) / 2
         )
     }
 
@@ -1205,7 +1471,7 @@ private final class TerminalOpticalViewport: NSView {
         guard bounds.contains(localPoint) else { return nil }
         if let event = NSApp.currentEvent,
            event.type == .scrollWheel,
-           magnification > 1.001,
+           magnification > 1,
            !event.modifierFlags.contains(.option) {
             return self
         }
@@ -1220,12 +1486,34 @@ private final class TerminalOpticalViewport: NSView {
     }
 
     override func scrollWheel(with event: NSEvent) {
-        if magnification > 1.001,
+        routeScrollWheel(
+            event,
+            atViewportPoint: convert(event.locationInWindow, from: nil)
+        )
+    }
+
+    func scrollWheelForTesting(with event: NSEvent, atViewportPoint point: CGPoint) {
+        routeScrollWheel(event, atViewportPoint: point)
+    }
+
+    private func routeScrollWheel(_ event: NSEvent, atViewportPoint viewportPoint: CGPoint) {
+        if magnification > 1,
            !event.modifierFlags.contains(.option) {
             pan(by: CGPoint(x: event.scrollingDeltaX, y: event.scrollingDeltaY))
-        } else {
-            hostedDocumentView?.scrollWheel(with: event)
+            return
         }
+        if magnification <= 1,
+           !locationFallsInsideDisplayedDocument(viewportPoint) {
+            return
+        }
+        hostedDocumentView?.scrollWheel(with: event)
+    }
+
+    private func locationFallsInsideDisplayedDocument(_ viewportPoint: CGPoint) -> Bool {
+        guard let documentView = hostedDocumentView else { return false }
+        guard bounds.contains(viewportPoint) else { return false }
+        let terminalPoint = opticalTransform.terminalPoint(fromViewport: viewportPoint)
+        return documentView.frame.contains(terminalPoint)
     }
 
     func setMagnification(_ magnification: CGFloat, centeredAt point: CGPoint) {
@@ -1283,11 +1571,16 @@ private final class TerminalOpticalViewport: NSView {
     }
 
     func viewportRect(forTerminalRect rect: CGRect) -> CGRect {
-        CGRect(
-            origin: viewportPoint(forTerminalPoint: rect.origin),
-            size: CGSize(
-                width: rect.width * magnification,
-                height: rect.height * magnification
+        guard let documentView = hostedDocumentView else {
+            return opticalTransform.viewportRect(fromTerminal: rect)
+        }
+        return opticalTransform.viewportRect(
+            fromTerminal: CGRect(
+                origin: CGPoint(
+                    x: rect.minX + documentView.frame.minX,
+                    y: rect.minY + documentView.frame.minY
+                ),
+                size: rect.size
             )
         )
     }

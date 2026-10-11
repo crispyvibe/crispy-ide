@@ -68,6 +68,32 @@ final class DocumentBufferStore: ObservableObject {
         return nil
     }
 
+    /// Re-keys a live buffer under a replacement document identity without closing it.
+    /// If the destination is already open, its buffer absorbs unsaved source edits.
+    @discardableResult
+    func migrateBuffer(
+        from oldID: String,
+        to reference: FileDocumentReference
+    ) -> DocumentBuffer? {
+        let newID = reference.documentIdentity
+        guard oldID != newID else { return buffers[oldID] }
+        guard let buffer = buffers.removeValue(forKey: oldID) else {
+            return buffers[newID]
+        }
+        buffer.prepareForIdentityMigration()
+        let referenceCount = refCounts.removeValue(forKey: oldID) ?? 1
+        if let existing = buffers[newID] {
+            existing.absorbUnsavedEdits(from: buffer)
+            buffer.cancelLoad()
+            refCounts[newID, default: 0] += referenceCount
+            return existing
+        }
+        buffer.retarget(to: reference)
+        buffers[newID] = buffer
+        refCounts[newID] = referenceCount
+        return buffer
+    }
+
     /// Returns the buffer for the given identity, if open.
     func buffer(for id: String) -> DocumentBuffer? {
         buffers[id]

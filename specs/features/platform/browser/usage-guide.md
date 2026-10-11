@@ -3,7 +3,7 @@ title: "In-App Browser"
 feature: "F012"
 domain: "platform"
 audience: "user"
-version: "1.0"
+version: "1.1"
 sidebar:
   label: "Browser"
   order: 3
@@ -19,7 +19,7 @@ Crispy includes a full-featured in-app browser integrated into the vibespace. It
 
 1. Click a web link in a terminal session — it opens as a browser spotlight preview inside Crispy.
 2. Use the address bar to navigate to any URL.
-3. Pin the browser to the terminal board dock or detailed content viewer for persistent access.
+3. Pin the browser to the terminal board dock or detailed content viewer for persistent access. Pinning keeps the current page, Back/Forward history, zoom, theme, and comments context.
 
 ## Workflows
 
@@ -36,7 +36,8 @@ Crispy includes a full-featured in-app browser integrated into the vibespace. It
 
 - Click the **Back** or **Forward** buttons in the browser chrome.
 - Use mouse button 3 (back) or button 4 (forward) for hardware navigation.
-- Session history is maintained across relaunches via persisted back/forward URL stacks.
+- Session history is maintained across relaunches. After restore, later addresses you type, links you follow, redirects, and in-page app route changes continue the same Back/Forward sequence instead of resetting it.
+- Board, Spotlight, and detailed views of the same pinned browser share its latest page and history. Closing a detailed view leaves the board browser where you last navigated.
 
 ### Find-in-Page
 
@@ -110,6 +111,7 @@ Right-click on browser content for contextual actions:
 | Address bar suggestions: navigate | Arrow Up/Down |
 | Address bar suggestions: accept | Enter |
 | Address bar suggestions: dismiss | Escape |
+| Browser Back/Forward | Toolbar Back/Forward or mouse buttons 3/4 |
 
 Menu key equivalents (Cmd+shortcuts) are routed to the menu system first. Return/Enter passes through for web form submission.
 
@@ -143,7 +145,7 @@ Menu key equivalents (Cmd+shortcuts) are routed to the menu system first. Return
 | Page shows error overlay | Check the URL is correct. The overlay includes a retry action — click it to reload. |
 | HTTP page blocked | The URL uses insecure HTTP. Choose Proceed to continue, Open in Default Browser, or add the host to your custom allowlist in settings. |
 | Downloads not saving | Ensure you have write permission to the chosen save location. Check for download failure alerts. |
-| Browser stealing focus | The focus guard (`allowsFirstResponderAcquisition`) controls this. If the browser unexpectedly takes focus, it may be a click-through event — this is by design for `acceptsFirstMouse`. |
+| Browser unexpectedly takes focus | Clicking an unfocused browser also activates it so the first click reaches the page. Background pages should not take focus on their own. |
 | Suggestions not appearing | Ensure search suggestions are enabled in settings. Suggestions are suppressed during active navigation. |
 | Favicon not showing | The browser queries `link[rel~=icon]` elements first, then falls back to `/favicon.ico`. Some sites may not provide either. |
 
@@ -153,4 +155,10 @@ Each browser instance belongs to exactly one project. When you create a browser 
 
 When you remove a project, all browsers owned by that project are closed automatically. The same applies when you park a project — but unlike removal, parking persists each browser's URL, history stacks, zoom, and theme so they can be restored on activate.
 
-Browser tabs in the content viewer respect project scope filtering: when scope is "focused project", only browsers belonging to the focused project are shown.
+Browser tabs in the content viewer respect project scope filtering: when scope is "focused project", only browsers belonging to the focused project are shown. Pinned browser previews are kept separate by project, so a preview from another project is not reused during pin or restore. Browser tiles also restore from detached board windows and the minimized tile bar.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-06 | Version 1.1: documented continuous restored history, shared board/Spotlight/detail state, complete pin snapshots, project isolation, and detached/minimized restore. | — |

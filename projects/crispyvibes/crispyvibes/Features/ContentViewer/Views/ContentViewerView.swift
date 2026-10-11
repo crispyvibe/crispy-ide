@@ -28,45 +28,85 @@ struct ContentViewerView: View {
     @State private var dropZone: EditorDropZone?
     @State private var isDropTargeted = false
 
-    private var activeGroup: EditorGroupStore { splitStore.activeGroup }
-
-    private var visibleTabs: [ContentViewerTab] {
-        activeGroup.filteredTabs(scope: store.viewerScope, focusedProjectRootPath: focusedProjectRootPath)
-    }
-
-    private var visibleActiveTab: ContentViewerTab? {
-        if let activeTab = activeGroup.activeTab,
-           visibleTabs.contains(where: { $0.id == activeTab.id }) {
-            return activeTab
-        }
-        return visibleTabs.first
-    }
-
-    private var contentAreaDropTypes: [UTType] {
-        ContentViewerTabDragSupport.contentAreaDropTypes(for: visibleActiveTab?.kind)
+    private func contentAreaDropTypes(for activeTab: ContentViewerTab?) -> [UTType] {
+        ContentViewerTabDragSupport.contentAreaDropTypes(for: activeTab?.kind)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if showsTopBar && !splitStore.isSplit { tabStrip; Divider() }
-            contentArea
+        Group {
+            if splitStore.isSplit {
+                splitContentArea
+            } else {
+                SinglePaneContentViewerObserverScope(
+                    group: splitStore.activeGroup,
+                    viewerScope: store.viewerScope,
+                    focusedProjectRootPath: focusedProjectRootPath
+                ) { group, visibleTabs, visibleActiveTab in
+                    singlePaneContent(
+                        group: group,
+                        visibleTabs: visibleTabs,
+                        visibleActiveTab: visibleActiveTab
+                    )
+                }
+            }
         }
         .background(appThemePalette.canvasBackgroundColor)
         .crispyvibesContainerBorder(opacity: 0.6)
         .overlay(alignment: .topLeading) { accessibilityStateMarker }
     }
 
+    private func singlePaneContent(
+        group: EditorGroupStore,
+        visibleTabs: [ContentViewerTab],
+        visibleActiveTab: ContentViewerTab?
+    ) -> some View {
+        VStack(spacing: 0) {
+            if showsTopBar {
+                tabStrip(group: group, visibleTabs: visibleTabs)
+                Divider()
+            }
+            GeometryReader { proxy in
+                singleContentArea(group: group, activeTab: visibleActiveTab)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("content-viewer.drop-surface")
+                    .overlay {
+                        if isDropTargeted {
+                            EditorDropZoneOverlay(hoveredZone: dropZone)
+                        }
+                    }
+                    .onDrop(
+                        of: contentAreaDropTypes(for: visibleActiveTab),
+                        delegate: EditorSplitDropDelegate(
+                            size: proxy.size,
+                            dropZone: $dropZone,
+                            isTargeted: $isDropTargeted,
+                            activeGroup: group,
+                            splitStore: splitStore
+                        )
+                    )
+            }
+        }
+    }
+
     // MARK: - Tab strip
 
-    private var tabStrip: some View {
+    private func tabStrip(
+        group: EditorGroupStore,
+        visibleTabs: [ContentViewerTab]
+    ) -> some View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 3) {
-                    ForEach(visibleTabs) { tab in tabItem(tab) }
+                    ForEach(visibleTabs) { tab in
+                        tabItem(tab, group: group)
+                    }
                 }
-                .padding(.horizontal, 8).padding(.vertical, 5)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
             }
-            if projects.count > 1 { scopeToggle.padding(.trailing, 8) }
+            if projects.count > 1 {
+                scopeToggle.padding(.trailing, 8)
+            }
         }
         .frame(minHeight: CrispyVibesHeaderStyle.panel.minHeight(scale: AppPreferences.chromeScale(forCodeFontSize: codeFontSize)))
         .background(appThemePalette.canvasSecondaryBackgroundColor)
@@ -86,9 +126,13 @@ struct ContentViewerView: View {
         .accessibilityIdentifier("content-viewer.scope-toggle")
     }
 
-    private func tabItem(_ tab: ContentViewerTab) -> some View {
-        let isActive = activeGroup.activeTabID == tab.id
-        let projectColor = ContentViewerTab.projectColor(for: tab, projectColorTagsByPath: projectColorTagsByPath, fallback: appThemePalette.accentColor)
+    private func tabItem(_ tab: ContentViewerTab, group: EditorGroupStore) -> some View {
+        let isActive = group.activeTabID == tab.id
+        let projectColor = ContentViewerTab.projectColor(
+            for: tab,
+            projectColorTagsByPath: projectColorTagsByPath,
+            fallback: appThemePalette.accentColor
+        )
         return ContentViewerTabItemView(
             tab: tab,
             isActive: isActive,
@@ -97,7 +141,7 @@ struct ContentViewerView: View {
             browserViewModel: browserViewModel(for: tab),
             acpChatViewModel: acpChatViewModel(for: tab),
             onClose: { closeTab(tab) },
-            onSelect: { activeGroup.activateTab(tab.id) }
+            onSelect: { group.activateTab(tab.id) }
         )
     }
 
@@ -118,105 +162,117 @@ struct ContentViewerView: View {
 
     // MARK: - Content area
 
-    @ViewBuilder
-    private var contentArea: some View {
-        if splitStore.isSplit {
-            SplitContainerView(node: splitStore.root, store: splitStore) { paneID in
-                AnyView(
-                    SplitPaneContentView(
-                        paneID: paneID,
-                        isActive: splitStore.activePaneID == paneID,
-                        splitStore: splitStore,
-                        group: splitStore.group(for: paneID),
-                        contentViewerStore: store,
-                        vibespaceID: vibespaceID,
-                        projects: projects,
-                        viewerScope: store.viewerScope,
-                        focusedProjectRootPath: focusedProjectRootPath,
-                        projectColorTagsByPath: projectColorTagsByPath,
-                        activityTracker: activityTracker,
-                        vibeCastView: vibeCastViewFactory(),
-                        todosView: todosViewFactory(),
-                        terminalSessionResolver: terminalSessionResolver,
-                        dockedBrowserCoordinator: dockedBrowserCoordinator,
-                        onLinkTargetActivated: onLinkTargetActivated,
-                        onFileSystemTargetActivated: onFileSystemTargetActivated,
-                        commentStore: commentStore,
-                        onActivate: { splitStore.activePaneID = paneID }
-                    )
+    private var splitContentArea: some View {
+        SplitContainerView(node: splitStore.root, store: splitStore) { paneID in
+            AnyView(
+                SplitPaneContentView(
+                    paneID: paneID,
+                    isActive: splitStore.activePaneID == paneID,
+                    splitStore: splitStore,
+                    group: splitStore.group(for: paneID),
+                    contentViewerStore: store,
+                    vibespaceID: vibespaceID,
+                    projects: projects,
+                    viewerScope: store.viewerScope,
+                    focusedProjectRootPath: focusedProjectRootPath,
+                    projectColorTagsByPath: projectColorTagsByPath,
+                    activityTracker: activityTracker,
+                    vibeCastView: vibeCastViewFactory(),
+                    todosView: todosViewFactory(),
+                    terminalSessionResolver: terminalSessionResolver,
+                    dockedBrowserCoordinator: dockedBrowserCoordinator,
+                    onLinkTargetActivated: onLinkTargetActivated,
+                    onFileSystemTargetActivated: onFileSystemTargetActivated,
+                    commentStore: commentStore,
+                    onActivate: { splitStore.activePaneID = paneID }
                 )
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private func singleContentArea(
+        group: EditorGroupStore,
+        activeTab: ContentViewerTab?
+    ) -> some View {
+        if let activeTab {
+            ContentTabRoutedContentScope(tabID: activeTab.id, paneID: group.id) {
+                singleRoutedContent(activeTab: activeTab, group: group)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            GeometryReader { proxy in
-                singleContentArea
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityIdentifier("content-viewer.drop-surface")
-                    .overlay { if isDropTargeted { EditorDropZoneOverlay(hoveredZone: dropZone) } }
-                    .onDrop(of: contentAreaDropTypes,
-                            delegate: EditorSplitDropDelegate(
-                                size: proxy.size, dropZone: $dropZone, isTargeted: $isDropTargeted,
-                                activeGroup: activeGroup, splitStore: splitStore
-                            ))
-            }
+            ContentUnavailableView(
+                AppStrings.ContentViewer.noContent,
+                systemImage: "doc.text",
+                description: Text(AppStrings.ContentViewer.noContentDescription)
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     @ViewBuilder
-    private var singleContentArea: some View {
-        if let activeTab = visibleActiveTab {
-            switch activeTab.kind {
-            case .file(let reference):
-                fileContentArea(activeTab: activeTab, filePath: reference.url.path)
-            case .vibeCast:
-                if !projects.isEmpty { vibeCastContent }
-                else {
-                    ContentUnavailableView(AppStrings.VibeCast.noTerminal, systemImage: "terminal",
-                                           description: Text(AppStrings.VibeCast.noTerminalDescription))
-                }
-            case .todos:
-                todosContent
-            case .vibeLanes:
-                VibeLaneSurfaceView(
-                    focusedProjectPath: focusedProjectRootPath,
-                    onOpenACPSession: {
-                        store.openVibeLaneACPPane(
-                            target: $0,
-                            projects: projects,
-                            vibespaceID: vibespaceID
-                        )
-                    },
-                    onOpenFileTarget: { target in
-                        openTodoFileAction(target.url.path, target.line)
-                    }
+    private func singleRoutedContent(
+        activeTab: ContentViewerTab,
+        group: EditorGroupStore
+    ) -> some View {
+        switch activeTab.kind {
+        case .file(let reference):
+            fileContentArea(
+                group: group,
+                filePath: reference.url.path
+            )
+        case .vibeCast:
+            if !projects.isEmpty {
+                vibeCastContent
+            } else {
+                ContentUnavailableView(
+                    AppStrings.VibeCast.noTerminal,
+                    systemImage: "terminal",
+                    description: Text(AppStrings.VibeCast.noTerminalDescription)
                 )
-            case .webPage(let reference):
-                WebPageTabView(reference: reference, coordinator: dockedBrowserCoordinator, onTitleChanged: { title in
-                    activeGroup.updateTabTitle(activeTab.id, title: title)
-                })
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .terminal(let projectID, let tabID):
-                terminalTabContent(projectID: projectID, tabID: tabID)
-            case .acpPane(let storeID):
-                if let acpStore = store.acpStore(for: storeID) {
-                    ACPStandalonePaneContentView(
-                        store: acpStore,
-                        projects: projects,
-                        onLinkTargetActivated: onLinkTargetActivated,
-                        onFileSystemTargetActivated: onFileSystemTargetActivated
-                    )
-                } else {
-                    ContentUnavailableView(
-                        AppStrings.ACP.unavailableTitle,
-                        systemImage: "sparkles",
-                        description: Text(AppStrings.ACP.unavailableDescription)
-                    )
-                }
             }
-        } else {
-            ContentUnavailableView(AppStrings.ContentViewer.noContent, systemImage: "doc.text",
-                                   description: Text(AppStrings.ContentViewer.noContentDescription))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .todos:
+            todosContent
+        case .vibeLanes:
+            VibeLaneSurfaceView(
+                focusedProjectPath: focusedProjectRootPath,
+                onOpenACPSession: {
+                    store.openVibeLaneACPPane(
+                        target: $0,
+                        projects: projects,
+                        vibespaceID: vibespaceID
+                    )
+                },
+                onOpenFileTarget: { target in
+                    openTodoFileAction(target.url.path, target.line)
+                }
+            )
+        case .webPage(let reference):
+            WebPageTabView(
+                reference: reference,
+                coordinator: dockedBrowserCoordinator,
+                onTitleChanged: { title in
+                    group.updateTabTitle(activeTab.id, title: title)
+                }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .terminal(let projectID, let tabID):
+            terminalTabContent(projectID: projectID, tabID: tabID)
+        case .acpPane(let storeID):
+            if let acpStore = store.acpStore(for: storeID) {
+                ACPStandalonePaneContentView(
+                    store: acpStore,
+                    projects: projects,
+                    onLinkTargetActivated: onLinkTargetActivated,
+                    onFileSystemTargetActivated: onFileSystemTargetActivated
+                )
+            } else {
+                ContentUnavailableView(
+                    AppStrings.ACP.unavailableTitle,
+                    systemImage: "sparkles",
+                    description: Text(AppStrings.ACP.unavailableDescription)
+                )
+            }
         }
     }
 
@@ -245,20 +301,22 @@ struct ContentViewerView: View {
     /// F049-R06: file content area, optionally docked with the comments side
     /// panel. The editor view itself owns the in-editor overlay + floating
     /// button. This wrapper just docks the panel.
-    @ViewBuilder
-    private func fileContentArea(activeTab: ContentViewerTab, filePath: String) -> some View {
+    private func fileContentArea(
+        group: EditorGroupStore,
+        filePath: String
+    ) -> some View {
         FileContentWithCommentsPanel(
-            panel: activeGroup.commentsPanel,
+            panel: group.commentsPanel,
             store: commentStore,
             filePath: filePath,
             editorContent: {
                 MarkdownEditorView(
-                    viewModel: activeGroup.markdownViewModel,
+                    viewModel: group.markdownViewModel,
                     showsTopBar: false,
-                    embeddedDropBridge: embeddedDropBridge
+                    embeddedDropBridge: embeddedDropBridge(for: group)
                 )
                 .environment(\.vibespaceCommentStoreEnvironment, commentStore)
-                .environment(\.commentsPanelEnvironment, activeGroup.commentsPanel)
+                .environment(\.commentsPanelEnvironment, group.commentsPanel)
                 .environment(\.commentsFilePathEnvironment, filePath)
             }
         )
@@ -391,7 +449,7 @@ struct ContentViewerView: View {
         }
     }
 
-    private var embeddedDropBridge: ContentViewerEmbeddedDropBridge {
+    private func embeddedDropBridge(for group: EditorGroupStore) -> ContentViewerEmbeddedDropBridge {
         ContentViewerEmbeddedDropBridge(
             updateTargeting: { location, size in
                 isDropTargeted = true
@@ -405,13 +463,17 @@ struct ContentViewerView: View {
                 let zone = EditorDropZoneOverlay.zone(at: location, in: size)
                 isDropTargeted = false
                 dropZone = nil
-                handleEmbeddedDrop(item: item, zone: zone)
+                handleEmbeddedDrop(item: item, zone: zone, group: group)
                 return true
             }
         )
     }
 
-    private func handleEmbeddedDrop(item: ContentViewerDropItem, zone: EditorDropZone) {
+    private func handleEmbeddedDrop(
+        item: ContentViewerDropItem,
+        zone: EditorDropZone,
+        group: EditorGroupStore
+    ) {
         let tab: ContentViewerTab
         switch item {
         case .tab(let droppedTab):
@@ -421,11 +483,106 @@ struct ContentViewerView: View {
         }
 
         if zone == .center {
-            splitStore.moveTab(tab, to: activeGroup)
+            splitStore.moveTab(tab, to: group)
         } else {
             let orientation: SplitOrientation = (zone == .left || zone == .right) ? .horizontal : .vertical
             splitStore.splitActiveWithTab(tab, orientation: orientation)
         }
+    }
+}
+
+@MainActor
+struct SinglePaneContentViewerObserverScope<Content: View>: View {
+    @ObservedObject var group: EditorGroupStore
+    let viewerScope: ViewerScope
+    let focusedProjectRootPath: String?
+    let content: (
+        EditorGroupStore,
+        [ContentViewerTab],
+        ContentViewerTab?
+    ) -> Content
+
+    init(
+        group: EditorGroupStore,
+        viewerScope: ViewerScope,
+        focusedProjectRootPath: String?,
+        @ViewBuilder content: @escaping (
+            EditorGroupStore,
+            [ContentViewerTab],
+            ContentViewerTab?
+        ) -> Content
+    ) {
+        self.group = group
+        self.viewerScope = viewerScope
+        self.focusedProjectRootPath = focusedProjectRootPath
+        self.content = content
+    }
+
+    private var visibleTabs: [ContentViewerTab] {
+        group.filteredTabs(
+            scope: viewerScope,
+            focusedProjectRootPath: focusedProjectRootPath
+        )
+    }
+
+    private var visibleTabIDs: [String] {
+        visibleTabs.map(\.id)
+    }
+
+    private var visibleActiveTab: ContentViewerTab? {
+        guard let activeTabID = group.activeTabID,
+              let activeTab = visibleTabs.first(where: { $0.id == activeTabID }),
+              activeTab.id == group.activeTabID else { return nil }
+        return activeTab
+    }
+
+    var body: some View {
+        content(group, visibleTabs, visibleActiveTab)
+            .onAppear(perform: reconcileActiveSelection)
+            .onChange(of: visibleTabIDs) { _, _ in
+                reconcileActiveSelection()
+            }
+            .onChange(of: group.activeTabID) { _, _ in
+                reconcileActiveSelection()
+            }
+    }
+
+    private func reconcileActiveSelection() {
+        group.reconcileActiveSelection(visibleTabIDs: visibleTabIDs)
+    }
+}
+
+@MainActor
+struct ContentTabRoutedContentScope<Content: View>: View {
+    let tabID: String
+    let paneID: UUID?
+    let content: () -> Content
+
+    init(
+        tabID: String,
+        paneID: UUID?,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.tabID = tabID
+        self.paneID = paneID
+        self.content = content
+    }
+
+    var body: some View {
+        content()
+            .id(tabID)
+            .onAppear {
+                var metadata = ["tab": AppDiagnostics.pathToken(tabID)]
+                if let paneID {
+                    metadata["pane"] = AppDiagnostics.pathToken(paneID.uuidString)
+                }
+                AppDiagnostics.record(
+                    category: .vibespaceLifecycle,
+                    level: .info,
+                    event: "content_tab_rendered",
+                    metadata: metadata
+                )
+            }
     }
 }
 

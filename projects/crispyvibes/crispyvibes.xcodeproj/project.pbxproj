@@ -76,10 +76,14 @@
 		20B2F522B1FA2EB9886B671F /* ContentViewerStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C4891B1ACCF43B91553954F /* ContentViewerStoreTests.swift */; };
 		212A12BC71A43BAE120DAE87 /* AppSettingsSheetViewRemoteSSH.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69D8F23A94579CEBE723EC48 /* AppSettingsSheetViewRemoteSSH.swift */; };
 		219F3C59245123C904F726D3 /* SplitPaneLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1829B25562B028CDC237B52 /* SplitPaneLayoutTests.swift */; };
+		A012A012A012A012A012A001 /* NativeSplitViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A012A012A012A012A012A002 /* NativeSplitViewTests.swift */; };
+		F00330000000000000000001 /* SpotlightSynchronizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00330000000000000000002 /* SpotlightSynchronizationTests.swift */; };
+		F00630000000000000000001 /* ContentViewerSynchronizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00630000000000000000002 /* ContentViewerSynchronizationTests.swift */; };
 		222AC1E03D35BD6654E50649 /* ScreenCaptureDeliveryAndViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901FBE5F0E76E8E7D480F01E /* ScreenCaptureDeliveryAndViewModelTests.swift */; };
 		247FE807D5D94D65E6B8FAC7 /* LocalScreenCaptureHistoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 160D8BB4605ABB1D5C60008A /* LocalScreenCaptureHistoryRepository.swift */; };
 		24D4A0B573E092F52826F6F8 /* TerminalPasteTargetingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5181BCA894219EFFA30150 /* TerminalPasteTargetingTests.swift */; };
 		24D4A0B573E092F52826F6F9 /* GhosttyTerminalViewInputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5181BCA894219EFFA30151 /* GhosttyTerminalViewInputTests.swift */; };
+		F00161000000000000000001 /* TerminalMagnificationGestureStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00161000000000000000002 /* TerminalMagnificationGestureStateTests.swift */; };
 		24D4A0B573E092F52826F6FA /* TerminalFileDropSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5181BCA894219EFFA30152 /* TerminalFileDropSupportTests.swift */; };
 		24F49FF6680CBEE5F24C6192 /* AppStrings+ScreenCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F95869F34209BE418F47E78 /* AppStrings+ScreenCapture.swift */; };
 		252BB8E2AB96132C6C3633A4 /* CrispyVibesThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBD1B77585A0E502758BCED3 /* CrispyVibesThemeManager.swift */; };
@@ -157,6 +161,7 @@
 		4D6799B6E0587CABAA74BB5C /* VibeLaneEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BFF12512F077CD0144F494 /* VibeLaneEngine.swift */; };
 		4D9920E1BF6882F852B59F49 /* CommentComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5E248E0EB174262C13D55E /* CommentComposerView.swift */; };
 		4DB91B0943D48D0D0BAFC7BF /* ContentViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07F79DDEABC0DC12B03FD2CE /* ContentViewerView.swift */; };
+		EFA001000000000000000001 /* EditorGroupFileSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFA001000000000000000002 /* EditorGroupFileSurface.swift */; };
 		4E0D328078786CADF108410F /* CaptureSelectionViewModel+Targeting.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC79150C85C8E07CCC9E1E6 /* CaptureSelectionViewModel+Targeting.swift */; };
 		4E2F99E444377184DF99F1D3 /* AppSettingsSheetViewScreenCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641EFEF5F8779AEEEAE0437C /* AppSettingsSheetViewScreenCapture.swift */; };
 		4EF62D496D8357708ACEFBAE /* RasterImageExportFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC2F77379CD12330765D8EE /* RasterImageExportFormat.swift */; };
@@ -934,6 +939,7 @@
 		07B977ECF638A5A85D81A20C /* VibeSpaceStateTestsOverridesAndPaths.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceStateTestsOverridesAndPaths.swift; sourceTree = "<group>"; };
 		07D2FB0E3252D64055270C63 /* MermaidRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MermaidRenderer.swift; sourceTree = "<group>"; };
 		07F79DDEABC0DC12B03FD2CE /* ContentViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewerView.swift; sourceTree = "<group>"; };
+		EFA001000000000000000002 /* EditorGroupFileSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorGroupFileSurface.swift; sourceTree = "<group>"; };
 		07F881DC80C69FF554F126D9 /* RasterImageFilePreviewIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageFilePreviewIntegrationTests.swift; sourceTree = "<group>"; };
 		08A6B8FFEF1DD101437D5A55 /* ACPDiffSpotlightPanel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ACPDiffSpotlightPanel.swift; sourceTree = "<group>"; };
 		08B92CF15A43141EB1791CF6 /* VibeLaneDefinition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VibeLaneDefinition.swift; path = crispyvibes/Features/VibeLanes/Models/VibeLaneDefinition.swift; sourceTree = "<group>"; };
@@ -1196,6 +1202,7 @@
 		8C074D30346BA4C294F7D99F /* VibeSpaceConfigModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VibeSpaceConfigModels.swift; sourceTree = "<group>"; };
 		8C5181BCA894219EFFA30150 /* TerminalPasteTargetingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalPasteTargetingTests.swift; sourceTree = "<group>"; };
 		8C5181BCA894219EFFA30151 /* GhosttyTerminalViewInputTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalViewInputTests.swift; sourceTree = "<group>"; };
+		F00161000000000000000002 /* TerminalMagnificationGestureStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalMagnificationGestureStateTests.swift; sourceTree = "<group>"; };
 		8C5181BCA894219EFFA30152 /* TerminalFileDropSupportTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TerminalFileDropSupportTests.swift; sourceTree = "<group>"; };
 		8C685ACAF1DA9F65C9FC8FF8 /* RasterImageEditSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditSession.swift; sourceTree = "<group>"; };
 		8C9C1C7DB7E40511134AF69C /* RasterImageEditorSheets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageEditorSheets.swift; sourceTree = "<group>"; };
@@ -1548,6 +1555,9 @@
 		BRWSOWNR0001000100010001 /* BrowserHostOwnershipCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserHostOwnershipCoordinator.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/BrowserHostOwnershipCoordinator.swift; sourceTree = "<group>"; };
 		C058007C6BE57237190D272A /* MarkdownEditorPlugins.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownEditorPlugins.swift; sourceTree = "<group>"; };
 		C1829B25562B028CDC237B52 /* SplitPaneLayoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitPaneLayoutTests.swift; sourceTree = "<group>"; };
+		A012A012A012A012A012A002 /* NativeSplitViewTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeSplitViewTests.swift; sourceTree = "<group>"; };
+		F00330000000000000000002 /* SpotlightSynchronizationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpotlightSynchronizationTests.swift; sourceTree = "<group>"; };
+		F00630000000000000000002 /* ContentViewerSynchronizationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentViewerSynchronizationTests.swift; sourceTree = "<group>"; };
 		C1B9CCF2E2BA8AB7F99D4190 /* SettingsLayoutPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsLayoutPrimitives.swift; sourceTree = "<group>"; };
 		C2C1E3B2A8770E85559D71C4 /* MeasuredPaneWorker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeasuredPaneWorker.swift; sourceTree = "<group>"; };
 		C2D000000000000000000001 /* VibeSpaceSidebarProjectTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeSpaceSidebarProjectTree.swift; sourceTree = "<group>"; };
@@ -1972,9 +1982,18 @@
 			isa = PBXGroup;
 			children = (
 				1F7A4EFC0D0358DE884C7764 /* ViewModels */,
+				F00630000000000000000003 /* Views */,
 			);
 			name = ContentViewer;
 			path = ContentViewer;
+			sourceTree = "<group>";
+		};
+		F00630000000000000000003 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F00630000000000000000002 /* ContentViewerSynchronizationTests.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		1C7F294C70BAA33A4DD71D73 /* Repositories */ = {
@@ -2189,12 +2208,21 @@
 		4322CE677C9F7F0C142F31FD /* VibeSpace */ = {
 			isa = PBXGroup;
 			children = (
+				F00330000000000000000003 /* Canvas */,
 				AEE87394E25DE915A133CA03 /* Services */,
 				D9E09FECEA79B3EA143EB6BB /* Support */,
 				F83DFD3E7D671EF7105E26C7 /* ViewModels */,
 			);
 			name = VibeSpace;
 			path = VibeSpace;
+			sourceTree = "<group>";
+		};
+		F00330000000000000000003 /* Canvas */ = {
+			isa = PBXGroup;
+			children = (
+				F00330000000000000000002 /* SpotlightSynchronizationTests.swift */,
+			);
+			path = Canvas;
 			sourceTree = "<group>";
 		};
 		4698EFB2BC18512B9BC6CDB8 /* Features */ = {
@@ -2441,10 +2469,20 @@
 		6618899004734C5A3B779D29 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				A012A012A012A012A012A003 /* Components */,
 				84765AF10D9D7029824390B2 /* Support */,
 			);
 			name = Shared;
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		A012A012A012A012A012A003 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				A012A012A012A012A012A002 /* NativeSplitViewTests.swift */,
+			);
+			name = Components;
+			path = Components;
 			sourceTree = "<group>";
 		};
 		6B312D5F695348BA6BA0C9A2 /* Data */ = {
@@ -3538,6 +3576,7 @@
 			isa = PBXGroup;
 			children = (
 				8C5181BCA894219EFFA30151 /* GhosttyTerminalViewInputTests.swift */,
+				F00161000000000000000002 /* TerminalMagnificationGestureStateTests.swift */,
 				8C5181BCA894219EFFA30152 /* TerminalFileDropSupportTests.swift */,
 				8C5181BCA894219EFFA30150 /* TerminalPasteTargetingTests.swift */,
 			);
@@ -3886,6 +3925,7 @@
 			isa = PBXGroup;
 			children = (
 				07F79DDEABC0DC12B03FD2CE /* ContentViewerView.swift */,
+				EFA001000000000000000002 /* EditorGroupFileSurface.swift */,
 				6885CA8D4CB1E8CBAADA0043 /* SplitContainerView.swift */,
 				D84C0E18521D9C2882467D3F /* SplitPaneContentView.swift */,
 				0D057D20F79F8DE3AD7C8756 /* EditorDropZoneOverlay.swift */,
@@ -4625,6 +4665,7 @@
 				676D45E9770C5DCEA19FA852 /* ContentViewerTab.swift in Sources */,
 				4D3D58F6C8B598C33C214C27 /* ContentViewerStore.swift in Sources */,
 				4DB91B0943D48D0D0BAFC7BF /* ContentViewerView.swift in Sources */,
+				EFA001000000000000000001 /* EditorGroupFileSurface.swift in Sources */,
 				7322C47AFB44E0D4D5B96D4A /* VibeCastStore.swift in Sources */,
 				8787791ABCD07EC7669CE8B4 /* VibeCastView.swift in Sources */,
 				A10000000000000000000001 /* CrispyVibesApp.swift in Sources */,
@@ -5357,6 +5398,9 @@
 				A8F790ECE80DEB47B6A98615 /* TextServiceCLIPresetCatalogTests.swift in Sources */,
 				64D5024F37E76E20279F2299 /* VibeSpaceManagementServiceTests.swift in Sources */,
 				219F3C59245123C904F726D3 /* SplitPaneLayoutTests.swift in Sources */,
+				A012A012A012A012A012A001 /* NativeSplitViewTests.swift in Sources */,
+				F00330000000000000000001 /* SpotlightSynchronizationTests.swift in Sources */,
+				F00630000000000000000001 /* ContentViewerSynchronizationTests.swift in Sources */,
 				AATHEMECON0000000000TEST /* AppThemePaletteContrastTests.swift in Sources */,
 				5977CBD83FD790EAA3CCCEA9 /* AppStringsTests.swift in Sources */,
 				SEC00002000000000000TEST /* ShellEscapingTests.swift in Sources */,
@@ -5365,6 +5409,7 @@
 				ADD000000000000000000003 /* EditorGroupStoreTests.swift in Sources */,
 				24D4A0B573E092F52826F6F8 /* TerminalPasteTargetingTests.swift in Sources */,
 				24D4A0B573E092F52826F6F9 /* GhosttyTerminalViewInputTests.swift in Sources */,
+				F00161000000000000000001 /* TerminalMagnificationGestureStateTests.swift in Sources */,
 				24D4A0B573E092F52826F6FA /* TerminalFileDropSupportTests.swift in Sources */,
 				411E2A4A136E8676A812C04A /* DocumentBufferTests.swift in Sources */,
 				608F0337C6F74E628E024E9C /* AutosaveSchedulerTests.swift in Sources */,

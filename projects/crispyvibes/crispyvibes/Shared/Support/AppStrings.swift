@@ -2612,6 +2612,8 @@ enum AppStrings {
     // MARK: - Editor
 
     enum Editor {
+        static let navigateBack = String(localized: "editor.navigation.back", defaultValue: "Back")
+        static let navigateForward = String(localized: "editor.navigation.forward", defaultValue: "Forward")
         static let find = String(localized: "editor.find")
         static let replace = String(localized: "editor.replace")
         static let replaceNext = String(localized: "editor.replaceNext")

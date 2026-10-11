@@ -566,33 +566,15 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .closeBrowserRequested)) { notification in
                 guard let browserID = notification.userInfo?["browserID"] as? UUID else { return }
-                // Try the board first. If the browser is a pinned tile, removing
-                // the tile state stops the view from re-rendering it (which would
-                // otherwise resurrect the VM via `coordinator.viewModel(for:url:)`).
-                if let surfaceID = boardStore.surfaceID(containing: browserID) {
-                    boardStore.removeTile(browserID, surfaceID: surfaceID)
-                    dockedBrowserCoordinator.removeViewModel(for: browserID)
-                    agentCLILogger.notice("browser closed (board): \(browserID.uuidString, privacy: .public)")
-                    return
-                }
-                // Otherwise look for a content-viewer tab in any editor group.
-                // `splitViewStore.closeTab` invokes `browserTabCloseHandler` which
-                // calls `coordinator.removeDetailedBrowser(browserID:)`, so the VM
-                // is removed as part of closing the tab.
-                let tabID = "web:\(browserID.uuidString)"
-                for group in splitViewStore.editorGroups.values {
-                    if let tab = group.tabs.first(where: { $0.id == tabID }) {
-                        splitViewStore.closeTab(tab, in: group)
-                        agentCLILogger.notice("browser closed (content viewer): \(browserID.uuidString, privacy: .public)")
-                        return
-                    }
-                }
-                // Not found in either surface — VM may still exist in the coordinator
-                // dictionaries (e.g., from a pre-render eager create whose tile/tab
-                // never reached the layout). Drop both kinds defensively.
-                dockedBrowserCoordinator.removeViewModel(for: browserID)
-                dockedBrowserCoordinator.removeDetailedBrowser(browserID: browserID)
-                agentCLILogger.notice("browser closed (orphan vm): \(browserID.uuidString, privacy: .public)")
+                let result = BrowserGlobalTeardownCoordinator.teardown(
+                    requestedID: browserID,
+                    boardStore: boardStore,
+                    splitViewStore: splitViewStore,
+                    dockedBrowserCoordinator: dockedBrowserCoordinator
+                )
+                agentCLILogger.notice(
+                    "browser globally closed: \(browserID.uuidString, privacy: .public) board=\(result.removedBoardPresentation, privacy: .public) tabs=\(result.closedContentTabCount, privacy: .public)"
+                )
             }
             .onReceive(NotificationCenter.default.publisher(for: .contentViewerTabActivated)) { notification in
                 // F021-R15 / R16 / R17: when a content-viewer tab becomes active,

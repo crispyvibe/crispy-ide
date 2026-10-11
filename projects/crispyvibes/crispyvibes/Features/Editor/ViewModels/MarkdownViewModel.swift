@@ -48,11 +48,105 @@ struct MarkdownRichNavigationRequest: Identifiable, Equatable, Sendable {
     let id: UUID
     let documentID: String
     let fragment: String
+    let recordsHistory: Bool
 
-    init(id: UUID = UUID(), documentID: String, fragment: String) {
+    init(
+        id: UUID = UUID(),
+        documentID: String,
+        fragment: String,
+        recordsHistory: Bool = false
+    ) {
         self.id = id
         self.documentID = documentID
         self.fragment = fragment
+        self.recordsHistory = recordsHistory
+    }
+}
+
+/// Direction for rendered Markdown history navigation.
+enum MarkdownNavigationDirection: String, Equatable, Sendable {
+    case back
+    case forward
+}
+
+/// A rendered Markdown scroll offset persisted across presentation remounts.
+struct MarkdownScrollPosition: Codable, Equatable, Sendable {
+    let x: Double
+    let y: Double
+
+    init(x: Double, y: Double) {
+        self.x = x.isFinite ? x : 0
+        self.y = y.isFinite ? y : 0
+    }
+}
+
+/// Current same-document navigation state reported by the Markdown runtime.
+struct MarkdownNavigationState: Codable, Equatable, Sendable {
+    static let maximumHistoryCount = 100
+
+    let documentID: String
+    let canNavigateBack: Bool
+    let canNavigateForward: Bool
+    let backScrollPositions: [MarkdownScrollPosition]
+    let forwardScrollPositions: [MarkdownScrollPosition]
+
+    init(
+        documentID: String,
+        canNavigateBack: Bool,
+        canNavigateForward: Bool,
+        backScrollPositions: [MarkdownScrollPosition] = [],
+        forwardScrollPositions: [MarkdownScrollPosition] = []
+    ) {
+        self.documentID = documentID
+        self.backScrollPositions = Array(backScrollPositions.suffix(Self.maximumHistoryCount))
+        self.forwardScrollPositions = Array(forwardScrollPositions.suffix(Self.maximumHistoryCount))
+        self.canNavigateBack = canNavigateBack
+        self.canNavigateForward = canNavigateForward
+    }
+
+    var hasSavedHistory: Bool {
+        !backScrollPositions.isEmpty || !forwardScrollPositions.isEmpty
+    }
+
+    static func decodeBridgePayload(documentID: String, body: Any) -> MarkdownNavigationState? {
+        guard let payload = body as? [String: Any],
+              let canBack = payload["canBack"] as? Bool,
+              let canForward = payload["canForward"] as? Bool else { return nil }
+        return MarkdownNavigationState(
+            documentID: documentID,
+            canNavigateBack: canBack,
+            canNavigateForward: canForward,
+            backScrollPositions: decodePositions(payload["backPositions"]),
+            forwardScrollPositions: decodePositions(payload["forwardPositions"])
+        )
+    }
+
+    private static func decodePositions(_ value: Any?) -> [MarkdownScrollPosition] {
+        guard let values = value as? [[String: Any]] else { return [] }
+        return values.suffix(maximumHistoryCount).compactMap { value in
+            guard let x = (value["x"] as? NSNumber)?.doubleValue,
+                  let y = (value["y"] as? NSNumber)?.doubleValue,
+                  x.isFinite,
+                  y.isFinite else { return nil }
+            return MarkdownScrollPosition(x: x, y: y)
+        }
+    }
+}
+
+/// One-shot native request to navigate rendered Markdown history.
+struct MarkdownNavigationCommandRequest: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let documentID: String
+    let direction: MarkdownNavigationDirection
+
+    init(
+        id: UUID = UUID(),
+        documentID: String,
+        direction: MarkdownNavigationDirection
+    ) {
+        self.id = id
+        self.documentID = documentID
+        self.direction = direction
     }
 }
 
@@ -130,6 +224,8 @@ final class MarkdownViewModel: ObservableObject {
     @Published var markupViewModeByDocumentID: [String: MarkupViewMode] = [:]
     @Published var pendingSourceSelection: PendingSourceSelection?
     @Published private(set) var pendingRichNavigationRequest: MarkdownRichNavigationRequest?
+    @Published private(set) var renderedNavigationStatesByDocumentID: [String: MarkdownNavigationState] = [:]
+    @Published private(set) var renderedNavigationCommandRequest: MarkdownNavigationCommandRequest?
     /// Pending LaTeX snippet to insert at the source editor's cursor (math palette).
     @Published var latexInsertionRequest: EditorInsertionRequest?
 
@@ -151,6 +247,17 @@ final class MarkdownViewModel: ObservableObject {
     /// Installed by the owning editor group so linked files participate in its
     /// visible tab list, provider registry, comments context, and persistence.
     var linkedFileOpenHandler: ((URL, FileDocumentReference) -> Void)?
+    /// Installed by the owning group so rendered keyboard navigation can fall
+    /// back to cross-file history when same-document history is exhausted.
+    var renderedNavigationFallbackHandler: ((MarkdownNavigationDirection) -> Void)?
+
+    var canNavigateBackInRenderedDocument: Bool {
+        renderedNavigationState(for: currentDocumentID)?.canNavigateBack == true
+    }
+
+    var canNavigateForwardInRenderedDocument: Bool {
+        renderedNavigationState(for: currentDocumentID)?.canNavigateForward == true
+    }
 
     enum DocumentType: Hashable {
         case none
@@ -347,6 +454,50 @@ final class MarkdownViewModel: ObservableObject {
         pendingRichNavigationRequest = request
     }
 
+    func updateRenderedNavigationState(_ state: MarkdownNavigationState) {
+        guard state.documentID == currentDocumentID else { return }
+        renderedNavigationStatesByDocumentID[state.documentID] = state
+    }
+
+    func renderedNavigationState(for documentID: String?) -> MarkdownNavigationState? {
+        guard let documentID else { return nil }
+        return renderedNavigationStatesByDocumentID[documentID]
+    }
+
+    func requestRenderedNavigation(_ direction: MarkdownNavigationDirection) {
+        guard let currentDocumentID else { return }
+        renderedNavigationCommandRequest = MarkdownNavigationCommandRequest(
+            documentID: currentDocumentID,
+            direction: direction
+        )
+    }
+
+    func renderedNavigationCommand(for documentID: String?) -> MarkdownNavigationCommandRequest? {
+        guard renderedNavigationCommandRequest?.documentID == documentID else { return nil }
+        return renderedNavigationCommandRequest
+    }
+
+    @discardableResult
+    func claimRenderedNavigationCommand(id: UUID) -> Bool {
+        guard renderedNavigationCommandRequest?.id == id else { return false }
+        renderedNavigationCommandRequest = nil
+        return true
+    }
+
+    func clearRenderedNavigation(for documentID: String) {
+        renderedNavigationStatesByDocumentID.removeValue(forKey: documentID)
+        if renderedNavigationCommandRequest?.documentID == documentID {
+            renderedNavigationCommandRequest = nil
+        }
+        if pendingRichNavigationRequest?.documentID == documentID {
+            pendingRichNavigationRequest = nil
+        }
+    }
+
+    func handleRenderedNavigationFallback(_ direction: MarkdownNavigationDirection) {
+        renderedNavigationFallbackHandler?(direction)
+    }
+
     private func syncPublishedState(from state: BufferState, for bufferID: String) {
         guard currentDocumentID == bufferID else { return }
         switch state {
@@ -373,64 +524,148 @@ final class MarkdownViewModel: ObservableObject {
     /// used before a file move so the last buffered edits aren't lost. Local
     /// files only; remote files autosave through their content provider.
     func flushUnsavedEdits(forFileURL url: URL) {
-        guard fileContentProvider == nil,
+        guard (fileContentProvider == nil || fileContentProvider is LocalFileContentProvider),
               fileURL?.standardizedFileURL == url.standardizedFileURL,
               let buffer = activeBuffer, buffer.isDirty else { return }
         try? Data(buffer.displayContent.utf8).write(to: url, options: .atomic)
     }
 
     func retargetOpenDocuments(from oldURL: URL, to newURL: URL) {
-        func map(_ candidate: URL?) -> URL? {
-            guard let candidate else { return nil }
-            return Self.mapFileSystemLocation(candidate, from: oldURL, to: newURL)
-        }
-
-        fileURL = map(fileURL) ?? fileURL
-        imageFileURL = map(imageFileURL) ?? imageFileURL
-        pdfFileURL = map(pdfFileURL) ?? pdfFileURL
-        officeFileURL = map(officeFileURL) ?? officeFileURL
-
-        editorTabs = editorTabs.map { tab in
-            guard let mappedURL = map(tab.fileURL) else { return tab }
-            return EditorTab(documentReference: tab.documentReference.replacingURL(mappedURL))
-        }
-
-        if let currentDocumentID,
-           let activeTab = editorTabs.first(where: { $0.id == currentDocumentID }) {
-            self.currentDocumentID = activeTab.id
-        } else if let fileURL {
-            let existingProjectIdentifier = self.currentDocumentID.flatMap(Self.projectIdentifier(fromDocumentID:))
-            self.currentDocumentID = map(fileURL).map {
-                FileDocumentReference(url: $0, projectIdentifier: existingProjectIdentifier).documentIdentity
-            } ?? currentDocumentID
-        }
-
-        if let currentActiveEditorTabID = activeEditorTabID,
-           let mappedTab = editorTabs.first(where: { $0.id == currentActiveEditorTabID }) {
-            activeEditorTabID = mappedTab.id
-        }
-
-        markupViewModeByDocumentID = Dictionary(
-            uniqueKeysWithValues: markupViewModeByDocumentID.map { key, value in
-                if let tab = editorTabs.first(where: { $0.id == key }) {
-                    return (tab.id, value)
-                }
-                let projectIdentifier = Self.projectIdentifier(fromDocumentID: key)
-                let filePath = Self.filePath(fromDocumentID: key)
-                let mappedURL = map(URL(fileURLWithPath: filePath))
-                let mappedID = mappedURL.map {
-                    FileDocumentReference(url: $0, projectIdentifier: projectIdentifier).documentIdentity
-                } ?? key
-                return (mappedID, value)
-            }
+        let normalizedOldURL = oldURL.standardizedFileURL
+        let normalizedNewURL = newURL.standardizedFileURL
+        let knownDocumentIDs = Set(
+            editorTabs.map(\.id)
+                + Array(markupViewModeByDocumentID.keys)
+                + Array(renderedNavigationStatesByDocumentID.keys)
+                + [
+                    currentDocumentID,
+                    activeEditorTabID,
+                    pendingRichNavigationRequest?.documentID,
+                    renderedNavigationCommandRequest?.documentID,
+                    pendingSourceSelection?.documentID
+                ].compactMap { $0 }
         )
-
-        if let pendingSourceSelection,
-           let tab = editorTabs.first(where: { $0.id == pendingSourceSelection.documentID }) {
-            self.pendingSourceSelection = PendingSourceSelection(
-                documentID: tab.id,
-                selection: pendingSourceSelection.selection
+        let identityMappings = knownDocumentIDs.reduce(into: [String: FileDocumentReference]()) { result, documentID in
+            let sourceURL = URL(fileURLWithPath: Self.filePath(fromDocumentID: documentID))
+            guard let mappedURL = Self.mapFileSystemLocation(
+                sourceURL,
+                from: normalizedOldURL,
+                to: normalizedNewURL
+            ) else { return }
+            result[documentID] = FileDocumentReference(
+                url: mappedURL,
+                projectIdentifier: Self.projectIdentifier(fromDocumentID: documentID)
             )
+        }
+        let migratedTabs = editorTabs.map { tab in
+            EditorTab(documentReference: identityMappings[tab.id] ?? tab.documentReference)
+        }
+        let migratedFileURL = fileURL.flatMap {
+            Self.mapFileSystemLocation($0, from: normalizedOldURL, to: normalizedNewURL)
+        } ?? fileURL
+        let migratedImageFileURL = imageFileURL.flatMap {
+            Self.mapFileSystemLocation($0, from: normalizedOldURL, to: normalizedNewURL)
+        } ?? imageFileURL
+        let migratedPDFFileURL = pdfFileURL.flatMap {
+            Self.mapFileSystemLocation($0, from: normalizedOldURL, to: normalizedNewURL)
+        } ?? pdfFileURL
+        let migratedOfficeFileURL = officeFileURL.flatMap {
+            Self.mapFileSystemLocation($0, from: normalizedOldURL, to: normalizedNewURL)
+        } ?? officeFileURL
+
+        migrateOpenDocumentIdentities(
+            identityMappings,
+            editorTabs: migratedTabs,
+            fileURL: migratedFileURL,
+            imageFileURL: migratedImageFileURL,
+            pdfFileURL: migratedPDFFileURL,
+            officeFileURL: migratedOfficeFileURL
+        )
+    }
+
+    func migrateOpenDocumentIdentities(
+        _ identityMappings: [String: FileDocumentReference],
+        editorTabs migratedTabs: [EditorTab],
+        fileURL migratedFileURL: URL?,
+        imageFileURL migratedImageFileURL: URL?,
+        pdfFileURL migratedPDFFileURL: URL?,
+        officeFileURL migratedOfficeFileURL: URL?
+    ) {
+        guard !identityMappings.isEmpty else {
+            editorTabs = migratedTabs
+            fileURL = migratedFileURL
+            imageFileURL = migratedImageFileURL
+            pdfFileURL = migratedPDFFileURL
+            officeFileURL = migratedOfficeFileURL
+            return
+        }
+
+        for oldID in identityMappings.keys {
+            autosave.cancel(for: oldID)
+        }
+        for (oldID, reference) in identityMappings {
+            _ = bufferStore.migrateBuffer(from: oldID, to: reference)
+        }
+
+        editorTabs = migratedTabs
+        currentDocumentID = currentDocumentID.flatMap {
+            identityMappings[$0]?.documentIdentity ?? $0
+        }
+        activeEditorTabID = activeEditorTabID.flatMap {
+            identityMappings[$0]?.documentIdentity ?? $0
+        }
+        fileURL = migratedFileURL
+        imageFileURL = migratedImageFileURL
+        pdfFileURL = migratedPDFFileURL
+        officeFileURL = migratedOfficeFileURL
+
+        markupViewModeByDocumentID = markupViewModeByDocumentID.reduce(into: [:]) { result, entry in
+            result[identityMappings[entry.key]?.documentIdentity ?? entry.key] = entry.value
+        }
+        renderedNavigationStatesByDocumentID = renderedNavigationStatesByDocumentID.reduce(into: [:]) { result, entry in
+            let migratedID = identityMappings[entry.key]?.documentIdentity ?? entry.key
+            let state = entry.value
+            result[migratedID] = MarkdownNavigationState(
+                documentID: migratedID,
+                canNavigateBack: state.canNavigateBack,
+                canNavigateForward: state.canNavigateForward,
+                backScrollPositions: state.backScrollPositions,
+                forwardScrollPositions: state.forwardScrollPositions
+            )
+        }
+        if let request = pendingRichNavigationRequest,
+           let migratedID = identityMappings[request.documentID]?.documentIdentity {
+            pendingRichNavigationRequest = MarkdownRichNavigationRequest(
+                id: request.id,
+                documentID: migratedID,
+                fragment: request.fragment,
+                recordsHistory: request.recordsHistory
+            )
+        }
+        if let request = renderedNavigationCommandRequest,
+           let migratedID = identityMappings[request.documentID]?.documentIdentity {
+            renderedNavigationCommandRequest = MarkdownNavigationCommandRequest(
+                id: request.id,
+                documentID: migratedID,
+                direction: request.direction
+            )
+        }
+        if let selection = pendingSourceSelection,
+           let migratedID = identityMappings[selection.documentID]?.documentIdentity {
+            pendingSourceSelection = PendingSourceSelection(
+                documentID: migratedID,
+                selection: selection.selection
+            )
+        }
+
+        let migratedBuffers = identityMappings.values.compactMap {
+            bufferStore.buffer(for: $0.documentIdentity)
+        }
+        if let currentDocumentID {
+            observeActiveBuffer(bufferStore.buffer(for: currentDocumentID))
+        }
+        for buffer in migratedBuffers where buffer.isDirty {
+            autosave.scheduleSave(for: buffer)
         }
     }
 

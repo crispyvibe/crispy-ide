@@ -32,7 +32,7 @@ struct UITestShortcut {
     }
 }
 
-private enum UITestAppTarget: CaseIterable {
+enum UITestAppTarget {
     case local
     case main
 
@@ -85,6 +85,16 @@ private enum UITestAppTarget: CaseIterable {
         case .main:
             return "Crispy"
         }
+    }
+
+    static let installedProductionExecutablePath = "/Applications/Crispy.app/Contents/MacOS/Crispy"
+
+    func shouldTerminate(bundleIdentifier: String?, executablePath: String?) -> Bool {
+        // Repository policy forbids terminating the main-profile app from tests,
+        // regardless of where it is installed. UI automation must use CrispyLocal.
+        guard self == .local else { return false }
+        return bundleIdentifier == self.bundleIdentifier ||
+            (executablePath?.hasSuffix(executableSuffix) ?? false)
     }
 }
 
@@ -249,18 +259,14 @@ func makeApplication(
 
 func ensureAppUnderTestIsNotRunning(timeout: TimeInterval = 4) {
 #if os(macOS)
-    let runningApps = NSWorkspace.shared.runningApplications.filter { app in
-        UITestAppTarget.allCases.contains { target in
-            if app.bundleIdentifier == target.bundleIdentifier {
-                return true
-            }
-            if let executablePath = app.executableURL?.path,
-               executablePath.hasSuffix(target.executableSuffix) {
-                return true
-            }
-            return false
-        }
+    let target = UITestAppTarget.current
+    let matchesTarget: (NSRunningApplication) -> Bool = { app in
+        target.shouldTerminate(
+            bundleIdentifier: app.bundleIdentifier,
+            executablePath: app.executableURL?.path
+        )
     }
+    let runningApps = NSWorkspace.shared.runningApplications.filter(matchesTarget)
     guard !runningApps.isEmpty else { return }
 
     for app in runningApps {
@@ -276,16 +282,7 @@ func ensureAppUnderTestIsNotRunning(timeout: TimeInterval = 4) {
     let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
         let stillRunning = NSWorkspace.shared.runningApplications.contains { app in
-            UITestAppTarget.allCases.contains { target in
-                if app.bundleIdentifier == target.bundleIdentifier {
-                    return !app.isTerminated
-                }
-                if let executablePath = app.executableURL?.path,
-                   executablePath.hasSuffix(target.executableSuffix) {
-                    return !app.isTerminated
-                }
-                return false
-            }
+            matchesTarget(app) && !app.isTerminated
         }
         if !stillRunning {
             return
@@ -294,12 +291,7 @@ func ensureAppUnderTestIsNotRunning(timeout: TimeInterval = 4) {
     }
 
     for app in NSWorkspace.shared.runningApplications where !app.isTerminated {
-        guard
-            UITestAppTarget.allCases.contains(where: { target in
-                app.bundleIdentifier == target.bundleIdentifier ||
-                (app.executableURL?.path.hasSuffix(target.executableSuffix) ?? false)
-            })
-        else { continue }
+        guard matchesTarget(app) else { continue }
         let processID = app.processIdentifier
         app.forceTerminate()
         _ = kill(processID, SIGKILL)

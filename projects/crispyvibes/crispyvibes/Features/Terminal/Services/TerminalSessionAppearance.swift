@@ -22,8 +22,20 @@ extension TerminalSession {
         )
     }
 
-    static let minimumDisplayMagnification: CGFloat = 1
+    static let minimumDisplayMagnification: CGFloat = 0.5
     static let maximumDisplayMagnification: CGFloat = 3
+
+    nonisolated static func normalizedDisplayMagnification(_ magnification: CGFloat) -> CGFloat {
+        guard magnification.isFinite else { return 1 }
+        let clamped = min(maximumDisplayMagnification, max(minimumDisplayMagnification, magnification))
+        guard clamped < 1 else { return clamped }
+
+        let scaled = clamped * 10
+        let lowerStep = floor(scaled)
+        let isMidpoint = abs((scaled - lowerStep) - 0.5) <= 0.000_000_1
+        let snappedStep = isMidpoint ? lowerStep + 1 : scaled.rounded(.toNearestOrAwayFromZero)
+        return snappedStep / 10
+    }
 
     func setDisplayDensity(_ density: TerminalDisplayDensity) {
         let resolvedFontSize = density.fontSize
@@ -50,11 +62,11 @@ extension TerminalSession {
     }
 
     func setDisplayMagnification(_ magnification: CGFloat) {
-        guard magnification.isFinite else { return }
-        displayMagnification = min(
-            Self.maximumDisplayMagnification,
-            max(Self.minimumDisplayMagnification, magnification)
-        )
+        displayMagnification = Self.normalizedDisplayMagnification(magnification)
+    }
+
+    func cancelKeyboardFocusRequest() {
+        focusRequestGeneration &+= 1
     }
 
     func requestKeyboardFocus(retryCount: Int) {

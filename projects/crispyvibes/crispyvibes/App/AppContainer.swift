@@ -261,7 +261,10 @@ struct AppContainer {
             NotificationCenter.default.post(name: .openNewBrowserRequested, object: nil, userInfo: userInfo)
         }
         dockedBrowserCoordinator.projectPathForTile = { [weak vibespaceHydrationCoordinator] tileID in
-            vibespaceHydrationCoordinator?.boardStore?.tile(for: tileID)?.projectPath
+            vibespaceHydrationCoordinator?.boardStore?.tile(
+                for: tileID,
+                includeMinimized: true
+            )?.projectPath
         }
         dockedBrowserCoordinator.onDetailedSessionStateChanged = { [weak vibespaceHydrationCoordinator] in
             vibespaceHydrationCoordinator?.scheduleEditorSessionStateSave()
@@ -587,9 +590,8 @@ struct AppContainer {
         // construction the surface state that did NOT contain the typed
         // text, so it's safe to retain. F041-T07.
         terminalServices.insightObserverConfigurator = { observer in
-            observer.onSensitiveClassification = { [weak contextSummaryObservabilityStore] info in
-                guard let store = contextSummaryObservabilityStore else { return }
-                store.record(
+            observer.onSensitiveClassification = { [contextSummaryObservabilityStore] info in
+                contextSummaryObservabilityStore.record(
                     ContextSummaryTrace(
                         source: .live,
                         received: "",

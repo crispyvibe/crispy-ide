@@ -3,7 +3,7 @@ title: "Markdown Editor"
 feature: "F008"
 domain: "editor"
 audience: "user"
-version: "1.0"
+version: "1.1"
 sidebar:
   label: "Markdown"
   order: 1
@@ -50,8 +50,9 @@ The Markdown Editor provides a rich editing experience for `.md`, `.markdown`, a
 
 ### Navigating Links in Rich Mode
 
-- Click `#section` links to jump immediately to the matching heading. The destination briefly highlights; press **⌘[** to return to the previous document position.
-- Click a relative Markdown link such as `../guide.md#setup` to open that file in the current Crispy editor group and jump to its heading after rendering.
+- Click `#section` links to jump immediately to the matching heading. The destination briefly highlights.
+- Click a relative Markdown link such as `../guide.md#setup` to open that file in the same Crispy view and jump to its heading after rendering. The title, folder, comments, and file actions update to the linked file.
+- Use the visible **Back** and **Forward** buttons in compact Spotlight and board views, or press **⌘[** and **⌘]**. One history covers both section jumps and linked Markdown files, so you can return from `guide.md#setup` to the source file and move forward again. Pinning the view does not reset that history or jump back to the file where the preview began.
 - Click another local file link to open it in Crispy. Right-click to choose the system default app instead.
 - Click an HTTP(S) link to show an anchored action popover when your preference is **Ask Each Time**. Choose **Open in Crispy** or **Default Browser**.
 - Right-click any link for the complete action set. Web links offer open destinations plus **Edit**, **Copy**, and **Remove**; Remove keeps the visible link text.
@@ -91,6 +92,8 @@ Crispy blocks executable/unknown schemes, protocol-relative links, web URLs with
 | Replace | ⌘⇧H |
 | Bold | ⌘B |
 | Italic | ⌘I |
+| Back through Markdown sections/files | ⌘[ |
+| Forward through Markdown sections/files | ⌘] |
 
 ## Settings
 
@@ -122,7 +125,14 @@ Crispy blocks executable/unknown schemes, protocol-relative links, web URLs with
 | A web link is blocked | Use a complete HTTP(S) address without embedded username/password credentials. Executable and unknown schemes are intentionally rejected. |
 | A relative file link does not open | Verify the target exists relative to the current Markdown file and points to a file rather than a directory. |
 | Clicking a link navigates when I want to edit | Hold Option while clicking, or right-click and choose **Edit**. |
+| A pinned Markdown tile shows the wrong file | Back/Forward and the tile title should follow the linked file currently shown, not the file first pinned. Close and reopen the tile if an older build reset it. |
 
 ### Rich-Mode Line Numbers
 
 Choose **All Text Views** in App Settings → General to show the starting source line beside each logical rich Markdown block. Paragraphs, headings, list/table wrappers, and raw blocks receive one source position; wrapped display rows are not separate Markdown lines. Labels follow the theme and global text size, coexist with comment indicators, and are presentation-only—saving produces no line-number markup. HTML documents do not receive Markdown source labels.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-06 | Version 1.1: documented shared section/file Back and Forward, compact controls and shortcuts, current-file context, and pin continuity. | — |
