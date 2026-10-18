@@ -123,37 +123,58 @@ final class BrowserTabReferenceTests: XCTestCase {
     }
 }
 
+@MainActor
 final class SpotlightRestoreDescriptorTests: XCTestCase {
-
-    func testTerminalDescriptorCreation() {
-        let descriptor = SpotlightRestoreDescriptor.terminal(
-            projectRootURL: URL(fileURLWithPath: "/projects/app"),
-            tabID: UUID()
+    func testDescriptorPreservesExactStateIdentitySurfaceAndCallbacks() {
+        let surfaceID = UUID()
+        var actionCount = 0
+        let state = TerminalSpotlightState(
+            id: UUID(),
+            source: .browser(tileID: UUID(), url: URL(string: "https://example.com")!),
+            title: "Browser",
+            accentColor: nil,
+            workingDirectoryURL: URL(fileURLWithPath: "/tmp"),
+            onSplitTerminalRequested: { actionCount += 1 },
+            onTemporaryTerminalRequested: {},
+            isTemporary: false,
+            owningProjectRootURL: nil,
+            surfaceID: surfaceID
         )
-        if case .terminal = descriptor {} else {
-            XCTFail("Expected .terminal descriptor")
-        }
+        let descriptor = SpotlightRestoreDescriptor(spotlight: state)
+
+        XCTAssertEqual(descriptor.spotlight.id, state.id)
+        XCTAssertEqual(descriptor.spotlight.surfaceID, surfaceID)
+        XCTAssertEqual(descriptor.spotlight.navigationIdentity, state.navigationIdentity)
+        descriptor.spotlight.onSplitTerminalRequested?()
+        XCTAssertEqual(actionCount, 1)
     }
 
-    func testBrowserPreviewDescriptorCreation() {
-        let descriptor = SpotlightRestoreDescriptor.browserPreview(
-            snapshot: BrowserSessionSnapshot(
-                urlString: "https://example.com",
-                backHistoryURLStrings: ["https://example.com/start"],
-                pageZoom: 1.25
-            ),
-            projectPath: nil
+    func testBrowserPreviewDescriptorRefreshesSnapshotWithoutDroppingStableState() throws {
+        let coordinator = TerminalSpotlightCoordinator(diagnosticsSnapshot: TerminalDiagnosticsSnapshot())
+        let initial = BrowserSessionSnapshot(urlString: "https://example.com")
+        let refreshed = BrowserSessionSnapshot(
+            urlString: "https://example.com/current",
+            backHistoryURLStrings: ["https://example.com/start"],
+            pageZoom: 1.25
         )
-        if case .browserPreview = descriptor {} else {
-            XCTFail("Expected .browserPreview descriptor")
-        }
-    }
+        let state = TerminalSpotlightState(
+            id: UUID(), source: .browserPreview(snapshot: initial), title: "Browser",
+            accentColor: nil, workingDirectoryURL: URL(fileURLWithPath: "/tmp"),
+            onSplitTerminalRequested: nil, onTemporaryTerminalRequested: nil,
+            isTemporary: true, owningProjectRootURL: nil, surfaceID: UUID()
+        )
+        coordinator.setSpotlight(state, animated: false)
+        let descriptor = try XCTUnwrap(coordinator.descriptorForCurrentSpotlight {
+            refreshed
+        })
 
-    func testBrowserDockedDescriptorCreation() {
-        let descriptor = SpotlightRestoreDescriptor.browser(tileID: UUID(), url: URL(string: "https://example.com")!)
-        if case .browser = descriptor {} else {
-            XCTFail("Expected .browser descriptor")
+        XCTAssertEqual(descriptor.spotlight.id, state.id)
+        XCTAssertEqual(descriptor.spotlight.surfaceID, state.surfaceID)
+        guard case let .browserPreview(snapshot) = descriptor.spotlight.source else {
+            return XCTFail("Expected browser preview state")
         }
+        XCTAssertEqual(snapshot, refreshed)
+        coordinator.dismiss(animated: false)
     }
 }
 

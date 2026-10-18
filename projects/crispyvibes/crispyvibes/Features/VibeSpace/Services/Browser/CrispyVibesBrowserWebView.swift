@@ -6,6 +6,7 @@ final class CrispyVibesBrowserWebView: WKWebView {
     var onOpenInNewTab: ((URL) -> Void)?
     var onNavigateBack: (() -> Void)?
     var onNavigateForward: (() -> Void)?
+    var onHostInteraction: (() -> Void)?
     private var pointerFocusAllowanceDepth: Int = 0
     private var middleClickTimestamp: Date?
 
@@ -61,6 +62,7 @@ final class CrispyVibesBrowserWebView: WKWebView {
     // MARK: - Mouse
 
     override func mouseDown(with event: NSEvent) {
+        onHostInteraction?()
         pointerFocusAllowanceDepth += 1
         defer { pointerFocusAllowanceDepth -= 1 }
         NotificationCenter.default.post(name: .webViewDidReceiveClick, object: self)
@@ -68,6 +70,7 @@ final class CrispyVibesBrowserWebView: WKWebView {
     }
 
     override func otherMouseDown(with event: NSEvent) {
+        onHostInteraction?()
         switch event.buttonNumber {
         case 2: // Middle click — track for new-tab intent
             middleClickTimestamp = Date()

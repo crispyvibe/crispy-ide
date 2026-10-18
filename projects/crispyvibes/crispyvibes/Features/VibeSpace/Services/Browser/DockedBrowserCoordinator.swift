@@ -410,6 +410,11 @@ final class DockedBrowserCoordinator: ObservableObject {
 
     // MARK: - Pinned Tile Groups
 
+    /// Returns an already-owned canonical browser without creating a hidden host.
+    func existingViewModel(for tileID: UUID) -> BrowserPanelViewModel? {
+        groups[tileID] ?? linkedDetailedViewModel(to: tileID)
+    }
+
     func viewModel(
         for tileID: UUID,
         url: URL,

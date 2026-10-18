@@ -60,6 +60,7 @@ private struct VibeSpaceRailLayoutState: Codable, Equatable {
         case terminalBoardLayout
         case terminalBoardState
         case vibespaceSpotlightTerminalOrder
+        case spotlightLayoutSnapshot
     }
 
     var railSizes: AppRailSizeState
@@ -70,6 +71,7 @@ private struct VibeSpaceRailLayoutState: Codable, Equatable {
     var terminalBoardLayout: VibeSpaceTerminalBoardLayout
     var terminalBoardState: VibeSpaceTerminalBoardState
     var vibespaceSpotlightTerminalOrder: [VibeSpaceSpotlightTerminalOrderEntry]
+    var spotlightLayoutSnapshot: SpotlightLayoutSnapshot
 
     init(
         railSizes: AppRailSizeState = .default,
@@ -80,7 +82,8 @@ private struct VibeSpaceRailLayoutState: Codable, Equatable {
         detailedTerminalPaneCollapsed: Bool = false,
         terminalBoardLayout: VibeSpaceTerminalBoardLayout = .empty,
         terminalBoardState: VibeSpaceTerminalBoardState? = nil,
-        vibespaceSpotlightTerminalOrder: [VibeSpaceSpotlightTerminalOrderEntry] = []
+        vibespaceSpotlightTerminalOrder: [VibeSpaceSpotlightTerminalOrderEntry] = [],
+        spotlightLayoutSnapshot: SpotlightLayoutSnapshot = SpotlightLayoutSnapshot()
     ) {
         self.railSizes = railSizes
         self.canvasModeRawValue = canvasMode.rawValue
@@ -90,6 +93,9 @@ private struct VibeSpaceRailLayoutState: Codable, Equatable {
         self.terminalBoardLayout = terminalBoardLayout
         self.terminalBoardState = terminalBoardState ?? .fromLegacyLayout(terminalBoardLayout)
         self.vibespaceSpotlightTerminalOrder = vibespaceSpotlightTerminalOrder.normalized()
+        self.spotlightLayoutSnapshot = spotlightLayoutSnapshot.normalized(
+            liveIDs: spotlightLayoutSnapshot.flattenedMembers
+        )
     }
 
     init(from decoder: Decoder) throws {
@@ -118,6 +124,16 @@ private struct VibeSpaceRailLayoutState: Codable, Equatable {
             [VibeSpaceSpotlightTerminalOrderEntry].self,
             forKey: .vibespaceSpotlightTerminalOrder
         )?.normalized() ?? []
+        spotlightLayoutSnapshot = (try? container.decodeIfPresent(
+            SpotlightLayoutSnapshot.self,
+            forKey: .spotlightLayoutSnapshot
+        )) ?? SpotlightLayoutSnapshot(
+            positions: vibespaceSpotlightTerminalOrder.map {
+                SpotlightPositionSnapshot(members: [
+                    .terminal(projectPath: $0.projectPath, tabID: $0.tabID)
+                ])
+            }
+        )
     }
 
     var canvasMode: VibeSpaceCanvasMode {
@@ -138,7 +154,8 @@ private struct VibeSpaceRailLayoutState: Codable, Equatable {
             detailedTerminalPaneCollapsed: detailedTerminalPaneCollapsed,
             terminalBoardLayout: terminalBoardState.normalized().primaryLayout,
             terminalBoardState: terminalBoardState.normalized(),
-            vibespaceSpotlightTerminalOrder: vibespaceSpotlightTerminalOrder.normalized()
+            vibespaceSpotlightTerminalOrder: vibespaceSpotlightTerminalOrder.normalized(),
+            spotlightLayoutSnapshot: spotlightLayoutSnapshot
         )
     }
 }
@@ -297,6 +314,67 @@ final class LayoutPersistenceService: ObservableObject {
         layout.terminalBoardLayout = terminalBoardState.primaryLayout
         vibespaceLayoutsByID[key] = layout.normalized()
         persistVibeSpaceLayout(key: key)
+    }
+
+    func spotlightReconciliation(
+        liveIDs: [SpotlightPersistentItemID],
+        currentID: SpotlightPersistentItemID?,
+        for vibespaceID: UUID?
+    ) -> SpotlightReconciliationResult {
+        if let vibespaceID { loadVibeSpaceLayoutIfNeeded(for: vibespaceID) }
+        let layout = layoutForVibeSpace(vibespaceKey(for: vibespaceID))
+        let seed = layout.spotlightLayoutSnapshot.positions.isEmpty
+            ? SpotlightLayoutSnapshot(positions: layout.vibespaceSpotlightTerminalOrder.map {
+                SpotlightPositionSnapshot(members: [.terminal(projectPath: $0.projectPath, tabID: $0.tabID)])
+            })
+            : layout.spotlightLayoutSnapshot
+        return SpotlightLayoutReconciler.reconcile(snapshot: seed, liveIDs: liveIDs, currentID: currentID)
+    }
+
+    func spotlightLayout(
+        liveIDs: [SpotlightPersistentItemID],
+        for vibespaceID: UUID?
+    ) -> SpotlightLayoutSnapshot {
+        if let vibespaceID {
+            loadVibeSpaceLayoutIfNeeded(for: vibespaceID)
+        }
+        let layout = layoutForVibeSpace(vibespaceKey(for: vibespaceID))
+        let seed: SpotlightLayoutSnapshot
+        if layout.spotlightLayoutSnapshot.positions.isEmpty {
+            seed = SpotlightLayoutSnapshot(
+                positions: layout.vibespaceSpotlightTerminalOrder.map {
+                    SpotlightPositionSnapshot(members: [
+                        .terminal(projectPath: $0.projectPath, tabID: $0.tabID)
+                    ])
+                }
+            )
+        } else {
+            seed = layout.spotlightLayoutSnapshot
+        }
+        return seed.normalized(liveIDs: liveIDs)
+    }
+
+    @discardableResult
+    func setSpotlightLayout(
+        _ snapshot: SpotlightLayoutSnapshot,
+        liveIDs: [SpotlightPersistentItemID],
+        for vibespaceID: UUID?
+    ) -> Bool {
+        if let vibespaceID {
+            loadVibeSpaceLayoutIfNeeded(for: vibespaceID)
+        }
+        let key = vibespaceKey(for: vibespaceID)
+        var layout = layoutForVibeSpace(key)
+        let normalized = snapshot.normalized(liveIDs: liveIDs)
+        guard layout.spotlightLayoutSnapshot != normalized else { return false }
+        layout.spotlightLayoutSnapshot = normalized
+        layout.vibespaceSpotlightTerminalOrder = normalized.flattenedMembers.compactMap { id in
+            guard case let .terminal(projectPath, tabID) = id else { return nil }
+            return VibeSpaceSpotlightTerminalOrderEntry(projectPath: projectPath, tabID: tabID)
+        }
+        vibespaceLayoutsByID[key] = layout.normalized()
+        persistVibeSpaceLayout(key: key)
+        return true
     }
 
     func vibespaceSpotlightTerminalOrder(
@@ -480,6 +558,44 @@ final class LayoutPersistenceService: ObservableObject {
 
     private func persistProjectPaneLayouts() {
         persistenceStore.save(projectLayoutsByPath, to: projectPaneLayoutsFileURL)
+    }
+
+    /// Atomically persists the canonical main Spotlight layout and its mirrored board state.
+    ///
+    /// The caller supplies a board state whose primary surface has already been reordered
+    /// with destination-slot geometry semantics. This operation updates the VibeSpace
+    /// snapshot, legacy terminal-order mirror, and terminal board state in one disk write.
+    @discardableResult
+    func commitMainSpotlightLayout(
+        _ snapshot: SpotlightLayoutSnapshot,
+        liveIDs: [SpotlightPersistentItemID],
+        terminalBoardState: VibeSpaceTerminalBoardState,
+        for vibespaceID: UUID?
+    ) -> Bool {
+        if let vibespaceID {
+            loadVibeSpaceLayoutIfNeeded(for: vibespaceID)
+        }
+        let key = vibespaceKey(for: vibespaceID)
+        var layout = layoutForVibeSpace(key)
+        let normalizedSnapshot = snapshot.normalized(liveIDs: liveIDs)
+        let normalizedBoardState = terminalBoardState.normalized()
+        let legacyTerminalOrder: [VibeSpaceSpotlightTerminalOrderEntry] = normalizedSnapshot.flattenedMembers.compactMap { id in
+            guard case let .terminal(projectPath, tabID) = id else { return nil }
+            return VibeSpaceSpotlightTerminalOrderEntry(projectPath: projectPath, tabID: tabID)
+        }
+        guard layout.spotlightLayoutSnapshot != normalizedSnapshot
+                || layout.vibespaceSpotlightTerminalOrder != legacyTerminalOrder
+                || layout.terminalBoardState != normalizedBoardState else {
+            return false
+        }
+
+        layout.spotlightLayoutSnapshot = normalizedSnapshot
+        layout.vibespaceSpotlightTerminalOrder = legacyTerminalOrder
+        layout.terminalBoardState = normalizedBoardState
+        layout.terminalBoardLayout = normalizedBoardState.primaryLayout
+        vibespaceLayoutsByID[key] = layout.normalized()
+        persistVibeSpaceLayout(key: key)
+        return true
     }
 
     // MARK: - Editor Session State

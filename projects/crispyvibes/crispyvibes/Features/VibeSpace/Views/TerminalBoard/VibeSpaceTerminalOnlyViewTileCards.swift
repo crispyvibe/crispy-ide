@@ -154,8 +154,10 @@ extension VibeSpaceTerminalOnlyView {
                 )
                 DockPinnedFileView(
                     fileURL: fileURL,
+                    tileID: tile.id,
                     isActive: isActive,
                     editorGroup: group,
+                    ownershipCoordinator: coordinator,
                     onSelect: { boardStore.activateTile(tile.id, requestFocus: false, surfaceID: surfaceID) },
                     onClose: {
                         coordinator.removeGroup(for: tile.id)
@@ -246,7 +248,8 @@ extension VibeSpaceTerminalOnlyView {
                             context.terminalTab.id,
                             context.projectTitle,
                             projectAccentColor,
-                            projectURL(for: context.projectPath)
+                            projectURL(for: context.projectPath),
+                            tile.id
                         )
                     },
                     onSplitTerminal: {

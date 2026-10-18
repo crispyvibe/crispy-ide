@@ -634,7 +634,8 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         mutate { state in
             guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
             guard state.surfaces[index].layout.tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount else { return }
-            guard !state.surfaces[index].layout.tiles.contains(where: { $0.isVibeCast }) else { return }
+            let layout = state.surfaces[index].layout
+            guard !(layout.tiles + layout.minimizedTiles).contains(where: { $0.isVibeCast }) else { return }
             let tile = VibeSpaceTerminalBoardTile(workingDirectoryPath: "", contentKind: .vibeCast)
             didInsert = state.surfaces[index].layout.insertNewTile(
                 tile,
@@ -651,7 +652,8 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         mutate { state in
             guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
             guard state.surfaces[index].layout.tileCount < VibeSpaceTerminalBoardLayout.maximumTileCount else { return }
-            guard !state.surfaces[index].layout.tiles.contains(where: { $0.isVibeLanes }) else { return }
+            let layout = state.surfaces[index].layout
+            guard !(layout.tiles + layout.minimizedTiles).contains(where: { $0.isVibeLanes }) else { return }
             let tile = VibeSpaceTerminalBoardTile(workingDirectoryPath: "", contentKind: .vibeLanes)
             didInsert = state.surfaces[index].layout.insertNewTile(
                 tile,
@@ -697,7 +699,9 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
                         .filter { $0.acpSnapshot?.id == storeID }
                         .map(\.id)
                 for id in matchingIDs {
-                    _ = state.surfaces[surfaceIndex].layout.removeTile(withID: id)
+                    if let removed = state.surfaces[surfaceIndex].layout.removeTile(withID: id) {
+                        Self.removeSpotlightMember(for: removed, from: &state.surfaces[surfaceIndex])
+                    }
                 }
             }
         }
@@ -712,7 +716,8 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         }
         mutate { state in
             guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
-            _ = state.surfaces[index].layout.removeTile(withID: tileID)
+            guard let removed = state.surfaces[index].layout.removeTile(withID: tileID) else { return }
+            Self.removeSpotlightMember(for: removed, from: &state.surfaces[index])
         }
     }
 

@@ -11,18 +11,22 @@ import SwiftUI
 /// Owned as a singleton by `AppContainer`. Not persisted across app restarts.
 @MainActor
 final class ComposeHistoryStore {
-    private var buckets: [UUID: [String]] = [:]
+    private var buckets: [String: [String]] = [:]
     let maxEntriesPerBucket: Int
 
     init(maxEntriesPerBucket: Int = 500) {
         self.maxEntriesPerBucket = maxEntriesPerBucket
     }
 
-    func entries(for key: UUID) -> [String] {
+    func entries(for key: String) -> [String] {
         buckets[key] ?? []
     }
 
-    func append(_ text: String, for key: UUID) {
+    func entries(for key: UUID) -> [String] {
+        entries(for: key.uuidString)
+    }
+
+    func append(_ text: String, for key: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         var bucket = buckets[key] ?? []
@@ -36,8 +40,16 @@ final class ComposeHistoryStore {
         buckets[key] = bucket
     }
 
-    func clear(for key: UUID) {
+    func append(_ text: String, for key: UUID) {
+        append(text, for: key.uuidString)
+    }
+
+    func clear(for key: String) {
         buckets.removeValue(forKey: key)
+    }
+
+    func clear(for key: UUID) {
+        clear(for: key.uuidString)
     }
 }
 

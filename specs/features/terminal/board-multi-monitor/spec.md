@@ -35,7 +35,7 @@ Detached board windows must close when the owning vibespace closes.
 
 ### F048-R06: Placement persistence
 
-Detached board window geometry (frame, display assignment) must persist per vibespace and restore on next open using best-effort placement.
+Detached board window frame coordinates and captured display identity must persist per vibespace. On reopen, the saved frame is reapplied directly as best-effort placement. The current restore path does not use the persisted display identity to choose a screen or explicitly clamp/fallback an unavailable display.
 
 ### F048-R07: Tile transfer via context menu
 
@@ -43,19 +43,19 @@ Visible tile headers and minimized tab context menus must support sending the se
 
 ### F048-R08: Surface-targeted creation
 
-New-terminal, split-terminal, and temporary-terminal-to-persistent actions initiated from a board surface must target the initiating surface.
+New-terminal and split/create-new-persistent-terminal actions initiated from a board surface must create a persistent tile on the initiating surface. A create action offered from temporary Spotlight creates a separate persistent terminal tile; it does not convert the temporary process.
 
-### F048-R09: Independent spotlight
+### F048-R09: Independent local Spotlight coordinator
 
-Each detached board window must own an independent local spotlight coordinator so spotlight does not jump to the primary vibespace window.
+Each detached board window MUST own an independent `TerminalSpotlightCoordinator`, restore stack, browser-preview owner, scroll ownership, and host-scoped editor lease. Its catalog MUST enumerate all project-terminal and standalone-terminal tile members first in visible-then-minimized terminal order, then file, browser, ACP, VibeCast, and tile-backed Vibe Lanes members in a second visible-then-minimized pass. When no Vibe Lanes tile exists, the host MUST append a synthetic Vibe Lanes member. A persisted Spotlight snapshot MAY retain a user-arranged order different from this catalog seed. The local host MUST provide the F003 44 pt shelf, compact grid-count semantic overview, max-two combo layout, separate pane-local terminal compose bars/drafts, full-identity Up/Down history through the AppContainer-owned store, activation-before-send, orientation, and focus parity. Terminal link/file/browser previews, validated restore, temporary process-exit cleanup, and dismissal MUST remain local and MUST NOT jump to or release ownership held by the primary window.
 
-### F048-R10: Tile transfer semantics
+### F048-R10: Single-tile transfer semantics
 
-Tile transfer must move exactly one tile between board surfaces. No cloning, no bulk-move, no blank placeholders left on the source surface.
+A single-tile transfer initiated through `Send to New Board Window` or `Send to Board Window` must move exactly the selected tile between board surfaces. That action must not clone the tile, move sibling tiles, or leave blank placeholders on the source surface. This restriction applies only to the single-tile transfer actions; the separate project-scoped bulk move defined by F048-R13 intentionally moves all matching tiles.
 
-### F048-R11: Window toolbar
+### F048-R11: Surface-local window toolbar
 
-Detached board windows must have a toolbar with actions to add VibeCast, Agent, and Browser tiles to that surface.
+Detached board windows MUST have a surface-scoped toolbar in this order: Terminal, Agent, Browser, VibeCast, and Vibe Lanes. Terminal creation MUST distinguish persistent and temporary submission: persistent creates a tile directly on the detached surface, while temporary crosses a per-window toolbar bridge and opens in that window's local Spotlight without creating a tile. Choosing split/create new persistent terminal from the temporary Spotlight MUST create exactly one separate persistent tile on the same detached surface; it MUST NOT convert the temporary process. Toolbar availability MUST respect that surface's tile cap. VibeCast and Vibe Lanes singleton checks MUST include both visible `layout.tiles` and `layout.minimizedTiles`, so a minimized singleton suppresses its corresponding add action.
 
 ### F048-R12: Window rename
 
@@ -77,10 +77,9 @@ the right-clicked tile's `projectPath` to determine which project's tiles
 to bulk-move (the right-clicked tile may not be from the focused project)
 and is hidden when the tile has no resolved project ownership.
 
-### F048-R14: Board mode only
+### F048-R14: Bulk-move and bulk-recall board-mode guard
 
-The bulk-move and bulk-recall shortcuts MUST operate in terminal board mode
-only. Detailed mode invocations are a no-op (silent, no error).
+The bulk-move and bulk-recall shortcuts MUST operate in terminal board mode only. A Detailed-mode invocation MUST be a silent no-op, including when a detached board window is focused.
 
 ### F048-R15: Source surface reorganization
 
@@ -96,6 +95,10 @@ Default binding: `⌘⌥B`. Invocation from the primary window is a no-op.
 Tile overflow (when the primary surface's 16-tile cap is reached) is
 handled by the existing reattach pathway, which folds excess tiles into
 `minimizedTiles`.
+
+### F048-R17: Per-surface Spotlight layout, restore, and privacy
+
+Each detached surface MUST persist and restore its own `spotlightLayout` order, combos, member order, and orientation with tile layout and placement. Decode/reconciliation MUST validate persistent surface membership/tile identity plus terminal-tab, ACP-store, and file-owner availability where applicable; browser-preview descriptors MUST additionally contain a decodable URL. A persistent browser MAY recreate or resolve its canonical owner without requiring a pre-existing browser view model. Reconciliation MUST collapse missing combo members, append new members, preserve board geometry/session lifetime, and never merge state with another surface. Semantic overview metadata MUST follow F003 redaction rules and MUST NOT contain screenshots, terminal screen excerpts, commands, or live output.
 
 ## Scenarios
 
@@ -131,17 +134,26 @@ handled by the existing reattach pathway, which folds excess tiles into
 **When** the vibespace is reopened with the same display topology  
 **Then** the detached board window is restored at its previous frame position
 
-### Scenario F048-S06: Spotlight in detached window
+### Scenario F048-S06: Full local Spotlight in detached window
 
-**Given** a detached board window is focused  
-**When** the user triggers spotlight  
-**Then** spotlight opens within the detached board window, not the primary window
+**Given** a detached board contains project/standalone terminals and nonterminal persistent panes
+**When** the user opens Spotlight, a terminal link/file preview, or a browser preview
+**Then** the independent local coordinator presents within that detached window
+**And** the primary coordinator, restore stack, and editor leases are unchanged
+**And** the local 44 pt shelf, grid-count semantic overview, persisted-order combos, orientation, and pane-local compose behavior include every supported persistent kind
+**When** the preview closes or its active temporary process exits
+**Then** stale descriptors are skipped, the nearest valid local owner restores, and local temporary resources are cleaned up.
 
-### Scenario F048-S07: New terminal targets initiating surface
+### Scenario F048-S07: Toolbar terminal creation targets the initiating surface
 
-**Given** the user is focused on a detached board window  
-**When** the user creates a new terminal tile  
-**Then** the tile appears on the detached board surface, not the primary surface
+**Given** the user is focused on a detached board window
+**When** the toolbar creates a persistent terminal
+**Then** one tile appears on that detached surface, not the primary surface
+**When** the toolbar creates a temporary terminal
+**Then** the per-window bridge opens it in local Spotlight and no tile is added
+**When** the user chooses split/create new persistent terminal from that temporary Spotlight
+**Then** exactly one separate persistent tile is added to the same detached surface
+**And** the temporary process is not converted or transferred into that tile.
 
 ### Scenario F048-S08: Empty window closes after transfer
 
@@ -161,7 +173,7 @@ handled by the existing reattach pathway, which folds excess tiles into
 **Given** the user is in terminal board mode with multiple projects' tiles on the primary surface  
 **And** project A is the focused project  
 **When** the user invokes the bulk-move shortcut (`⌘⌥M`)  
-**Then** every tile on the primary surface where `projectPath == projectA` moves to a new detached board window in a single mutation  
+**Then** every tile on the primary surface where `projectPath == projectA` is detached in one source-store mutation and added to a new detached surface in a second store mutation
 **And** other projects' tiles remain on the primary surface  
 **And** the layout on the primary surface compacts to fill the freed space (F048-R15)  
 **And** the new detached window opens at the system-default placement, ready to be dragged to another monitor
@@ -182,12 +194,13 @@ handled by the existing reattach pathway, which folds excess tiles into
 **And** the detached window closes automatically  
 **And** if the primary surface's 16-tile cap is exceeded, overflow tiles roll into the minimized tab strip
 
-### Scenario F048-S13: Bulk shortcuts in detailed mode are no-ops
+### Scenario F048-S13: Detailed-mode shortcut behavior
 
-**Given** the vibespace primary window is in detailed mode  
-**When** the user presses `⌘⌥M` or `⌘⌥B`  
-**Then** nothing happens (no error, no notification, no UI change)  
-**Because** F048-R14 restricts these shortcuts to terminal board mode
+**Given** the vibespace primary window is in Detailed mode
+**When** the user presses `⌘⌥M`
+**Then** nothing happens (no error, no notification, no UI change)
+**When** the user presses `⌘⌥B` from either the primary window or a focused detached board window
+**Then** nothing happens because both bulk routes require Terminal Board mode.
 
 ### Scenario F048-S14: Bulk move with no matching tiles is a no-op
 
@@ -211,22 +224,30 @@ handled by the existing reattach pathway, which folds excess tiles into
 - Primary vibespace window can switch modes without disrupting detached board windows.
 - Detached board windows close automatically with the owning vibespace.
 - Detached board windows are restored using persisted surface state and best-effort window placement.
-- Spotlight opens in the board window where the user initiated it.
+- Spotlight opens in the board window where the user initiated it and uses an independent coordinator, restore stack, preview owner, scroll owner, and editor lease.
+- Detached Spotlight includes all persistent kinds with per-surface 44 pt shelf/grid/combo/orientation and pane-local terminal compose parity.
+- Detached terminal link, file, and browser previews stay local; restore validates surface/tile identity, terminal/ACP/file owners where applicable, and browser-preview URLs, while a valid persistent browser can resolve without a pre-existing view model. Temporary process exit cleans up local resources.
+- The toolbar distinguishes direct persistent terminal creation from the bridged temporary Spotlight path; split/create-new-persistent-terminal adds a separate tile to the same surface without converting the temporary process.
 - Settings continue to behave as primary-window shell flows.
 - Persistent terminal creation from plus, split, and spotlight actions appears on the initiating board surface.
 - Context-menu tile transfer moves one selected tile only, leaves no blank source placeholders, and closes emptied detached source windows.
 - Transfer target menu shows current surface content labels.
-- Bulk-move shortcut (`⌘⌥M`, F048-R13) relocates every tile on the source surface owned by the focused project to a new detached board window in a single store mutation; remaining tiles compact via the existing layout reflow (F048-R15). The same action is invokable from any tile's right-click menu via "Send All From This Project to New Window", which uses the right-clicked tile's project (not the focused project).
+- Bulk-move shortcut (`⌘⌥M`, F048-R13) relocates every tile on the source surface owned by the focused project to a new detached board window through a source-detach mutation followed by a destination-surface mutation; remaining tiles compact via the existing source-layout reflow (F048-R15). The same action is invokable from any tile's right-click menu via "Send All From This Project to New Window", which uses the right-clicked tile's project (not the focused project). A crash between the two mutations can leave removal persisted before destination creation.
 - Bulk-recall shortcut (`⌘⌥B`, F048-R16) returns every tile on a focused detached surface to the primary surface and closes the detached window; tile-cap overflow rolls into the minimized strip.
-- Bulk shortcuts are no-ops outside terminal board mode (F048-R14) and when no tiles match the focused project on the source surface.
+- Bulk move and bulk recall are silent no-ops outside terminal board mode. Bulk move is also a no-op when no source tiles match; bulk recall is a no-op from the primary window.
 
 ## Test Coverage
 
-| Requirement | Test |
+> **Evidence status (2026-10-18 documentation review):** No tests, builds, apps, processes, or manual UI checks were run. The table is a static inventory only. Source and `SpotlightEnhancementTests` contain surface identity, detached snapshot, full-kind factory, local shortcut/permanent creation, restore, process-exit, redaction, and geometry assertions. Production inspection confirms detached compose-history environment injection, visible-plus-minimized VibeCast/Vibe Lanes singleton checks, and the bulk-recall Terminal Board mode guard. Mounted detached NSWindow coverage for toolbar bridge delivery, complete local preview UI, multi-host editor leases, placement restore, and cleanup was not found.
+
+| Requirement | Static test/source inventory |
 |------|------|
+| F048-R09 / F048-S06 | `SpotlightStandaloneAndRestoreTests` statically covers detached identity/factory and restore guards; local window UI/parity remains unmounted. |
+| F048-R11 / F048-S07 | Production source contains `DetachedToolbarTemporaryTerminalBridge` and surface-targeted `onCreateTerminal`; no dedicated toolbar bridge test was found. |
+| F048-R17 | Detached snapshot Codable and unequal-geometry tests are present; end-to-end window restoration and lease cleanup remain gaps. |
 | F048-R13 (bulk detach + new surface) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testBulkDetachTilesForProjectRemovesOnlyMatching`, `testCreateDetachedSurfaceWithTilesPopulatesAndSetsActive` |
 | F048-R13 (visible + minimized) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testTileIDsForProjectIncludesMinimizedTiles`, `testBulkDetachTilesForProjectIncludesMinimized` |
-| F048-R13 (single mutation) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testBulkDetachIsSingleMutation` |
+| F048-R13 (source detach publication) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testBulkDetachIsSingleMutation` covers only the source-detach helper's publication; the complete detach-then-create move spans two mutations. |
 | F048-R13 (no match no-op) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testBulkDetachTilesForProjectNoMatchIsNoOp` |
 | F048-R16 (recall merges back) | `VibeSpaceTerminalBoardStoreBulkMoveTests.testRecallMergesAllDetachedTilesBackToPrimary` |
 
@@ -238,6 +259,8 @@ None — feature is implemented.
 
 | Date | Change | Author |
 |------|--------|--------|
-| 2026-05-20 | Initial spec from implemented feature | Kiro |
+| 2026-10-18 | Final audit fixes: scoped F048-R10 to single-tile transfer while preserving F048-R13 bulk move; documented detached history injection, visible-plus-minimized VibeCast/Vibe Lanes singleton checks, and the Terminal Board recall guard; replaced obsolete conversion wording with separate split/create-new-persistent-tile behavior. Static sources only; no tests or manual runs. | — |
+| 2026-10-18 | Review expanded F048-R09/R11/R17 and S06/S07 for independent local ownership, terminal-first two-pass ordering plus built-in Vibe Lanes fallback, per-surface shelf/grid/combo persistence, pane-local drafts/activation, canonical toolbar order, temporary versus persistent creation, local previews, restore validation, safe metadata, geometry-preserving reconciliation, placement limitations, immediate placement writes, and two-step non-atomic bulk move. Later production-fix status is recorded above. | — |
 | 2026-05-23 | Added F048-R13 to R16 (multi-monitor bulk pane move) with scenarios S10 to S14 and Test Coverage table | Kiro |
 | 2026-05-23 | Added "Send All From This Project to New Window" tile context menu entry alongside the keyboard shortcut (scenario S15) | Kiro |
+| 2026-05-20 | Initial spec from implemented feature | Kiro |

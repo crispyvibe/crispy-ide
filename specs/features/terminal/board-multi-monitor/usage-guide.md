@@ -3,7 +3,7 @@ title: "Terminal Board Multi-Monitor"
 feature: "F048"
 domain: "terminal"
 audience: "user"
-version: "1.0"
+version: "1.2"
 sidebar:
   label: "Multi-Monitor Board"
   order: 7
@@ -40,25 +40,32 @@ You can open as many detached board windows as you need.
 
 ### Creating terminals in a detached window
 
-When a detached board window is focused:
+The detached toolbar's Terminal action lets you choose the working directory and lifetime:
 
-- The **+** button creates a new terminal on that window's surface.
-- Split actions create splits on that window's surface.
-- Spotlight temporary terminals promote to that window's surface.
+- **Persistent** adds one terminal tile directly to that detached surface.
+- **Temporary** opens a terminal only in that window's Spotlight and adds no tile. Choose split/create new persistent terminal to add one separate persistent tile on the same surface; the temporary terminal itself is not converted.
 
-### Using spotlight in a detached window
+Tile and Spotlight split actions also create persistent terminals on the initiating detached surface.
 
-Press the spotlight shortcut while a detached board window is focused. Spotlight opens within that window — it does not jump to the primary window.
+### Using Spotlight in a detached window
 
-### Adding VibeCast, Agent, or Browser tiles
+Open Spotlight from a pane or terminal action in the detached board. Each window keeps its own Spotlight state, return path, previews, and saved shelf arrangement, so nothing jumps to the primary window.
 
-Each detached window has a toolbar with buttons to add:
+The local 44 pt shelf, compact grid-count control, safe three-column overview, two-member combos, orientation, and focused shared actions support project terminals, standalone terminals, files, browsers, ACP, VibeCast, and Vibe Lanes. Terminals appear first—visible terminal tiles followed by minimized terminals—then the other tile types appear in a second visible-then-minimized pass. If no Vibe Lanes tile exists, Vibe Lanes appears as a final built-in item. A saved custom shelf arrangement is restored in its saved order. Each terminal combo half keeps a separate compose draft and Up/Down history and activates before sending.
 
-- **VibeCast** tile
-- **Agent** tile
-- **Browser** tile
+Terminal links and filesystem targets open local browser/file previews. Closing them—or exit of the active temporary process—returns to the nearest valid local item. Overview cards show semantic status only and never screenshots, terminal screen excerpts, commands, or live output; file and browser locations are redacted.
 
-These tiles are created on the detached window's surface.
+### Adding content from the detached toolbar
+
+Each detached window has its own controls in this order:
+
+- **Terminal** (temporary or persistent)
+- **Agent**
+- **Browser**
+- **VibeCast**
+- **Vibe Lanes**
+
+Persistent items are created in the detached window, subject to its tile cap. VibeCast and Vibe Lanes each remain singletons across that surface's visible and minimized tiles. If one is minimized, its toolbar add action stays unavailable until the existing tile is removed.
 
 ### Renaming a detached window
 
@@ -102,7 +109,7 @@ You can also right-click any tile and choose **Send All From This Project to New
 
 Every tile on that detached surface moves back to the primary surface and the detached window closes. If the primary surface is already at its 16-tile cap, overflow tiles roll into the minimized tab strip.
 
-The shortcut is a no-op when invoked from the primary window or outside terminal board mode.
+The shortcut is a no-op when invoked from the primary window. Both bulk move and bulk recall are also silent no-ops while the primary vibespace is in Detailed mode; switch back to Terminal Board mode before using them.
 
 Both bindings are editable in App Settings → Shortcuts → Terminal Board.
 
@@ -110,7 +117,7 @@ Both bindings are editable in App Settings → Shortcuts → Terminal Board.
 
 No additional settings are required. Detached board windows are a natural extension of terminal board mode.
 
-Window positions are automatically saved per vibespace and restored on next open when the same display topology is available.
+Window frame coordinates and display identity are saved per vibespace. On reopen, the saved frame is reapplied directly. The current restore path does not use the saved display identity to select a monitor or explicitly clamp the frame.
 
 ## Troubleshooting
 
@@ -135,3 +142,12 @@ Detached windows close with their owning vibespace. If a window persists unexpec
 - There is no single continuous board canvas spanning monitors; each window is an independent surface.
 - Drag-to-transfer between windows uses screen-point hit testing; very fast drags may not register the target.
 - Window placement restoration is best-effort; macOS may adjust frames if displays are rearranged.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-18 | Version 1.2: documented detached Up/Down history parity, minimized-aware VibeCast/Vibe Lanes singleton controls, the Detailed-mode guard for bulk move and recall, and separate persistent-tile creation from temporary Spotlight without process conversion. | — |
+| 2026-10-18 | Version 1.1: documented independent detached-window Spotlight behavior, terminal-first ordering with built-in Vibe Lanes fallback, the shelf and grid overview, combos, separate terminal drafts, canonical toolbar order, temporary versus persistent terminal creation, local previews, privacy-safe metadata, and saved arrangements. Later history, singleton, and shortcut-guard corrections are recorded above. | — |
+| 2026-05-23 | Added project bulk-move and detached-to-primary bulk-recall workflows. | Kiro |
+| 2026-05-20 | Initial guide for detached terminal-board windows. | Kiro |

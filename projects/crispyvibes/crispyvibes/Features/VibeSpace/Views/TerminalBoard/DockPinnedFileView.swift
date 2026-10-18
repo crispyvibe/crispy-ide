@@ -6,8 +6,10 @@ struct DockPinnedFileView: View {
     @AppStorage(AppPreferences.codeFontSizeKey)
     private var codeFontSize = AppPreferences.defaultCodeFontSize
     let fileURL: URL
+    let tileID: UUID
     let isActive: Bool
     @ObservedObject var editorGroup: EditorGroupStore
+    @ObservedObject var ownershipCoordinator: DockedFileViewerCoordinator
     let onSelect: () -> Void
     let onClose: () -> Void
     let onMinimize: () -> Void
@@ -20,7 +22,7 @@ struct DockPinnedFileView: View {
     var interactionController: BoardInteractionController?
 
     var body: some View {
-        EditorGroupFileSurface(group: editorGroup)
+        fileSurface
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, 30)
             .onTapGesture { onSelect() }
@@ -66,6 +68,16 @@ struct DockPinnedFileView: View {
             }
     }
 
+    @ViewBuilder
+    private var fileSurface: some View {
+        if ownershipCoordinator.spotlightOwnedTileIDs.contains(tileID) {
+            appThemePalette.canvasBackgroundColor
+                .accessibilityHidden(true)
+        } else {
+            EditorGroupFileSurface(group: editorGroup, onInteraction: onSelect)
+        }
+    }
+
     private var borderColor: Color {
         isActive ? appThemePalette.accentColor : appThemePalette.borderColorValue
     }
@@ -99,7 +111,7 @@ struct DockPinnedFileView: View {
                 systemName: "minus.circle.fill",
                 variant: .card,
                 color: appThemePalette.secondaryTextColor,
-                accessibilityLabel: "Minimize File Tile"
+                accessibilityLabel: AppStrings.Spotlight.minimizeFileTile
             ) {
                 onMinimize()
             }
@@ -108,7 +120,7 @@ struct DockPinnedFileView: View {
                 systemName: "xmark.circle.fill",
                 variant: .card,
                 color: appThemePalette.secondaryTextColor,
-                accessibilityLabel: "Close File Tile"
+                accessibilityLabel: AppStrings.Spotlight.closeFileTile
             ) {
                 onClose()
             }

@@ -14,8 +14,10 @@ final class DockedFileViewerCoordinator: ObservableObject {
     private var rootReferences: [UUID: FileDocumentReference] = [:]
     private var previewGroup: EditorGroupStore?
     private var previewRootReference: FileDocumentReference?
+    private var spotlightOwnershipByHost: [String: Set<UUID>] = [:]
 
     @Published var previewFileURL: URL?
+    @Published private(set) var spotlightOwnedTileIDs: Set<UUID> = []
     /// Tile identity list kept in sync by the board view — no editor state here.
     var dockedFiles: [DockedFileEntry] = []
 
@@ -122,6 +124,18 @@ final class DockedFileViewerCoordinator: ObservableObject {
 
     func assignedEditorGroup(for tileID: UUID) -> EditorGroupStore? {
         groups[tileID]
+    }
+
+    /// Updates one Spotlight host lease and publishes the union used by board tiles.
+    func setSpotlightOwnedTileIDs(_ tileIDs: Set<UUID>, ownerID: String) {
+        if tileIDs.isEmpty {
+            spotlightOwnershipByHost.removeValue(forKey: ownerID)
+        } else {
+            spotlightOwnershipByHost[ownerID] = tileIDs
+        }
+        let combined = spotlightOwnershipByHost.values.reduce(into: Set<UUID>()) { $0.formUnion($1) }
+        guard spotlightOwnedTileIDs != combined else { return }
+        spotlightOwnedTileIDs = combined
     }
 
     func removeGroup(for tileID: UUID) {

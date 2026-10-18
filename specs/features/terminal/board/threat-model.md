@@ -13,7 +13,7 @@ Terminal Board stores vibespace board layout, hosts long-lived terminal sessions
 
 ## Attack Surfaces
 
-- Persisted `VibeSpaceTerminalBoardState`, detached surface IDs, tile IDs, and window placement metadata.
+- Persisted `VibeSpaceTerminalBoardState`, detached surface IDs, tile IDs, per-surface F003 Spotlight value snapshots, and window placement metadata.
 - Drag-and-drop and context-menu transfer between primary and detached board surfaces.
 - Spotlight actions that create persistent terminal tiles from a board window.
 - Window restoration after vibespace reopen or display topology changes.
@@ -63,10 +63,38 @@ Terminal Board stores vibespace board layout, hosts long-lived terminal sessions
 - Likelihood: Medium for laptop/dock workflows.
 - Mitigation: Placement restore is best-effort and does not merge user panes unexpectedly. Moving or resizing the window writes new placement metadata. User can manually reposition if monitor topology changed.
 
+### F002-T07: Temporary and persistent creation cross surfaces
+
+- Vector: A detached toolbar request falls back to the primary coordinator, or a temporary terminal action creates a persistent tile on the wrong surface or is mistaken for conversion of the temporary process.
+- Impact: Unexpected process/tile creation in the wrong window and corrupted surface layout.
+- Likelihood: Medium.
+- Mitigation: The local toolbar bridge opens only a temporary detached Spotlight. Persistent New Terminal and split actions call `addTile(..., surfaceID:)` exactly once on the originating surface. A split/create-new-persistent action from temporary Spotlight creates a separate persistent terminal tile; the temporary process is not converted or transferred.
+
+### F002-T08: Local preview leaks or persists sensitive content
+
+- Vector: Detached browser/file overview metadata captures content pixels, terminal output, commands, raw paths, or sensitive URL components.
+- Impact: Local secret or browsing-context disclosure.
+- Likelihood: Medium if live content is sampled.
+- Mitigation: F003 safe semantic metadata only; no screenshots, terminal screen excerpts, live output, commands, or captured WebView/editor pixels. File data is filename/parent only, and browser userinfo/password/query/fragment are removed.
+
+### F002-T09: One Spotlight host releases another host's editor
+
+- Vector: Main and detached Spotlights display the same file tile while ownership is tracked by one global Boolean/set.
+- Impact: Duplicate editor hosts, lost responder state, or a blank file pane after unrelated window dismissal.
+- Likelihood: Medium.
+- Mitigation: Editor ownership is leased by host ID and tile set. Board suppression uses the union of leases; dismissal clears only the calling host's lease.
+
+### F002-T10: Stale restore or process callback mutates a detached window
+
+- Vector: A restore descriptor's terminal/ACP/file owner disappears, a browser preview contains an invalid URL, a persistent browser tile no longer belongs to the surface, or an old temporary process exits after replacement.
+- Impact: Wrong local content, blank preview, leaked process, or mutation of a newer Spotlight.
+- Likelihood: Medium.
+- Mitigation: Validate surface membership/tile identity for persistent members, validate terminal tabs, ACP stores, and file owners where applicable, require a decodable URL for browser previews, and allow a valid persistent browser tile to recreate or resolve through its canonical coordinator. Skip invalid descriptors, guard process exit by Spotlight ID, and release local sessions/previews/callbacks/monitors/leases on final dismissal.
+
 ## Residual Risks
 
 - Programmatic AppKit frame restoration may still place a window somewhere inconvenient when displays change. The product decision is to preserve detached board state rather than merge panes automatically.
-- Multi-window UI behavior still needs regression coverage beyond build validation, especially drag-to-existing-window, minimized transfer, and mixed tile-kind transfer.
+- Static test/source inspection covers normalization, geometry-safe persistence, surface-local identity, restore/process-exit guards, URL redaction, and detached AppContainer compose-history injection. No tests or manual UI flows were run for this documentation update. Mounted detached toolbar delivery, local preview presentation, multi-host editor-lease release, pane-history isolation, physical gestures, and complete window restoration remain UI/manual or missing dedicated regression gaps.
 
 ## NFR Compliance
 
@@ -74,3 +102,11 @@ Terminal Board stores vibespace board layout, hosts long-lived terminal sessions
 - REL-6 — tile removal and detached window close paths must not orphan terminal processes.
 - PERF-3, PERF-4 — layout mutation and persistence remain bounded by the 16-tile board limit.
 - A11Y-2 — board actions remain available through context menus and keyboard-reachable controls.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-18 | Final audit fixes: documented detached compose-history injection and clarified that split/create-new-persistent-terminal creates a separate tile rather than converting or transferring a temporary process. Static sources only; no tests or manual UI runs. | — |
+| 2026-10-18 | Added temporary-versus-persistent local creation, privacy-safe metadata, host-scoped editor lease, detached restore/process-exit threats, and static/manual gap accounting. Later production-fix status is recorded above. | — |
+| 2026-10-16 | Added regression controls for surface-scoped Spotlight identity and geometry-safe flattened reorder persistence, including minimized standalone terminals. | — |

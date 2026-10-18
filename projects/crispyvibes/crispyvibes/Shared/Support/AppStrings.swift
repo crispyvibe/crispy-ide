@@ -116,6 +116,47 @@ enum AppStrings {
         static let filesOpenedFromFinder = String(localized: "shelf.filesOpenedFromFinder")
     }
 
+    // MARK: - Spotlight (F003)
+
+    enum Spotlight {
+        static let allTabs = String(localized: "spotlight.shelf.allTabs", defaultValue: "All Tabs")
+        static let allTabsHelp = String(localized: "spotlight.shelf.allTabsHelp", defaultValue: "Search every Spotlight tab")
+        static let searchPlaceholder = String(localized: "spotlight.overview.search", defaultValue: "Search tabs")
+        static let noMatches = String(localized: "spotlight.overview.noMatches", defaultValue: "No matching tabs")
+        static let current = String(localized: "spotlight.status.current", defaultValue: "Current")
+        static let combo = String(localized: "spotlight.status.combo", defaultValue: "Combo")
+        static let focused = String(localized: "spotlight.status.focused", defaultValue: "Focused")
+        static let terminal = String(localized: "spotlight.type.terminal", defaultValue: "Terminal")
+        static let standalone = String(localized: "spotlight.group.standalone", defaultValue: "Standalone")
+        static let vibeSpace = String(localized: "spotlight.group.vibespace", defaultValue: "VibeSpace")
+        static let agents = String(localized: "spotlight.group.agents", defaultValue: "Agents")
+        static let agent = String(localized: "spotlight.type.agent", defaultValue: "Agent")
+        static let files = String(localized: "spotlight.group.files", defaultValue: "Files")
+        static let web = String(localized: "spotlight.group.web", defaultValue: "Web")
+        static let previous = String(localized: "spotlight.navigation.previous", defaultValue: "Previous Spotlight tab")
+        static let next = String(localized: "spotlight.navigation.next", defaultValue: "Next Spotlight tab")
+        static let toggleOrientation = String(localized: "spotlight.combo.toggleOrientation", defaultValue: "Toggle combo orientation")
+        static let dragCombo = String(localized: "spotlight.combo.drag", defaultValue: "Drag the whole combo")
+        static let active = String(localized: "spotlight.status.active", defaultValue: "Active")
+        static let idle = String(localized: "spotlight.status.idle", defaultValue: "Idle")
+        static let browserUnavailable = String(localized: "spotlight.browser.unavailable", defaultValue: "Browser Unavailable")
+        static let terminalUnavailable = String(localized: "spotlight.terminal.unavailable", defaultValue: "Terminal Unavailable")
+        static let minimizeFileTile = String(localized: "spotlight.fileTile.minimize", defaultValue: "Minimize File Tile")
+        static let closeFileTile = String(localized: "spotlight.fileTile.close", defaultValue: "Close File Tile")
+        static let pastedImage = String(localized: "spotlight.compose.pastedImage", defaultValue: "Pasted image")
+        static let close = String(localized: "spotlight.action.close", defaultValue: "Close Terminal Spotlight")
+        static let openInViewer = String(localized: "spotlight.action.openInViewer", defaultValue: "Open in Viewer")
+        static let pinToDock = String(localized: "spotlight.action.pinToDock", defaultValue: "Pin to Dock")
+        private static let itemAccessibilityFormat = String(
+            localized: "spotlight.item.accessibilityLabel",
+            defaultValue: "%1$@, %2$@"
+        )
+
+        static func itemAccessibilityLabel(_ title: String, _ secondary: String) -> String {
+            String(format: itemAccessibilityFormat, title, secondary)
+        }
+    }
+
     // MARK: - Todos (F053)
 
     enum Todos {

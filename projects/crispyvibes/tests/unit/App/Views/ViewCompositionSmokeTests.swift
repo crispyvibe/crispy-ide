@@ -344,7 +344,7 @@ final class ViewCompositionSmokeTests: XCTestCase {
                 topTrailing: 14
             ),
             onAddProjectsRequested: {},
-            onSpotlightRequested: { _, _, _, _, _ in },
+            onSpotlightRequested: { _, _, _, _, _, _ in },
             onACPSpotlightRequested: { _, _ in },
             onTemporaryTerminalRequested: { _, _, _, _, _ in },
             onTemporaryShortcutRequested: { _, _, _, _, _, _ in },
@@ -377,7 +377,7 @@ final class ViewCompositionSmokeTests: XCTestCase {
                 topTrailing: 14
             ),
             onAddProjectsRequested: {},
-            onSpotlightRequested: { _, _, _, _, _ in },
+            onSpotlightRequested: { _, _, _, _, _, _ in },
             onACPSpotlightRequested: { _, _ in },
             onTemporaryTerminalRequested: { _, _, _, _, _ in },
             onTemporaryShortcutRequested: { _, _, _, _, _, _ in },
@@ -405,7 +405,7 @@ final class ViewCompositionSmokeTests: XCTestCase {
                 topTrailing: 14
             ),
             onAddProjectsRequested: {},
-            onSpotlightRequested: { _, _, _, _, _ in },
+            onSpotlightRequested: { _, _, _, _, _, _ in },
             onACPSpotlightRequested: { _, _ in },
             onTemporaryTerminalRequested: { _, _, _, _, _ in },
             onTemporaryShortcutRequested: { _, _, _, _, _, _ in },

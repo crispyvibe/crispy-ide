@@ -1,217 +1,10 @@
-import SwiftUI
 import AppKit
-
-struct TerminalSpotlightCardView<SpotlightContent: View, InputBarContent: View>: View {
-    @Environment(\.appThemePalette) private var activeThemePalette
-    @EnvironmentObject private var themeManager: CrispyVibesThemeManager
-
-    let spotlight: TerminalSpotlightState
-    let onDismiss: () -> Void
-    let onPin: (() -> Void)?
-    let pinAccessibilityLabel: String?
-    let shortcutDefinitions: [TerminalShortcutDefinition]
-    let onShortcutSelected: ((TerminalShortcutDefinition) -> Void)?
-    let onManageShortcutsRequested: (() -> Void)?
-    let onSendSignal: ((String) -> Void)?
-    let onRenamePersistentTab: (TerminalViewModel, UUID, String) -> Void
-    let spotlightContent: () -> SpotlightContent
-    let inputBarContent: () -> InputBarContent
-
-    @State private var isRenaming = false
-    @State private var renameText = ""
-    @FocusState private var isRenameFieldFocused: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: spotlight.headerIconName)
-                    .foregroundStyle(spotlight.accentColor ?? activeThemePalette.accentColor)
-
-                HStack(spacing: 6) {
-                    if isRenaming, case let .persistent(vm, tabID) = spotlight.source {
-                        TextField("", text: $renameText, onCommit: {
-                            let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-                            onRenamePersistentTab(vm, tabID, trimmed)
-                            isRenaming = false
-                        })
-                        .textFieldStyle(.plain)
-                        .font(AppTypographyTokens.subheadlineSemibold)
-                        .foregroundStyle(activeThemePalette.primaryTextColor)
-                        .frame(maxWidth: 200)
-                        .focused($isRenameFieldFocused)
-                        .onExitCommand { isRenaming = false }
-                        .onAppear { isRenameFieldFocused = true }
-                    } else {
-                        spotlightHeaderTitle
-                            .font(AppTypographyTokens.subheadlineSemibold)
-                            .lineLimit(1)
-                            .foregroundStyle(activeThemePalette.primaryTextColor)
-                    }
-
-                    if spotlight.showsTemporaryBadge {
-                        Text(AppStrings.Terminal.temporary)
-                            .font(AppTypographyTokens.caption2Semibold)
-                            .foregroundStyle(activeThemePalette.secondaryTextColor)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(activeThemePalette.selectionBackgroundColor.opacity(0.22))
-                            .clipShape(Capsule())
-                    }
-                }
-
-                Spacer(minLength: 8)
-
-                spotlightHeaderDirectory
-                    .font(AppTypographyTokens.caption2)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(activeThemePalette.secondaryTextColor)
-
-                if let onSendSignal {
-                    TerminalCommandsMenu(
-                        textColor: activeThemePalette.secondaryTextColor,
-                        shortcuts: shortcutDefinitions,
-                        agentPresets: spotlight.agentPresets,
-                        showsAgentCLIMenu: spotlight.onAgentPresetSelected != nil,
-                        onRunShortcut: { shortcut in
-                            onShortcutSelected?(shortcut)
-                        },
-                        onManageShortcutsRequested: onManageShortcutsRequested,
-                        onSendSignal: onSendSignal,
-                        onLaunchAgent: { preset, mode in
-                            spotlight.onAgentPresetSelected?(preset, mode)
-                        }
-                    )
-                    .accessibilityIdentifier("terminal.spotlight.commands")
-                }
-
-                if let onSplitTerminalRequested = spotlight.onSplitTerminalRequested {
-                    CrispyVibesIconButton(systemName: "square.split.2x1", size: 12, padding: 4, color: activeThemePalette.secondaryTextColor, accessibilityLabel: "Split Terminal") {
-                        onSplitTerminalRequested()
-                    }
-                    .help(AppStrings.Terminal.splitTerminal)
-                }
-
-                if let onTemporaryTerminalRequested = spotlight.onTemporaryTerminalRequested {
-                    CrispyVibesIconButton(systemName: "scope", size: 12, padding: 4, color: activeThemePalette.secondaryTextColor, accessibilityLabel: "New Temporary Terminal") {
-                        onTemporaryTerminalRequested()
-                    }
-                    .help(AppStrings.Terminal.newTemporaryTerminal)
-                }
-
-                if let onPin, let pinAccessibilityLabel {
-                    CrispyVibesIconButton(systemName: "pin", size: 12, padding: 4, color: activeThemePalette.secondaryTextColor, accessibilityLabel: pinAccessibilityLabel) {
-                        onPin()
-                    }
-                    .help(pinAccessibilityLabel)
-                    .accessibilityIdentifier("terminal.spotlight.pin")
-                }
-
-                CrispyVibesIconButton(systemName: "xmark.circle.fill", size: 12, padding: 4, color: activeThemePalette.secondaryTextColor, accessibilityLabel: "Close Terminal Spotlight") {
-                    onDismiss()
-                }
-                .keyboardShortcut(.escape, modifiers: [])
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(activeThemePalette.canvasSecondaryBackgroundColor)
-
-            Divider()
-
-            spotlightContent()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            if spotlight.source.showsComposeInputBar {
-                inputBarContent()
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(activeThemePalette.canvasBackgroundColor)
-        .clipShape(RoundedRectangle(cornerRadius: themeManager.theme.radius(11), style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: themeManager.theme.radius(11), style: .continuous)
-                .stroke(activeThemePalette.borderColorValue.opacity(0.72), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.30), radius: 26, x: 0, y: 15)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("terminal.spotlight.overlay")
-        .onTapGesture(count: 2) {
-            onDismiss()
-        }
-    }
-
-    @ViewBuilder
-    private var spotlightHeaderTitle: some View {
-        switch spotlight.source {
-        case let .filePreview(target, group):
-            TerminalSpotlightFileMetadataText(
-                group: group,
-                rootURL: target.url,
-                component: .title
-            )
-        case let .file(_, fileURL, group):
-            TerminalSpotlightFileMetadataText(
-                group: group,
-                rootURL: fileURL,
-                component: .title
-            )
-        case .persistent:
-            Text(spotlight.title)
-                .onTapGesture(count: 2) {
-                    renameText = spotlight.title
-                    isRenaming = true
-                }
-        case .transient, .vibeCast, .vibeLanes, .todos, .acp, .browserPreview, .browser:
-            Text(spotlight.title)
-        }
-    }
-
-    @ViewBuilder
-    private var spotlightHeaderDirectory: some View {
-        switch spotlight.source {
-        case let .filePreview(target, group):
-            TerminalSpotlightFileMetadataText(
-                group: group,
-                rootURL: target.url,
-                component: .directory
-            )
-        case let .file(_, fileURL, group):
-            TerminalSpotlightFileMetadataText(
-                group: group,
-                rootURL: fileURL,
-                component: .directory
-            )
-        case .persistent, .transient, .vibeCast, .vibeLanes, .todos, .acp, .browserPreview, .browser:
-            Text(spotlight.workingDirectoryURL.path)
-        }
-    }
-}
-
-@MainActor
-private struct TerminalSpotlightFileMetadataText: View {
-    enum Component {
-        case title
-        case directory
-    }
-
-    @ObservedObject var group: EditorGroupStore
-    let rootURL: URL
-    let component: Component
-
-    var body: some View {
-        let activeURL = group.activeFileDocumentReference?.url ?? rootURL
-        switch component {
-        case .title:
-            Text(activeURL.lastPathComponent)
-        case .directory:
-            Text(activeURL.deletingLastPathComponent().path)
-        }
-    }
-}
+import SwiftUI
 
 extension ContentView {
     @ViewBuilder
-    func terminalSpotlightCard(for spotlight: TerminalSpotlightState) -> some View {
+    func terminalSpotlightCard(for presentation: SpotlightCardPresentation) -> some View {
+        let spotlight = presentation.focused
         let pinMetadata = spotlightPinMetadata(for: spotlight)
         TerminalSpotlightCardView(
             spotlight: spotlight,
@@ -225,11 +18,31 @@ extension ContentView {
             onRenamePersistentTab: { terminalViewModel, tabID, title in
                 terminalViewModel.renameTab(tabID, to: title)
             },
-            spotlightContent: { terminalSpotlightContent(for: spotlight) },
-            inputBarContent: {
+            comboMembers: presentation.members,
+            comboOrientation: presentation.orientation,
+            onFocusMember: selectSpotlightItem(_:),
+            onToggleComboOrientation: {
+                guard let positionID = presentation.positionID else { return }
+                let items = flatSpotlightItems
+                let liveIDs = items.map(\.persistentID)
+                let snapshot = layoutPersistence.spotlightLayout(liveIDs: liveIDs, for: activeVibeSpaceID)
+                guard let updated = SpotlightLayoutReducer.togglingOrientation(
+                    positionID: positionID,
+                    snapshot: snapshot
+                ) else { return }
+                if commitMainSpotlightLayout(updated, liveIDs: liveIDs) {
+                    terminalSpotlightCoordinator.noteLayoutCommitted()
+                }
+            },
+            spotlightContent: { member, interaction in
+                terminalSpotlightContent(for: member, interaction: interaction)
+            },
+            inputBarContent: { member, requestsInitialFocus, onActivate in
                 SpotlightTerminalInputBar(
-                    spotlight: spotlight,
-                    vibespaceProjects: vibespaceView.activeVibeSpaceProjects
+                    spotlight: member,
+                    vibespaceProjects: vibespaceView.activeVibeSpaceProjects,
+                    requestsInitialFocus: requestsInitialFocus,
+                    onActivate: onActivate
                 )
             }
         )
@@ -251,7 +64,10 @@ extension ContentView {
     }
 
     @ViewBuilder
-    private func terminalSpotlightContent(for spotlight: TerminalSpotlightState) -> some View {
+    private func terminalSpotlightContent(
+        for spotlight: TerminalSpotlightState,
+        interaction: SpotlightMemberInteractionContext
+    ) -> some View {
         switch spotlight.source {
         case let .persistent(terminalViewModel, tabID):
             if let resolvedTab = terminalViewModel.tabs.first(where: { $0.id == tabID }) {
@@ -265,19 +81,13 @@ extension ContentView {
                     inlineTriggerSearchRoots: spotlightInlineTriggerSearchRoots(for: spotlight, fallbackDirectory: resolvedTab.workingDirectory),
                     inlineTriggerShortcuts: spotlight.shortcutDefinitions,
                     onManageInlineTriggerShortcutsRequested: spotlight.onManageShortcutsRequested,
-                    onSessionSelected: { selectedTabID in
-                        presentTerminalSpotlight(
-                            terminalViewModel: terminalViewModel,
-                            tabID: selectedTabID,
-                            title: spotlight.title,
-                            accentColor: spotlight.accentColor,
-                            owningProjectRootURL: spotlight.owningProjectRootURL,
-                            surfaceID: spotlight.surfaceID
-                        )
+                    onSessionSelected: { _ in
+                        interaction.handleTerminalSelection {
+                            terminalViewModel.selectTab(resolvedTab)
+                            terminalViewModel.focusActiveTerminal()
+                        }
                     },
-                    onSessionDoubleClicked: { _ in
-                        dismissTerminalSpotlight()
-                    },
+                    onSessionDoubleClicked: handleTerminalSpotlightSessionDoubleClick,
                     onSplitTerminalRequested: { tab in
                         createSplitTerminal(
                             in: terminalViewModel,
@@ -300,7 +110,8 @@ extension ContentView {
                                     owningProjectRootURL: spotlight.owningProjectRootURL
                                 )
                             },
-                            owningProjectRootURL: spotlight.owningProjectRootURL
+                            owningProjectRootURL: spotlight.owningProjectRootURL,
+                            surfaceID: spotlight.surfaceID
                         )
                     },
                     onOpenInEditorPaneRequested: { tab in
@@ -321,7 +132,7 @@ extension ContentView {
                 )
             } else {
                 ContentUnavailableView(
-                    "Terminal Unavailable",
+                    AppStrings.Spotlight.terminalUnavailable,
                     systemImage: "terminal",
                     description: Text(AppStrings.Terminal.selectedUnavailable)
                 )
@@ -420,11 +231,11 @@ extension ContentView {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         case let .filePreview(_, group):
-            EditorGroupFileSurface(group: group)
+            EditorGroupFileSurface(group: group, onInteraction: interaction.requestFocus)
                 .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .file(_, _, group):
-            EditorGroupFileSurface(group: group)
+            EditorGroupFileSurface(group: group, onInteraction: interaction.requestFocus)
                 .environment(\.vibespaceCommentStoreEnvironment, appContainer.vibespaceCommentStore)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .browserPreview(snapshot):
@@ -432,11 +243,11 @@ extension ContentView {
                 snapshot: snapshot,
                 projectPath: spotlight.owningProjectRootURL?.path
             )
-            BrowserContentView(viewModel: vm, presentation: .spotlight)
+            BrowserContentView(viewModel: vm, presentation: .spotlight, onInteraction: interaction.requestFocus)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .browser(tileID, url):
             let vm = dockedBrowserCoordinator.viewModel(for: tileID, url: url)
-            BrowserContentView(viewModel: vm, presentation: .spotlight)
+            BrowserContentView(viewModel: vm, presentation: .spotlight, onInteraction: interaction.requestFocus)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -471,12 +282,12 @@ extension ContentView {
         switch ContentSurfacePolicy.surface(for: .spotlightPin, mode: vibespaceView.selectedCanvasMode) {
         case .detailTab:
             guard spotlightSupportsDetailedPin(spotlight) else { return nil }
-            return SpotlightPinMetadata(label: "Open in Viewer", action: {
+            return SpotlightPinMetadata(label: AppStrings.Spotlight.openInViewer, action: {
                 pinSpotlightToDetailedViewer(spotlight)
             })
         case .boardTile:
             guard spotlightSupportsBoardPin(spotlight) else { return nil }
-            return SpotlightPinMetadata(label: "Pin to Dock", action: {
+            return SpotlightPinMetadata(label: AppStrings.Spotlight.pinToDock, action: {
                 pinSpotlightToTerminalBoard(spotlight)
             })
         case .dockedPreview, .spotlight:
@@ -568,417 +379,5 @@ extension ContentView {
             return
         }
         dismissTerminalSpotlight()
-    }
-}
-
-private struct SpotlightTerminalPastedImage: Identifiable {
-    let id = UUID()
-    let image: NSImage
-    let escapedPath: String
-}
-
-struct SpotlightTerminalInputBar: View {
-    @Environment(\.appThemePalette) private var palette
-    @Environment(\.boardInlinePickerOverlayController) private var boardInlinePickerOverlayController
-    @Environment(\.composeHistoryStore) private var composeHistoryStore
-    @Environment(\.crispyvibesUIScale) private var uiScale
-    let spotlight: TerminalSpotlightState
-    let vibespaceProjects: [AnyProjectSession]
-
-    @AppStorage(AppPreferences.terminalComposeInlineTriggerKey)
-    private var configuredInlineTrigger = AppPreferences.defaultTerminalComposeInlineTrigger
-    @State private var inputText = ""
-    @State private var pendingSelectionLocation: Int?
-    @State private var isRephrasing = false
-    @State private var drafts: [UUID: String] = [:]
-    @State private var imageDrafts: [UUID: [SpotlightTerminalPastedImage]] = [:]
-    @State private var pastedImages: [SpotlightTerminalPastedImage] = []
-    @State private var focusTrigger = false
-    @StateObject private var inlineTrigger = TerminalInlineTriggerController()
-    @State private var historyNavigator: ComposeHistoryNavigator?
-
-    private var session: TerminalSession? {
-        switch spotlight.source {
-        case let .persistent(terminalViewModel, tabID):
-            return terminalViewModel.session(for: tabID)
-        case let .transient(session):
-            return session
-        case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
-            return nil
-        }
-    }
-
-    var body: some View {
-        if session != nil {
-            // Fixed reserved space — compose bar floats as overlay, growing upward
-            Color.clear
-                .frame(height: uiScale.chromeSize(ComposeLayoutTokens.compactBarHeight + 20))
-                .overlay(alignment: .bottom) {
-                    VStack(spacing: 0) {
-                        if !pastedImages.isEmpty {
-                            pastedImageStrip
-                        }
-                        TerminalComposeInputView(
-                            text: $inputText,
-                            pendingSelectionLocation: $pendingSelectionLocation,
-                            isRephrasing: isRephrasing,
-                            requestFocus: focusTrigger,
-                            canSendOverride: canSendInputPayload,
-                    onSend: { sendInput() },
-                    onRephrase: { rephrase() },
-                    inlineOverlayActive: inlineTrigger.isPresented,
-                    onInlineMoveUp: { _ = inlineTrigger.handleCommand(.moveUp) },
-                    onInlineMoveDown: { _ = inlineTrigger.handleCommand(.moveDown) },
-                    onInlineMoveRight: { _ = inlineTrigger.handleCommand(.moveRight) },
-                    onInlineConfirm: { _ = inlineTrigger.handleCommand(.confirm) },
-                    onInlineDismiss: dismissInlineTrigger,
-                    onPasteImage: { image in appendPastedImage(image) },
-                    onHistoryBack: {
-                        guard let historyNavigator else { return }
-                        let nav = historyNavigator.navigateBack(currentText: inputText)
-                        if case let .replace(text) = nav {
-                            historyNavigator.isApplyingNavigation = true
-                            inputText = text
-                        }
-                    },
-                    onHistoryForward: {
-                        guard let historyNavigator else { return }
-                        let nav = historyNavigator.navigateForward(currentText: inputText)
-                        if case let .replace(text) = nav {
-                            historyNavigator.isApplyingNavigation = true
-                            inputText = text
-                        }
-                    }
-                )
-            }
-            }
-            .onAppear {
-                if let composeHistoryStore {
-                    historyNavigator = ComposeHistoryNavigator(store: composeHistoryStore)
-                }
-                historyNavigator?.attach(to: session?.id)
-                focusTrigger = true
-                syncInlineTriggerConfiguration()
-                inlineTrigger.reconcileBufferText(inputText)
-                syncBoardInlinePickerOverlay()
-            }
-            .onChange(of: terminalIdentity) { oldID, newID in
-                guard oldID != newID else { return }
-                if let oldID {
-                    drafts[oldID] = inputText
-                    imageDrafts[oldID] = pastedImages
-                }
-                if let newID {
-                    inputText = drafts[newID] ?? ""
-                    pastedImages = imageDrafts[newID] ?? []
-                } else {
-                    inputText = ""
-                    pastedImages = []
-                }
-                historyNavigator?.attach(to: newID)
-                syncInlineTriggerConfiguration()
-                inlineTrigger.reconcileBufferText(inputText)
-                syncBoardInlinePickerOverlay()
-                focusTrigger = false
-                DispatchQueue.main.async { focusTrigger = true }
-            }
-            .onChange(of: inputText) { _, _ in
-                if historyNavigator?.isApplyingNavigation == true {
-                    historyNavigator?.isApplyingNavigation = false
-                } else {
-                    historyNavigator?.resetOnUnrelatedEdit()
-                }
-                syncInlineTriggerBuffer()
-            }
-            .onChange(of: configuredInlineTrigger) { _, _ in
-                syncInlineTriggerConfiguration()
-                inlineTrigger.reconcileBufferText(inputText)
-                syncBoardInlinePickerOverlay()
-            }
-            .onChange(of: spotlight.title) { _, _ in
-                syncInlineTriggerConfiguration()
-            }
-            .onChange(of: spotlight.shortcutDefinitions.map { "\($0.id.uuidString):\($0.name):\($0.command)" }) { _, _ in
-                syncInlineTriggerConfiguration()
-            }
-            .onChange(of: vibespaceProjectRootPaths) { _, _ in
-                syncInlineTriggerConfiguration()
-            }
-            .onChange(of: currentSessionSearchDirectoryPath) { _, _ in
-                syncInlineTriggerConfiguration()
-            }
-            .onDisappear {
-                clearBoardInlinePickerOverlay()
-                inlineTrigger.shutdown()
-            }
-            .onReceive(inlineTrigger.objectWillChange) { _ in
-                guard boardInlinePickerOverlayController != nil else { return }
-                DispatchQueue.main.async {
-                    syncBoardInlinePickerOverlay()
-                }
-            }
-        }
-    }
-
-    private var pastedImageStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(pastedImages) { pastedImage in
-                    ZStack(alignment: .topTrailing) {
-                        Image(nsImage: pastedImage.image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: uiScale.iconSize(52), height: uiScale.iconSize(52))
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .stroke(palette.borderColorValue.opacity(0.35), lineWidth: 1)
-                            )
-
-                        Button {
-                            pastedImages.removeAll { $0.id == pastedImage.id }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(AppTypographyTokens.caption)
-                                .foregroundStyle(.white)
-                                .shadow(radius: 1)
-                        }
-                        .buttonStyle(.plain)
-                        .offset(x: 4, y: -4)
-                    }
-                    .help(pastedImage.escapedPath)
-                }
-            }
-            .padding(.horizontal, ComposeLayoutTokens.contentHorizontalPadding)
-            .padding(.top, 6)
-            .padding(.bottom, 2)
-        }
-        .background(palette.canvasSecondaryBackgroundColor.opacity(ComposeLayoutTokens.backgroundOpacity))
-    }
-
-    private var terminalIdentity: UUID? {
-        switch spotlight.source {
-        case let .persistent(_, tabID): return tabID
-        case let .transient(session): return session.id
-        case .vibeCast, .vibeLanes, .todos, .acp, .filePreview, .file, .browserPreview, .browser:
-            return nil
-        }
-    }
-
-    private var inlinePathSearchRoots: [URL] {
-        var orderedRoots: [URL] = []
-        if let currentSessionDirectoryURL = currentSessionSearchDirectoryURL {
-            orderedRoots.append(currentSessionDirectoryURL)
-        }
-        if let owningProjectRootURL = spotlight.owningProjectRootURL, owningProjectRootURL.isFileURL {
-            orderedRoots.append(owningProjectRootURL)
-        }
-        orderedRoots.append(contentsOf: vibespaceProjects.compactMap { project in
-            guard project.projectSession != nil else { return nil }
-            let rootURL = project.rootURL.standardizedFileURL
-            return rootURL.isFileURL ? rootURL : nil
-        })
-        if spotlight.workingDirectoryURL.isFileURL {
-            orderedRoots.append(spotlight.workingDirectoryURL)
-        }
-
-        var seen = Set<String>()
-        return orderedRoots.compactMap { rootURL in
-            let normalized = rootURL.standardizedFileURL
-            let path = normalized.path
-            guard !path.isEmpty, seen.insert(path).inserted else { return nil }
-            return normalized
-        }
-    }
-
-    private var vibespaceProjectRootPaths: [String] {
-        inlinePathSearchRoots.map(\.path)
-    }
-
-    private var currentSessionSearchDirectoryPath: String? {
-        currentSessionSearchDirectoryURL?.path
-    }
-
-    private var currentSessionSearchDirectoryURL: URL? {
-        guard let directoryURL = session?.currentWorkingDirectory.standardizedFileURL,
-              directoryURL.isFileURL else {
-            return nil
-        }
-        return directoryURL
-    }
-
-    private var parsedInlineTrigger: SpotlightComposeInlineTrigger? {
-        SpotlightComposeInlineTrigger.parse(
-            inputText,
-            triggerToken: AppPreferences.normalizedTerminalComposeInlineTrigger(configuredInlineTrigger)
-        )
-    }
-
-    private var inputPayloadText: String {
-        let typedText = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imagePaths = pastedImages.map(\.escapedPath)
-        guard !typedText.isEmpty else {
-            return imagePaths.joined(separator: " ")
-        }
-        guard !imagePaths.isEmpty else {
-            return typedText
-        }
-        return ([typedText] + imagePaths).joined(separator: " ")
-    }
-
-    private var canSendInputPayload: Bool {
-        !inputPayloadText.isEmpty
-    }
-
-    private func sendInput() {
-        let text = inputPayloadText
-        guard !text.isEmpty else { return }
-        session?.sendRawTextWithEnter(text)
-        historyNavigator?.append(text)
-        inputText = ""
-        pastedImages = []
-        if let terminalIdentity {
-            drafts[terminalIdentity] = ""
-            imageDrafts[terminalIdentity] = []
-        }
-        syncInlineTriggerBuffer()
-    }
-
-    private func appendPastedImage(_ image: NSImage) {
-        guard let escapedPath = savePastedImage(image) else { return }
-        pastedImages.append(SpotlightTerminalPastedImage(image: image, escapedPath: escapedPath))
-        requestComposeFocus()
-    }
-
-    private func savePastedImage(_ image: NSImage) -> String? {
-        guard let tiffData = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            return nil
-        }
-
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "crispyvibes-terminal-paste",
-            isDirectory: true
-        )
-        let formatter = ISO8601DateFormatter()
-        let timestamp = formatter.string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let filename = "clipboard-\(timestamp)-\(UUID().uuidString.prefix(8)).png"
-        let fileURL = directory.appendingPathComponent(filename)
-
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try pngData.write(to: fileURL, options: .atomic)
-            return ShellEscaping.singleQuote(fileURL.path)
-        } catch {
-            return nil
-        }
-    }
-
-    private func rephrase() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isRephrasing else { return }
-        isRephrasing = true
-        Task.detached {
-            let result = VibeCastRephraseService.rephrase(text)
-            await MainActor.run {
-                if let result { inputText = result }
-                isRephrasing = false
-            }
-        }
-    }
-
-    private func dismissInlineTrigger() {
-        _ = inlineTrigger.handleCommand(.dismiss)
-        requestComposeFocus()
-        syncBoardInlinePickerOverlay()
-    }
-
-    private func requestComposeFocus() {
-        focusTrigger = false
-        DispatchQueue.main.async {
-            focusTrigger = true
-        }
-    }
-
-    private func replaceInlineTrigger(with replacement: String) {
-        guard let trigger = parsedInlineTrigger else {
-            return
-        }
-        let newText = trigger.prefixText + replacement
-        inputText = newText
-        pendingSelectionLocation = (newText as NSString).length
-    }
-
-    private func syncInlineTriggerConfiguration() {
-        let sessionRef = session
-        inlineTrigger.configure(
-            triggerToken: configuredInlineTrigger,
-            searchRoots: inlinePathSearchRoots,
-            shortcuts: spotlight.shortcutDefinitions,
-            terminalTitle: spotlight.title,
-            currentDirectoryProvider: { [weak sessionRef] in
-                sessionRef?.currentWorkingDirectory ?? spotlight.workingDirectoryURL
-            },
-            insertionHandler: { replacement in
-                replaceInlineTrigger(with: replacement)
-            },
-            focusHandler: requestComposeFocus,
-            manageShortcutsHandler: spotlight.onManageShortcutsRequested
-        )
-        syncBoardInlinePickerOverlay()
-    }
-
-    private func syncInlineTriggerBuffer() {
-        inlineTrigger.syncBufferText(inputText)
-        syncBoardInlinePickerOverlay()
-    }
-
-    private var boardInlinePickerOverlayOwnerID: String {
-        "terminal-spotlight:\(terminalIdentity?.uuidString ?? spotlight.title)"
-    }
-
-    private var manageShortcutsAction: (() -> Void)? {
-        guard spotlight.onManageShortcutsRequested != nil else { return nil }
-        let inlineTriggerRef = inlineTrigger
-        return { [weak inlineTriggerRef] in
-            inlineTriggerRef?.runManageShortcutsAction()
-        }
-    }
-
-    private func syncBoardInlinePickerOverlay() {
-        guard let boardInlinePickerOverlayController else { return }
-        guard inlineTrigger.isPresented else {
-            boardInlinePickerOverlayController.clear(ownerID: boardInlinePickerOverlayOwnerID)
-            return
-        }
-        let inlineTriggerRef = inlineTrigger
-
-        boardInlinePickerOverlayController.update(
-            ownerID: boardInlinePickerOverlayOwnerID,
-            presentation: BoardInlinePickerOverlayPresentation(
-                title: AppStrings.Terminal.ComposeTriggers.pickerTitle,
-                queryText: inlineTrigger.queryText,
-                featuredAction: inlineTrigger.featuredPanelAction,
-                rows: inlineTrigger.panelRows,
-                statusText: inlineTrigger.footerText,
-                hintText: inlineTrigger.hintText,
-                actionTitle: inlineTrigger.manageShortcutsActionTitle,
-                onAction: manageShortcutsAction,
-                onFeaturedAction: { [weak inlineTriggerRef] in
-                    inlineTriggerRef?.applyFeaturedAction()
-                },
-                onDismiss: { [weak inlineTriggerRef] in
-                    _ = inlineTriggerRef?.handleCommand(.dismiss)
-                },
-                onSelect: { [weak inlineTriggerRef] rowID in
-                    inlineTriggerRef?.applyResult(id: rowID)
-                }
-            )
-        )
-    }
-
-    private func clearBoardInlinePickerOverlay() {
-        boardInlinePickerOverlayController?.clear(ownerID: boardInlinePickerOverlayOwnerID)
     }
 }

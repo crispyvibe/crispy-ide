@@ -12,7 +12,8 @@ extension ContentView {
     private func browserSpotlightState(
         source: TerminalSpotlightState.Source,
         title: String,
-        projectPath: String?
+        projectPath: String?,
+        surfaceID: UUID?
     ) -> TerminalSpotlightState {
         TerminalSpotlightState(
             id: UUID(),
@@ -23,7 +24,8 @@ extension ContentView {
             onSplitTerminalRequested: nil,
             onTemporaryTerminalRequested: nil,
             isTemporary: false,
-            owningProjectRootURL: projectPath.map { URL(fileURLWithPath: $0) }
+            owningProjectRootURL: projectPath.map { URL(fileURLWithPath: $0) },
+            surfaceID: surfaceID
         )
     }
 
@@ -39,14 +41,20 @@ extension ContentView {
         return dockedBrowserCoordinator.restorePreview(from: snapshot, projectPath: projectPath)
     }
 
-    func presentBrowserSpotlight(url: URL?, projectPath: String? = nil, animated: Bool = true) {
+    func presentBrowserSpotlight(
+        url: URL?,
+        projectPath: String? = nil,
+        surfaceID: UUID? = nil,
+        animated: Bool = true
+    ) {
         dockedBrowserCoordinator.dismissPreview()
         let resolvedURL = url ?? URL(string: "about:blank")!
         let snapshot = BrowserSessionSnapshot(urlString: resolvedURL.absoluteString)
         let spotlight = browserSpotlightState(
             source: .browserPreview(snapshot: snapshot),
             title: browserSpotlightTitle(for: resolvedURL),
-            projectPath: projectPath
+            projectPath: projectPath,
+            surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }
@@ -54,6 +62,7 @@ extension ContentView {
     func presentBrowserSpotlight(
         snapshot: BrowserSessionSnapshot,
         projectPath: String? = nil,
+        surfaceID: UUID? = nil,
         animated: Bool = true
     ) {
         _ = dockedBrowserCoordinator.restorePreview(from: snapshot, projectPath: projectPath)
@@ -61,17 +70,29 @@ extension ContentView {
         let spotlight = browserSpotlightState(
             source: .browserPreview(snapshot: snapshot),
             title: browserSpotlightTitle(for: resolvedURL),
-            projectPath: projectPath
+            projectPath: projectPath,
+            surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }
 
-    func presentBrowserSpotlight(tileID: UUID, url: URL, animated: Bool = true) {
-        let tile = vibespaceHydrationCoordinator.boardStore?.tile(for: tileID)
+    func presentBrowserSpotlight(
+        tileID: UUID,
+        url: URL,
+        surfaceID: UUID? = nil,
+        animated: Bool = true
+    ) {
+        let boardStore = vibespaceHydrationCoordinator.boardStore
+        let resolvedSurfaceID = surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
+        let tileSurfaceID = resolvedSurfaceID ?? boardStore?.primarySurfaceID
+        let tile = tileSurfaceID.flatMap { tileSurfaceID in
+            boardStore?.tile(for: tileID, includeMinimized: true, surfaceID: tileSurfaceID)
+        }
         let spotlight = browserSpotlightState(
             source: .browser(tileID: tileID, url: url),
             title: browserSpotlightTitle(for: url),
-            projectPath: tile?.projectPath
+            projectPath: tile?.projectPath,
+            surfaceID: resolvedSurfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }

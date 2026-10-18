@@ -7,9 +7,11 @@ struct EditorGroupFileSurface: View {
     @Environment(\.vibespaceCommentStoreEnvironment) private var commentStore
     @ObservedObject private var group: EditorGroupStore
     @ObservedObject private var markdownViewModel: MarkdownViewModel
+    private let onInteraction: () -> Void
 
-    init(group: EditorGroupStore) {
+    init(group: EditorGroupStore, onInteraction: @escaping () -> Void = {}) {
         self.group = group
+        self.onInteraction = onInteraction
         _markdownViewModel = ObservedObject(wrappedValue: group.markdownViewModel)
     }
 
@@ -20,6 +22,7 @@ struct EditorGroupFileSurface: View {
             fileContent
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .simultaneousGesture(TapGesture().onEnded(onInteraction))
     }
 
     private var navigationBar: some View {

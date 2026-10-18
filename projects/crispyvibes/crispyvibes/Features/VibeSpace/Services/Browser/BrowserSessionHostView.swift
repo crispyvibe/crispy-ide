@@ -64,6 +64,7 @@ struct BrowserSessionHostView: NSViewRepresentable {
 
     let viewModel: BrowserPanelViewModel
     var presentation: BrowserHostPresentation = .detailed
+    var onInteraction: (() -> Void)? = nil
 
     func makeNSView(context: Context) -> BrowserContainerView {
         let container = BrowserContainerView(frame: .zero)
@@ -71,7 +72,8 @@ struct BrowserSessionHostView: NSViewRepresentable {
         container.attach(
             viewModel,
             allowsOwnershipParticipation: ownershipParticipationEnabled,
-            ownershipPriority: presentation.ownershipPriority + ownershipPriorityBoost
+            ownershipPriority: presentation.ownershipPriority + ownershipPriorityBoost,
+            onInteraction: onInteraction
         )
         return container
     }
@@ -81,7 +83,8 @@ struct BrowserSessionHostView: NSViewRepresentable {
         nsView.attach(
             viewModel,
             allowsOwnershipParticipation: ownershipParticipationEnabled,
-            ownershipPriority: presentation.ownershipPriority + ownershipPriorityBoost
+            ownershipPriority: presentation.ownershipPriority + ownershipPriorityBoost,
+            onInteraction: onInteraction
         )
     }
 }
@@ -93,6 +96,7 @@ final class BrowserContainerView: NSView, BrowserSessionOwnershipHost {
     private weak var attachedWebView: CrispyVibesBrowserWebView?
     private var desiredAllowsOwnershipParticipation = true
     private var desiredOwnershipPriority = 0
+    private var onInteraction: (() -> Void)?
     private var configuredAccessibilityIdentifier: String?
 
     override init(frame frameRect: NSRect) {
@@ -114,7 +118,8 @@ final class BrowserContainerView: NSView, BrowserSessionOwnershipHost {
     func attach(
         _ viewModel: BrowserPanelViewModel,
         allowsOwnershipParticipation: Bool,
-        ownershipPriority: Int
+        ownershipPriority: Int,
+        onInteraction: (() -> Void)?
     ) {
         if desiredViewModel !== viewModel {
             resetAttachedState()
@@ -125,6 +130,7 @@ final class BrowserContainerView: NSView, BrowserSessionOwnershipHost {
 
         desiredAllowsOwnershipParticipation = allowsOwnershipParticipation
         desiredOwnershipPriority = ownershipPriority
+        self.onInteraction = onInteraction
         attemptAttachIfNeeded()
     }
 
@@ -175,12 +181,14 @@ final class BrowserContainerView: NSView, BrowserSessionOwnershipHost {
             addSubview(webView)
         }
         attachedWebView = webView
+        webView.onHostInteraction = onInteraction
         layoutAttachedWebViewFrame()
     }
 
     private func detachAttachedWebViewIfNeeded() {
         guard let attachedWebView else { return }
         if attachedWebView.superview === self {
+            attachedWebView.onHostInteraction = nil
             attachedWebView.removeFromSuperview()
         }
         self.attachedWebView = nil

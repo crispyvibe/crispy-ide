@@ -3,7 +3,7 @@ title: "Terminal Board"
 feature: "F002"
 domain: "terminal"
 audience: "user"
-version: "1.1"
+version: "1.3"
 sidebar:
   label: "Board"
   order: 2
@@ -25,13 +25,11 @@ Detached board windows reopen with the vibespace using saved board state and bes
 
 ## Workflows
 
-### Create A Terminal Tile
+### Create or preview a terminal
 
-Use `New Terminal` from the board. Choose a project or vibespace terminal and select the working directory. The new terminal is added to the board window where you started the action.
+Use **New Terminal** from a board when you want a persistent tile; choose a project or VibeSpace terminal and working directory. Persistent creation and split actions add the tile to the board window where you started.
 
-### Split A Terminal
-
-Use `Split Terminal` from a terminal tile, terminal context menu, or terminal spotlight. The persistent split is added to the same board window that initiated the split.
+A detached titlebar can also request a temporary terminal. That opens only in the detached window's Spotlight and does not add a tile. Choose its split/create-new-terminal action to add one separate persistent terminal tile on that detached surface; the temporary terminal itself is not converted into the tile.
 
 ### Move Tiles Inside A Board
 
@@ -47,9 +45,13 @@ Choose `Send to Board Window` to move that single tile into an existing board wi
 
 The move is not a clone. The source board loses that tile, the target board gains that tile, and an emptied detached source window closes automatically.
 
-### Use Spotlight In A Detached Window
+### Use Spotlight in a detached window
 
-Opening spotlight from a detached board window presents spotlight in that detached window. Temporary terminals, file previews, browser previews, VibeCast, and ACP panes stay local to the board window that opened them.
+Spotlight stays in the board window where it opens. Terminals appear first: visible terminal tiles, then minimized terminals. Files, browsers, ACP, VibeCast, and Vibe Lanes tiles appear afterward in a second visible-then-minimized pass. If the board has no Vibe Lanes tile, Vibe Lanes appears as a final built-in item. A saved custom shelf arrangement is restored in its saved order. Spotlight uses the 44 pt shelf, compact grid-count control, three-column semantic overview, and two-member combos. Combo halves are separately clickable, and each terminal half keeps its own compose draft and Up/Down history and activates before sending while the focused half owns the shared header actions.
+
+Terminal links and filesystem targets open browser/file previews in the same detached window. Closing a preview or an active temporary process returns to the nearest still-available local item. While a file is open in Spotlight, the board avoids displaying a second copy of that editor, and closing Spotlight in one window does not disturb the same file in another window.
+
+The overview displays only safe status: terminal activity and folder basename, current file name/parent, or current browser title and redacted location. It does not display screenshots, terminal screen excerpts, commands, or live output. Rearranging the shelf preserves rows, columns, resize weights, active/minimized tiles, and running sessions.
 
 ## Keyboard Shortcuts
 
@@ -61,7 +63,7 @@ Terminal and shortcut commands keep their normal terminal behavior. Board-origin
 
 Detached board windows have no separate settings shell. App settings and vibespace settings always open from the primary vibespace window.
 
-Window geometry and display placement are persisted per vibespace on a best-effort basis. If the monitor layout changes, detached board windows remain detached and can be repositioned manually.
+Window frame coordinates and display identity are persisted per vibespace. Restore reapplies the frame directly on a best-effort basis; it does not currently use display identity to select a screen. If the monitor layout changes, detached board windows remain detached and can be repositioned manually.
 
 ## Troubleshooting
 
@@ -76,3 +78,11 @@ If a detached window reopens off your preferred display after changing monitors,
 Detached windows are board-only surfaces. Detailed editor layout, vibespace settings, and app settings do not detach as separate vibespace windows.
 
 Display restoration is best-effort. The app preserves detached board windows but does not merge detached panes into the primary board solely because a previous monitor is unavailable.
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-18 | Version 1.3: documented detached Up/Down history parity and clarified that a temporary Spotlight terminal's split/create action adds a separate persistent tile instead of converting the temporary process. | — |
+| 2026-10-18 | Version 1.2: added detached-window Spotlight parity, terminal-first ordering with a built-in Vibe Lanes fallback, separate terminal drafts, temporary versus persistent creation, local previews, safe file display across windows, privacy-safe metadata, restore behavior, and geometry-preserving saved arrangements. Later behavior corrections are recorded above. | — |
+| 2026-10-16 | Clarified that Spotlight includes persistent minimized terminals in each board window's order while shelf rearrangement preserves the board's rows, columns, and resize weights. | — |

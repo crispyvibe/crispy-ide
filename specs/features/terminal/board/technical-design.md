@@ -49,7 +49,9 @@ VibeSpaceTerminalOnlyView
 
 - `primarySurfaceID`: stable identifier for the vibespace shell board.
 - `surfaces`: primary and detached `VibeSpaceTerminalBoardSurface` entries.
-- per-surface layout, title, kind, and optional window placement.
+- per-surface layout, title, kind, optional window placement, and optional F003 Spotlight layout snapshot.
+
+The per-surface `spotlightLayout` contains value-only persistent IDs for project terminals, standalone terminals (`surfaceID` + `tileID` + `tabID`), file, browser, ACP, VibeCast, and Vibe Lanes; it stores persisted position/member order, max-two combos, and orientation. Detached live enumeration emits all terminal tile members from visible then minimized tiles first, then scans visible then minimized tiles again for VibeCast/Vibe Lanes/ACP/file/browser members. A host-level Vibe Lanes member is appended when no Vibe Lanes tile exists. Reconciliation removes stale/duplicate members, collapses a one-survivor combo, and appends new live IDs without replacing a saved user arrangement with a unified mixed-kind tile traversal. Flattened shelf mirroring applies only to visible tile-backed board content through destination-slot semantics; minimized board placement/order, surface/column/row IDs and counts, column width weights, row height weights, active state, tile/session identity and lifetime, synthetic host-level members, and other surfaces remain unchanged.
 
 Each board window renders exactly one surface. Surface-targeted APIs must pass `surfaceID`; defaulting to the primary surface is only valid for legacy primary-window flows or non-board fallback paths.
 
@@ -99,20 +101,23 @@ All board-originated persistent terminal creation flows must call `VibeSpaceTerm
 - tile header/context-menu `Split Terminal`
 - terminal surface context-menu split
 - terminal spotlight split
-- temporary spotlight split-to-persistent
+- create-new-persistent-tile action from a temporary Spotlight
+
+Each such action creates a new persistent terminal tile on the initiating surface through `addTile`; it does not convert or transfer the temporary Spotlight process.
 
 Raw `TerminalViewModel.createTab` remains valid for detailed-mode/non-board terminal panes where no board surface owns the action.
 
-### Detached Window Spotlight Flow
+### Detached Window Spotlight and Toolbar Terminal Flow
 
-The primary vibespace window and each detached board window own separate `TerminalSpotlightCoordinator` instances:
+The primary shell and each `DetachedTerminalBoardWindowContent` own separate `TerminalSpotlightCoordinator` instances. Detached content constructs the same `TerminalSpotlightOverlayHostView`, metadata resolver, shelf/grid/combo card, and `SpotlightTerminalInputBar` used by the main host, but binds them to `boardStore.spotlightLayout(..., surfaceID:)`. It emits all project/standalone terminal members from visible then minimized tiles first, then scans visible then minimized tiles again for VibeCast/Vibe Lanes/ACP/file/browser members; when no Vibe Lanes tile exists, it appends a synthetic host-level Vibe Lanes member. Terminal compose views and drafts remain pane-local and activate before send. `DetachedTerminalBoardWindowRoot` injects `AppContainer.composeHistoryStore`, giving detached terminal, ACP, and VibeCast compose views the same per-identity Up/Down history behavior as the main root.
 
-1. Primary board actions route through the vibespace shell's spotlight coordinator.
-2. Detached board actions route through `DetachedTerminalBoardWindowContent` and its local coordinator.
-3. Terminal, file, browser, ACP, VibeCast, and temporary-terminal spotlight presentations stay in the originating board window.
-4. Split-to-persistent actions launched from detached spotlight call `VibeSpaceTerminalBoardStore.addTile(..., surfaceID:)` for the detached surface.
+Detached titlebar requests cannot call SwiftUI-local Spotlight state directly. `DetachedToolbarTemporaryTerminalBridge` carries a `DetachedToolbarTemporaryTerminalRequest(directoryURL, projectPath)` from the AppKit toolbar configuration into the detached view. The receiver resolves the project or standalone terminal owner and opens a local temporary terminal Spotlight. This route creates no board tile. Choosing split/create new persistent terminal calls `boardStore.addTile(..., surfaceID:)` to create a separate persistent terminal tile; it does not convert the temporary process. Direct persistent New Terminal and split actions also call the surface-targeted tile API without using the temporary route.
 
-This keeps focus, temporary previews, and persistent terminal creation aligned with the window where the user initiated the action.
+Terminal link and filesystem actions route to detached-local browser/file preview presenters. Browser previews use a local ephemeral `BrowserPanelViewModel`; persistent browsers resolve through `DockedBrowserCoordinator` and do not require a pre-existing browser view model during descriptor validation. File previews use a preview editor group; persistent files reuse `DockedFileViewerCoordinator`. The file coordinator's `setSpotlightOwnedTileIDs(_:ownerID:)` maintains a lease per host (`board:<vibespaceID>:<surfaceID>`) and publishes the union, so a board tile does not mount the same editor while any Spotlight host owns it and one window cannot clear another's lease.
+
+Restore descriptors remain local. Before restore, detached code validates persistent surface membership/tile identity, terminal tab existence, ACP store availability, and the active file document; browser previews additionally require a decodable URL. Persistent browser descriptors may recreate or resolve their canonical owner. Invalid descriptors are skipped. Process-exit callbacks are guarded by Spotlight ID. Final dismissal tears down local temporary sessions, preview view models, monitor ownership, and that host's file lease.
+
+Persistent terminal creation and all supported direct presentations therefore stay aligned with the originating window and surface.
 
 ### Window Title Bar Toolbars
 
@@ -123,7 +128,7 @@ The primary vibespace window title bar groups toolbar controls into two pills, s
 
 Each group is rendered as a single `ToolbarItem` whose content is an `HStack` of buttons so the group renders as one visual pill capsule. Buttons that should be hidden for the current state (non-applicable rail position, no remote projects) are omitted rather than rendered disabled, so the pill never contains empty slots.
 
-Detached board windows attach their own `NSToolbar` (style `.unifiedCompact`, `showsBaselineSeparator = false`) and expose a surface-scoped Agent and Browser action as `.primaryAction` toolbar items. Both target the detached window's `surfaceID` and respect the 16-tile cap. The Agent button is only shown when the detached window has an ACP factory wired (it is wired when constructed from `ContentViewProjectCanvas` with the vibespace's `contentViewerStore` + `acpVibeSpaceSessionService`).
+Detached board windows attach their own `NSToolbar` (style `.unifiedCompact`, `showsBaselineSeparator = false`). Its item order is Terminal, Agent, Browser, VibeCast, and Vibe Lanes, using ordinary `NSToolbarItem` instances plus the hosted terminal item rather than `.primaryAction` placement. Actions target the detached window's `surfaceID` and respect the 16-tile cap. The Agent item is available only when the detached window has an ACP factory wired (it is wired when constructed from `ContentViewProjectCanvas` with the vibespace's `contentViewerStore` + `acpVibeSpaceSessionService`). VibeCast and Vibe Lanes singleton availability checks the union of visible `layout.tiles` and `layout.minimizedTiles`, so minimizing an existing singleton does not re-enable its add action.
 
 ### Tile Transfer Flow
 
@@ -197,6 +202,10 @@ The shared popup is intentionally two-pane:
 - right pane: generate action, matching shortcuts, and `Manage Shortcuts…` when available
 
 Dismissal behavior is source-aware: the close button and keyboard cancel both route back through the originating tile surface so that focus and input state are restored correctly.
+
+### Spotlight Metadata and Privacy
+
+Board hosts pass current owner resolvers into `SpotlightMetadataResolver`. Terminal overview artwork uses only active/idle state and directory basename. File metadata follows the current `activeFileDocumentReference` and exposes only filename/parent display name. Browser metadata follows the current view model and removes URL userinfo, password, query, and fragment. Persisted layout contains identities and layout—not screenshots, terminal screen excerpts, command text, live terminal output, or captured browser/editor pixels.
 
 ## API / Command Contracts
 
@@ -319,6 +328,9 @@ Detached board surfaces are persisted as part of `VibeSpaceTerminalBoardState`. 
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-18 | Final audit fixes: documented detached AppContainer compose-history injection, visible-plus-minimized VibeCast/Vibe Lanes singleton checks, and the actual split/create-new-persistent-tile path with separate temporary and persistent terminal lifetimes. Sources were inspected statically; no tests or manual UI runs were performed. | — |
+| 2026-10-18 | Review documented detached-local persistent-kind shelf/grid/combo parity with terminal-first two-pass enumeration and built-in Vibe Lanes fallback, pane-local drafts/activation, the AppKit-to-SwiftUI temporary-terminal toolbar bridge, Terminal/Agent/Browser/VibeCast/Vibe Lanes toolbar items, persistent versus temporary creation, local previews, host-scoped editor leases, restore validation, safe metadata, and geometry-preserving `spotlightLayout` reconciliation. Later production-fix status is recorded above. | — |
+| 2026-10-16 | Defined visible-then-minimized canonical Spotlight terminal enumeration per surface and destination-slot row-weight preservation for flattened shelf reorder persistence. | — |
 | 2026-05-04 | Centralized board state in `VibeSpaceTerminalBoardStore` with a single `mutate` boundary; persistence layer now a pure sink. External state captured via `BoardSnapshotProviders` at persist time. Removed the `boardLayoutDidChange` self-observing notification loop. Added two-pill toolbar grouping on primary window and title-bar toolbar (Agent + Browser) on detached board windows. | — |
 | 2026-04-27 | Clarified destination-owned placement for tile transfer between board surfaces. | — |
 | 2026-04-26 | Documented ready multi-window board architecture: detached surfaces, local spotlight, surface-targeted terminal creation, one-tile transfer, target labels, and best-effort placement restore. | Codex |

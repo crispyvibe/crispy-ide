@@ -674,14 +674,14 @@ struct ContentView: View {
             .modifier(ContentViewExtraCommands(
                 onToggleVibeCast: {
                     if ContentSurfacePolicy.surface(for: .vibeCast, mode: selectedVibeSpaceCanvasMode) == .spotlight {
-                        presentVibeCastSpotlight()
+                        presentVibeCastSpotlight(surfaceID: directMainSpotlightSurfaceID)
                     } else {
                         vibespaceCanvasActionsCoordinator.toggleVibeCast()
                     }
                 },
                 onToggleTodos: {
                     if ContentSurfacePolicy.surface(for: .todos, mode: selectedVibeSpaceCanvasMode) == .spotlight {
-                        presentTodosSpotlight()
+                        presentTodosSpotlight(surfaceID: directMainSpotlightSurfaceID)
                     } else {
                         vibespaceCanvasActionsCoordinator.toggleTodos()
                     }
@@ -690,7 +690,7 @@ struct ContentView: View {
                 onOpenAutomation: showAutomationFromAppMenu,
                 onToggleVibeLanes: {
                     if ContentSurfacePolicy.surface(for: .vibeLanes, mode: selectedVibeSpaceCanvasMode) == .spotlight {
-                        presentVibeLanesSpotlight()
+                        presentVibeLanesSpotlight(surfaceID: directMainSpotlightSurfaceID)
                     } else {
                         vibespaceCanvasActionsCoordinator.toggleVibeLanes()
                     }

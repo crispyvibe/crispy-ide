@@ -118,6 +118,7 @@ extension VibeSpaceTerminalBoardLayout {
         guard tileID != targetID else { return false }
         let columnCounts = columns.map(\.tiles.count)
         var flatTiles = columns.flatMap(\.tiles)
+        let destinationRowWeights = flatTiles.map(\.heightWeight)
         guard let sourceIndex = flatTiles.firstIndex(where: { $0.id == tileID }),
               flatTiles.contains(where: { $0.id == targetID }) else {
             return false
@@ -134,11 +135,43 @@ extension VibeSpaceTerminalBoardLayout {
             adjustedTargetIndex + 1
         }
         flatTiles.insert(movingTile, at: max(0, min(insertionIndex, flatTiles.count)))
+        for index in flatTiles.indices {
+            flatTiles[index].heightWeight = destinationRowWeights[index]
+        }
 
         var cursor = 0
         for columnIndex in columns.indices {
             let count = columnCounts[columnIndex]
             columns[columnIndex].tiles = Array(flatTiles[cursor..<(cursor + count)])
+            cursor += count
+        }
+        return true
+    }
+
+    /// Reorders the flattened tile sequence while preserving column counts and every
+    /// destination slot's geometry. Tile content moves; row weights stay attached to
+    /// their original column/row slots.
+    @discardableResult
+    mutating func reorderTilesInLinearOrder(_ orderedTileIDs: [UUID]) -> Bool {
+        let columnCounts = columns.map(\.tiles.count)
+        let existing = columns.flatMap(\.tiles)
+        let destinationRowWeights = existing.map(\.heightWeight)
+        let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+        var seen = Set<UUID>()
+        var reordered = orderedTileIDs.compactMap { id -> VibeSpaceTerminalBoardTile? in
+            guard seen.insert(id).inserted else { return nil }
+            return byID[id]
+        }
+        reordered.append(contentsOf: existing.filter { seen.insert($0.id).inserted })
+        guard reordered.map(\.id) != existing.map(\.id) else { return false }
+
+        for index in reordered.indices {
+            reordered[index].heightWeight = destinationRowWeights[index]
+        }
+        var cursor = 0
+        for columnIndex in columns.indices {
+            let count = columnCounts[columnIndex]
+            columns[columnIndex].tiles = Array(reordered[cursor..<(cursor + count)])
             cursor += count
         }
         return true

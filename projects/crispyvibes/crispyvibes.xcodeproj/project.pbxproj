@@ -78,6 +78,8 @@
 		219F3C59245123C904F726D3 /* SplitPaneLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1829B25562B028CDC237B52 /* SplitPaneLayoutTests.swift */; };
 		A012A012A012A012A012A001 /* NativeSplitViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A012A012A012A012A012A002 /* NativeSplitViewTests.swift */; };
 		F00330000000000000000001 /* SpotlightSynchronizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00330000000000000000002 /* SpotlightSynchronizationTests.swift */; };
+		F003A0000000000000000011 /* SpotlightEnhancementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000011 /* SpotlightEnhancementTests.swift */; };
+		F003A0000000000000000012 /* SpotlightPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000012 /* SpotlightPresentationTests.swift */; };
 		F00630000000000000000001 /* ContentViewerSynchronizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00630000000000000000002 /* ContentViewerSynchronizationTests.swift */; };
 		222AC1E03D35BD6654E50649 /* ScreenCaptureDeliveryAndViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901FBE5F0E76E8E7D480F01E /* ScreenCaptureDeliveryAndViewModelTests.swift */; };
 		247FE807D5D94D65E6B8FAC7 /* LocalScreenCaptureHistoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 160D8BB4605ABB1D5C60008A /* LocalScreenCaptureHistoryRepository.swift */; };
@@ -479,6 +481,14 @@
 		A1B673B7C6D54BD593B61DA8 /* ScreenCaptureFoundationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000D8596D1D1F9A775D6E04 /* ScreenCaptureFoundationStateTests.swift */; };
 		A1D000000000000000000001 /* ContentViewStackedProjectRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000001 /* ContentViewStackedProjectRail.swift */; };
 		A1D000000000000000000002 /* ContentViewTerminalSpotlightState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000002 /* ContentViewTerminalSpotlightState.swift */; };
+		F003A0000000000000000001 /* SpotlightLayoutSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000001 /* SpotlightLayoutSnapshot.swift */; };
+		F003A0000000000000000002 /* SpotlightTabShelf.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000002 /* SpotlightTabShelf.swift */; };
+		F003A0000000000000000003 /* SpotlightAllTabsOverview.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000003 /* SpotlightAllTabsOverview.swift */; };
+		F003A0000000000000000007 /* SpotlightItemMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000007 /* SpotlightItemMetadata.swift */; };
+		F003A0000000000000000008 /* SpotlightOverviewArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000008 /* SpotlightOverviewArtwork.swift */; };
+		F003A0000000000000000004 /* SpotlightLayoutNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000004 /* SpotlightLayoutNavigation.swift */; };
+		F003A0000000000000000005 /* SpotlightCardChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000005 /* SpotlightCardChrome.swift */; };
+		F003A0000000000000000006 /* SpotlightTerminalInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003B0000000000000000006 /* SpotlightTerminalInputBar.swift */; };
 		A1D000000000000000000003 /* ContentViewTerminalSpotlightOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000003 /* ContentViewTerminalSpotlightOverlay.swift */; };
 		A1D000000000000000000004 /* ContentViewTerminalSpotlightCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000004 /* ContentViewTerminalSpotlightCard.swift */; };
 		A1D000000000000000000005 /* AppShellStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000005 /* AppShellStore.swift */; };
@@ -1476,6 +1486,14 @@
 		B1A199FBB4076712252D28F5 /* TextGenerationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextGenerationService.swift; sourceTree = "<group>"; };
 		B1D000000000000000000001 /* ContentViewStackedProjectRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewStackedProjectRail.swift; sourceTree = "<group>"; };
 		B1D000000000000000000002 /* ContentViewTerminalSpotlightState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewTerminalSpotlightState.swift; sourceTree = "<group>"; };
+		F003B0000000000000000001 /* SpotlightLayoutSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightLayoutSnapshot.swift; sourceTree = "<group>"; };
+		F003B0000000000000000002 /* SpotlightTabShelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightTabShelf.swift; sourceTree = "<group>"; };
+		F003B0000000000000000003 /* SpotlightAllTabsOverview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightAllTabsOverview.swift; sourceTree = "<group>"; };
+		F003B0000000000000000007 /* SpotlightItemMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightItemMetadata.swift; sourceTree = "<group>"; };
+		F003B0000000000000000008 /* SpotlightOverviewArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightOverviewArtwork.swift; sourceTree = "<group>"; };
+		F003B0000000000000000004 /* SpotlightLayoutNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightLayoutNavigation.swift; sourceTree = "<group>"; };
+		F003B0000000000000000005 /* SpotlightCardChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightCardChrome.swift; sourceTree = "<group>"; };
+		F003B0000000000000000006 /* SpotlightTerminalInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightTerminalInputBar.swift; sourceTree = "<group>"; };
 		B1D000000000000000000003 /* ContentViewTerminalSpotlightOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewTerminalSpotlightOverlay.swift; sourceTree = "<group>"; };
 		B1D000000000000000000004 /* ContentViewTerminalSpotlightCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViewTerminalSpotlightCard.swift; sourceTree = "<group>"; };
 		B1D000000000000000000005 /* AppShellStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellStore.swift; sourceTree = "<group>"; };
@@ -1557,6 +1575,8 @@
 		C1829B25562B028CDC237B52 /* SplitPaneLayoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplitPaneLayoutTests.swift; sourceTree = "<group>"; };
 		A012A012A012A012A012A002 /* NativeSplitViewTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeSplitViewTests.swift; sourceTree = "<group>"; };
 		F00330000000000000000002 /* SpotlightSynchronizationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpotlightSynchronizationTests.swift; sourceTree = "<group>"; };
+		F003B0000000000000000011 /* SpotlightEnhancementTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpotlightEnhancementTests.swift; sourceTree = "<group>"; };
+		F003B0000000000000000012 /* SpotlightPresentationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpotlightPresentationTests.swift; sourceTree = "<group>"; };
 		F00630000000000000000002 /* ContentViewerSynchronizationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentViewerSynchronizationTests.swift; sourceTree = "<group>"; };
 		C1B9CCF2E2BA8AB7F99D4190 /* SettingsLayoutPrimitives.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsLayoutPrimitives.swift; sourceTree = "<group>"; };
 		C2C1E3B2A8770E85559D71C4 /* MeasuredPaneWorker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeasuredPaneWorker.swift; sourceTree = "<group>"; };
@@ -2221,6 +2241,8 @@
 			isa = PBXGroup;
 			children = (
 				F00330000000000000000002 /* SpotlightSynchronizationTests.swift */,
+				F003B0000000000000000011 /* SpotlightEnhancementTests.swift */,
+				F003B0000000000000000012 /* SpotlightPresentationTests.swift */,
 			);
 			path = Canvas;
 			sourceTree = "<group>";
@@ -2999,6 +3021,8 @@
 			children = (
 				B1D000000000000000000009 /* ContentViewActiveVibeSpaceSession.swift */,
 				B1D000000000000000000002 /* ContentViewTerminalSpotlightState.swift */,
+				F003B0000000000000000001 /* SpotlightLayoutSnapshot.swift */,
+				F003B0000000000000000004 /* SpotlightLayoutNavigation.swift */,
 				B1D000000000000000000020 /* ContentViewTerminalSpotlightBrowser.swift */,
 				B1D000000000000000000021 /* ContentViewTerminalSpotlightNavigation.swift */,
 				C2D000000000000000000009 /* VibeSpaceSidebarSessionsModels.swift */,
@@ -4282,6 +4306,12 @@
 				7A3F6DFA8D0B4C3E90000004 /* ContentViewStackedProjectRailActions.swift */,
 				7A3F6DFA8D0B4C3E90000002 /* VibeSpaceStackedProjectRailSupport.swift */,
 				B1D000000000000000000003 /* ContentViewTerminalSpotlightOverlay.swift */,
+				F003B0000000000000000002 /* SpotlightTabShelf.swift */,
+				F003B0000000000000000003 /* SpotlightAllTabsOverview.swift */,
+				F003B0000000000000000007 /* SpotlightItemMetadata.swift */,
+				F003B0000000000000000008 /* SpotlightOverviewArtwork.swift */,
+				F003B0000000000000000005 /* SpotlightCardChrome.swift */,
+				F003B0000000000000000006 /* SpotlightTerminalInputBar.swift */,
 				B1D000000000000000000004 /* ContentViewTerminalSpotlightCard.swift */,
 				D1C000000000000000000002 /* ContentViewTerminalLinkPreview.swift */,
 				9BBA405FBC9C6B135037CE16 /* ContentViewVibeSpaceSidebar.swift */,
@@ -4691,6 +4721,14 @@
 				A3C1D4E5F6B7A8901E2F3C74 /* TmuxService.swift in Sources */,
 				7A3F6DFA8D0B4C3E90000007 /* GhosttyTerminalRuntimeCallbacks.swift in Sources */,
 				A1D000000000000000000002 /* ContentViewTerminalSpotlightState.swift in Sources */,
+				F003A0000000000000000001 /* SpotlightLayoutSnapshot.swift in Sources */,
+				F003A0000000000000000002 /* SpotlightTabShelf.swift in Sources */,
+				F003A0000000000000000003 /* SpotlightAllTabsOverview.swift in Sources */,
+				F003A0000000000000000007 /* SpotlightItemMetadata.swift in Sources */,
+				F003A0000000000000000008 /* SpotlightOverviewArtwork.swift in Sources */,
+				F003A0000000000000000004 /* SpotlightLayoutNavigation.swift in Sources */,
+				F003A0000000000000000005 /* SpotlightCardChrome.swift in Sources */,
+				F003A0000000000000000006 /* SpotlightTerminalInputBar.swift in Sources */,
 				A1D000000000000000000020 /* ContentViewTerminalSpotlightBrowser.swift in Sources */,
 				A1D000000000000000000021 /* ContentViewTerminalSpotlightNavigation.swift in Sources */,
 				A1D000000000000000000003 /* ContentViewTerminalSpotlightOverlay.swift in Sources */,
@@ -5400,6 +5438,8 @@
 				219F3C59245123C904F726D3 /* SplitPaneLayoutTests.swift in Sources */,
 				A012A012A012A012A012A001 /* NativeSplitViewTests.swift in Sources */,
 				F00330000000000000000001 /* SpotlightSynchronizationTests.swift in Sources */,
+				F003A0000000000000000011 /* SpotlightEnhancementTests.swift in Sources */,
+				F003A0000000000000000012 /* SpotlightPresentationTests.swift in Sources */,
 				F00630000000000000000001 /* ContentViewerSynchronizationTests.swift in Sources */,
 				AATHEMECON0000000000TEST /* AppThemePaletteContrastTests.swift in Sources */,
 				5977CBD83FD790EAA3CCCEA9 /* AppStringsTests.swift in Sources */,

@@ -22,7 +22,17 @@ VibeSpaceTerminalBoardStore (single instance per vibespace)
             +-- orderedSurfaceIDs(for:)
 ```
 
-Each detached window hosts a `VibeSpaceTerminalOnlyView` bound to a specific `surfaceID`. All views share the same `VibeSpaceTerminalBoardStore` instance, so mutations propagate via `@Published boardState`.
+Each detached window hosts a `VibeSpaceTerminalOnlyView` bound to a specific `surfaceID`. All views share the same `VibeSpaceTerminalBoardStore` instance, so board mutations propagate via `@Published boardState`.
+
+Each `DetachedTerminalBoardWindowContent` also owns independent local-only presentation state:
+
+- one `TerminalSpotlightCoordinator`, restore stack, scroll monitor, and browser-preview owner;
+- a host ID `board:<vibespaceID>:<surfaceID>` used for drag scope and editor leases;
+- `boardStore.spotlightLayout(liveIDs:surfaceID:)` as its persisted order/combo/orientation source;
+- a catalog that emits project/standalone terminal members from visible then minimized tiles first, then scans visible then minimized tiles again for VibeCast/Vibe Lanes/ACP/file/browser members, appending a synthetic Vibe Lanes member when no Vibe Lanes tile exists;
+- the shared F003 44 pt shelf, compact grid-count semantic overview, stable combo split, and pane-local terminal compose views/drafts/history. `DetachedTerminalBoardWindowRoot` injects `AppContainer.composeHistoryStore`, so detached terminal, ACP, and VibeCast compose views create independent Up/Down history navigators.
+
+`DockedFileViewerCoordinator` retains editor groups and tracks Spotlight-owned tile IDs per host. Its published union suppresses duplicate board editor mounting without allowing one detached window to release another host's lease.
 
 ## Data Flow
 
@@ -42,15 +52,25 @@ Each detached window hosts a `VibeSpaceTerminalOnlyView` bound to a specific `su
 
 ### Vibespace close
 
-1. `WorkspaceCatalogStore` calls `shutdownProjects()`.
+1. `VibeSpaceCatalogStore` calls `shutdownProjects()`.
 2. `VibeSpaceTerminalBoardDetachedWindowManager.closeWindows(for: vibespaceID)` tears down all detached windows.
 3. Window observers are removed, `onUserClose` callbacks fire.
 
-### Placement restoration
+### Placement and Spotlight restoration
 
-1. On vibespace open, `boardState.surfaces` is loaded from persistence.
-2. For each detached surface with `isOpen == true`, a window is opened with the stored `placement`.
-3. macOS positions the window at the stored frame; if the display is unavailable, the window appears on the primary display.
+1. On vibespace open, `boardState.surfaces` is loaded and normalized from signed layout persistence.
+2. For each detached surface with `isOpen == true`, a window opens with stored best-effort placement.
+3. That surface's `spotlightLayout` is decoded or migrated from an empty/legacy seed, reconciled against current live IDs, and retained independently from every other surface.
+4. Persistent descriptors validate surface membership/tile identity, terminal-tab existence, ACP-store availability, and active file ownership where applicable. Persistent browsers may recreate or resolve through `DockedBrowserCoordinator` without a pre-existing view model; browser-preview descriptors additionally require a decodable URL. Missing combo members collapse and new live members append without changing grid geometry.
+5. The saved frame is reapplied directly. Persisted display identity is not read to select a screen, and the registry performs no explicit unavailable-display adjustment or visible-screen clamping; the detached surface remains separate from primary.
+
+### Detached toolbar terminal path
+
+The AppKit titlebar configuration receives `onCreateTerminal(directoryURL, projectPath, preferTemporary)`. Persistent requests call `boardStore.addTile(..., surfaceID:)` directly. Temporary requests cross a per-window `DetachedToolbarTemporaryTerminalBridge` publisher into `DetachedTerminalBoardWindowContent`, which resolves project/standalone shell services and presents a temporary terminal on its local coordinator. Choosing split/create new persistent terminal calls the same surface-targeted `addTile` route to create a separate persistent tile; the temporary process is not converted or transferred. VibeCast and Vibe Lanes toolbar availability checks `layout.tiles + layout.minimizedTiles`, matching the store insertion guards so a minimized singleton cannot be added again.
+
+### Local previews, restore, and cleanup
+
+Terminal link and filesystem actions call detached-local browser/file presenters. Browser preview owns an ephemeral local view model; persistent browser/file states resolve through shared coordinators and canonical live owners. Restore validates persistent surface membership/tile identity, terminal tabs, ACP stores, and file owners where applicable; a valid persistent browser may recreate or resolve its owner, while a browser preview additionally requires a decodable URL. An active temporary process exit is Spotlight-ID guarded and follows the same restore-first loop; stale exits are ignored. Final dismissal releases local temporary sessions, browser preview, scroll monitor, callback references, and only this host's editor lease. Persistent sessions remain alive.
 
 ## API / Command Contracts
 
@@ -98,7 +118,7 @@ struct VibeSpaceTerminalBoardSurfaceTransferTarget: Identifiable, Equatable {
 ## Platform Considerations
 
 - macOS only. Uses `NSWindow` APIs for multi-window management.
-- `NSScreen.deviceDescription` is used to capture display identity for placement restoration.
+- `NSScreen.deviceDescription` is used to capture display identity in placement metadata, but the current restore path does not read it to choose a display.
 - Titlebar context menu uses `NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown)` with hit-testing against the titlebar region.
 - `NSApp.orderedWindows` is used for front-to-back surface ordering and drag hit-testing.
 
@@ -107,7 +127,7 @@ struct VibeSpaceTerminalBoardSurfaceTransferTarget: Identifiable, Equatable {
 - Detached windows share the same `VibeSpaceTerminalBoardStore` — no state duplication.
 - Terminal sessions are not duplicated; tiles reference the same `TerminalTab` instances.
 - Window creation is lightweight (single `NSHostingController`).
-- Placement persistence is debounced via move/resize notification coalescing on `RunLoop.main`.
+- Placement persistence runs immediately from move/resize notifications through `onPlacementChanged`; there is no debounce or coalescing layer in the current registry.
 
 ## Migration / Rollout Notes
 
@@ -120,7 +140,7 @@ Added in 2026-05 to extend single-tile transfer (F048-R07) into a project-scoped
 
 ### Architecture
 
-The bulk move reuses the existing surface model (one primary + N detached) and the single-mutation `mutate(_:)` boundary on `VibeSpaceTerminalBoardStore`. No new types were introduced for state — only model API methods and UI orchestration.
+The bulk move reuses the existing surface model (one primary + N detached). The orchestrator performs two sequential `@MainActor` store mutations: `bulkDetachTilesForProject` removes matching visible/minimized tiles from the source, then `createDetachedSurface` adds those returned tile values to a new surface. Each mutation normalizes, publishes, and persists independently. A crash or failure between them can therefore leave a persisted remove-without-add state; the full move is not atomic. No new state types were introduced.
 
 There are two invocation surfaces that converge on the same `bulkMoveProjectToNewWindow(projectPath:sourceSurfaceID:)` orchestrator:
 
@@ -140,11 +160,15 @@ NotificationCenter.post(.boardMoveProjectToNewWindowRequested | .boardRecallProj
 ContentView.onReceive(...)
     v
 ContentView.bulkMoveCurrentProjectToNewWindow(sourceSurfaceID:)  /  .recallProjectFromWindow(sourceSurfaceID:)
-    | (board mode + focused project guards, project-path resolution)
+    | bulk move: board-mode + focused-project guards and project-path resolution
+    | recall: board-mode + primary/empty-state guards
     v
 ContentView.bulkMoveProjectToNewWindow(projectPath:sourceSurfaceID:)  ◀── shared orchestrator
     v
-VibeSpaceTerminalBoardStore — single mutate batches detach + new-surface creation
+VibeSpaceTerminalBoardStore — `bulkDetachTilesForProject` source mutation
+    | returned tiles
+    v
+VibeSpaceTerminalBoardStore — `createDetachedSurface` destination mutation
     v
 VibeSpaceTerminalBoardDetachedWindowManager.openWindow(...)  /  .closeAfterTransfer(id:)
 ```
@@ -189,11 +213,11 @@ The two surfaces differ only in **how the project anchor is chosen** (focused pr
 
 ### Recall path
 
-The reverse direction (R16) does not need new model API: `closeDetachedSurface(_:mergeIntoPrimary: true)` already moves every tile back to primary and removes the surface. The view orchestrator pairs this with `DetachedWindowManager.closeAfterTransfer(id:)` to dismiss the NSWindow without firing the user-close handler that would double-merge.
+The reverse direction (R16) does not need new model API: `closeDetachedSurface(_:mergeIntoPrimary: true)` already moves every tile back to primary and removes the surface. The view orchestrator pairs this with `DetachedWindowManager.closeAfterTransfer(id:)` to dismiss the NSWindow without firing the user-close handler that would double-merge. `recallProjectFromWindow(sourceSurfaceID:)` first requires `selectedCanvasMode == .terminalOnly`, then applies detached-source and nonempty-state guards; a focused detached window therefore cannot be recalled while the primary shell is in Detailed mode.
 
 ### Window resolution for shortcut dispatch
 
-`VibeSpaceTerminalBoardDetachedWindowManager.surfaceContext(forWindow: NSWindow)` was added so `AppDelegate` can resolve `NSApp.keyWindow` to a `(surfaceID, vibespaceID)` tuple. Lookups iterate `windowsByID` once; the registry is small (one record per detached window). When the key window is the primary vibespace shell or any other unmanaged window, the helper returns nil and the source defaults to the primary surface ID — letting the listener apply its own board-mode and focused-project guards.
+`VibeSpaceTerminalBoardDetachedWindowManager.surfaceContext(forWindow: NSWindow)` was added so `AppDelegate` can resolve `NSApp.keyWindow` to a `(surfaceID, vibespaceID)` tuple. Lookups iterate `windowsByID` once; the registry is small (one record per detached window). When the key window is the primary vibespace shell or any other unmanaged window, the helper returns nil and the source defaults to the primary surface ID. The bulk-move listener then applies its board-mode/focused-project guards; the recall listener applies the same board-mode gate plus primary/empty-state guards.
 
 ### Default keybindings
 
@@ -207,3 +231,10 @@ Both shortcuts live under section `.board` and are user-editable via App Setting
 ### Re-entrancy and isolation
 
 `AppDelegate.handleKeyboardShortcut` and `dispatchShortcutAction` are now `@MainActor`-isolated. The NSEvent local monitor that drives them already runs on the main thread, so this is a typing-system change with no runtime behavior shift; the change was needed because the bulk-move helper accesses `appContainer` (already main-actor isolated).
+
+## Change History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-10-18 | Final audit fixes: documented detached AppContainer compose-history injection, visible-plus-minimized singleton checks, the Terminal Board recall guard, and separate split/create-new-persistent-tile behavior without temporary process conversion. Static sources were inspected; no tests or manual UI runs were performed. | — |
+| 2026-10-18 | Review documented the independent detached coordinator and local owners, terminal-first two-pass Spotlight enumeration plus synthetic Vibe Lanes, per-surface layout, shelf/grid/combo parity, pane-local drafts/activation, temporary versus persistent toolbar routes, local previews, host-scoped editor leases, restore validation, privacy-safe metadata, geometry-preserving reconciliation, placement limitations, immediate placement writes, and two-step non-atomic bulk move. Later production-fix status is recorded above. | — |

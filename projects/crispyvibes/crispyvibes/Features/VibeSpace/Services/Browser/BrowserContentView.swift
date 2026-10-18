@@ -11,6 +11,7 @@ struct BrowserContentView: View {
     @ObservedObject var viewModel: BrowserPanelViewModel
     @StateObject private var suggestionsController = BrowserSuggestionsController()
     var presentation: BrowserHostPresentation = .detailed
+    var onInteraction: (() -> Void)? = nil
 
     var body: some View {
         // F049-v2: bind the store on every body evaluation so it's never
@@ -50,7 +51,8 @@ struct BrowserContentView: View {
             ZStack {
                 BrowserSessionHostView(
                     viewModel: viewModel,
-                    presentation: presentation
+                    presentation: presentation,
+                    onInteraction: onInteraction
                 )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -59,6 +61,7 @@ struct BrowserContentView: View {
                 }
             }
         }
+        .simultaneousGesture(TapGesture().onEnded { onInteraction?() })
     }
 
     private var addressBar: some View {

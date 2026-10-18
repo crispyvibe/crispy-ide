@@ -98,6 +98,106 @@ extension VibeSpaceTerminalBoardStore {
         )
     }
 
+    func spotlightReconciliation(
+        liveIDs: [SpotlightPersistentItemID],
+        currentID: SpotlightPersistentItemID?,
+        surfaceID: UUID
+    ) -> SpotlightReconciliationResult {
+        let seed = boardState.surface(id: surfaceID)?.spotlightLayout ?? SpotlightLayoutSnapshot()
+        return SpotlightLayoutReconciler.reconcile(snapshot: seed, liveIDs: liveIDs, currentID: currentID)
+    }
+
+    func spotlightLayout(
+        liveIDs: [SpotlightPersistentItemID],
+        surfaceID: UUID
+    ) -> SpotlightLayoutSnapshot {
+        let surface = boardState.surface(id: surfaceID)
+        let seed = surface?.spotlightLayout ?? SpotlightLayoutSnapshot()
+        return seed.normalized(liveIDs: liveIDs)
+    }
+
+    /// Commits the main VibeSpace Spotlight layout and its primary-board mirror together.
+    ///
+    /// Only visible primary-surface tiles represented by flattened Spotlight members move.
+    /// Existing column IDs/counts/widths and destination row weights remain attached to
+    /// their slots; minimized and detached surfaces are not modified.
+    @discardableResult
+    func commitMainSpotlightLayout(
+        _ snapshot: SpotlightLayoutSnapshot,
+        liveIDs: [SpotlightPersistentItemID]
+    ) -> Bool {
+        let normalized = snapshot.normalized(liveIDs: liveIDs)
+        let previousState = boardState
+        mutateLive { state in
+            guard let primaryIndex = state.surfaces.firstIndex(where: { $0.id == state.primarySurfaceID }) else {
+                return
+            }
+            state.surfaces[primaryIndex].spotlightLayout = normalized
+            let layout = state.surfaces[primaryIndex].layout
+            let orderedTileIDs = normalized.flattenedMembers.compactMap { id in
+                Self.spotlightTileID(for: id, in: layout)
+            }
+            var mirroredLayout = layout
+            _ = mirroredLayout.reorderTilesInLinearOrder(orderedTileIDs)
+            state.surfaces[primaryIndex].layout = mirroredLayout
+        }
+        let persistedState = snapshotProviders.enriched(boardState)
+        let didPersist = layoutPersistence.commitMainSpotlightLayout(
+            normalized,
+            liveIDs: liveIDs,
+            terminalBoardState: persistedState,
+            for: vibespaceID
+        )
+        return didPersist || boardState != previousState
+    }
+
+    @discardableResult
+    func setSpotlightLayout(
+        _ snapshot: SpotlightLayoutSnapshot,
+        liveIDs: [SpotlightPersistentItemID],
+        surfaceID: UUID
+    ) -> Bool {
+        let normalized = snapshot.normalized(liveIDs: liveIDs)
+        guard boardState.surface(id: surfaceID)?.spotlightLayout != normalized else { return false }
+        mutate { state in
+            guard let surfaceIndex = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
+            state.surfaces[surfaceIndex].spotlightLayout = normalized
+
+            let layout = state.surfaces[surfaceIndex].layout
+            let orderedTileIDs = normalized.flattenedMembers.compactMap { id in
+                Self.spotlightTileID(for: id, in: layout)
+            }
+            var mirroredLayout = layout
+            _ = mirroredLayout.reorderTilesInLinearOrder(orderedTileIDs)
+            state.surfaces[surfaceIndex].layout = mirroredLayout
+        }
+        return true
+    }
+
+    private static func spotlightTileID(
+        for id: SpotlightPersistentItemID,
+        in layout: VibeSpaceTerminalBoardLayout
+    ) -> UUID? {
+        switch id {
+        case let .terminal(projectPath, tabID):
+            let normalizedPath = URL(fileURLWithPath: projectPath).standardizedFileURL.path
+            return layout.tiles.first {
+                $0.projectPath.map { URL(fileURLWithPath: $0).standardizedFileURL.path } == normalizedPath
+                    && $0.terminalTabID == tabID
+            }?.id
+        case let .standaloneTerminal(_, tileID, _),
+             let .file(tileID),
+             let .browser(tileID):
+            return layout.tiles.contains(where: { $0.id == tileID }) ? tileID : nil
+        case let .acp(tileID, _):
+            return layout.tiles.contains(where: { $0.id == tileID }) ? tileID : nil
+        case .vibeCast:
+            return layout.tiles.first(where: \.isVibeCast)?.id
+        case .vibeLanes:
+            return layout.tiles.first(where: \.isVibeLanes)?.id
+        }
+    }
+
     // MARK: - Resize (live + commit)
 
     /// When `commit` is false, publishes the state change but skips the disk write —
@@ -219,6 +319,9 @@ extension VibeSpaceTerminalBoardStore {
         mutate { state in
             guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
             detached = state.surfaces[index].layout.removeTile(withID: tileID)
+            if let detached {
+                Self.removeSpotlightMember(for: detached, from: &state.surfaces[index])
+            }
         }
         return detached
     }
@@ -235,8 +338,10 @@ extension VibeSpaceTerminalBoardStore {
             guard let sourceIndex = state.surfaces.firstIndex(where: { $0.id == sourceSurfaceID }) else { return }
             guard let targetIndex = state.surfaces.firstIndex(where: { $0.id == targetSurfaceID }) else { return }
             guard let tile = state.surfaces[sourceIndex].layout.removeTile(withID: tileID) else { return }
+            Self.removeSpotlightMember(for: tile, from: &state.surfaces[sourceIndex])
             Self.removeDuplicateTerminalIdentity(for: tile, in: &state.surfaces, exceptIndex: targetIndex)
             Self.reattach(tile: tile, into: &state.surfaces[targetIndex].layout)
+            Self.appendSpotlightMember(for: tile, to: &state.surfaces[targetIndex])
             didMove = true
         }
         return didMove
@@ -252,6 +357,7 @@ extension VibeSpaceTerminalBoardStore {
             guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
             Self.removeDuplicateTerminalIdentity(for: tile, in: &state.surfaces, exceptIndex: index)
             Self.reattach(tile: tile, into: &state.surfaces[index].layout)
+            Self.appendSpotlightMember(for: tile, to: &state.surfaces[index])
             didAttach = true
         }
         return didAttach
@@ -294,6 +400,7 @@ extension VibeSpaceTerminalBoardStore {
             // Preserve original order: visible first (column-flattened), then minimized.
             for tileID in visibleIDs + minimizedIDs {
                 if let removed = state.surfaces[index].layout.removeTile(withID: tileID) {
+                    Self.removeSpotlightMember(for: removed, from: &state.surfaces[index])
                     detached.append(removed)
                 }
             }
@@ -320,6 +427,11 @@ extension VibeSpaceTerminalBoardStore {
         let visible = Array(tiles.prefix(visibleCap))
         let overflow = Array(tiles.dropFirst(visibleCap))
         let columns = Self.distributeIntoColumns(visible)
+        let spotlightLayout = SpotlightLayoutSnapshot(positions: (visible + overflow).compactMap { tile in
+            Self.spotlightPersistentID(for: tile, surfaceID: surfaceID).map {
+                SpotlightPositionSnapshot(members: [$0])
+            }
+        })
         let surface = VibeSpaceTerminalBoardSurface(
             id: surfaceID,
             kind: .detached,
@@ -330,7 +442,8 @@ extension VibeSpaceTerminalBoardStore {
             ),
             title: title,
             placement: placement,
-            isOpen: true
+            isOpen: true,
+            spotlightLayout: spotlightLayout
         )
         mutate { state in
             state.surfaces.append(surface)
@@ -404,5 +517,77 @@ extension VibeSpaceTerminalBoardStore {
                 _ = surfaces[i].layout.removeTile(withID: existingTile.id)
             }
         }
+    }
+}
+
+
+@MainActor
+extension VibeSpaceTerminalBoardStore {
+    /// Builds stable Spotlight terminal items in canonical visible-then-minimized
+    /// board order for one surface.
+    func spotlightTerminalItems(
+        surfaceID: UUID,
+        projects: [AnyProjectSession],
+        includeProjectTerminals: Bool
+    ) -> [SpotlightItem] {
+        let surfaceLayout = layout(for: surfaceID)
+        return (surfaceLayout.tiles + surfaceLayout.minimizedTiles).compactMap { tile in
+            guard let context = tileContext(for: tile) else { return nil }
+            if let projectPath = context.projectPath,
+               let project = projects.first(where: {
+                   $0.rootURL.standardizedFileURL.path == projectPath
+               }) {
+                guard includeProjectTerminals else { return nil }
+                return .terminal(project: project, tab: context.terminalTab)
+            }
+            return .standaloneTerminal(
+                surfaceID: surfaceID,
+                tileID: tile.id,
+                terminalViewModel: context.terminalViewModel,
+                tab: context.terminalTab
+            )
+        }
+    }
+}
+
+
+@MainActor
+extension VibeSpaceTerminalBoardStore {
+    static func removeSpotlightMember(
+        for tile: VibeSpaceTerminalBoardTile,
+        from surface: inout VibeSpaceTerminalBoardSurface
+    ) {
+        guard let id = spotlightPersistentID(for: tile, surfaceID: surface.id),
+              let snapshot = surface.spotlightLayout else { return }
+        surface.spotlightLayout = snapshot.normalized(
+            liveIDs: snapshot.flattenedMembers.filter { $0 != id }
+        )
+    }
+
+    static func appendSpotlightMember(
+        for tile: VibeSpaceTerminalBoardTile,
+        to surface: inout VibeSpaceTerminalBoardSurface
+    ) {
+        guard let id = spotlightPersistentID(for: tile, surfaceID: surface.id) else { return }
+        let snapshot = surface.spotlightLayout ?? SpotlightLayoutSnapshot()
+        surface.spotlightLayout = snapshot.normalized(liveIDs: snapshot.flattenedMembers + [id])
+    }
+
+    static func spotlightPersistentID(
+        for tile: VibeSpaceTerminalBoardTile,
+        surfaceID: UUID
+    ) -> SpotlightPersistentItemID? {
+        if let tabID = tile.terminalTabID {
+            if let projectPath = tile.projectPath {
+                return .terminal(projectPath: projectPath, tabID: tabID)
+            }
+            return .standaloneTerminal(surfaceID: surfaceID, tileID: tile.id, tabID: tabID)
+        }
+        if tile.isVibeCast { return .vibeCast }
+        if tile.isVibeLanes { return .vibeLanes }
+        if let snapshot = tile.acpSnapshot { return .acp(tileID: tile.id, storeID: snapshot.id) }
+        if tile.isFile { return .file(tileID: tile.id) }
+        if tile.isBrowser { return .browser(tileID: tile.id) }
+        return nil
     }
 }

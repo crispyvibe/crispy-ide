@@ -564,18 +564,44 @@ final class SpotlightMountedCardSynchronizationTests: XCTestCase {
         XCTAssertNil(viewModelB.webView.superview)
     }
 
-    func testStaticAuditTabStripCenteringUsesStableIdentityWithoutCompetingAnimation() throws {
-        let sourceURL = try XCTUnwrap(sourceFileURL(named: "ContentViewTerminalSpotlightOverlay.swift"))
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
-        let start = try XCTUnwrap(source.range(of: ".onChange(of: currentIdentity)"))
-        let end = try XCTUnwrap(source.range(of: "                }\n\n                if items.count > 5", range: start.upperBound..<source.endIndex))
-        let centeringBlock = String(source[start.lowerBound..<end.lowerBound])
+    func testMountedShelfKeepsStableRootWhileSelectionChangesByIdentity() throws {
+        let coordinator = TerminalSpotlightCoordinator(diagnosticsSnapshot: TerminalDiagnosticsSnapshot())
+        let firstID = UUID()
+        let secondID = UUID()
+        let first = SpotlightItem.browser(tileID: firstID, url: URL(string: "https://first.example")!)
+        let second = SpotlightItem.browser(tileID: secondID, url: URL(string: "https://second.example")!)
+        let firstState = makeBrowserState(tileID: firstID, title: "first")
+        let secondState = makeBrowserState(tileID: secondID, title: "second")
+        coordinator.setSpotlight(firstState, animated: false)
+        let root = TerminalSpotlightOverlayHostView(
+            coordinator: coordinator,
+            items: [first, second],
+            projectColorTag: { _ in nil },
+            onDismiss: {},
+            onInstallScrollMonitor: {},
+            onRemoveScrollMonitor: {},
+            onSwitchSpotlight: { _ in },
+            onSelectSpotlight: { _ in },
+            onReorderTerminalTab: { _, _, _ in false },
+            cardContent: { SpotlightCardProbe(state: $0) }
+        )
+        let hosting = mount(root)
+        let shelf = try XCTUnwrap(firstDescendant(of: NSScrollView.self, in: hosting))
+        let originalFrame = shelf.frame
+        let transaction = coordinator.beginCarouselSwitch(SpotlightNavigationSelection(
+            item: second,
+            sourceIdentity: first.navigationIdentity,
+            targetIdentity: second.navigationIdentity,
+            direction: 1
+        ))
+        XCTAssertTrue(coordinator.setSpotlight(secondState, animated: false, switchTransaction: transaction))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
+        hosting.layoutSubtreeIfNeeded()
 
-        XCTAssertTrue(source.contains(".id(entry.id)"))
-        XCTAssertTrue(centeringBlock.contains("scrollProxy.scrollTo(newIdentity, anchor: .center)"))
-        XCTAssertFalse(centeringBlock.contains("withAnimation"))
-        XCTAssertTrue(source.contains("onSelectSpotlight(item.navigationIdentity)"))
-        XCTAssertTrue(source.contains("guard !isCurrent else { return }"))
+        let updatedShelf = try XCTUnwrap(firstDescendant(of: NSScrollView.self, in: hosting))
+        XCTAssertTrue(updatedShelf === shelf)
+        XCTAssertEqual(updatedShelf.frame, originalFrame)
+        XCTAssertEqual(coordinator.spotlight?.navigationIdentity, second.navigationIdentity)
     }
 
     private func mount<V: View>(_ root: V) -> NSHostingView<V> {
@@ -607,6 +633,14 @@ final class SpotlightMountedCardSynchronizationTests: XCTestCase {
             isTemporary: false,
             owningProjectRootURL: nil
         )
+    }
+
+    private func firstDescendant<T: NSView>(of type: T.Type, in view: NSView) -> T? {
+        if let match = view as? T { return match }
+        for subview in view.subviews {
+            if let match = firstDescendant(of: type, in: subview) { return match }
+        }
+        return nil
     }
 
     private func descendant(in view: NSView, identifier: String) -> NSView? {

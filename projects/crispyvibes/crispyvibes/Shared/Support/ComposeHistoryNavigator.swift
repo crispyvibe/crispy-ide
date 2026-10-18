@@ -15,7 +15,7 @@ final class ComposeHistoryNavigator: ObservableObject {
     }
 
     private let store: ComposeHistoryStore
-    private var key: UUID?
+    private var key: String?
     private var cursor: Int?
     private var pendingDraft: String?
 
@@ -32,11 +32,15 @@ final class ComposeHistoryNavigator: ObservableObject {
     /// Bind the navigator to a bucket. Resets cursor and draft. Call on view
     /// appearance and whenever the underlying identity changes (tab switch,
     /// thread switch, etc.).
-    func attach(to key: UUID?) {
+    func attach(toStableKey key: String?) {
         guard self.key != key else { return }
         self.key = key
         cursor = nil
         pendingDraft = nil
+    }
+
+    func attach(to key: UUID?) {
+        attach(toStableKey: key?.uuidString)
     }
 
     /// Record a successful send. Appends to the store, clears cursor and

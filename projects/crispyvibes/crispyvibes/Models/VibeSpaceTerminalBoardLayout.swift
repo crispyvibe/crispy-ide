@@ -406,12 +406,17 @@ struct VibeSpaceTerminalBoardWindowPlacement: Codable, Equatable {
 }
 
 struct VibeSpaceTerminalBoardSurface: Identifiable, Codable, Equatable {
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, layout, title, placement, isOpen, spotlightLayout
+    }
+
     let id: UUID
     var kind: VibeSpaceTerminalBoardSurfaceKind
     var layout: VibeSpaceTerminalBoardLayout
     var title: String
     var placement: VibeSpaceTerminalBoardWindowPlacement?
     var isOpen: Bool
+    var spotlightLayout: SpotlightLayoutSnapshot?
 
     init(
         id: UUID = UUID(),
@@ -419,7 +424,8 @@ struct VibeSpaceTerminalBoardSurface: Identifiable, Codable, Equatable {
         layout: VibeSpaceTerminalBoardLayout,
         title: String = "",
         placement: VibeSpaceTerminalBoardWindowPlacement? = nil,
-        isOpen: Bool = true
+        isOpen: Bool = true,
+        spotlightLayout: SpotlightLayoutSnapshot? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -427,6 +433,29 @@ struct VibeSpaceTerminalBoardSurface: Identifiable, Codable, Equatable {
         self.title = title
         self.placement = placement
         self.isOpen = isOpen
+        self.spotlightLayout = spotlightLayout
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        kind = try container.decode(VibeSpaceTerminalBoardSurfaceKind.self, forKey: .kind)
+        layout = try container.decode(VibeSpaceTerminalBoardLayout.self, forKey: .layout)
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        placement = try container.decodeIfPresent(VibeSpaceTerminalBoardWindowPlacement.self, forKey: .placement)
+        isOpen = try container.decodeIfPresent(Bool.self, forKey: .isOpen) ?? true
+        spotlightLayout = try? container.decodeIfPresent(SpotlightLayoutSnapshot.self, forKey: .spotlightLayout)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(layout, forKey: .layout)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(placement, forKey: .placement)
+        try container.encode(isOpen, forKey: .isOpen)
+        try container.encodeIfPresent(spotlightLayout, forKey: .spotlightLayout)
     }
 
     func normalized() -> VibeSpaceTerminalBoardSurface {
@@ -436,7 +465,10 @@ struct VibeSpaceTerminalBoardSurface: Identifiable, Codable, Equatable {
             layout: layout.normalized(),
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             placement: placement,
-            isOpen: isOpen
+            isOpen: isOpen,
+            spotlightLayout: spotlightLayout.map {
+                $0.normalized(liveIDs: $0.flattenedMembers)
+            }
         )
     }
 }

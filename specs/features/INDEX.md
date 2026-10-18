@@ -23,7 +23,7 @@ Next available prefix: F063. Numbers are never reused. (F052 Whiteboarding, F053
 |--------|---------|--------|--------|--------|
 | F001 | Terminal Sessions & Tabs | D3 | `terminal/sessions-and-tabs` | draft |
 | F002 | Terminal Board | D3 | `terminal/board` | implemented |
-| F003 | Terminal Spotlight | D3 | `terminal/spotlight` | draft |
+| F003 | Terminal Spotlight | D3 | `terminal/spotlight` | implemented |
 | F004 | Terminal Rail | D3 | `terminal/rail` | draft |
 | F005 | Terminal Presets | D3 | `terminal/presets` | draft |
 | F006 | Content Viewer | D4 | `editor/content-viewer` | draft |
@@ -61,7 +61,7 @@ Next available prefix: F063. Numbers are never reused. (F052 Whiteboarding, F053
 | F040 | Agent Conversation Persistence | D7 | `ai-agents/agent-conversation-persistence` | draft |
 | F041 | Terminal Context Summary | D3 | `terminal/context-summary` | draft |
 | F042 | Agent Board | D7 | `ai-agents/agent-board` | vision |
-| F043 | Compose History | D1 | `app-shell/compose-history` | draft (single-file layout — see folder note) |
+| F043 | Compose History | D1 | `app-shell/compose-history` | draft ([combined-document waiver](CONVENTION.md#document-layout-waivers)) |
 | F044 | Agent CLI | D9 | `platform/agent-cli` | implemented |
 | F045 | Office Document Preview | D4 | `editor/office-document-preview` | draft |
 | F046 | Terminal Scroll Assist | D3 | `terminal/scroll-assist` | draft |

@@ -362,7 +362,11 @@ extension ContentView {
                                 projectPath: activeVibeSpaceSession.focusedProject?.rootURL.standardizedFileURL.path
                             )
                         } else {
-                            presentBrowserSpotlight(url: nil, projectPath: activeVibeSpaceSession.focusedProject?.rootURL.standardizedFileURL.path)
+                            presentBrowserSpotlight(
+                                url: nil,
+                                projectPath: activeVibeSpaceSession.focusedProject?.rootURL.standardizedFileURL.path,
+                                surfaceID: directMainSpotlightSurfaceID
+                            )
                         }
                     } label: {
                         HomeToolbarIconLabel(systemName: "globe")

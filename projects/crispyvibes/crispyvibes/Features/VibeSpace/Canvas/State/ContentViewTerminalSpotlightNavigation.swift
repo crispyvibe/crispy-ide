@@ -1,6 +1,12 @@
 import SwiftUI
 
 extension ContentView {
+    var directMainSpotlightSurfaceID: UUID? {
+        selectedVibeSpaceCanvasMode == .terminalOnly
+            ? VibeSpaceTerminalBoardState.primarySurfaceID
+            : nil
+    }
+
     private var spotlightHomeDirectoryURL: URL {
         URL(fileURLWithPath: NSHomeDirectory())
     }
@@ -9,7 +15,8 @@ extension ContentView {
         source: TerminalSpotlightState.Source,
         title: String,
         workingDirectoryURL: URL,
-        owningProjectRootURL: URL? = nil
+        owningProjectRootURL: URL? = nil,
+        surfaceID: UUID? = nil
     ) -> TerminalSpotlightState {
         TerminalSpotlightState(
             id: UUID(),
@@ -20,7 +27,8 @@ extension ContentView {
             onSplitTerminalRequested: nil,
             onTemporaryTerminalRequested: nil,
             isTemporary: false,
-            owningProjectRootURL: owningProjectRootURL
+            owningProjectRootURL: owningProjectRootURL,
+            surfaceID: surfaceID
         )
     }
 
@@ -68,20 +76,22 @@ extension ContentView {
             items = terminalEntries.map(\.item)
         }
         if let boardStore = vibespaceHydrationCoordinator.boardStore {
-            for tile in boardStore.layout.tiles {
-                guard let snapshot = tile.acpSnapshot,
-                      let store = contentViewerStore.acpStore(for: snapshot.id) else { continue }
-                let accentColor = store.selectedProject(from: vibespaceView.activeVibeSpaceProjects)
-                    .flatMap { vibespaceCanvasActionsCoordinator.colorTag(for: $0)?.color }
-                items.append(.acp(tileID: tile.id, storeID: snapshot.id, title: store.tabTitle, accentColor: accentColor))
-            }
-        }
-        for entry in dockedFileViewerCoordinator.dockedFiles {
-            items.append(.file(tileID: entry.id, fileURL: entry.fileURL))
-        }
-        if let boardStore = vibespaceHydrationCoordinator.boardStore {
-            for tile in boardStore.layout.tiles where tile.isBrowser {
-                if let url = tile.browserURL {
+            let primarySurfaceID = boardStore.primarySurfaceID
+            let primaryLayout = boardStore.layout(for: primarySurfaceID)
+            items.append(contentsOf: boardStore.spotlightTerminalItems(
+                surfaceID: primarySurfaceID,
+                projects: vibespaceView.activeVibeSpaceProjects,
+                includeProjectTerminals: false
+            ))
+            for tile in primaryLayout.tiles + primaryLayout.minimizedTiles {
+                if let snapshot = tile.acpSnapshot,
+                   let store = contentViewerStore.acpStore(for: snapshot.id) {
+                    let accentColor = store.selectedProject(from: vibespaceView.activeVibeSpaceProjects)
+                        .flatMap { vibespaceCanvasActionsCoordinator.colorTag(for: $0)?.color }
+                    items.append(.acp(tileID: tile.id, storeID: snapshot.id, title: store.tabTitle, accentColor: accentColor))
+                } else if let fileURL = tile.fileURL {
+                    items.append(.file(tileID: tile.id, fileURL: fileURL))
+                } else if let url = tile.browserURL {
                     items.append(.browser(tileID: tile.id, url: url))
                 }
             }
@@ -93,6 +103,265 @@ extension ContentView {
             items.append(.vibeLanes)
         }
         return items
+    }
+
+    func spotlightState(for item: SpotlightItem) -> TerminalSpotlightState? {
+        spotlightState(
+            for: item,
+            inheritingSurfaceID: terminalSpotlightCoordinator.spotlight?.surfaceID
+        )
+    }
+
+    func spotlightState(
+        for item: SpotlightItem,
+        inheritingSurfaceID inheritedSurfaceID: UUID?
+    ) -> TerminalSpotlightState? {
+        switch item {
+        case let .terminal(project, tab):
+            let surfaceID = inheritedSurfaceID
+            let title = tab.title.isEmpty ? project.title : tab.title
+            let accentColor = vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color
+            let workingDirectoryURL = tab.workingDirectory.standardizedFileURL
+            let terminalViewModel = project.terminalViewModel
+            return TerminalSpotlightState(
+                id: UUID(),
+                source: .persistent(terminalViewModel: terminalViewModel, tabID: tab.id),
+                title: title,
+                accentColor: accentColor,
+                workingDirectoryURL: workingDirectoryURL,
+                onSplitTerminalRequested: {
+                    createSplitTerminal(
+                        in: terminalViewModel,
+                        directoryURL: workingDirectoryURL,
+                        surfaceID: surfaceID,
+                        owningProjectRootURL: project.rootURL
+                    )
+                },
+                onTemporaryTerminalRequested: {
+                    presentTemporaryTerminalSpotlight(
+                        title: title,
+                        accentColor: accentColor,
+                        directoryURL: workingDirectoryURL,
+                        shellResolutionProvider: { terminalViewModel.shellResolutionProviderStore.resolve() },
+                        onSplitTerminalRequested: {
+                            createSplitTerminal(
+                                in: terminalViewModel,
+                                directoryURL: workingDirectoryURL,
+                                surfaceID: surfaceID,
+                                owningProjectRootURL: project.rootURL
+                            )
+                        },
+                        owningProjectRootURL: project.rootURL
+                    )
+                },
+                shortcutDefinitions: spotlightShortcutDefinitions(
+                    for: project.rootURL,
+                    fallback: terminalViewModel.shortcutCommands
+                ),
+                onShortcutSelected: { shortcut in
+                    if shortcut.launchBehavior == .newPermanentTerminal,
+                       let surfaceID,
+                       let boardStore = vibespaceHydrationCoordinator.boardStore,
+                       DetachedPermanentShortcutTileLauncher.launch(
+                            shortcut,
+                            directoryURL: workingDirectoryURL,
+                            owningProjectRootURL: project.rootURL,
+                            surfaceID: surfaceID,
+                            boardStore: boardStore
+                       ) {
+                        return
+                    }
+                    executeTerminalShortcut(
+                        shortcut,
+                        viewModel: terminalViewModel,
+                        defaultDirectory: workingDirectoryURL,
+                        onTemporaryShortcutRequested: { shortcut, directoryURL in
+                            presentTemporaryTerminalSpotlight(
+                                title: shortcut.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    ? title
+                                    : shortcut.name,
+                                accentColor: accentColor,
+                                directoryURL: directoryURL,
+                                shellResolutionProvider: { terminalViewModel.shellResolutionProviderStore.resolve() },
+                                onSplitTerminalRequested: {
+                                    createSplitTerminal(
+                                        in: terminalViewModel,
+                                        directoryURL: directoryURL,
+                                        surfaceID: surfaceID,
+                                        owningProjectRootURL: project.rootURL
+                                    )
+                                },
+                                owningProjectRootURL: project.rootURL,
+                                initialCommand: shortcut.command
+                            )
+                        }
+                    )
+                },
+                onManageShortcutsRequested: spotlightManageShortcuts,
+                agentPresets: terminalViewModel.availablePresets,
+                onAgentPresetSelected: { [weak terminalViewModel] preset, mode in
+                    guard let session = terminalViewModel?.session(for: tab.id) else { return }
+                    session.requestKeyboardFocus()
+                    session.sendUICommand(preset.command(for: mode))
+                },
+                isTemporary: false,
+                owningProjectRootURL: project.rootURL,
+                surfaceID: surfaceID
+            )
+        case let .standaloneTerminal(surfaceID, tileID, terminalViewModel, tab):
+            return TerminalSpotlightState(
+                id: UUID(),
+                source: .persistent(terminalViewModel: terminalViewModel, tabID: tab.id),
+                title: tab.title.isEmpty ? AppStrings.Spotlight.terminal : tab.title,
+                accentColor: activeThemePalette.accentColor,
+                workingDirectoryURL: tab.workingDirectory,
+                onSplitTerminalRequested: {
+                    createSplitTerminal(
+                        in: terminalViewModel,
+                        directoryURL: tab.workingDirectory,
+                        surfaceID: surfaceID,
+                        owningProjectRootURL: nil
+                    )
+                },
+                onTemporaryTerminalRequested: {
+                    presentTemporaryTerminalSpotlight(
+                        title: tab.title.isEmpty ? AppStrings.Spotlight.terminal : tab.title,
+                        accentColor: activeThemePalette.accentColor,
+                        directoryURL: tab.workingDirectory,
+                        shellResolutionProvider: { terminalViewModel.shellResolutionProviderStore.resolve() },
+                        onSplitTerminalRequested: {
+                            createSplitTerminal(
+                                in: terminalViewModel,
+                                directoryURL: tab.workingDirectory,
+                                surfaceID: surfaceID,
+                                owningProjectRootURL: nil
+                            )
+                        },
+                        owningProjectRootURL: nil
+                    )
+                },
+                shortcutDefinitions: spotlightShortcutDefinitions(
+                    for: nil,
+                    fallback: terminalViewModel.shortcutCommands
+                ),
+                onShortcutSelected: { shortcut in
+                    if shortcut.launchBehavior == .newPermanentTerminal,
+                       let boardStore = vibespaceHydrationCoordinator.boardStore,
+                       DetachedPermanentShortcutTileLauncher.launch(
+                            shortcut,
+                            directoryURL: tab.workingDirectory,
+                            owningProjectRootURL: nil,
+                            surfaceID: surfaceID,
+                            boardStore: boardStore
+                       ) {
+                        return
+                    }
+                    executeTerminalShortcut(
+                        shortcut,
+                        viewModel: terminalViewModel,
+                        defaultDirectory: tab.workingDirectory,
+                        onTemporaryShortcutRequested: { shortcut, directoryURL in
+                            presentTemporaryTerminalSpotlight(
+                                title: shortcut.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    ? (tab.title.isEmpty ? AppStrings.Spotlight.terminal : tab.title)
+                                    : shortcut.name,
+                                accentColor: activeThemePalette.accentColor,
+                                directoryURL: directoryURL,
+                                shellResolutionProvider: { terminalViewModel.shellResolutionProviderStore.resolve() },
+                                onSplitTerminalRequested: {
+                                    createSplitTerminal(
+                                        in: terminalViewModel,
+                                        directoryURL: directoryURL,
+                                        surfaceID: surfaceID,
+                                        owningProjectRootURL: nil
+                                    )
+                                },
+                                owningProjectRootURL: nil,
+                                initialCommand: shortcut.command
+                            )
+                        }
+                    )
+                },
+                onManageShortcutsRequested: spotlightManageShortcuts,
+                agentPresets: terminalViewModel.availablePresets,
+                onAgentPresetSelected: { [weak terminalViewModel] preset, mode in
+                    guard let session = terminalViewModel?.session(for: tab.id) else { return }
+                    session.requestKeyboardFocus()
+                    session.sendUICommand(preset.command(for: mode))
+                },
+                isTemporary: false,
+                owningProjectRootURL: nil,
+                surfaceID: surfaceID,
+                navigationIdentityOverride: .terminal(projectScope: .unscoped(tileID), tabID: tab.id)
+            )
+        case .vibeCast:
+            return TerminalSpotlightState(
+                id: UUID(), source: .vibeCast, title: AppStrings.VibeCast.title,
+                accentColor: activeThemePalette.accentColor,
+                workingDirectoryURL: URL(fileURLWithPath: NSHomeDirectory()),
+                onSplitTerminalRequested: nil, onTemporaryTerminalRequested: nil,
+                isTemporary: false, owningProjectRootURL: nil,
+                surfaceID: inheritedSurfaceID
+            )
+        case .vibeLanes:
+            return TerminalSpotlightState(
+                id: UUID(), source: .vibeLanes, title: AppStrings.VibeLanes.title,
+                accentColor: activeThemePalette.accentColor,
+                workingDirectoryURL: URL(fileURLWithPath: NSHomeDirectory()),
+                onSplitTerminalRequested: nil, onTemporaryTerminalRequested: nil,
+                isTemporary: false, owningProjectRootURL: nil,
+                surfaceID: inheritedSurfaceID
+            )
+        case let .acp(tileID, storeID, title, accentColor):
+            let selectedProject = contentViewerStore.acpStore(for: storeID)?
+                .selectedProject(from: vibespaceView.activeVibeSpaceProjects)
+            let owningProjectRootURL = selectedProject?.rootURL.standardizedFileURL
+            return TerminalSpotlightState(
+                id: UUID(), source: .acp(tileID: tileID, storeID: storeID), title: title,
+                accentColor: accentColor,
+                workingDirectoryURL: owningProjectRootURL ?? URL(fileURLWithPath: NSHomeDirectory()),
+                onSplitTerminalRequested: nil, onTemporaryTerminalRequested: nil,
+                isTemporary: false, owningProjectRootURL: owningProjectRootURL,
+                surfaceID: inheritedSurfaceID
+            )
+        case let .file(tileID, fileURL):
+            let context = resolvedFileOpenContext(for: fileURL)
+            let group = dockedFileViewerCoordinator.assignedEditorGroup(for: tileID)
+                ?? dockedFileViewerCoordinator.editorGroup(
+                    for: tileID, fileURL: fileURL, documentReference: context.reference,
+                    fileContentProvider: context.fileContentProvider
+                )
+            return TerminalSpotlightState(
+                id: UUID(),
+                source: .file(tileID: tileID, fileURL: fileURL, group: group),
+                title: fileURL.lastPathComponent,
+                accentColor: activeThemePalette.accentColor,
+                workingDirectoryURL: fileURL.deletingLastPathComponent(),
+                onSplitTerminalRequested: nil,
+                onTemporaryTerminalRequested: nil,
+                isTemporary: false,
+                owningProjectRootURL: context.owningProjectRootURL,
+                surfaceID: inheritedSurfaceID
+            )
+        case let .browser(tileID, url):
+            let boardStore = vibespaceHydrationCoordinator.boardStore
+            let surfaceID = inheritedSurfaceID ?? boardStore?.primarySurfaceID
+            let tile = surfaceID.flatMap { surfaceID in
+                boardStore?.tile(for: tileID, includeMinimized: true, surfaceID: surfaceID)
+            }
+            return TerminalSpotlightState(
+                id: UUID(),
+                source: .browser(tileID: tileID, url: url),
+                title: SpotlightSafeMetadata.browserLocation(url).host,
+                accentColor: activeThemePalette.accentColor,
+                workingDirectoryURL: URL(fileURLWithPath: NSHomeDirectory()),
+                onSplitTerminalRequested: nil,
+                onTemporaryTerminalRequested: nil,
+                isTemporary: false,
+                owningProjectRootURL: tile?.projectPath.map(URL.init(fileURLWithPath:)),
+                surfaceID: inheritedSurfaceID
+            )
+        }
     }
 
     private func vibespaceSpotlightTerminalEntries() -> [
@@ -139,16 +408,21 @@ extension ContentView {
               spotlight.supportsCarouselNavigation,
               let currentIdentity = spotlight.navigationIdentity else { return }
         let items = flatSpotlightItems
-        guard items.count > 1 else {
+        let snapshot = layoutPersistence.spotlightLayout(
+            liveIDs: items.map(\.persistentID),
+            for: activeVibeSpaceID
+        )
+        guard snapshot.positions.count > 1 else {
             terminalSpotlightCoordinator.animateSwipeOffset(
                 0,
                 animation: .spring(response: 0.35, dampingFraction: 0.7)
             )
             return
         }
-        guard let selection = SpotlightNavigationResolver.relativeSelection(
+        guard let selection = SpotlightPositionNavigationResolver.relativeSelection(
             offset: offset,
             currentIdentity: currentIdentity,
+            snapshot: snapshot,
             items: items
         ) else { return }
         performSpotlightSwitch(selection)
@@ -157,71 +431,74 @@ extension ContentView {
     func selectSpotlightItem(_ targetIdentity: SpotlightNavigationIdentity) {
         guard let currentIdentity = terminalSpotlightCoordinator.spotlight?.navigationIdentity else { return }
         let items = flatSpotlightItems
-        guard let selection = SpotlightNavigationResolver.selection(
+        let snapshot = layoutPersistence.spotlightLayout(
+            liveIDs: items.map(\.persistentID),
+            for: activeVibeSpaceID
+        )
+        guard let selection = SpotlightPositionNavigationResolver.selection(
             targetIdentity: targetIdentity,
             currentIdentity: currentIdentity,
+            snapshot: snapshot,
             items: items
         ) else { return }
         performSpotlightSwitch(selection)
     }
 
-    private func performSpotlightSwitch(_ selection: SpotlightNavigationSelection) {
+    func performSpotlightSwitch(_ selection: SpotlightNavigationSelection) {
         let previousSpotlightID = terminalSpotlightCoordinator.spotlight?.id
-        let transaction = terminalSpotlightCoordinator.beginCarouselSwitch(selection)
+        let originatingSurfaceID = terminalSpotlightCoordinator.spotlight?.surfaceID
+        let transaction = selection.direction == 0
+            ? nil
+            : terminalSpotlightCoordinator.beginCarouselSwitch(selection)
 
-        switch selection.item {
-        case let .terminal(project, tab):
-            let accentColor = vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color
-                ?? activeThemePalette.accentColor
-            presentTerminalSpotlight(
-                terminalViewModel: project.terminalViewModel,
-                tabID: tab.id,
-                title: tab.title.isEmpty ? project.title : tab.title,
-                accentColor: accentColor,
-                owningProjectRootURL: project.rootURL,
-                surfaceID: terminalSpotlightCoordinator.spotlight?.surfaceID,
-                animated: false
-            )
-        case .vibeCast:
-            presentVibeCastSpotlight(animated: false)
-        case .vibeLanes:
-            presentVibeLanesSpotlight(animated: false)
-        case let .acp(tileID, storeID, _, _):
-            presentACPSpotlight(tileID: tileID, storeID: storeID, animated: false)
-        case let .file(tileID, fileURL):
-            presentFileSpotlight(tileID: tileID, fileURL: fileURL, animated: false)
-        case let .browser(tileID, url):
-            presentBrowserSpotlight(tileID: tileID, url: url, animated: false)
+        if let state = spotlightState(
+            for: selection.item,
+            inheritingSurfaceID: originatingSurfaceID
+        ) {
+            setTerminalSpotlight(state, animated: false)
         }
 
-        if terminalSpotlightCoordinator.spotlight?.id == previousSpotlightID {
+        if let transaction,
+           terminalSpotlightCoordinator.spotlight?.id == previousSpotlightID {
             terminalSpotlightCoordinator.cancelCarouselSwitch(transaction)
         }
     }
 
-    func presentVibeCastSpotlight(animated: Bool = true) {
+    func presentVibeCastSpotlight(
+        surfaceID: UUID? = nil,
+        animated: Bool = true
+    ) {
         let spotlight = makeSpotlightState(
             source: .vibeCast,
             title: AppStrings.VibeCast.title,
-            workingDirectoryURL: spotlightHomeDirectoryURL
+            workingDirectoryURL: spotlightHomeDirectoryURL,
+            surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }
 
-    func presentVibeLanesSpotlight(animated: Bool = true) {
+    func presentVibeLanesSpotlight(
+        surfaceID: UUID? = nil,
+        animated: Bool = true
+    ) {
         let spotlight = makeSpotlightState(
             source: .vibeLanes,
             title: AppStrings.VibeLanes.title,
-            workingDirectoryURL: spotlightHomeDirectoryURL
+            workingDirectoryURL: spotlightHomeDirectoryURL,
+            surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }
 
-    func presentTodosSpotlight(animated: Bool = true) {
+    func presentTodosSpotlight(
+        surfaceID: UUID? = nil,
+        animated: Bool = true
+    ) {
         let spotlight = makeSpotlightState(
             source: .todos,
             title: AppStrings.Todos.title,
-            workingDirectoryURL: spotlightHomeDirectoryURL
+            workingDirectoryURL: spotlightHomeDirectoryURL,
+            surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }
@@ -229,6 +506,7 @@ extension ContentView {
     func presentFilePreviewSpotlight(
         target: TerminalFileSystemTarget,
         owningProjectRootURL: URL? = nil,
+        surfaceID: UUID? = nil,
         animated: Bool = true
     ) {
         let normalizedTarget = TerminalFileSystemTarget(
@@ -252,7 +530,8 @@ extension ContentView {
             source: .filePreview(target: normalizedTarget, group: group),
             title: normalizedTarget.url.lastPathComponent,
             workingDirectoryURL: normalizedTarget.url.deletingLastPathComponent(),
-            owningProjectRootURL: fileContext.owningProjectRootURL ?? owningProjectRootURL
+            owningProjectRootURL: fileContext.owningProjectRootURL ?? owningProjectRootURL,
+            surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }
@@ -261,6 +540,7 @@ extension ContentView {
         tileID: UUID,
         fileURL: URL,
         owningProjectRootURL: URL? = nil,
+        surfaceID: UUID? = nil,
         animated: Bool = true
     ) {
         let fileContext = resolvedFileOpenContext(
@@ -278,7 +558,8 @@ extension ContentView {
             source: .file(tileID: tileID, fileURL: fileURL, group: group),
             title: fileURL.lastPathComponent,
             workingDirectoryURL: fileURL.deletingLastPathComponent(),
-            owningProjectRootURL: fileContext.owningProjectRootURL ?? owningProjectRootURL
+            owningProjectRootURL: fileContext.owningProjectRootURL ?? owningProjectRootURL,
+            surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }

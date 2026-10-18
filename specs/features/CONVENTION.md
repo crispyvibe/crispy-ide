@@ -2,7 +2,7 @@
 
 ## Structure
 
-Each feature in `specs/features/` MUST have its own folder containing exactly four documents:
+Each feature in `specs/features/` MUST have its own folder containing exactly four documents unless it is explicitly listed in [Document Layout Waivers](#document-layout-waivers):
 
 ```
 specs/features/{domain}/{feature-name}/
@@ -19,6 +19,21 @@ For the feature registry (domains, prefixes, folders, status), see [INDEX.md](IN
 - Feature folder: lowercase kebab-case (e.g., `file-explorer`, `vibespace-lifecycle`).
 - Document names are fixed — always `spec.md`, `technical-design.md`, `threat-model.md`, `usage-guide.md`.
 - Features are nested under their domain folder: `specs/features/{domain}/{feature-name}/`.
+
+## Document Layout Waivers
+
+A layout waiver is an explicit exception to the four fixed filenames, not an exception to documentation content or review. A waived feature MUST:
+
+- be listed in the table below and linked from `INDEX.md`;
+- keep requirements, scenarios, technical design, security/threat notes, end-user usage, acceptance criteria, open questions, and one `## Change History` in its combined document;
+- keep canonical F/R/S/T identifiers and registry status;
+- be promoted to the four-document layout when the review trigger is met.
+
+| Feature | Authorized combined document | Reason | Review trigger |
+|---------|------------------------------|--------|----------------|
+| F043 Compose History | [`app-shell/compose-history/compose-history.md`](app-shell/compose-history/compose-history.md) | Small draft shared service whose technical, security, and usage material remains readable in one file. | Before shipping, or when persistence, search, cross-bucket modes, or document size make the combined format difficult to review. |
+
+This waiver authorizes F043's current structure only. It does not waive the requirement to review all canonical content before shipping.
 
 ## ID Formats
 
@@ -132,7 +147,7 @@ Content rules for portability:
 
 ## Rules
 
-- No feature may ship without all four documents reviewed and merged.
+- No feature may ship without all four documents reviewed and merged, except an explicitly waived feature whose combined document contains and has review coverage for every canonical document concern.
 - Threat model MUST reference applicable NFR requirement IDs (SEC-1, SEC-3a, etc.).
 - Spec scenarios MUST have matching test coverage documented in the spec or a linked test plan.
 - Usage guide MUST be written for end users — no implementation jargon.

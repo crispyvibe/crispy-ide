@@ -23,7 +23,7 @@ struct VibeSpaceTerminalOnlyView: View {
     let terminalBoardStandaloneRegistry: VibeSpaceTerminalBoardStandaloneRegistry
     let headerCornerRadii: RectangleCornerRadii
     let onAddProjectsRequested: () -> Void
-    let onSpotlightRequested: (TerminalViewModel, UUID, String, Color?, URL?) -> Void
+    let onSpotlightRequested: (TerminalViewModel, UUID, String, Color?, URL?, UUID) -> Void
     let onACPSpotlightRequested: (UUID, UUID) -> Void
     let onTemporaryTerminalRequested: (TerminalViewModel, URL, String, Color?, URL?) -> Void
     let onTemporaryShortcutRequested: (TerminalViewModel, TerminalShortcutDefinition, URL, String, Color?, URL?) -> Void
@@ -74,7 +74,7 @@ struct VibeSpaceTerminalOnlyView: View {
         terminalBoardStandaloneRegistry: VibeSpaceTerminalBoardStandaloneRegistry,
         headerCornerRadii: RectangleCornerRadii,
         onAddProjectsRequested: @escaping () -> Void,
-        onSpotlightRequested: @escaping (TerminalViewModel, UUID, String, Color?, URL?) -> Void,
+        onSpotlightRequested: @escaping (TerminalViewModel, UUID, String, Color?, URL?, UUID) -> Void,
         onACPSpotlightRequested: @escaping (UUID, UUID) -> Void,
         onTemporaryTerminalRequested: @escaping (TerminalViewModel, URL, String, Color?, URL?) -> Void,
         onTemporaryShortcutRequested: @escaping (TerminalViewModel, TerminalShortcutDefinition, URL, String, Color?, URL?) -> Void,
