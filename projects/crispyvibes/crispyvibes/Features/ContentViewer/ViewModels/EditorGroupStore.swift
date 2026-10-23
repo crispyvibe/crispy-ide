@@ -8,6 +8,7 @@ final class EditorGroupStore: ObservableObject, Identifiable {
     static let navigationHistoryLimit = 100
     private enum GitFileTabPresentation: Equatable {
         case diff(rootURL: URL, relativePath: String, statusCode: String)
+        case preloadedDiff(content: String, relativePath: String, statusCode: String)
         case historicalContent(rootURL: URL, relativePath: String, titleSuffix: String)
     }
 
@@ -120,9 +121,10 @@ final class EditorGroupStore: ObservableObject, Identifiable {
         }
 
         gitPresentationByTabID.removeValue(forKey: tab.id)
+        applyFileContentProvider(fileContentProvider, for: tab.id)
         activateOrInsertTab(tab, setActive: true)
         previewTabID = tab.id
-        markdownViewModel.fileContentProvider = fileContentProvider
+        markdownViewModel.fileContentProvider = fileContentProviderForFileTab(tab)
         markdownViewModel.previewFile(at: reference.url, documentReference: reference)
     }
 
@@ -270,6 +272,35 @@ final class EditorGroupStore: ObservableObject, Identifiable {
         )
     }
 
+    func previewGitDiffContent(
+        _ content: String,
+        fileURL: URL,
+        relativePath: String,
+        statusCode: String,
+        projectIdentifier: String
+    ) {
+        let reference = FileDocumentReference(
+            url: fileURL,
+            projectIdentifier: projectIdentifier
+        )
+        let tab = ContentViewerTab.file(reference: reference)
+        applyFileContentProvider(nil, for: tab.id)
+        gitPresentationByTabID[tab.id] = .preloadedDiff(
+            content: content,
+            relativePath: relativePath,
+            statusCode: statusCode
+        )
+        activateOrInsertTab(tab, setActive: true)
+        markdownViewModel.fileContentProvider = nil
+        markdownViewModel.previewGitDiffContent(
+            content,
+            fileURL: fileURL,
+            relativePath: relativePath,
+            statusCode: statusCode,
+            documentReference: reference
+        )
+    }
+
     func previewGitFileContent(
         rootURL: URL,
         fileURL: URL,
@@ -351,8 +382,12 @@ final class EditorGroupStore: ObservableObject, Identifiable {
         tabs[index].customTitle = title
     }
 
-    func closeTab(_ tabID: String) {
-        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
+    @discardableResult
+    func closeTab(
+        _ tabID: String,
+        discardUnsavedChanges: Bool = false
+    ) -> Task<Error?, Never>? {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return nil }
         if previewTabID == tabID { previewTabID = nil }
         let wasActive = activeTabID == tabID
         let closingKind = tabs[index].kind
@@ -361,13 +396,20 @@ final class EditorGroupStore: ObservableObject, Identifiable {
         backNavigationTabIDs.removeAll(where: { $0 == tabID })
         forwardNavigationTabIDs.removeAll(where: { $0 == tabID })
 
+        var flushTask: Task<Error?, Never>?
         if case .file(let reference) = closingKind {
-            fileContentProviderByTabID.removeValue(forKey: tabID)
+            let closingProvider = fileContentProviderByTabID.removeValue(forKey: tabID)
             gitPresentationByTabID.removeValue(forKey: tabID)
-            markdownViewModel.closeEditorTab(withID: reference.documentIdentity)
+            flushTask = markdownViewModel.closeEditorTab(
+                withID: reference.documentIdentity,
+                writer: discardUnsavedChanges ? nil : markdownViewModel.makeBufferWriter(
+                    fileContentProvider: closingProvider
+                ),
+                discardUnsavedChanges: discardUnsavedChanges
+            )
         }
 
-        guard wasActive else { return }
+        guard wasActive else { return flushTask }
         if tabs.isEmpty {
             activeTabID = nil
             markdownViewModel.fileContentProvider = nil
@@ -376,6 +418,11 @@ final class EditorGroupStore: ObservableObject, Identifiable {
             let fallbackIndex = min(index, tabs.count - 1)
             activateTab(tabs[fallbackIndex].id, mode: .lifecycleFallback)
         }
+        return flushTask
+    }
+
+    func closeAllTabsForTeardown() -> [Task<Error?, Never>] {
+        tabs.map(\.id).reversed().compactMap { closeTab($0) }
     }
 
     func retargetFileSystemLocation(from oldURL: URL, to newURL: URL) {
@@ -423,18 +470,22 @@ final class EditorGroupStore: ObservableObject, Identifiable {
         markdownViewModel.flushUnsavedEdits(forFileURL: url)
     }
 
-    func closeFileTabs(at url: URL) {
+    func closeFileTabs(at url: URL, includeDescendants: Bool = false) {
         let normalizedURL = url.standardizedFileURL
+        let rootPath = normalizedURL.path
+        let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
         let matchingTabIDs = tabs.compactMap { tab -> String? in
-            guard case .file(let reference) = tab.kind,
-                  reference.url.standardizedFileURL == normalizedURL else {
+            guard case .file(let reference) = tab.kind else { return nil }
+            let candidatePath = reference.url.standardizedFileURL.path
+            guard candidatePath == rootPath
+                    || (includeDescendants && candidatePath.hasPrefix(prefix)) else {
                 return nil
             }
             return tab.id
         }
 
         for tabID in matchingTabIDs.reversed() {
-            closeTab(tabID)
+            closeTab(tabID, discardUnsavedChanges: true)
         }
     }
 
@@ -515,6 +566,14 @@ final class EditorGroupStore: ObservableObject, Identifiable {
                 case let .diff(rootURL, relativePath, statusCode):
                     markdownViewModel.previewGitDiff(
                         rootURL: rootURL,
+                        fileURL: reference.url,
+                        relativePath: relativePath,
+                        statusCode: statusCode,
+                        documentReference: reference
+                    )
+                case let .preloadedDiff(content, relativePath, statusCode):
+                    markdownViewModel.previewGitDiffContent(
+                        content,
                         fileURL: reference.url,
                         relativePath: relativePath,
                         statusCode: statusCode,

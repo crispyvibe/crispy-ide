@@ -602,6 +602,17 @@ struct MarkdownEditorView: View {
                 Spacer(minLength: 8)
             }
 
+            if viewModel.documentType == .html {
+                Button(action: viewModel.openHTMLInSystem) {
+                    Label(AppStrings.Editor.openInSystem, systemImage: "arrow.up.forward.app")
+                }
+                .buttonStyle(.crispyvibesText)
+                .controlSize(.small)
+                .disabled(!viewModel.canOpenHTMLInSystem)
+                .help(AppStrings.Editor.openInSystemHelp)
+                .accessibilityIdentifier("editor.html.openInSystem")
+            }
+
             markupViewModeToggle
         }
         .padding(.horizontal, 12)

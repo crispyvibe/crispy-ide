@@ -570,7 +570,7 @@ enum DiagnosticsExportService {
             layoutStateSanitizedJSON: nil,
             operationMetrics: operationMetricsStore?.exportPayload(),
             acpObservability: acpObservabilityStore?.exportPayload(mode: acpObservabilityMode),
-            recentEvents: AppDiagnostics.eventStore.snapshot()
+            recentEvents: sanitizeEvents(AppDiagnostics.eventStore.snapshot())
         )
     }
 
@@ -589,6 +589,20 @@ enum DiagnosticsExportService {
             totalProjects: totalProjects,
             totalUnresolvedPaths: totalUnresolvedPaths
         )
+    }
+
+    private static func sanitizeEvents(
+        _ events: [DiagnosticsEventRecord]
+    ) -> [DiagnosticsEventRecord] {
+        events.map { record in
+            DiagnosticsEventRecord(
+                timestamp: record.timestamp,
+                category: record.category,
+                level: record.level,
+                event: sanitizeString(record.event),
+                metadata: record.metadata.mapValues(sanitizeString)
+            )
+        }
     }
 
     private static func sanitizeJSONText(_ raw: String?) -> String? {
@@ -632,7 +646,7 @@ enum DiagnosticsExportService {
     }
 
     private static func looksLikePath(_ value: String) -> Bool {
-        value.hasPrefix("/") || value.contains("/Users/") || value.contains("\\Users\\")
+        value.contains("/") || value.contains("\\")
     }
 
     private static func timestampForFileName() -> String {

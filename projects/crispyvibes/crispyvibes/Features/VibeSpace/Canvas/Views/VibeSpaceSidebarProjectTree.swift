@@ -93,6 +93,7 @@ struct VibeSpaceProjectFilesSectionView: View {
                 ProjectFileTreeView(
                     viewModel: project.folderExplorer,
                     projectRootURLs: projectRootURLs,
+                    isRemoteProject: project.metadata.hostLabel != nil,
                     onAction: onAction,
                     onTransferDrop: onTransferDrop
                 )
@@ -128,6 +129,7 @@ struct ProjectFileTreeView: View {
     @FocusState private var isExplorerListFocused: Bool
 
     let projectRootURLs: [URL]
+    let isRemoteProject: Bool
     let onAction: (FileTreeAction) -> Void
     let onTransferDrop: ([ExplorerItemTransferPlan]) -> Bool
 
@@ -185,6 +187,7 @@ struct ProjectFileTreeView: View {
                 changedDirectoryIDs: viewModel.changedDirectoryIDs,
                 treeMutationRevision: viewModel.treeMutationRevision,
                 allowsFileTransfers: viewModel.supportsFileTransfers,
+                isRemoteProject: isRemoteProject,
                 allowsScrolling: false,
                 usesIntrinsicContentHeight: false,
                 rootURL: viewModel.rootURL,
@@ -258,7 +261,18 @@ struct ProjectNodeContextMenu: View {
                     startImmediately: true
                 )
             }
-            if !isRemote {
+            if isRemote {
+                let rootItem = FileItem(url: project.rootURL, isDirectory: true)
+                Button(AppStrings.Explorer.openInSystem) {
+                    onAction(.openInSystem(rootItem))
+                }
+                Button(AppStrings.Explorer.download) {
+                    onAction(.download(rootItem))
+                }
+            } else {
+                Button(AppStrings.Explorer.openInSystem) {
+                    onAction(.openInSystem(FileItem(url: project.rootURL, isDirectory: true)))
+                }
                 Button(AppStrings.Explorer.revealInFinder) {
                     onAction(.openInFinder(project.rootURL))
                 }

@@ -73,7 +73,12 @@ struct SSHConnectionSheet: View {
                 Spacer()
                 Button("Cancel") { onCancel() }.keyboardShortcut(.escape, modifiers: [])
                 Button("Save") {
-                    onSave(vm.buildProfile(existingID: profile?.id, importedFromConfig: profile?.importedFromConfig ?? false))
+                    if let built = vm.buildProfile(
+                        existingID: profile?.id,
+                        importedFromConfig: profile?.importedFromConfig ?? false
+                    ) {
+                        onSave(built)
+                    }
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(!vm.isValid)

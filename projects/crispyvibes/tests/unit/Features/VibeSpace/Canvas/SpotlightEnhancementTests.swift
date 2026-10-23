@@ -768,6 +768,22 @@ final class SpotlightHostPersistenceAndPolicyTests: XCTestCase {
         XCTAssertFalse(AppStrings.Spotlight.searchPlaceholder.isEmpty)
     }
 
+    func testSpotlightTerminalIDCodablePreservesSSHIdentifierVerbatim() throws {
+        let identifier = "ssh://dev@example.com:2222/srv/My%20Project"
+        let expected = SpotlightPersistentItemID.terminal(
+            projectPath: identifier,
+            tabID: UUID()
+        )
+
+        let decoded = try JSONDecoder().decode(
+            SpotlightPersistentItemID.self,
+            from: JSONEncoder().encode(expected)
+        )
+
+        XCTAssertEqual(decoded, expected)
+        XCTAssertEqual(decoded.navigationIdentity, expected.navigationIdentity)
+    }
+
     private func makeService() -> LayoutPersistenceService {
         let service = LayoutPersistenceService(fileManager: .default)
         service.setVibeSpacePersistenceStore(persistence)
@@ -1178,13 +1194,15 @@ final class SpotlightStandaloneAndRestoreTests: XCTestCase {
                 agentPresets: [preset],
                 onAgentPresetSelected: { _, _ in presetCount += 1 },
                 isTemporary: false,
-                owningProjectRootURL: nil,
+                owningProjectRootURL: root,
+                owningProjectIdentifier: "ssh://dev@example.com:22/srv/app",
                 navigationIdentityOverride: .terminal(projectScope: .unscoped(tileID), tabID: tabID)
             )
             let attached = DetachedSpotlightStateFactory.attach(original, to: surfaceID)
             XCTAssertEqual(attached.id, original.id)
             XCTAssertEqual(attached.surfaceID, surfaceID)
             XCTAssertEqual(attached.navigationIdentityOverride, original.navigationIdentityOverride)
+            XCTAssertEqual(attached.owningProjectIdentifier, original.owningProjectIdentifier)
             XCTAssertEqual(attached.shortcutDefinitions, [shortcut])
             attached.onSplitTerminalRequested?()
             attached.onTemporaryTerminalRequested?()

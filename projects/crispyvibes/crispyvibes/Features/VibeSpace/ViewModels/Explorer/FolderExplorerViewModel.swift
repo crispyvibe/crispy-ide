@@ -45,6 +45,7 @@ final class FolderExplorerViewModel: ObservableObject {
     let defaultSidebarTab: SidebarTab
     let worker: any PaneWorkerExecuting
     let renameEvents = PassthroughSubject<ExplorerRenameEvent, Never>()
+    let deletionEvents = PassthroughSubject<ExplorerDeletionEvent, Never>()
     let treeLoadTimeout: TimeInterval = 45
     let observedFileSystemChanges = PassthroughSubject<Set<String>, Never>()
     var gitRefreshRequestID = UUID()

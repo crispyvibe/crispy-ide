@@ -97,6 +97,22 @@ final class ContentViewerStore: ObservableObject {
         )
     }
 
+    func previewGitDiffContent(
+        _ content: String,
+        fileURL: URL,
+        relativePath: String,
+        statusCode: String,
+        projectIdentifier: String
+    ) {
+        activeGroup.previewGitDiffContent(
+            content,
+            fileURL: fileURL,
+            relativePath: relativePath,
+            statusCode: statusCode,
+            projectIdentifier: projectIdentifier
+        )
+    }
+
     func previewGitFileContent(
         rootURL: URL,
         fileURL: URL,
@@ -327,13 +343,13 @@ final class ContentViewerStore: ObservableObject {
         }
     }
 
-    func closeFileTabs(at url: URL) {
+    func closeFileTabs(at url: URL, includeDescendants: Bool = false) {
         if let splitStore {
             for group in splitStore.editorGroups.values {
-                group.closeFileTabs(at: url)
+                group.closeFileTabs(at: url, includeDescendants: includeDescendants)
             }
         } else {
-            fallbackGroup.closeFileTabs(at: url)
+            fallbackGroup.closeFileTabs(at: url, includeDescendants: includeDescendants)
         }
 
         if activeGroup.tabs.isEmpty {

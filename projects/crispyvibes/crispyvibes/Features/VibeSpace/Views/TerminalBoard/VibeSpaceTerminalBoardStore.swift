@@ -36,7 +36,10 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
     var isReconciling = false
 
     var orderedProjectPaths: [String] = []
+    var orderedProjectIdentifiers: [String] = []
+    var orderedProjects: [AnyProjectSession] = []
     var projectsByPath: [String: AnyProjectSession] = [:]
+    var projectsByIdentifier: [String: AnyProjectSession] = [:]
     var tabsByProjectPathAndID: [String: [UUID: TerminalTab]] = [:]
     var tabsByProjectPathAndDirectory: [String: [String: [TerminalTab]]] = [:]
     var standaloneTabsByID: [UUID: TerminalTab] = [:]
@@ -63,7 +66,6 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
 
         standaloneTerminalViewModel = terminalBoardStandaloneRegistry.viewModel(for: vibespaceID)
         rebuildTileLookup()
-        pruneStaleFileTiles()
         configureStandaloneTerminalViewModel(for: vibespaceID)
         focusedSessionSubscription = NotificationCenter.default.publisher(for: .terminalFocusedSessionDidChange)
             .receive(on: RunLoop.main)
@@ -157,7 +159,6 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         self.vibespaceID = vibespaceID
         boardState = layoutPersistence.terminalBoardState(for: vibespaceID)
         rebuildTileLookup()
-        pruneStaleFileTiles()
         didSeedInitialTile = false
         configureStandaloneTerminalViewModel(for: vibespaceID)
     }
@@ -183,13 +184,13 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
 
     var activeProjectPath: String? {
         guard let activeTileID = layout.activeTileID else { return nil }
-        return layout.tile(for: activeTileID)?.projectPath
+        return layout.tile(for: activeTileID).flatMap { $0.projectIdentifier ?? $0.projectPath }
     }
 
     func activeProjectPath(surfaceID: UUID) -> String? {
         let surfaceLayout = layout(for: surfaceID)
         guard let activeTileID = surfaceLayout.activeTileID else { return nil }
-        return surfaceLayout.tile(for: activeTileID)?.projectPath
+        return surfaceLayout.tile(for: activeTileID).flatMap { $0.projectIdentifier ?? $0.projectPath }
     }
 
     // MARK: - Surface Commands
@@ -259,13 +260,76 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
     // MARK: - Projects & Hidden Terminals
 
     func syncProjects(_ projects: [AnyProjectSession]) {
+        orderedProjects = projects
         orderedProjectPaths = projects.map { $0.rootURL.standardizedFileURL.path }
+        orderedProjectIdentifiers = projects.map(\.projectIdentifier)
         projectsByPath = projects.reduce(into: [:]) { result, project in
             result[project.rootURL.standardizedFileURL.path] = project
         }
+        projectsByIdentifier = Dictionary(
+            uniqueKeysWithValues: projects.map { ($0.projectIdentifier, $0) }
+        )
+        migrateLegacyTileProjectIdentifiers(projects: projects)
+        pruneStaleFileTiles()
         rebuildProjectTabLookups()
         syncProjectSubscriptions()
         reconcileTerminalTiles()
+    }
+
+    private func migrateLegacyTileProjectIdentifiers(projects: [AnyProjectSession]) {
+        mutate { state in
+            for surfaceIndex in state.surfaces.indices {
+                for columnIndex in state.surfaces[surfaceIndex].layout.columns.indices {
+                    for tileIndex in state.surfaces[surfaceIndex].layout.columns[columnIndex].tiles.indices {
+                        let tile = state.surfaces[surfaceIndex].layout.columns[columnIndex].tiles[tileIndex]
+                        guard tile.projectIdentifier == nil,
+                              let identifier = Self.inferredProjectIdentifier(for: tile, projects: projects) else {
+                            continue
+                        }
+                        state.surfaces[surfaceIndex].layout.columns[columnIndex].tiles[tileIndex].projectIdentifier = identifier
+                    }
+                }
+                for tileIndex in state.surfaces[surfaceIndex].layout.minimizedTiles.indices {
+                    let tile = state.surfaces[surfaceIndex].layout.minimizedTiles[tileIndex]
+                    guard tile.projectIdentifier == nil,
+                          let identifier = Self.inferredProjectIdentifier(for: tile, projects: projects) else {
+                        continue
+                    }
+                    state.surfaces[surfaceIndex].layout.minimizedTiles[tileIndex].projectIdentifier = identifier
+                }
+            }
+        }
+    }
+
+    private static func inferredProjectIdentifier(
+        for tile: VibeSpaceTerminalBoardTile,
+        projects: [AnyProjectSession]
+    ) -> String? {
+        if let selectedProject = tile.acpSnapshot?.selectedProjectIdentifier,
+           projects.contains(where: { $0.projectIdentifier == selectedProject }) {
+            return selectedProject
+        }
+        if let terminalTabID = tile.terminalTabID {
+            let matches = projects.filter { project in
+                project.terminal.tabs.contains(where: { $0.id == terminalTabID })
+            }
+            if matches.count == 1 { return matches[0].projectIdentifier }
+        }
+        if let projectPath = tile.projectPath {
+            let matches = projects.filter {
+                $0.rootURL.standardizedFileURL.path == URL(fileURLWithPath: projectPath).standardizedFileURL.path
+            }
+            if matches.count == 1 { return matches[0].projectIdentifier }
+        }
+        if let fileURL = tile.fileURL {
+            let filePath = fileURL.standardizedFileURL.path
+            let matches = projects.filter {
+                let root = $0.rootURL.standardizedFileURL.path
+                return filePath == root || filePath.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+            }
+            if matches.count == 1 { return matches[0].projectIdentifier }
+        }
+        return nil
     }
 
     func setHiddenTerminalIDsByProjectPath(_ hiddenTerminalIDsByProjectPath: [String: Set<UUID>]) {
@@ -287,21 +351,18 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         guard layout.tiles.isEmpty else { return }
 
         for project in projects {
-            let projectPath = project.rootURL.standardizedFileURL.path
-            if project.terminal.tabs.contains(where: {
-                hiddenTerminalIDsByProjectPath[projectPath]?.contains($0.id) ?? false
-            }) {
+            let hiddenIDs = hiddenTerminalIDsByProjectPath[project.projectIdentifier]
+                ?? hiddenTerminalIDsByProjectPath[project.rootURL.standardizedFileURL.path]
+                ?? []
+            if project.terminal.tabs.contains(where: { hiddenIDs.contains($0.id) }) {
                 return
             }
         }
 
-        guard let fallbackProjectPath = orderedProjectPaths.first,
-              let fallbackProject = projectsByPath[fallbackProjectPath] else {
-            return
-        }
+        guard let fallbackProject = orderedProjects.first else { return }
 
         _ = addTile(
-            projectPath: fallbackProjectPath,
+            projectPath: fallbackProject.projectIdentifier,
             directoryURL: fallbackProject.rootURL.standardizedFileURL,
             preferStandalone: false
         )
@@ -312,12 +373,24 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
     func tileContext(for tile: VibeSpaceTerminalBoardTile) -> TileContext? {
         guard let terminalTabID = tile.terminalTabID else { return nil }
 
-        if let projectPath = tile.projectPath,
-           let project = projectsByPath[projectPath],
-           let terminalTab = tabsByProjectPathAndID[projectPath]?[terminalTabID] {
+        if let projectIdentifier = tile.projectIdentifier,
+           let project = projectsByIdentifier[projectIdentifier],
+           let terminalTab = tabsByProjectPathAndID[projectIdentifier]?[terminalTabID] {
             return TileContext(
                 tile: tile,
-                projectPath: projectPath,
+                projectPath: projectIdentifier,
+                projectTitle: project.title,
+                terminalViewModel: project.terminalViewModel,
+                terminalTab: terminalTab
+            )
+        }
+
+        if let legacyRoot = tile.projectPath,
+           let project = projectsByPath[legacyRoot],
+           let terminalTab = tabsByProjectPathAndID[project.projectIdentifier]?[terminalTabID] {
+            return TileContext(
+                tile: tile,
+                projectPath: project.projectIdentifier,
                 projectTitle: project.title,
                 terminalViewModel: project.terminalViewModel,
                 terminalTab: terminalTab
@@ -493,7 +566,15 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         let staleIDs = boardState.surfaces.flatMap { surface -> [UUID] in
             (surface.layout.tiles + surface.layout.minimizedTiles).compactMap { tile -> UUID? in
                 guard let url = tile.fileURL else { return nil }
-                return FileManager.default.fileExists(atPath: url.path) ? nil : tile.id
+                if tile.projectIdentifier?.hasPrefix("ssh://") == true { return nil }
+                let filePath = url.standardizedFileURL.path
+                let belongsToRemoteProject = projectsByIdentifier.values.contains { project in
+                    guard project.projectIdentifier.hasPrefix("ssh://") else { return false }
+                    let root = project.rootURL.standardizedFileURL.path
+                    return filePath == root || filePath.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+                }
+                if belongsToRemoteProject { return nil }
+                return FileManager.default.fileExists(atPath: filePath) ? nil : tile.id
             }
         }
         guard !staleIDs.isEmpty else { return }
@@ -507,13 +588,15 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
     }
 
     func rebuildProjectTabLookups() {
-        let validPaths = Set(orderedProjectPaths)
+        let validPaths = Set(orderedProjectIdentifiers)
         tabsByProjectPathAndID = tabsByProjectPathAndID.filter { validPaths.contains($0.key) }
         tabsByProjectPathAndDirectory = tabsByProjectPathAndDirectory.filter { validPaths.contains($0.key) }
 
-        for projectPath in orderedProjectPaths {
-            guard let terminalViewModel = projectsByPath[projectPath]?.terminalViewModel else { continue }
-            refreshProjectTabLookup(projectPath: projectPath, terminalViewModel: terminalViewModel)
+        for project in orderedProjects {
+            refreshProjectTabLookup(
+                projectPath: project.projectIdentifier,
+                terminalViewModel: project.terminalViewModel
+            )
         }
     }
 
@@ -557,8 +640,8 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         } else if let resolvedProjectPath = VibeSpaceTerminalBoardLayoutSync.resolveProjectPath(
             preferredProjectPath: projectPath,
             workingDirectoryPath: normalizedDirectory.path,
-            orderedProjectPaths: orderedProjectPaths,
-            projectsByPath: projectsByPath,
+            orderedProjectPaths: orderedProjectIdentifiers,
+            projectsByPath: projectsByIdentifier,
             activeProjectPath: activeProjectPath(surfaceID: surfaceID)
         ) {
             scope = .project(resolvedProjectPath)
@@ -568,8 +651,8 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
 
         let terminalViewModel: TerminalViewModel
         switch scope {
-        case let .project(projectPath):
-            terminalViewModel = projectsByPath[projectPath]?.terminalViewModel ?? standaloneTerminalViewModel
+        case let .project(projectIdentifier):
+            terminalViewModel = projectsByIdentifier[projectIdentifier]?.terminalViewModel ?? standaloneTerminalViewModel
         case .standalone:
             terminalViewModel = standaloneTerminalViewModel
         }
@@ -579,8 +662,8 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         isReconciling = false
 
         switch scope {
-        case let .project(projectPath):
-            refreshProjectTabLookup(projectPath: projectPath, terminalViewModel: terminalViewModel)
+        case let .project(projectIdentifier):
+            refreshProjectTabLookup(projectPath: projectIdentifier, terminalViewModel: terminalViewModel)
         case .standalone:
             refreshStandaloneTabLookup()
         }
@@ -590,16 +673,20 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         }
 
         let tileProjectPath: String?
+        let tileProjectIdentifier: String?
         switch scope {
-        case let .project(projectPath):
-            tileProjectPath = projectPath
+        case let .project(projectIdentifier):
+            tileProjectPath = projectsByIdentifier[projectIdentifier]?.rootURL.standardizedFileURL.path
+            tileProjectIdentifier = projectIdentifier
         case .standalone:
             tileProjectPath = nil
+            tileProjectIdentifier = nil
         }
 
         let tile = VibeSpaceTerminalBoardTile(
             heightWeight: 1,
             projectPath: tileProjectPath,
+            projectIdentifier: tileProjectIdentifier,
             terminalTabID: createdTab.id,
             workingDirectoryPath: createdTab.workingDirectory.standardizedFileURL.path
         )
@@ -619,8 +706,8 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         focusTerminal(
             for: TileContext(
                 tile: tile,
-                projectPath: tileProjectPath,
-                projectTitle: tileProjectPath.flatMap { projectsByPath[$0]?.title } ?? "VibeSpace",
+                projectPath: tileProjectIdentifier,
+                projectTitle: tileProjectIdentifier.flatMap { projectsByIdentifier[$0]?.title } ?? "VibeSpace",
                 terminalViewModel: terminalViewModel,
                 terminalTab: createdTab
             )
@@ -676,6 +763,7 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
             guard !state.surfaces[index].layout.tiles.contains(where: { $0.acpSnapshot?.id == snapshot.id }) else { return }
             guard !state.surfaces[index].layout.minimizedTiles.contains(where: { $0.acpSnapshot?.id == snapshot.id }) else { return }
             let tile = VibeSpaceTerminalBoardTile(
+                projectIdentifier: snapshot.selectedProjectIdentifier,
                 workingDirectoryPath: "",
                 contentKind: .acp(snapshot)
             )
@@ -770,8 +858,8 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         // listener short-circuits when the project is already focused, so
         // programmatic activations from `focusProject` don't recurse.
         var userInfo: [String: Any] = [:]
-        if let projectPath = tile.projectPath {
-            userInfo[AppCommandUserInfoKey.projectPath] = projectPath
+        if let projectIdentity = tile.projectIdentifier ?? tile.projectPath {
+            userInfo[AppCommandUserInfoKey.projectPath] = projectIdentity
         }
         NotificationCenter.default.post(
             name: .boardTileActivated,
@@ -801,9 +889,18 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
     @discardableResult
     func pinPreviewToDock(
         fileURL: URL,
+        projectIdentifier: String? = nil,
         surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID
     ) -> UUID? {
-        let tile = VibeSpaceTerminalBoardTile(workingDirectoryPath: "", contentKind: .file(fileURL))
+        let tile = VibeSpaceTerminalBoardTile(
+            projectIdentifier: projectIdentifier ?? inferredProjectIdentifier(
+                forProjectPath: nil,
+                fileURL: fileURL,
+                surfaceID: surfaceID
+            ),
+            workingDirectoryPath: "",
+            contentKind: .file(fileURL)
+        )
         var didInsert = false
         mutate { state in
             guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
@@ -821,6 +918,7 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
     func pinBrowserToDock(
         url: URL,
         projectPath: String? = nil,
+        projectIdentifier: String? = nil,
         surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID,
         browserSession: BrowserSessionSnapshot? = nil
     ) -> UUID? {
@@ -828,6 +926,7 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
             id: UUID(),
             url: url,
             projectPath: projectPath,
+            projectIdentifier: projectIdentifier,
             surfaceID: surfaceID,
             browserSession: browserSession
         )
@@ -838,12 +937,18 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
         id tileID: UUID,
         url: URL,
         projectPath: String? = nil,
+        projectIdentifier: String? = nil,
         surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID,
         browserSession: BrowserSessionSnapshot? = nil
     ) -> UUID? {
         let tile = VibeSpaceTerminalBoardTile(
             id: tileID,
             projectPath: projectPath,
+            projectIdentifier: projectIdentifier ?? inferredProjectIdentifier(
+                forProjectPath: projectPath,
+                fileURL: nil,
+                surfaceID: surfaceID
+            ),
             workingDirectoryPath: "",
             contentKind: .browser(url),
             browserSession: browserSession
@@ -859,6 +964,34 @@ final class VibeSpaceTerminalBoardStore: ObservableObject {
             )
         }
         return didInsert ? tile.id : nil
+    }
+
+    private func inferredProjectIdentifier(
+        forProjectPath projectPath: String?,
+        fileURL: URL?,
+        surfaceID: UUID
+    ) -> String? {
+        if let projectPath, projectsByIdentifier[projectPath] != nil {
+            return projectPath
+        }
+        let active = layout(for: surfaceID).activeTileID.flatMap {
+            tile(for: $0, includeMinimized: true, surfaceID: surfaceID)
+        }
+        if let activeIdentifier = active?.projectIdentifier,
+           projectPath == nil || active?.projectPath == projectPath {
+            return activeIdentifier
+        }
+
+        let candidates = projectsByIdentifier.values.filter { project in
+            let root = project.rootURL.standardizedFileURL.path
+            if let projectPath {
+                return root == URL(fileURLWithPath: projectPath).standardizedFileURL.path
+            }
+            guard let fileURL else { return false }
+            let filePath = fileURL.standardizedFileURL.path
+            return filePath == root || filePath.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+        }
+        return candidates.count == 1 ? candidates[0].projectIdentifier : nil
     }
 
     func dockedFileEntries(surfaceID: UUID = VibeSpaceTerminalBoardState.primarySurfaceID) -> [DockedFileEntry] {

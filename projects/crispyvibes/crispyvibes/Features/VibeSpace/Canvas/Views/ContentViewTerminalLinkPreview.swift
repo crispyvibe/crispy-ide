@@ -1,11 +1,21 @@
 import Foundation
 
 extension ContentView {
-    func openTerminalLinkTarget(_ url: URL, preferredProjectRootURL: URL? = nil) {
+    func openTerminalLinkTarget(
+        _ url: URL,
+        preferredProjectRootURL: URL? = nil,
+        preferredProjectIdentifier: String? = nil
+    ) {
         if url.isFileURL {
             openTerminalFileSystemTarget(
-                TerminalFileSystemTarget(url: url, line: nil, column: nil),
-                preferredProjectRootURL: preferredProjectRootURL
+                TerminalFileSystemTarget(
+                    url: url,
+                    line: nil,
+                    column: nil,
+                    projectIdentifier: preferredProjectIdentifier
+                ),
+                preferredProjectRootURL: preferredProjectRootURL,
+                preferredProjectIdentifier: preferredProjectIdentifier
             )
             return
         }
@@ -13,16 +23,24 @@ extension ContentView {
         pushCurrentSpotlightForRestoreIfNeeded()
         presentBrowserSpotlight(
             url: url,
-            projectPath: preferredProjectRootURL?.standardizedFileURL.path
+            projectPath: preferredProjectIdentifier
+                ?? preferredProjectRootURL?.standardizedFileURL.path
         )
     }
 
     func openTerminalFileSystemTarget(
         _ target: TerminalFileSystemTarget,
-        preferredProjectRootURL: URL? = nil
+        preferredProjectRootURL: URL? = nil,
+        preferredProjectIdentifier: String? = nil
     ) {
+        let qualifiedTarget = TerminalFileSystemTarget(
+            url: target.url,
+            line: target.line,
+            column: target.column,
+            projectIdentifier: target.projectIdentifier ?? preferredProjectIdentifier
+        )
         let resolution = VibeSpaceCanvasFileOpenUseCase().resolveFileSystemTargetFromTerminal(
-            target,
+            qualifiedTarget,
             preferredProjectRootURL: preferredProjectRootURL,
             candidates: vibespaceCatalogStore.allProjects()
         )

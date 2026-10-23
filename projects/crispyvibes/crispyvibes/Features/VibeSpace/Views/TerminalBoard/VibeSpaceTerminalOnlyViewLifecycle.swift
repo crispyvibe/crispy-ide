@@ -27,6 +27,7 @@ extension VibeSpaceTerminalOnlyView {
                         onPin: {
                             if let tileID = boardStore.pinPreviewToDock(
                                 fileURL: fileURL,
+                                projectIdentifier: coordinator.previewProjectIdentifier,
                                 surfaceID: surfaceID
                             ) {
                                 coordinator.promotePreview(to: tileID)
@@ -215,14 +216,14 @@ extension VibeSpaceTerminalOnlyView {
     private func applyBoardNotificationHandlers<V: View>(to content: V) -> some View {
         content
             .onReceive(
-                dockPreviewBridge?.$pendingFileURL.compactMap({ $0 }).eraseToAnyPublisher()
+                dockPreviewBridge?.$pendingTarget.compactMap({ $0 }).eraseToAnyPublisher()
                 ?? Empty().eraseToAnyPublisher()
-            ) { fileURL in
-                if let _ = dockPreviewBridge?.consumePending() {
-                    onFileSystemTargetActivated(
-                        TerminalFileSystemTarget(url: fileURL, line: nil, column: nil),
-                        preferredProjectRootURL(for: fileURL)
-                    )
+            ) { target in
+                if let consumed = dockPreviewBridge?.consumePending() {
+                    let preferredRoot = consumed.projectIdentifier.flatMap { identifier in
+                        projects.first(where: { $0.projectIdentifier == identifier })?.rootURL
+                    } ?? preferredProjectRootURL(for: consumed.url)
+                    onFileSystemTargetActivated(consumed, preferredRoot)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .focusNextProjectTerminal)) { _ in

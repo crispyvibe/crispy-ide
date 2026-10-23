@@ -23,11 +23,11 @@ struct VibeSpaceTerminalOnlyView: View {
     let terminalBoardStandaloneRegistry: VibeSpaceTerminalBoardStandaloneRegistry
     let headerCornerRadii: RectangleCornerRadii
     let onAddProjectsRequested: () -> Void
-    let onSpotlightRequested: (TerminalViewModel, UUID, String, Color?, URL?, UUID) -> Void
+    let onSpotlightRequested: (TerminalViewModel, UUID, String, Color?, URL?, String?, UUID) -> Void
     let onACPSpotlightRequested: (UUID, UUID) -> Void
-    let onTemporaryTerminalRequested: (TerminalViewModel, URL, String, Color?, URL?) -> Void
-    let onTemporaryShortcutRequested: (TerminalViewModel, TerminalShortcutDefinition, URL, String, Color?, URL?) -> Void
-    let onLinkTargetActivated: (URL, URL?) -> Void
+    let onTemporaryTerminalRequested: (TerminalViewModel, URL, String, Color?, URL?, String?) -> Void
+    let onTemporaryShortcutRequested: (TerminalViewModel, TerminalShortcutDefinition, URL, String, Color?, URL?, String?) -> Void
+    let onLinkTargetActivated: (URL, URL?, String?) -> Void
     let onFileSystemTargetActivated: (TerminalFileSystemTarget, URL?) -> Void
     let onManageShortcutsRequested: () -> Void
     let shortcutDefinitionsForProjectPath: (String?) -> [TerminalShortcutDefinition]
@@ -74,11 +74,11 @@ struct VibeSpaceTerminalOnlyView: View {
         terminalBoardStandaloneRegistry: VibeSpaceTerminalBoardStandaloneRegistry,
         headerCornerRadii: RectangleCornerRadii,
         onAddProjectsRequested: @escaping () -> Void,
-        onSpotlightRequested: @escaping (TerminalViewModel, UUID, String, Color?, URL?, UUID) -> Void,
+        onSpotlightRequested: @escaping (TerminalViewModel, UUID, String, Color?, URL?, String?, UUID) -> Void,
         onACPSpotlightRequested: @escaping (UUID, UUID) -> Void,
-        onTemporaryTerminalRequested: @escaping (TerminalViewModel, URL, String, Color?, URL?) -> Void,
-        onTemporaryShortcutRequested: @escaping (TerminalViewModel, TerminalShortcutDefinition, URL, String, Color?, URL?) -> Void,
-        onLinkTargetActivated: @escaping (URL, URL?) -> Void,
+        onTemporaryTerminalRequested: @escaping (TerminalViewModel, URL, String, Color?, URL?, String?) -> Void,
+        onTemporaryShortcutRequested: @escaping (TerminalViewModel, TerminalShortcutDefinition, URL, String, Color?, URL?, String?) -> Void,
+        onLinkTargetActivated: @escaping (URL, URL?, String?) -> Void,
         onFileSystemTargetActivated: @escaping (TerminalFileSystemTarget, URL?) -> Void,
         onManageShortcutsRequested: @escaping () -> Void,
         shortcutDefinitionsForProjectPath: @escaping (String?) -> [TerminalShortcutDefinition],

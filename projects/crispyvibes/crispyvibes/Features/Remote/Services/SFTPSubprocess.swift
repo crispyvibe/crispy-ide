@@ -10,8 +10,16 @@ final class SFTPSubprocess: @unchecked Sendable {
     private let stdinHandle: FileHandle
     private let fd: Int32
     private let lock = NSLock()
+    private let lifecycleLock = NSLock()
     private var nextRequestId: UInt32 = 1
-    private(set) var isRunning = false
+    private var running = false
+    private var resourcesClosed = false
+
+    var isRunning: Bool {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
+        return running
+    }
 
     init(controlPath: String, user: String, host: String, port: UInt16) throws {
         let process = Process()
@@ -36,8 +44,8 @@ final class SFTPSubprocess: @unchecked Sendable {
         try process.run()
         inPipe.fileHandleForReading.closeFile()
         outPipe.fileHandleForWriting.closeFile()
-        isRunning = true
-        process.terminationHandler = { [weak self] _ in self?.isRunning = false }
+        setRunning(true)
+        process.terminationHandler = { [weak self] _ in self?.setRunning(false) }
 
         // SFTP init handshake with timeout — if ssh can't connect, read blocks forever
         send(type: 1) { $0.appendUInt32(3) }
@@ -80,149 +88,281 @@ final class SFTPSubprocess: @unchecked Sendable {
     }
 
     private func _realpath(_ path: String) throws -> String {
-        sendRequest(type: 16) { $0.appendSSHString(path) } // SSH_FXP_REALPATH
+        let requestID = sendRequest(type: 16) { $0.appendSSHString(path) } // SSH_FXP_REALPATH
         let resp = try readPacket()
+        try validateResponseID(resp, expected: requestID, context: "realpath")
         if resp.type == 104 { // SSH_FXP_NAME
-            var d = resp.payload; _ = d.readUInt32() // requestId
-            let count = d.readUInt32() ?? 0
-            if count > 0, let name = d.readSSHString() { return name }
+            var payload = resp.payload
+            _ = payload.readUInt32()
+            guard payload.readUInt32() == 1,
+                  let name = payload.readSSHString(),
+                  payload.readSSHString() != nil,
+                  payload.readSFTPAttrs() != nil,
+                  payload.isEmpty else {
+                throw SFTPError.operationFailed("realpath: malformed name response")
+            }
+            return name
         }
         try throwIfStatus(resp, context: "realpath(\(path))")
         throw SFTPError.operationFailed("realpath failed")
     }
 
-    func listDirectory(_ path: String) throws -> [SFTPEntry] {
+    func listDirectory(_ path: String, maximumEntries: Int? = nil) throws -> [SFTPEntry] {
         try locked {
-        // OPENDIR
-        sendRequest(type: 11) { $0.appendSSHString(path) }
-        let openResp = try readPacket()
-        guard openResp.type == 102 else { try throwIfStatus(openResp, context: "opendir"); throw SFTPError.operationFailed("opendir failed") }
-        var od = openResp.payload; _ = od.readUInt32()
-        guard let handle = od.readSSHData() else { throw SFTPError.operationFailed("opendir: no handle") }
-
-        // READDIR loop
-        var entries = [SFTPEntry]()
-        while true {
-            _ = sendRequest(type: 12) { $0.appendSSHData(handle) } // SSH_FXP_READDIR
-            let resp = try readPacket()
-            if resp.type == 101 { // SSH_FXP_STATUS (EOF)
-                var sd = resp.payload; _ = sd.readUInt32()
-                let code = sd.readUInt32() ?? 4
-                if code == 1 { break } // SSH_FX_EOF
-                let msg = sd.readSSHString() ?? "unknown"
-                throw SFTPError.operationFailed("readdir: \(msg)")
+            let openID = sendRequest(type: 11) { $0.appendSSHString(path) }
+            let openResp = try readPacket()
+            try validateResponseID(openResp, expected: openID, context: "opendir")
+            guard openResp.type == 102 else {
+                try throwIfStatus(openResp, context: "opendir")
+                throw SFTPError.operationFailed("opendir failed")
             }
-            guard resp.type == 104 else { throw SFTPError.operationFailed("readdir: unexpected type \(resp.type)") }
-            var nd = resp.payload; _ = nd.readUInt32()
-            let count = nd.readUInt32() ?? 0
-            for _ in 0..<count {
-                guard let filename = nd.readSSHString(),
-                      let _ = nd.readSSHString(), // longname
-                      let attrs = nd.readSFTPAttrs() else { break }
-                guard filename != "." && filename != ".." else { continue }
-                let fullPath = (path as NSString).appendingPathComponent(filename)
-                let isDir = attrs.permissions.map { ($0 & 0o170000) == 0o040000 } ?? false
-                entries.append(SFTPEntry(
-                    name: filename, path: fullPath, isDirectory: isDir,
-                    size: attrs.size ?? 0,
-                    modificationDate: attrs.mtime.map { Date(timeIntervalSince1970: TimeInterval($0)) }
-                ))
+            var openPayload = openResp.payload
+            _ = openPayload.readUInt32()
+            guard let handle = openPayload.readSSHData(), openPayload.isEmpty else {
+                throw SFTPError.operationFailed("opendir: malformed handle")
             }
-        }
+            var closeNeeded = true
+            defer {
+                if closeNeeded, isRunning { try? closeHandle(handle, context: "closedir") }
+            }
 
-        // CLOSE
-        _ = sendRequest(type: 4) { $0.appendSSHData(handle) }
-        _ = try? readPacket()
-        return entries
+            var entries = [SFTPEntry]()
+            while true {
+                try Task.checkCancellation()
+                let readID = sendRequest(type: 12) { $0.appendSSHData(handle) }
+                let resp = try readPacket()
+                try validateResponseID(resp, expected: readID, context: "readdir")
+                if resp.type == 101 {
+                    let status = try statusDetails(resp, context: "readdir")
+                    if status.code == 1 { break }
+                    throw SFTPError.operationFailed("readdir: \(status.message)")
+                }
+                guard resp.type == 104 else {
+                    throw SFTPError.operationFailed("readdir: unexpected type \(resp.type)")
+                }
+                var names = resp.payload
+                _ = names.readUInt32()
+                guard let count = names.readUInt32(), count > 0 else {
+                    throw SFTPError.operationFailed("readdir: malformed name count")
+                }
+                for _ in 0..<count {
+                    try Task.checkCancellation()
+                    guard let filename = names.readSSHString(),
+                          names.readSSHString() != nil,
+                          let attrs = names.readSFTPAttrs() else {
+                        throw SFTPError.operationFailed("readdir: malformed name entry")
+                    }
+                    guard filename != "." && filename != ".." else { continue }
+                    if let maximumEntries, entries.count >= maximumEntries {
+                        throw SFTPError.entryLimitExceeded(maximumEntries)
+                    }
+                    let fullPath = (path as NSString).appendingPathComponent(filename)
+                    entries.append(SFTPEntry(
+                        name: filename,
+                        path: fullPath,
+                        kind: SFTPFileKind(permissions: attrs.permissions),
+                        size: attrs.size ?? 0,
+                        modificationDate: attrs.mtime.map { Date(timeIntervalSince1970: TimeInterval($0)) },
+                        modificationTime: attrs.mtime
+                    ))
+                }
+                guard names.isEmpty else {
+                    throw SFTPError.operationFailed("readdir: trailing bytes in name response")
+                }
+            }
+
+            closeNeeded = false
+            try closeHandle(handle, context: "closedir")
+            return entries
         }
     }
 
     func stat(_ path: String) throws -> SFTPAttrs {
+        try attributes(path, requestType: 17, context: "stat")
+    }
+
+    func lstat(_ path: String) throws -> SFTPAttrs {
+        try attributes(path, requestType: 7, context: "lstat")
+    }
+
+    private func attributes(_ path: String, requestType: UInt8, context: String) throws -> SFTPAttrs {
         try locked {
-            _ = sendRequest(type: 17) { $0.appendSSHString(path) }
+            let requestID = sendRequest(type: requestType) { $0.appendSSHString(path) }
             let resp = try readPacket()
+            try validateResponseID(resp, expected: requestID, context: context)
             if resp.type == 105 {
                 var d = resp.payload; _ = d.readUInt32()
-                if let attrs = d.readSFTPAttrs() { return attrs }
+                guard let attrs = d.readSFTPAttrs(), d.isEmpty else {
+                    throw SFTPError.operationFailed("\(context): malformed attributes")
+                }
+                return attrs
             }
-            try throwIfStatus(resp, context: "stat(\(path))")
-            throw SFTPError.operationFailed("stat failed")
+            try throwIfStatus(resp, context: "\(context)(\(path))")
+            throw SFTPError.operationFailed("\(context) failed")
         }
     }
 
     func readFile(_ path: String) throws -> Data {
         try locked {
-            sendRequest(type: 3) { buf in
+            let openID = sendRequest(type: 3) { buf in
                 buf.appendSSHString(path)
                 buf.appendUInt32(0x00000001)
                 buf.appendUInt32(0)
             }
             let openResp = try readPacket()
+            try validateResponseID(openResp, expected: openID, context: "open")
             guard openResp.type == 102 else { try throwIfStatus(openResp, context: "open(\(path))"); throw SFTPError.fileNotFound(path) }
             var od = openResp.payload; _ = od.readUInt32()
-            guard let handle = od.readSSHData() else { throw SFTPError.operationFailed("open: no handle") }
+            guard let handle = od.readSSHData(), od.isEmpty else { throw SFTPError.operationFailed("open: malformed handle") }
+            var closeNeeded = true
+            defer {
+                if closeNeeded, isRunning { try? closeHandle(handle, context: "close-read") }
+            }
 
             var result = Data()
             var offset: UInt64 = 0
             let chunkSize: UInt32 = 32768
             while true {
-                _ = sendRequest(type: 5) { buf in
+                let readID = sendRequest(type: 5) { buf in
                     buf.appendSSHData(handle)
                     buf.appendUInt64(offset)
                     buf.appendUInt32(chunkSize)
                 }
                 let resp = try readPacket()
-                if resp.type == 101 { break }
+                try validateResponseID(resp, expected: readID, context: "read")
+                if resp.type == 101 {
+                    let status = try statusDetails(resp, context: "read(\(path))")
+                    if status.code == 1 { break }
+                    throw SFTPError.operationFailed("read(\(path)): \(status.message)")
+                }
                 guard resp.type == 103 else { throw SFTPError.operationFailed("read: unexpected type \(resp.type)") }
                 var dd = resp.payload; _ = dd.readUInt32()
-                guard let chunk = dd.readSSHData() else { break }
+                guard let chunk = dd.readSSHData(), !chunk.isEmpty, dd.isEmpty else {
+                    throw SFTPError.operationFailed("read(\(path)): server returned no data before EOF")
+                }
                 result.append(chunk)
                 offset += UInt64(chunk.count)
-                if chunk.count < chunkSize { break }
+            }
+            closeNeeded = false
+            try closeHandle(handle, context: "close-read")
+            return result
+        }
+    }
+
+    @discardableResult
+    func downloadFile(
+        _ remotePath: String,
+        to localURL: URL,
+        progress: @escaping @Sendable (UInt64) -> Void
+    ) throws -> UInt64 {
+        try locked {
+            try Task.checkCancellation()
+            let openID = sendRequest(type: 3) { buffer in
+                buffer.appendSSHString(remotePath)
+                buffer.appendUInt32(0x00000001)
+                buffer.appendUInt32(0)
+            }
+            let openResponse = try readPacket()
+            try validateResponseID(openResponse, expected: openID, context: "open")
+            guard openResponse.type == 102 else {
+                try throwIfStatus(openResponse, context: "open(\(remotePath))")
+                throw SFTPError.fileNotFound(remotePath)
+            }
+            var openPayload = openResponse.payload
+            _ = openPayload.readUInt32()
+            guard let handle = openPayload.readSSHData(), openPayload.isEmpty else {
+                throw SFTPError.operationFailed("open: malformed handle")
+            }
+            var closeNeeded = true
+            defer {
+                if closeNeeded, isRunning { try? closeHandle(handle, context: "close-read") }
             }
 
-            _ = sendRequest(type: 4) { $0.appendSSHData(handle) }
-            _ = try? readPacket()
-            return result
+            guard FileManager.default.createFile(
+                atPath: localURL.path,
+                contents: nil,
+                attributes: [.posixPermissions: 0o600]
+            ) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            let output = try FileHandle(forWritingTo: localURL)
+            defer { try? output.close() }
+
+            var offset: UInt64 = 0
+            let chunkSize: UInt32 = 128 * 1024
+            while true {
+                try Task.checkCancellation()
+                let readID = sendRequest(type: 5) { buffer in
+                    buffer.appendSSHData(handle)
+                    buffer.appendUInt64(offset)
+                    buffer.appendUInt32(chunkSize)
+                }
+                let response = try readPacket()
+                try validateResponseID(response, expected: readID, context: "read")
+                if response.type == 101 {
+                    let status = try statusDetails(response, context: "read(\(remotePath))")
+                    if status.code == 1 { break }
+                    throw SFTPError.operationFailed("read(\(remotePath)): \(status.message)")
+                }
+                guard response.type == 103 else {
+                    throw SFTPError.operationFailed("read: unexpected type \(response.type)")
+                }
+                var dataPayload = response.payload
+                _ = dataPayload.readUInt32()
+                guard let chunk = dataPayload.readSSHData(), !chunk.isEmpty, dataPayload.isEmpty else {
+                    throw SFTPError.operationFailed("read(\(remotePath)): server returned no data before EOF")
+                }
+                try output.write(contentsOf: chunk)
+                offset += UInt64(chunk.count)
+                progress(offset)
+            }
+            closeNeeded = false
+            try closeHandle(handle, context: "close-read")
+            return offset
         }
     }
 
     func writeFile(_ path: String, contents: Data) throws {
         try locked {
-            sendRequest(type: 3) { buf in
+            let openID = sendRequest(type: 3) { buf in
                 buf.appendSSHString(path)
                 buf.appendUInt32(0x0000001A)
                 buf.appendUInt32(0)
             }
             let openResp = try readPacket()
+            try validateResponseID(openResp, expected: openID, context: "open-write")
             guard openResp.type == 102 else { try throwIfStatus(openResp, context: "open-write(\(path))"); throw SFTPError.writeFailed(path, "open failed") }
             var od = openResp.payload; _ = od.readUInt32()
-            guard let handle = od.readSSHData() else { throw SFTPError.operationFailed("open: no handle") }
+            guard let handle = od.readSSHData(), od.isEmpty else { throw SFTPError.operationFailed("open: malformed handle") }
+            var closeNeeded = true
+            defer {
+                if closeNeeded, isRunning { try? closeHandle(handle, context: "close-write") }
+            }
 
             var offset: UInt64 = 0
             let chunkSize = 32768
             while Int(offset) < contents.count {
                 let end = min(Int(offset) + chunkSize, contents.count)
                 let chunk = contents[Int(offset)..<end]
-                _ = sendRequest(type: 6) { buf in
+                let writeID = sendRequest(type: 6) { buf in
                     buf.appendSSHData(handle)
                     buf.appendUInt64(offset)
                     buf.appendSSHData(Data(chunk))
                 }
                 let resp = try readPacket()
-                if resp.type == 101 {
-                    var sd = resp.payload; _ = sd.readUInt32()
-                    let code = sd.readUInt32() ?? 4
-                    if code != 0 {
-                        let msg = sd.readSSHString() ?? "write failed"
-                        throw SFTPError.writeFailed(path, msg)
-                    }
+                try validateResponseID(resp, expected: writeID, context: "write")
+                guard resp.type == 101 else {
+                    throw SFTPError.writeFailed(path, "unexpected response type \(resp.type)")
+                }
+                let status = try statusDetails(resp, context: "write(\(path))")
+                guard status.code == 0 else {
+                    throw SFTPError.writeFailed(path, status.message)
                 }
                 offset = UInt64(end)
             }
 
-            _ = sendRequest(type: 4) { $0.appendSSHData(handle) }
-            _ = try? readPacket()
+            closeNeeded = false
+            try closeHandle(handle, context: "close-write")
         }
     }
 
@@ -232,40 +372,65 @@ final class SFTPSubprocess: @unchecked Sendable {
 
     func mkdir(_ path: String) throws {
         try locked {
-            _ = sendRequest(type: 14) { buf in
+            let requestID = sendRequest(type: 14) { buf in
                 buf.appendSSHString(path)
                 buf.appendUInt32(0)
             }
             let resp = try readPacket()
+            try validateResponseID(resp, expected: requestID, context: "mkdir")
             try throwIfStatus(resp, context: "mkdir(\(path))", allowOK: true)
         }
     }
 
     func remove(_ path: String) throws {
         try locked {
-            _ = sendRequest(type: 13) { $0.appendSSHString(path) }
+            let requestID = sendRequest(type: 13) { $0.appendSSHString(path) }
             let resp = try readPacket()
+            try validateResponseID(resp, expected: requestID, context: "remove")
             try throwIfStatus(resp, context: "remove(\(path))", allowOK: true)
         }
     }
 
     func rename(from oldPath: String, to newPath: String) throws {
         try locked {
-            _ = sendRequest(type: 18) { buf in
+            let requestID = sendRequest(type: 18) { buf in
                 buf.appendSSHString(oldPath)
                 buf.appendSSHString(newPath)
             }
             let resp = try readPacket()
+            try validateResponseID(resp, expected: requestID, context: "rename")
             try throwIfStatus(resp, context: "rename", allowOK: true)
         }
     }
 
     func terminate() {
-        isRunning = false
+        lifecycleLock.lock()
+        running = false
+        let shouldCloseResources = !resourcesClosed
+        resourcesClosed = true
+        lifecycleLock.unlock()
+        guard shouldCloseResources else { return }
+
         process.terminationHandler = nil
         signal(SIGPIPE, SIG_IGN)
         try? stdinHandle.close()
-        if process.isRunning { process.terminate() }
+        if process.isRunning {
+            process.terminate()
+            let deadline = Date().addingTimeInterval(1)
+            while process.isRunning, Date() < deadline {
+                usleep(10_000)
+            }
+            if process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+            }
+            process.waitUntilExit()
+        }
+    }
+
+    private func setRunning(_ value: Bool) {
+        lifecycleLock.lock()
+        running = value
+        lifecycleLock.unlock()
     }
 
     deinit { terminate() }
@@ -300,6 +465,9 @@ final class SFTPSubprocess: @unchecked Sendable {
     private func readPacket() throws -> Packet {
         let header = try readExact(5) // 4 bytes length + 1 byte type
         let length = header.readUInt32At(0)
+        guard length >= 1, length <= 64 * 1024 * 1024 else {
+            throw SFTPError.operationFailed("SFTP packet length is invalid: \(length)")
+        }
         let type = header[4]
         let payload = length > 1 ? try readExact(Int(length) - 1) : Data()
         return Packet(type: type, payload: payload)
@@ -322,21 +490,80 @@ final class SFTPSubprocess: @unchecked Sendable {
         return buf
     }
 
+    private func closeHandle(_ handle: Data, context: String) throws {
+        let closeID = sendRequest(type: 4) { $0.appendSSHData(handle) }
+        let response = try readPacket()
+        try validateResponseID(response, expected: closeID, context: context)
+        let status = try statusDetails(response, context: context)
+        guard status.code == 0 else {
+            throw SFTPError.operationFailed("\(context): \(status.message)")
+        }
+    }
+
+    private func validateResponseID(
+        _ packet: Packet,
+        expected: UInt32,
+        context: String
+    ) throws {
+        var payload = packet.payload
+        guard payload.readUInt32() == expected else {
+            throw SFTPError.operationFailed("\(context): mismatched SFTP response")
+        }
+    }
+
+    private func statusDetails(
+        _ packet: Packet,
+        context: String
+    ) throws -> (code: UInt32, message: String) {
+        guard packet.type == 101 else {
+            throw SFTPError.operationFailed("\(context): expected status response")
+        }
+        var payload = packet.payload
+        _ = payload.readUInt32()
+        guard let code = payload.readUInt32(),
+              let message = payload.readSSHString(),
+              payload.readSSHString() != nil,
+              payload.isEmpty else {
+            throw SFTPError.operationFailed("\(context): malformed status response")
+        }
+        return (code, message.isEmpty ? "SFTP status \(code)" : message)
+    }
+
     private func throwIfStatus(_ packet: Packet, context: String, allowOK: Bool = false) throws {
-        guard packet.type == 101 else { return } // SSH_FXP_STATUS
-        var d = packet.payload; _ = d.readUInt32()
-        let code = d.readUInt32() ?? 4
-        if allowOK && code == 0 { return }
-        let msg = d.readSSHString() ?? "unknown error"
-        switch code {
+        guard packet.type == 101 else {
+            throw SFTPError.operationFailed("\(context): unexpected response type \(packet.type)")
+        }
+        let status = try statusDetails(packet, context: context)
+        if allowOK && status.code == 0 { return }
+        switch status.code {
         case 2: throw SFTPError.fileNotFound(context)
         case 3: throw SFTPError.operationFailed("Permission denied: \(context)")
-        default: throw SFTPError.operationFailed("\(context): \(msg)")
+        default: throw SFTPError.operationFailed("\(context): \(status.message)")
         }
     }
 }
 
 // MARK: - Binary Helpers
+
+enum SFTPFileKind: Equatable, Sendable {
+    case regular
+    case directory
+    case symbolicLink
+    case other
+
+    init(permissions: UInt32?) {
+        guard let permissions else {
+            self = .other
+            return
+        }
+        switch permissions & 0o170000 {
+        case 0o100000: self = .regular
+        case 0o040000: self = .directory
+        case 0o120000: self = .symbolicLink
+        default: self = .other
+        }
+    }
+}
 
 struct SFTPAttrs {
     var size: UInt64?
@@ -345,6 +572,8 @@ struct SFTPAttrs {
     var permissions: UInt32?
     var atime: UInt32?
     var mtime: UInt32?
+
+    var fileKind: SFTPFileKind { SFTPFileKind(permissions: permissions) }
 }
 
 private extension Data {
@@ -379,15 +608,10 @@ private extension Data {
     mutating func readSSHString() -> String? {
         guard let len = readUInt32() else { return nil }
         guard count >= Int(len) else { return nil }
-        let bytes = self[startIndex..<startIndex+Int(len)]
-        // Use lossy UTF-8 decoding so a single filename with non-UTF-8 bytes
-        // (legal on POSIX) cannot abort an SFTP READDIR loop and silently drop
-        // the rest of the directory entries. Invalid sequences become U+FFFD;
-        // the byte stream is still consumed correctly so subsequent fields
-        // remain in sync.
-        let s = String(decoding: bytes, as: UTF8.self)
+        let bytes = Data(self[startIndex..<startIndex+Int(len)])
+        guard let string = String(data: bytes, encoding: .utf8) else { return nil }
         self = self.dropFirst(Int(len)).asData
-        return s
+        return string
     }
     mutating func readSSHData() -> Data? {
         guard let len = readUInt32() else { return nil }
@@ -397,18 +621,33 @@ private extension Data {
         return d
     }
     mutating func readSFTPAttrs() -> SFTPAttrs? {
-        guard let flags = readUInt32() else { return nil }
-        var a = SFTPAttrs()
-        if flags & 0x01 != 0 { a.size = readUInt64() }
-        if flags & 0x02 != 0 { a.uid = readUInt32(); a.gid = readUInt32() }
-        if flags & 0x04 != 0 { a.permissions = readUInt32() }
-        if flags & 0x08 != 0 { a.atime = readUInt32(); a.mtime = readUInt32() }
+        guard let flags = readUInt32(), flags & ~UInt32(0x8000000F) == 0 else { return nil }
+        var attributes = SFTPAttrs()
+        if flags & 0x01 != 0 {
+            guard let size = readUInt64() else { return nil }
+            attributes.size = size
+        }
+        if flags & 0x02 != 0 {
+            guard let uid = readUInt32(), let gid = readUInt32() else { return nil }
+            attributes.uid = uid
+            attributes.gid = gid
+        }
+        if flags & 0x04 != 0 {
+            guard let permissions = readUInt32() else { return nil }
+            attributes.permissions = permissions
+        }
+        if flags & 0x08 != 0 {
+            guard let atime = readUInt32(), let mtime = readUInt32() else { return nil }
+            attributes.atime = atime
+            attributes.mtime = mtime
+        }
         if flags & 0x80000000 != 0 {
-            if let extCount = readUInt32() {
-                for _ in 0..<extCount { _ = readSSHString(); _ = readSSHString() }
+            guard let extensionCount = readUInt32() else { return nil }
+            for _ in 0..<extensionCount {
+                guard readSSHString() != nil, readSSHData() != nil else { return nil }
             }
         }
-        return a
+        return attributes
     }
 }
 
@@ -423,6 +662,7 @@ enum SFTPError: LocalizedError {
     case timeout(String)
     case fileNotFound(String)
     case writeFailed(String, String)
+    case entryLimitExceeded(Int)
     case operationFailed(String)
 
     var errorDescription: String? {
@@ -431,6 +671,7 @@ enum SFTPError: LocalizedError {
         case .timeout(let cmd): return "SFTP command timed out: \(cmd)"
         case .fileNotFound(let path): return "File not found: \(path)"
         case .writeFailed(let path, let detail): return "Failed to write \(path): \(detail)"
+        case .entryLimitExceeded(let limit): return "SFTP directory entry limit exceeded (\(limit))."
         case .operationFailed(let detail): return "SFTP operation failed: \(detail)"
         }
     }
@@ -439,7 +680,10 @@ enum SFTPError: LocalizedError {
 struct SFTPEntry {
     let name: String
     let path: String
-    let isDirectory: Bool
+    let kind: SFTPFileKind
     let size: UInt64
     let modificationDate: Date?
+    let modificationTime: UInt32?
+
+    var isDirectory: Bool { kind == .directory }
 }

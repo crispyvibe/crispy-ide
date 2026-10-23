@@ -21,6 +21,7 @@ struct VibeSpaceTerminalBoardTile: Identifiable, Equatable {
     let id: UUID
     var heightWeight: Double
     var projectPath: String?
+    var projectIdentifier: String?
     var terminalTabID: UUID?
     var workingDirectoryPath: String
     var contentKind: TileContentKind
@@ -30,6 +31,7 @@ struct VibeSpaceTerminalBoardTile: Identifiable, Equatable {
         id: UUID = UUID(),
         heightWeight: Double = 1,
         projectPath: String? = nil,
+        projectIdentifier: String? = nil,
         terminalTabID: UUID? = nil,
         workingDirectoryPath: String,
         contentKind: TileContentKind = .terminal,
@@ -38,6 +40,7 @@ struct VibeSpaceTerminalBoardTile: Identifiable, Equatable {
         self.id = id
         self.heightWeight = heightWeight
         self.projectPath = projectPath
+        self.projectIdentifier = projectIdentifier
         self.terminalTabID = terminalTabID
         self.workingDirectoryPath = workingDirectoryPath
         self.contentKind = contentKind
@@ -54,6 +57,7 @@ struct VibeSpaceTerminalBoardTile: Identifiable, Equatable {
             id: id,
             heightWeight: VibeSpaceTerminalBoardColumn.normalizedWeight(heightWeight),
             projectPath: projectPath?.trimmingCharacters(in: .whitespacesAndNewlines),
+            projectIdentifier: projectIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines),
             terminalTabID: terminalTabID,
             workingDirectoryPath: normalizedPath,
             contentKind: contentKind,
@@ -137,7 +141,7 @@ extension TileContentKind: Codable {
 
 extension VibeSpaceTerminalBoardTile: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, heightWeight, projectPath, terminalTabID
+        case id, heightWeight, projectPath, projectIdentifier, terminalTabID
         case workingDirectoryPath, contentKind, isVibeCast, browserSession
     }
 
@@ -146,6 +150,7 @@ extension VibeSpaceTerminalBoardTile: Codable {
         id = try container.decode(UUID.self, forKey: .id)
         heightWeight = try container.decodeIfPresent(Double.self, forKey: .heightWeight) ?? 1
         projectPath = try container.decodeIfPresent(String.self, forKey: .projectPath)
+        projectIdentifier = try container.decodeIfPresent(String.self, forKey: .projectIdentifier)
         terminalTabID = try container.decodeIfPresent(UUID.self, forKey: .terminalTabID)
         workingDirectoryPath = try container.decodeIfPresent(String.self, forKey: .workingDirectoryPath) ?? ""
         browserSession = try container.decodeIfPresent(BrowserSessionSnapshot.self, forKey: .browserSession)
@@ -163,6 +168,7 @@ extension VibeSpaceTerminalBoardTile: Codable {
         try container.encode(id, forKey: .id)
         try container.encode(heightWeight, forKey: .heightWeight)
         try container.encodeIfPresent(projectPath, forKey: .projectPath)
+        try container.encodeIfPresent(projectIdentifier, forKey: .projectIdentifier)
         try container.encodeIfPresent(terminalTabID, forKey: .terminalTabID)
         try container.encode(workingDirectoryPath, forKey: .workingDirectoryPath)
         try container.encode(contentKind, forKey: .contentKind)

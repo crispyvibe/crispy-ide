@@ -91,6 +91,7 @@ final class AnyFolderExplorer: ObservableObject {
     // MARK: - Events
 
     var renameEvents: PassthroughSubject<ExplorerRenameEvent, Never> { _wrapped.renameEvents }
+    var deletionEvents: PassthroughSubject<ExplorerDeletionEvent, Never> { _wrapped.deletionEvents }
     var observedFileSystemChanges: PassthroughSubject<Set<String>, Never> { _wrapped.observedFileSystemChanges }
 
     // MARK: - Tree Operations

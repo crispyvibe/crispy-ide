@@ -122,3 +122,8 @@ struct ExplorerRenameEvent: Equatable {
     let oldURL: URL
     let newURL: URL
 }
+
+struct ExplorerDeletionEvent: Equatable {
+    let url: URL
+    let isDirectory: Bool
+}

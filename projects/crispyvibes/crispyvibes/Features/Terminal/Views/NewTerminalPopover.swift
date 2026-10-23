@@ -133,7 +133,7 @@ struct NewTerminalPopover: View {
         let url = project.rootURL.standardizedFileURL
         let projectColor = colorForProject(project) ?? palette.accentColor
         return Button {
-            submit(directoryURL: url, projectPath: url.path, preferTemporary: true)
+            submit(directoryURL: url, projectPath: project.projectIdentifier, preferTemporary: true)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "bolt.horizontal.circle.fill")
@@ -195,7 +195,7 @@ struct NewTerminalPopover: View {
         let displayPath = VibeSpaceDirectoryCandidate.formatDisplayPath(for: url.path)
         let projectColor = colorForProject(project) ?? palette.accentColor
         return Button {
-            submit(directoryURL: url, projectPath: url.path, preferTemporary: false)
+            submit(directoryURL: url, projectPath: project.projectIdentifier, preferTemporary: false)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "folder.fill")
@@ -284,8 +284,14 @@ struct NewTerminalPopover: View {
     private func inferredProjectPath(for directoryURL: URL) -> String? {
         let dirPath = directoryURL.standardizedFileURL.path
         return projects
-            .map { $0.rootURL.standardizedFileURL.path }
-            .filter { dirPath == $0 || dirPath.hasPrefix($0 + "/") }
-            .max(by: { $0.count < $1.count })
+            .filter {
+                let root = $0.rootURL.standardizedFileURL.path
+                return dirPath == root || dirPath.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+            }
+            .max(by: {
+                $0.rootURL.standardizedFileURL.path.count
+                    < $1.rootURL.standardizedFileURL.path.count
+            })?
+            .projectIdentifier
     }
 }

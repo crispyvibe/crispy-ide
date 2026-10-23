@@ -189,6 +189,9 @@ extension FolderExplorerViewModel {
                     arguments: ["itemPath": item.url.path],
                     timeout: 10
                 )
+                self.deletionEvents.send(
+                    ExplorerDeletionEvent(url: item.url, isDirectory: item.isDirectory)
+                )
 
                 if self.isSamePathOrDescendant(self.selectedFileURL, of: item.url) {
                     self.selectedFileURL = nil

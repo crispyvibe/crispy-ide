@@ -5,7 +5,7 @@ extension SpotlightItem {
     var persistentID: SpotlightPersistentItemID {
         switch self {
         case let .terminal(project, tab):
-            return .terminal(projectPath: project.rootURL.standardizedFileURL.path, tabID: tab.id)
+            return .terminal(projectPath: project.projectIdentifier, tabID: tab.id)
         case let .standaloneTerminal(surfaceID, tileID, _, tab):
             return .standaloneTerminal(surfaceID: surfaceID, tileID: tileID, tabID: tab.id)
         case .vibeCast: return .vibeCast
@@ -22,7 +22,10 @@ extension SpotlightPersistentItemID {
     var navigationIdentity: SpotlightNavigationIdentity {
         switch self {
         case let .terminal(projectPath, tabID):
-            return .terminal(projectScope: .projectPath(URL(fileURLWithPath: projectPath).standardizedFileURL.path), tabID: tabID)
+            let identity = projectPath.hasPrefix("ssh://")
+                ? projectPath
+                : URL(fileURLWithPath: projectPath).standardizedFileURL.path
+            return .terminal(projectScope: .projectPath(identity), tabID: tabID)
         case let .standaloneTerminal(_, tileID, tabID):
             return .terminal(projectScope: .unscoped(tileID), tabID: tabID)
         case .vibeCast: return .vibeCast
@@ -87,6 +90,9 @@ extension TerminalSpotlightState {
                let surfaceID {
                 return .standaloneTerminal(surfaceID: surfaceID, tileID: tileID, tabID: tabID)
             }
+            if case let .terminal(.projectPath(projectIdentifier), _) = navigationIdentity {
+                return .terminal(projectPath: projectIdentifier, tabID: tabID)
+            }
             guard let path = owningProjectRootURL?.standardizedFileURL.path else { return nil }
             return .terminal(projectPath: path, tabID: tabID)
         case .vibeCast: return .vibeCast
@@ -150,6 +156,7 @@ enum DetachedSpotlightStateFactory {
             onAgentPresetSelected: spotlight.onAgentPresetSelected,
             isTemporary: spotlight.isTemporary,
             owningProjectRootURL: spotlight.owningProjectRootURL,
+            owningProjectIdentifier: spotlight.owningProjectIdentifier,
             surfaceID: surfaceID,
             navigationIdentityOverride: spotlight.navigationIdentityOverride
         )
@@ -182,12 +189,14 @@ enum DetachedPermanentShortcutTileLauncher {
         _ shortcut: TerminalShortcutDefinition,
         directoryURL: URL,
         owningProjectRootURL: URL?,
+        owningProjectIdentifier: String? = nil,
         surfaceID: UUID,
         boardStore: VibeSpaceTerminalBoardStore
     ) -> Bool {
         let layout = boardStore.layout(for: surfaceID)
         let existingTileIDs = Set((layout.tiles + layout.minimizedTiles).map(\.id))
-        let projectPath = owningProjectRootURL?.standardizedFileURL.path
+        let projectPath = owningProjectIdentifier
+            ?? owningProjectRootURL?.standardizedFileURL.path
         guard boardStore.addTile(
             projectPath: projectPath,
             directoryURL: directoryURL.standardizedFileURL,

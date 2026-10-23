@@ -56,10 +56,10 @@ extension VibeSpaceState {
         return addedOrMatched
     }
 
-    mutating func removeProject(id: UUID) {
+    mutating func removeProject(id: UUID, shutdown: Bool = true) {
         guard let removingIndex = projects.firstIndex(where: { $0.id == id }) else { return }
         let removing = projects.remove(at: removingIndex)
-        removing.shutdown()
+        if shutdown { removing.shutdown() }
         removeProjectAssociatedState(for: removing.projectIdentifier)
         if focusedProjectID == id {
             focusedProjectID = projects.last?.id
@@ -85,11 +85,11 @@ extension VibeSpaceState {
     /// - Returns: the normalized project path that was parked, or `nil` if no live
     ///   session matched the given id.
     @discardableResult
-    mutating func parkProject(id: UUID) -> String? {
+    mutating func parkProject(id: UUID, shutdown: Bool = true) -> String? {
         guard let removingIndex = projects.firstIndex(where: { $0.id == id }) else { return nil }
         let parking = projects.remove(at: removingIndex)
         let parkedPath = parking.projectIdentifier
-        parking.shutdown()
+        if shutdown { parking.shutdown() }
 
         if !parkedProjectPaths.contains(parkedPath) {
             parkedProjectPaths.append(parkedPath)

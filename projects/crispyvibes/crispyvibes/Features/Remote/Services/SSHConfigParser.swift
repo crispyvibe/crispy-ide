@@ -9,6 +9,7 @@ enum SSHConfigParser {
         var hostname: String?
         var user: String?
         var port: UInt16?
+        var hasInvalidPort = false
         var identityFile: String?
     }
 
@@ -30,20 +31,33 @@ enum SSHConfigParser {
             guard parts.count == 2 else { continue }
 
             if parts[0].lowercased() == "host" {
-                if let finished = current, !finished.alias.contains("*") { hosts.append(finished) }
+                if let finished = current,
+                   !finished.alias.contains("*"),
+                   !finished.hasInvalidPort {
+                    hosts.append(finished)
+                }
                 current = ParsedHost(alias: parts[1])
             } else if var host = current {
                 switch parts[0].lowercased() {
                 case "hostname": host.hostname = parts[1]
                 case "user": host.user = parts[1]
-                case "port": host.port = UInt16(parts[1])
+                case "port":
+                    if let port = UInt16(parts[1]), port > 0 {
+                        host.port = port
+                    } else {
+                        host.hasInvalidPort = true
+                    }
                 case "identityfile": host.identityFile = NSString(string: parts[1]).expandingTildeInPath
                 default: break
                 }
                 current = host
             }
         }
-        if let finished = current, !finished.alias.contains("*") { hosts.append(finished) }
+        if let finished = current,
+           !finished.alias.contains("*"),
+           !finished.hasInvalidPort {
+            hosts.append(finished)
+        }
         return hosts
     }
 

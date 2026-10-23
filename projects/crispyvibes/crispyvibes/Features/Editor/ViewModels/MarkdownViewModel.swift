@@ -220,6 +220,7 @@ final class MarkdownViewModel: ObservableObject {
     @Published var unsupportedFileMessage: String?
     @Published var errorMessage: String?
     @Published var workerStatus: PaneWorkerStatus = .ready
+    @Published var isOpeningInSystem = false
     @Published var codeLanguageKind: CodeLanguageKind?
     @Published var markupViewModeByDocumentID: [String: MarkupViewMode] = [:]
     @Published var pendingSourceSelection: PendingSourceSelection?
@@ -234,11 +235,14 @@ final class MarkdownViewModel: ObservableObject {
     var openRequestID = UUID()
     var openFileTask: Task<Void, Never>?
     var gitDiffTask: Task<Void, Never>?
+    var externalOpenTask: Task<Void, Never>?
+    var externalOpenBufferID: String?
     var displayTitleOverride: String?
     var materializedPreviewURL: URL?
     let worker: any PaneWorkerExecuting
     let bufferStore: DocumentBufferStore
     let markdownLinkRouter: MarkdownLinkRouter
+    let externalFileOpener: (any ExternalFileOpening)?
     private(set) var autosave: AutosaveScheduler
     /// Optional remote file content provider. When set, file reads/writes use this instead of the local worker.
     var fileContentProvider: (any FileContentProviding)?
@@ -327,12 +331,14 @@ final class MarkdownViewModel: ObservableObject {
         worker: any PaneWorkerExecuting,
         bufferStore: DocumentBufferStore,
         markdownLinkRouter: MarkdownLinkRouter = .disabled,
+        externalFileOpener: (any ExternalFileOpening)? = nil,
         rasterImageEditorServices: RasterImageEditorServices = .makeDefault()
     ) {
         self.rasterImageEditorServices = rasterImageEditorServices
         self.worker = worker
         self.bufferStore = bufferStore
         self.markdownLinkRouter = markdownLinkRouter
+        self.externalFileOpener = externalFileOpener
         self.autosave = AutosaveScheduler { _, _ in }
         self.autosave = AutosaveScheduler { [weak self] url, token in
             guard let self else { return }
@@ -372,6 +378,7 @@ final class MarkdownViewModel: ObservableObject {
         }
         openFileTask?.cancel()
         gitDiffTask?.cancel()
+        externalOpenTask?.cancel()
         remoteReloadPollTask?.cancel()
         if let materializedPreviewURL {
             try? FileManager.default.removeItem(at: materializedPreviewURL)

@@ -25,9 +25,15 @@ final class SSHConnectionSheetViewModel: ObservableObject {
         }
     }
 
+    private var validatedPort: UInt16? {
+        guard let value = UInt16(port), value > 0 else { return nil }
+        return value
+    }
+
     var isValid: Bool {
         !host.trimmingCharacters(in: .whitespaces).isEmpty &&
         !user.trimmingCharacters(in: .whitespaces).isEmpty &&
+        validatedPort != nil &&
         (!useKeyFile || keyValidationStatus.isUsable)
     }
 
@@ -57,12 +63,13 @@ final class SSHConnectionSheetViewModel: ObservableObject {
         }
     }
 
-    func buildProfile(existingID: UUID?, importedFromConfig: Bool) -> SSHConnectionProfile {
-        SSHConnectionProfile(
+    func buildProfile(existingID: UUID?, importedFromConfig: Bool) -> SSHConnectionProfile? {
+        guard let validatedPort else { return nil }
+        return SSHConnectionProfile(
             id: existingID ?? UUID(),
             displayName: displayName.isEmpty ? host : displayName,
             host: host.trimmingCharacters(in: .whitespaces),
-            port: UInt16(port) ?? 22,
+            port: validatedPort,
             user: user.trimmingCharacters(in: .whitespaces),
             authMethod: useKeyFile ? .keyFile(keyFilePath.trimmingCharacters(in: .whitespaces)) : .agent,
             importedFromConfig: importedFromConfig,

@@ -3,14 +3,19 @@ import SwiftUI
 extension VibeSpaceTerminalOnlyView {
     func accentColor(for projectPath: String?) -> Color? {
         guard let projectPath else { return nil }
-        return projectColorTagsByPath[projectPath]?.color
+        let colorKey = boardStore.projectsByIdentifier[projectPath]?
+            .rootURL.standardizedFileURL.path ?? projectPath
+        return projectColorTagsByPath[colorKey]?.color
     }
 
     func fileOpenContext(
-        forDockedFileURL fileURL: URL
+        forDockedFileURL fileURL: URL,
+        projectIdentifier: String? = nil
     ) -> (reference: FileDocumentReference, provider: (any FileContentProviding)?) {
         let path = fileURL.standardizedFileURL.path
-        let owner = projects
+        let owner = projectIdentifier.flatMap { projectsByIdentifier in
+            projects.first(where: { $0.projectIdentifier == projectsByIdentifier })
+        } ?? projects
             .filter { project in
                 let root = project.rootURL.standardizedFileURL.path
                 return path == root || path.hasPrefix(root.hasSuffix("/") ? root : root + "/")
@@ -30,12 +35,14 @@ extension VibeSpaceTerminalOnlyView {
 
     func projectURL(for projectPath: String?) -> URL? {
         guard let projectPath else { return nil }
-        return URL(fileURLWithPath: projectPath)
+        return boardStore.projectsByIdentifier[projectPath]?.rootURL
+            ?? URL(fileURLWithPath: projectPath)
     }
 
     func openTerminalInEditorPane(projectPath: String?, terminalTabID: UUID) {
         guard let projectPath,
-              let project = boardStore.projectsByPath[projectPath] else {
+              let project = boardStore.projectsByIdentifier[projectPath]
+                ?? boardStore.projectsByPath[projectPath] else {
             return
         }
         onOpenTerminalInEditorPane?(project.id, terminalTabID)

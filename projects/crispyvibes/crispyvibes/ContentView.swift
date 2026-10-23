@@ -68,6 +68,7 @@ struct ContentView: View {
     @StateObject var dockedAgentPreviewCoordinator: DockedAgentPreviewCoordinator
     @StateObject var boardStore: VibeSpaceTerminalBoardStore
     @StateObject var vibespaceShortcutProvider: VibeSpaceShortcutProvider
+    @ObservedObject private var remoteTransferCoordinator: RemoteTransferCoordinator
     @State var externalAgentSessionPreview: ExternalAgentTranscript?
     let vibespaceManagement: VibeSpaceManagementService
     @AppStorage(AppPreferences.appearancePreferenceKey)
@@ -109,6 +110,7 @@ struct ContentView: View {
         _dockedAgentPreviewCoordinator = StateObject(wrappedValue: dependencies.dockedAgentPreviewCoordinator)
         _boardStore = StateObject(wrappedValue: dependencies.boardStore)
         _vibespaceShortcutProvider = StateObject(wrappedValue: dependencies.vibespaceShortcutProvider)
+        _remoteTransferCoordinator = ObservedObject(wrappedValue: container.remoteTransferCoordinator)
         _hasAcceptedDisclaimer = State(initialValue: dependencies.hasAcceptedDisclaimer)
         vibespaceManagement = container.vibespaceManagement
     }
@@ -416,7 +418,7 @@ struct ContentView: View {
     private func syncVibeSpaceShortcutProvider(vibespaceIDOverride: UUID? = nil) {
         vibespaceShortcutProvider.update(
             vibespaceID: vibespaceIDOverride ?? activeVibeSpaceSession.vibespaceID ?? activeVibeSpaceID,
-            focusedProjectPath: activeVibeSpaceSession.focusedProject?.rootURL.path
+            focusedProjectPath: activeVibeSpaceSession.focusedProject?.projectIdentifier
         )
     }
 
@@ -727,6 +729,10 @@ struct ContentView: View {
             }
             .overlay { walkthroughOverlayLayer }
             .overlay { quickCaptureOverlay }
+            .overlay(alignment: .bottomTrailing) {
+                RemoteTransferProgressOverlay(coordinator: remoteTransferCoordinator)
+                    .zIndex(450)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .quickCaptureTodo)) { _ in
                 isShowingQuickCapture = true
             }
@@ -757,6 +763,19 @@ struct ContentView: View {
                 }
             }
             .onAppear(perform: bootstrapAppEntryState)
+            .alert(
+                AppStrings.RemoteTransfer.errorTitle,
+                isPresented: Binding(
+                    get: { remoteTransferCoordinator.errorMessage != nil },
+                    set: { if !$0 { remoteTransferCoordinator.clearError() } }
+                )
+            ) {
+                Button(AppStrings.Common.ok, role: .cancel) {
+                    remoteTransferCoordinator.clearError()
+                }
+            } message: {
+                Text(remoteTransferCoordinator.errorMessage ?? "")
+            }
             .alert(
                 AppStrings.Alert.vibespaceConfigModified,
                 isPresented: Binding(

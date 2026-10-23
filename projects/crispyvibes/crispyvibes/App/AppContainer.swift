@@ -13,6 +13,8 @@ struct AppContainer {
     let themeManager: CrispyVibesThemeManager
     let experimentalFeatures: ExperimentalFeaturesService
     let vibespaceInteraction: VibeSpaceInteractionService
+    let externalFileOpenService: ExternalFileOpenService
+    let remoteTransferCoordinator: RemoteTransferCoordinator
     let terminalServices: TerminalServices
     let terminalViewModelDependencies: TerminalViewModelDependencies
     let operationMetricsStore: OperationMetricsStore
@@ -91,6 +93,7 @@ struct AppContainer {
             markdownLinkRouter: makeMarkdownLinkRouter(
                 vibespaceInteraction: vibespaceInteraction
             ),
+            externalFileOpener: externalFileOpenService,
             rasterImageEditorServices: makeRasterImageEditorServices()
         )
     }
@@ -252,6 +255,7 @@ struct AppContainer {
             layoutPersistenceRef.canvasMode(for: appShellStore?.activeVibeSpaceID)
         }
         vibespaceHydrationCoordinator.dockPreviewBridge = dockPreviewBridge
+        vibespaceHydrationCoordinator.dockedFileViewerCoordinator = dockedFileViewerCoordinator
         vibespaceHydrationCoordinator.canvasModeProvider = canvasModeProvider
         vibespaceHydrationCoordinator.operationMetricsStore = operationMetricsStore
         vibespaceHydrationCoordinator.dockedBrowserCoordinator = dockedBrowserCoordinator
@@ -261,10 +265,11 @@ struct AppContainer {
             NotificationCenter.default.post(name: .openNewBrowserRequested, object: nil, userInfo: userInfo)
         }
         dockedBrowserCoordinator.projectPathForTile = { [weak vibespaceHydrationCoordinator] tileID in
-            vibespaceHydrationCoordinator?.boardStore?.tile(
+            guard let tile = vibespaceHydrationCoordinator?.boardStore?.tile(
                 for: tileID,
                 includeMinimized: true
-            )?.projectPath
+            ) else { return nil }
+            return tile.projectIdentifier ?? tile.projectPath
         }
         dockedBrowserCoordinator.onDetailedSessionStateChanged = { [weak vibespaceHydrationCoordinator] in
             vibespaceHydrationCoordinator?.scheduleEditorSessionStateSave()
@@ -310,6 +315,7 @@ struct AppContainer {
             splitViewStore: splitViewStore,
             dockPreviewBridge: dockPreviewBridge,
             canvasModeProvider: canvasModeProvider,
+            dockedFileViewerCoordinator: dockedFileViewerCoordinator,
             dockedBrowserCoordinator: dockedBrowserCoordinator
         )
 
@@ -557,6 +563,8 @@ struct AppContainer {
         let vibespaceManagement = VibeSpaceManagementService(persistenceStore: vibespacePersistenceStore)
         let layoutPersistence = LayoutPersistenceService(persistenceStore: appPersistenceStore)
         let vibespaceInteraction = VibeSpaceInteractionService()
+        let externalFileOpenService = ExternalFileOpenService(interaction: vibespaceInteraction)
+        let remoteTransferCoordinator = RemoteTransferCoordinator(interaction: vibespaceInteraction)
         let composeHistoryStore = ComposeHistoryStore()
         let experimentalFeaturesService = ExperimentalFeaturesService()
         let contextSummaryObservabilityStore = ContextSummaryObservabilityStore()
@@ -622,6 +630,7 @@ struct AppContainer {
                 worker: measuredPaneWorkerFactory(.editor),
                 bufferStore: DocumentBufferStore(),
                 markdownLinkRouter: markdownLinkRouter,
+                externalFileOpener: externalFileOpenService,
                 rasterImageEditorServices: rasterImageEditorServices
             )
         }
@@ -682,6 +691,8 @@ struct AppContainer {
             themeManager: CrispyVibesThemeManager(),
             experimentalFeatures: experimentalFeaturesService,
             vibespaceInteraction: vibespaceInteraction,
+            externalFileOpenService: externalFileOpenService,
+            remoteTransferCoordinator: remoteTransferCoordinator,
             terminalServices: terminalServices,
             terminalViewModelDependencies: terminalViewModelDependencies,
             operationMetricsStore: operationMetricsStore,

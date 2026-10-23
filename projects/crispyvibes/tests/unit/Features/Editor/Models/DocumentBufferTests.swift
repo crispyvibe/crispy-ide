@@ -81,6 +81,33 @@ final class DocumentBufferTests: XCTestCase {
         XCTAssertNil(buf.beginSave())
     }
 
+    func test_beginSave_returnsNilWhileEarlierTokenRemainsActiveAfterEdit() {
+        let buf = makeBuffer()
+        buf.didLoad(content: "base")
+        buf.applyEdit("v1")
+        let first = buf.beginSave()!
+        buf.applyEdit("v2")
+
+        XCTAssertTrue(buf.isDirty)
+        XCTAssertEqual(buf.activeSaveToken, first)
+        XCTAssertNil(buf.beginSave())
+    }
+
+    func test_capturedRevisionSaveKeepsLaterEditDirty() {
+        let buf = makeBuffer()
+        buf.didLoad(content: "base")
+        buf.applyEdit("captured")
+        let captured = buf.displayContent
+        buf.applyEdit("later")
+
+        let token = buf.beginSave(capturedContent: captured)!
+        XCTAssertEqual(token.content, "captured")
+        XCTAssertEqual(buf.displayContent, "later")
+        buf.didSave(token: token)
+
+        XCTAssertEqual(buf.state, .dirty(content: "later", baseline: "captured"))
+    }
+
     func test_didSave_savingToClean() {
         let buf = makeBuffer()
         buf.didLoad(content: "base")

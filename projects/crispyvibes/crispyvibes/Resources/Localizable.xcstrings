@@ -1,6 +1,45 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "editor.openInSystem": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Open in System"}}}},
+    "editor.openInSystem.error.documentChanged": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The active document changed before it could be opened."}}}},
+    "editor.openInSystem.error.emptyRejected": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Crispy refused to replace non-empty HTML with an empty document."}}}},
+    "editor.openInSystem.error.failed": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Unable to open in system: %1$@"}}}},
+    "editor.openInSystem.error.launchFailed": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"macOS could not open the item with its default application."}}}},
+    "editor.openInSystem.error.saveTimedOut": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Timed out while waiting for the current save to finish."}}}},
+    "editor.openInSystem.help": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Save this HTML file and open it with the default system application"}}}},
+    "editor.openInSystem.opening": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Opening in System"}}}},
+    "editor.openInSystem.unavailable": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"External open unavailable"}}}},
+    "explorer.download": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Download…"}}}},
+    "explorer.openInSystem": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Open in System"}}}},
+    "explorer.gitDiff.loadFailed": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Unable to load git changes: %1$@"}}}},
+    "remoteTransfer.alreadyInProgress": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Another remote transfer is already in progress."}}}},
+    "remoteTransfer.complete": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Download complete."}}}},
+    "remoteTransfer.cancelling": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Cancelling…"}}}},
+    "remoteTransfer.download": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Download"}}}},
+    "remoteTransfer.download.title": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Download Remote Item"}}}},
+    "remoteTransfer.downloading": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Downloading %1$@"}}}},
+    "remoteTransfer.error.invalidName": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The transfer contains an invalid file name: %1$@"}}}},
+    "remoteTransfer.error.incomplete": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The remote item was not downloaded completely: %1$@"}}}},
+    "remoteTransfer.error.missingMetadata": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The remote server did not provide the metadata required to verify: %1$@"}}}},
+    "remoteTransfer.error.limitExceeded": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The remote folder is too large or deeply nested to transfer safely."}}}},
+    "remoteTransfer.error.outsideProjectRoot": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The selected item resolves outside the remote project root."}}}},
+    "remoteTransfer.error.sourceChanged": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The remote item changed while it was being downloaded: %1$@"}}}},
+    "remoteTransfer.error.symbolicLink": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The transfer contains a symbolic link that cannot be exported safely: %1$@"}}}},
+    "remoteTransfer.error.title": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Remote Transfer Failed"}}}},
+    "remoteTransfer.error.unsupportedItem": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The transfer contains an unsupported remote item: %1$@"}}}},
+    "remoteTransfer.fileProgress": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%1$lld of %2$lld files"}}}},
+    "remoteTransfer.preparing": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Preparing remote items…"}}}},
+    "remoteTransfer.preparingToOpen": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Preparing %1$@ to open"}}}},
+    "remoteTransfer.publishing": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Finishing download…"}}}},
+    "remoteTransfer.showInFinder": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Show in Finder"}}}},
+    "remoteTransfer.temporaryCopy.notice": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Opened a temporary copy. Changes made outside Crispy won’t be saved to the remote item."}}}},
+    "remoteTransfer.transferring": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Transferring…"}}}},
+    "vibespace.parkedRemoteProject.accessibility": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Parked remote project %1$@ on %2$@, inactive"}}}},
+    "vibespace.remoteProject.badge": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"SSH"}}}},
+    "vibespace.remoteProject.detail": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%1$@ • %2$@"}}}},
+    "vibespace.remoteProject.hostPort": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%1$@:%2$lld"}}}},
+    "vibespace.remoteProject.pathBasename": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"…/%1$@"}}}},
     "spotlight.shelf.allTabs": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"All Tabs"}}}},
     "spotlight.shelf.allTabsHelp": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Search every Spotlight tab"}}}},
     "spotlight.overview.search": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Search tabs"}}}},
@@ -1377,12 +1416,41 @@
       }
     },
     "explorer.deleteItem.confirm": {
-      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Are you sure you want to delete \"%@\"?"
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "explorer.deleteItem.namedMessage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” will be permanently deleted. This action cannot be undone."
+          }
+        }
+      }
+    },
+    "explorer.deleteItem.namedTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete “%1$@”?"
+          }
+        }
+      }
+    },
+    "explorer.deleteItem.path": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Path:\n%1$@"
           }
         }
       }

@@ -16,6 +16,7 @@ final class CLICommandRouterVibeSpaceProjectTests: XCTestCase {
     var router: CLICommandRouter!
     var catalog: VibeSpaceCatalogStore!
     var actions: VibeSpaceCanvasActionsCoordinator!
+    var boardStore: VibeSpaceTerminalBoardStore!
 
     override func setUpWithError() throws {
         tempRoot = try makeTempDirectory(prefix: "crispyvibes-cli-vibespace")
@@ -36,6 +37,7 @@ final class CLICommandRouterVibeSpaceProjectTests: XCTestCase {
             try? FileManager.default.removeItem(at: tempRoot)
         }
         actions = nil
+        boardStore = nil
         catalog?.clearDisplayedVibeSpaces()
         catalog = nil
         router = nil
@@ -59,6 +61,13 @@ final class CLICommandRouterVibeSpaceProjectTests: XCTestCase {
             splitViewStore: splitViewStore,
             contentViewerStore: contentViewerStore
         )
+        boardStore = VibeSpaceTerminalBoardStore(
+            vibespaceID: catalog.vibespaces.first!.id,
+            layoutPersistence: container.layoutPersistence,
+            terminalBoardStandaloneRegistry: container.terminalBoardStandaloneRegistry
+        )
+        boardStore.syncProjects(catalog.vibespaces.first!.projects)
+        hydration.boardStore = boardStore
         let coordinator = VibeSpaceCanvasActionsCoordinator(
             appShellStore: appShellStore,
             vibespaceCatalogStore: catalog,
@@ -151,6 +160,9 @@ final class CLICommandRouterVibeSpaceProjectTests: XCTestCase {
             params: ["path": .string(extraURL.path)]
         ))
         XCTAssertEqual(catalog.vibespaces.first?.projects.count, 2)
+        boardStore.syncProjects(catalog.vibespaces.first!.projects)
+        XCTAssertTrue(boardStore.addTile(projectPath: extraURL.path, directoryURL: extraURL))
+        let removedTileID = boardStore.layout.activeTileID
 
         let response = router.handleVibeSpaceRemoveProject(request(
             "vibespace.removeProject",
@@ -162,6 +174,9 @@ final class CLICommandRouterVibeSpaceProjectTests: XCTestCase {
         let remaining = try XCTUnwrap(catalog.vibespaces.first).projects
         XCTAssertEqual(remaining.count, 1)
         XCTAssertFalse(remaining.contains(where: { $0.projectIdentifier == extraURL.standardizedFileURL.path }))
+        if let removedTileID {
+            XCTAssertNil(boardStore.tile(for: removedTileID, includeMinimized: true))
+        }
     }
 
     func testRemoveProjectErrorsForUnknownPath() {
@@ -181,6 +196,9 @@ final class CLICommandRouterVibeSpaceProjectTests: XCTestCase {
             "vibespace.addProject",
             params: ["path": .string(extraURL.path)]
         ))
+        boardStore.syncProjects(catalog.vibespaces.first!.projects)
+        XCTAssertTrue(boardStore.addTile(projectPath: extraURL.path, directoryURL: extraURL))
+        let parkedTileID = boardStore.layout.activeTileID
 
         let response = router.handleVibeSpaceParkProject(request(
             "vibespace.parkProject",
@@ -193,6 +211,9 @@ final class CLICommandRouterVibeSpaceProjectTests: XCTestCase {
         let vibespace = try XCTUnwrap(catalog.vibespaces.first)
         XCTAssertFalse(vibespace.projects.contains(where: { $0.projectIdentifier == extraURL.standardizedFileURL.path }))
         XCTAssertTrue(vibespace.parkedProjectPaths.contains(extraURL.standardizedFileURL.path))
+        if let parkedTileID {
+            XCTAssertNil(boardStore.tile(for: parkedTileID, includeMinimized: true))
+        }
     }
 
     func testParkProjectErrorsForUnknownPath() {

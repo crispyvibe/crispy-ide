@@ -133,6 +133,7 @@ extension VibeSpaceSourceControlViewModel {
                 ?? VibeSpaceSourceControlRepositoryViewModel(
                     id: repositoryID,
                     repositoryRootURL: entry.repositoryRootURL,
+                    projectIdentifier: entry.project.projectIdentifier,
                     worker: mutationWorker,
                     gitExplorer: entry.project.usesProjectGitBackend ? entry.project.gitExplorer : nil
                 )
@@ -193,7 +194,7 @@ extension VibeSpaceSourceControlViewModel {
 
     func applyProjectContextAndOrdering() {
         repositories.forEach { repository in
-            repository.configure(attachedProjects: attachedProjects(for: repository.repositoryRootURL))
+            repository.configure(attachedProjects: attachedProjects(for: repository))
         }
 
         repositories = repositories.sorted { lhs, rhs in
@@ -206,7 +207,26 @@ extension VibeSpaceSourceControlViewModel {
         }
     }
 
-    func attachedProjects(for repositoryRootURL: URL) -> [VibeSpaceSourceControlProjectReference] {
+    func attachedProjects(
+        for repository: VibeSpaceSourceControlRepositoryViewModel
+    ) -> [VibeSpaceSourceControlProjectReference] {
+        if let projectIdentifier = repository.projectIdentifier,
+           let exact = projectReferences.first(where: {
+               $0.projectIdentifier == projectIdentifier && $0.usesProjectGitBackend
+           }) {
+            return [exact]
+        }
+        let repositoryRootPath = repository.repositoryRootURL.standardizedFileURL.path
+        return projectReferences.filter { project in
+            let projectPath = project.rootURL.path
+            return containsPath(repositoryRootPath, candidatePath: projectPath)
+                || containsPath(projectPath, candidatePath: repositoryRootPath)
+        }
+    }
+
+    func attachedProjects(
+        for repositoryRootURL: URL
+    ) -> [VibeSpaceSourceControlProjectReference] {
         let repositoryRootPath = repositoryRootURL.standardizedFileURL.path
         return projectReferences.filter { project in
             let projectPath = project.rootURL.path

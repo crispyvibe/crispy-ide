@@ -6,7 +6,7 @@ extension VibeSpaceTerminalBoardStore {
     // MARK: - Subscriptions
 
     func syncProjectSubscriptions() {
-        let validPaths = Set(orderedProjectPaths)
+        let validPaths = Set(orderedProjectIdentifiers)
 
         for path in projectTabSubscriptionsByPath.keys where !validPaths.contains(path) {
             projectTabSubscriptionsByPath[path]?.cancel()
@@ -16,8 +16,8 @@ extension VibeSpaceTerminalBoardStore {
             tabsByProjectPathAndDirectory[path] = nil
         }
 
-        for path in orderedProjectPaths {
-            guard let project = projectsByPath[path] else { continue }
+        for path in orderedProjectIdentifiers {
+            guard let project = projectsByIdentifier[path] else { continue }
             let terminalViewModelID = ObjectIdentifier(project.terminalViewModel)
             let hasMatchingSubscription = subscribedTerminalViewModelIDsByPath[path] == terminalViewModelID
                 && projectTabSubscriptionsByPath[path] != nil
@@ -73,16 +73,14 @@ extension VibeSpaceTerminalBoardStore {
             objectWillChange.send()
         }
 
-        let projectsByPath = self.projectsByPath
-        let orderedProjectPaths = self.orderedProjectPaths
+        let projects = self.orderedProjects
+        let projectsByIdentifier = self.projectsByIdentifier
         let hiddenTerminalIDsByProjectPath = self.hiddenTerminalIDsByProjectPath
         let standaloneViewModel = self.standaloneTerminalViewModel
 
         var allKnownTabIDs = Set<UUID>()
-        for projectPath in orderedProjectPaths {
-            if let project = projectsByPath[projectPath] {
-                for tab in project.terminal.tabs { allKnownTabIDs.insert(tab.id) }
-            }
+        for project in projects {
+            for tab in project.terminal.tabs { allKnownTabIDs.insert(tab.id) }
         }
         for tab in standaloneViewModel.tabs { allKnownTabIDs.insert(tab.id) }
 
@@ -90,7 +88,7 @@ extension VibeSpaceTerminalBoardStore {
             // Phase 1: bind tiles with stale project/tab references
             TerminalTileReconciler.reconcileProjectAssignments(
                 state: &state,
-                projectsByPath: projectsByPath,
+                projectsByPath: projectsByIdentifier,
                 tabsByProjectPathAndID: self.tabsByProjectPathAndID,
                 tabsByProjectPathAndDirectory: self.tabsByProjectPathAndDirectory,
                 standaloneTabsByID: self.standaloneTabsByID,
@@ -107,14 +105,12 @@ extension VibeSpaceTerminalBoardStore {
             }
 
             let desiredState = VibeSpaceTerminalBoardDesiredTabState(
-                orderedProjectPaths: orderedProjectPaths,
-                projectsByPath: projectsByPath,
+                projects: projects,
                 hiddenTerminalIDsByProjectPath: hiddenTerminalIDsByProjectPath,
                 standaloneTabs: standaloneViewModel.tabs
             )
             let primaryDesiredState = VibeSpaceTerminalBoardDesiredTabState(
-                orderedProjectPaths: orderedProjectPaths,
-                projectsByPath: projectsByPath,
+                projects: projects,
                 hiddenTerminalIDsByProjectPath: hiddenTerminalIDsByProjectPath,
                 standaloneTabs: standaloneViewModel.tabs,
                 excludedTerminalIdentities: detachedIdentities
@@ -135,7 +131,7 @@ extension VibeSpaceTerminalBoardStore {
             // Phase 3: bind any terminal tile whose tab still needs attaching
             TerminalTileReconciler.restorePersistedTerminalTiles(
                 state: &state,
-                projectsByPath: projectsByPath,
+                projectsByPath: projectsByIdentifier,
                 standaloneViewModel: standaloneViewModel,
                 tabsByProjectPathAndID: self.tabsByProjectPathAndID,
                 standaloneTabsByID: self.standaloneTabsByID,

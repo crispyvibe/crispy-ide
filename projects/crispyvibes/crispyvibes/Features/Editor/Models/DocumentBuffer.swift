@@ -159,12 +159,27 @@ final class DocumentBuffer: ObservableObject, Identifiable {
 
     // MARK: - Save
 
-    /// Mints a save token and transitions `.dirty` → `.saving`. Returns `nil` if not dirty.
+    /// Mints a save token and transitions `.dirty` → `.saving`. Returns `nil` if not dirty
+    /// or another save is still in flight.
     func beginSave() -> SaveToken? {
+        guard activeSaveToken == nil else { return nil }
         guard case .dirty(let content, let baseline) = state else { return nil }
         let token = SaveToken(id: UUID(), content: content)
         activeSaveToken = token
         state = .saving(content: content, baseline: baseline, token: token)
+        return token
+    }
+
+    /// Begins a serialized write for a revision captured by a higher-level command.
+    /// Later edits remain dirty while the captured token updates their baseline on completion.
+    func beginSave(capturedContent: String) -> SaveToken? {
+        guard activeSaveToken == nil else { return nil }
+        guard case .dirty(let currentContent, let baseline) = state else { return nil }
+        let token = SaveToken(id: UUID(), content: capturedContent)
+        activeSaveToken = token
+        if currentContent == capturedContent {
+            state = .saving(content: capturedContent, baseline: baseline, token: token)
+        }
         return token
     }
 

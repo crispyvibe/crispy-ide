@@ -81,4 +81,11 @@ final class EditorHTMLSecurityTests: XCTestCase {
             "script-src must not allow the file: scheme — co-locate scripts under 'self'"
         )
     }
+
+    func testAuthoredHTMLIframeIsSandboxedWithoutScriptCapability() throws {
+        let html = try editorHTMLContents()
+        XCTAssertTrue(html.contains("setAttribute(\"sandbox\", \"allow-same-origin\")"))
+        XCTAssertFalse(html.contains("sandbox\", \"allow-same-origin allow-scripts"))
+        XCTAssertFalse(html.contains("sandbox\", \"allow-scripts"))
+    }
 }

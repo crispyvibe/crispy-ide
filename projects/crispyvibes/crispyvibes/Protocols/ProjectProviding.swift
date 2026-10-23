@@ -14,12 +14,25 @@ protocol ProjectProviding: AnyObject, Identifiable where ID == UUID {
     var gitExplorer: any GitExploring { get }
     var terminal: any TerminalProviding { get }
     var fileContent: any FileContentProviding { get }
+    var remoteItemTransfer: (any RemoteItemTransferring)? { get }
     var paneLayout: ProjectPaneLayoutState { get set }
 
     var onFileOpenRequested: ((ExplorerOpenRequest) -> Void)? { get set }
     var onFileRenamed: ((ExplorerRenameEvent) -> Void)? { get set }
+    var onFileDeleted: ((ExplorerDeletionEvent) -> Void)? { get set }
 
     func activate()
     func ensureExplorerLoaded()
     func shutdown()
+}
+
+extension ProjectProviding {
+    var remoteItemTransfer: (any RemoteItemTransferring)? { nil }
+}
+
+extension ProjectProviding {
+    var onFileDeleted: ((ExplorerDeletionEvent) -> Void)? {
+        get { nil }
+        set {}
+    }
 }

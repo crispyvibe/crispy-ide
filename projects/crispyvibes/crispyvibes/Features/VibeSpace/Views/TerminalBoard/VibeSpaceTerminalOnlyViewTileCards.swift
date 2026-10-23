@@ -20,10 +20,10 @@ extension VibeSpaceTerminalOnlyView {
     }
 
     /// F048-R13: closure for the "Send All From This Project to New Window"
-    /// menu item. Returns nil when the tile has no `projectPath` (so the menu
+    /// menu item. Returns nil when the tile has no project owner (so the menu
     /// item is hidden) or no callback is wired.
     func sendAllFromProjectToNewBoardWindowAction(for tile: VibeSpaceTerminalBoardTile) -> (() -> Void)? {
-        guard let projectPath = tile.projectPath else { return nil }
+        guard let projectPath = tile.projectIdentifier ?? tile.projectPath else { return nil }
         guard let onTileSendAllFromProjectToNewBoardWindowRequested else { return nil }
         return {
             onTileSendAllFromProjectToNewBoardWindowRequested(projectPath, boardStore, surfaceID)
@@ -145,7 +145,10 @@ extension VibeSpaceTerminalOnlyView {
                 )
             } else if tile.isFile, let fileURL = tile.fileURL,
                       let coordinator = dockedFileViewerCoordinator {
-                let fileContext = fileOpenContext(forDockedFileURL: fileURL)
+                let fileContext = fileOpenContext(
+                    forDockedFileURL: fileURL,
+                    projectIdentifier: tile.projectIdentifier
+                )
                 let group = coordinator.editorGroup(
                     for: tile.id,
                     fileURL: fileURL,
@@ -180,7 +183,7 @@ extension VibeSpaceTerminalOnlyView {
                         snapshot: tile.browserSession
                     ),
                     isActive: isActive,
-                    projectAccentColor: tile.projectPath.flatMap { accentColor(for: $0) },
+                    projectAccentColor: (tile.projectIdentifier ?? tile.projectPath).flatMap { accentColor(for: $0) },
                     onSelect: { boardStore.activateTile(tile.id, requestFocus: false, surfaceID: surfaceID) },
                     onClose: {
                         coordinator.removeViewModel(for: tile.id)
@@ -202,10 +205,25 @@ extension VibeSpaceTerminalOnlyView {
                     isActive: isActive,
                     projectAccentColor: store.selectedProject(from: projects).flatMap { accentColor(for: $0.rootURL.standardizedFileURL.path) },
                     onLinkTargetActivated: { url in
-                        onLinkTargetActivated(url, store.selectedProject(from: projects)?.rootURL)
+                        let selectedProject = store.selectedProject(from: projects)
+                        onLinkTargetActivated(
+                            url,
+                            selectedProject?.rootURL,
+                            selectedProject?.projectIdentifier
+                        )
                     },
                     onFileSystemTargetActivated: { target in
-                        onFileSystemTargetActivated(target, store.selectedProject(from: projects)?.rootURL)
+                        let selectedProject = store.selectedProject(from: projects)
+                        onFileSystemTargetActivated(
+                            TerminalFileSystemTarget(
+                                url: target.url,
+                                line: target.line,
+                                column: target.column,
+                                projectIdentifier: target.projectIdentifier
+                                    ?? selectedProject?.projectIdentifier
+                            ),
+                            selectedProject?.rootURL
+                        )
                     },
                     onSelect: { boardStore.activateTile(tile.id, requestFocus: false, surfaceID: surfaceID) },
                     onClose: {
@@ -249,6 +267,7 @@ extension VibeSpaceTerminalOnlyView {
                             context.projectTitle,
                             projectAccentColor,
                             projectURL(for: context.projectPath),
+                            context.projectPath,
                             tile.id
                         )
                     },
@@ -266,12 +285,24 @@ extension VibeSpaceTerminalOnlyView {
                             context.terminalTab.workingDirectory,
                             context.projectTitle,
                             projectAccentColor,
-                            projectURL(for: context.projectPath)
+                            projectURL(for: context.projectPath),
+                            context.projectPath
                         )
                     },
                     shortcutDefinitions: shortcutDefinitions,
                     inlineTriggerSearchRoots: inlineTriggerSearchRoots,
                     onRunShortcut: { shortcut in
+                        if shortcut.launchBehavior == .newPermanentTerminal,
+                           DetachedPermanentShortcutTileLauncher.launch(
+                               shortcut,
+                               directoryURL: context.terminalTab.workingDirectory,
+                               owningProjectRootURL: projectURL(for: context.projectPath),
+                               owningProjectIdentifier: context.projectPath,
+                               surfaceID: surfaceID,
+                               boardStore: boardStore
+                           ) {
+                            return
+                        }
                         executeTerminalShortcut(
                             shortcut,
                             viewModel: context.terminalViewModel,
@@ -283,7 +314,8 @@ extension VibeSpaceTerminalOnlyView {
                                     directoryURL,
                                     context.projectTitle,
                                     projectAccentColor,
-                                    projectURL(for: context.projectPath)
+                                    projectURL(for: context.projectPath),
+                                    context.projectPath
                                 )
                             },
                             onTerminalInteraction: {
@@ -298,12 +330,18 @@ extension VibeSpaceTerminalOnlyView {
                     onLinkTargetActivated: { url in
                         onLinkTargetActivated(
                             url,
-                            projectURL(for: context.projectPath)
+                            projectURL(for: context.projectPath),
+                            context.projectPath
                         )
                     },
-                    onFileSystemTargetActivated: { url in
+                    onFileSystemTargetActivated: { target in
                         onFileSystemTargetActivated(
-                            url,
+                            TerminalFileSystemTarget(
+                                url: target.url,
+                                line: target.line,
+                                column: target.column,
+                                projectIdentifier: target.projectIdentifier ?? context.projectPath
+                            ),
                             projectURL(for: context.projectPath)
                         )
                     },

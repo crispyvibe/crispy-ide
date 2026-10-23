@@ -51,7 +51,10 @@ enum SpotlightPersistentItemID: Hashable, Sendable, Codable {
         switch self {
         case let .terminal(projectPath, tabID):
             try container.encode(Kind.terminal, forKey: .kind)
-            try container.encode(URL(fileURLWithPath: projectPath).standardizedFileURL.path, forKey: .projectPath)
+            let persistedProjectPath = projectPath.hasPrefix("ssh://")
+                ? projectPath
+                : URL(fileURLWithPath: projectPath).standardizedFileURL.path
+            try container.encode(persistedProjectPath, forKey: .projectPath)
             try container.encode(tabID, forKey: .tabID)
         case let .standaloneTerminal(surfaceID, tileID, tabID):
             try container.encode(Kind.standaloneTerminal, forKey: .kind)

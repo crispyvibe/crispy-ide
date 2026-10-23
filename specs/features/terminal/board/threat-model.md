@@ -91,10 +91,50 @@ Terminal Board stores vibespace board layout, hosts long-lived terminal sessions
 - Likelihood: Medium.
 - Mitigation: Validate surface membership/tile identity for persistent members, validate terminal tabs, ACP stores, and file owners where applicable, require a decodable URL for browser previews, and allow a valid persistent browser tile to recreate or resolve through its canonical coordinator. Skip invalid descriptors, guard process exit by Spotlight ID, and release local sessions/previews/callbacks/monitors/leases on final dismissal.
 
+### F002-T11: Cross-host cleanup deletes same-root remote tiles
+
+- Vector: Cleanup matches a remote project by raw root text while another SSH host exposes the same root.
+- Impact: Tiles and Spotlight members from the other host are deleted, or terminal reconciliation adopts them into the wrong project.
+- Likelihood: Medium in standardized server layouts.
+- Mitigation: Persist optional host-qualified `projectIdentifier` ownership and use it in runtime subscriptions, project context, reconciliation, and Spotlight identities. For legacy remote terminals, tab membership may prove one owner; raw-root equality alone does not. Cleanup removes only proven matches.
+- Residual risk: Historically incorrect owner stamps may remain authoritative until separately repaired.
+
+### F002-T12: Ambiguous legacy migration assigns a destructive owner
+
+- Vector: `syncProjects` stamps a legacy remote raw-root-only tile when multiple host-qualified projects are candidates.
+- Impact: Future cleanup, restoration, or synchronization crosses host boundaries.
+- Likelihood: Medium for layouts persisted before ownership stamping.
+- Mitigation: Optional Codable ownership preserves legacy decoding; migration requires unique evidence. Ambiguous remote raw-root-only tiles remain unstamped and retained fail-closed. Local file fallback uses standardized component-boundary containment, not string-prefix matching.
+- Residual risk: Retained ambiguous tiles may remain stale or require manual closure, but this is safer than destructive guessing.
+
+### F002-T13: Automatic cleanup leaves a stale detached window
+
+- Vector: The final owned visible/minimized tile and Spotlight member are removed, but the detached surface or AppKit window survives.
+- Impact: Blank windows, stale restoration records, focus participants, or leaked management state.
+- Likelihood: Low after atomic normalization; mounted AppKit behavior still requires UI-level verification.
+- Mitigation: Cleanup removes all owned collections and Spotlight members in one mutation; normalization removes empty detached surfaces; persistence records the normalized state; the detached-window manager closes windows whose surface IDs disappear.
+- Residual risk: An unmanaged or pre-existing desynchronized window may still require manual closure.
+
+### F002-T14: Host identity is lost across preview or bulk-move routing
+
+- Vector: A terminal target or dock preview is reduced to a local-looking path, Spotlight Codable normalizes `ssh://` as a file path, remote file pruning runs before ownership migration, or Send All selects by raw root.
+- Impact: A file opens through the wrong host/provider, a valid remote tile is deleted as locally stale, Spotlight identity collides, or another host's tiles move.
+- Likelihood: Medium when multiple hosts expose a common root.
+- Mitigation: Carry `projectIdentifier` through `TerminalFileSystemTarget`, `DockPreviewBridge`, main/detached file/browser/link routes, tile pinning, and Spotlight state; preserve SSH identifiers verbatim in Codable; migrate uniquely owned legacy remote file tiles before local stale prune; retain ambiguous legacy tiles fail-closed; and select Send All by unique owner.
+- Residual risk: Unstamped ambiguous legacy panes may require manual closure.
+
+### F002-T15: Spotlight route drops host-qualified project identity
+
+- Vector: A main/detached direct, temporary, shortcut, split, permanent, ACP, link, file, browser, editor-pane, restore, or detached-attachment route reconstructs Spotlight state from a raw root and loses `owningProjectIdentifier`.
+- Impact: Nested actions can open content, execute a shortcut, create a terminal, or resolve a provider on the wrong SSH host when projects share a root.
+- Likelihood: Medium because Spotlight crosses many presentation and callback boundaries.
+- Mitigation: Every route passes the exact `projectIdentifier` through `TerminalSpotlightState`; lookups prefer it before path fallback, nested actions reuse it, and detached attachment copies it unchanged. Same-root remote identifiers remain host-qualified.
+- Residual risk: The full matrix is production-source inspected rather than mounted end-to-end UI coverage; a future route can regress if it omits the field.
+
 ## Residual Risks
 
 - Programmatic AppKit frame restoration may still place a window somewhere inconvenient when displays change. The product decision is to preserve detached board state rather than merge panes automatically.
-- Static test/source inspection covers normalization, geometry-safe persistence, surface-local identity, restore/process-exit guards, URL redaction, and detached AppContainer compose-history injection. No tests or manual UI flows were run for this documentation update. Mounted detached toolbar delivery, local preview presentation, multi-host editor-lease release, pane-history isolation, physical gestures, and complete window restoration remain UI/manual or missing dedicated regression gaps.
+- Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. Static source covers normalization, same-root isolation, dock-preview identity, remote-file migration-before-prune, verbatim SSH Codable, and fail-closed cleanup. `SpotlightEnhancementTests` directly checks owner/callback preservation for every detached direct persistent source kind, exact-once detached temporary shortcut dispatch, and surface-local detached permanent creation. The complete mounted main/detached route matrix, additional nested actions, and unique-owner Send All remain production-source inspection; toolbar delivery, editor-lease release, gestures, and window restoration remain UI/manual gaps.
 
 ## NFR Compliance
 
@@ -107,6 +147,10 @@ Terminal Board stores vibespace board layout, hosts long-lived terminal sessions
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-23 | Corrected direct versus production-inspection evidence for project-qualified Spotlight routes and recorded build/test-build-only validation with no executed pass. | — |
+| 2026-10-23 | Added F002-T15 for exact owner retention across every main/detached Spotlight route and detached attachment; narrowed complete route evidence to production-source inspection. | — |
+| 2026-10-23 | Added F002-T14 for host identity loss across previews, Spotlight persistence, stale pruning, and Send All; recorded compile/static-only coverage. | — |
+| 2026-10-20 | Added F002-T11–T13 for cross-host deletion, ambiguous legacy migration, and stale detached windows, with fail-closed and lifecycle mitigations plus residual risks. Static sources only; no test pass is claimed. | — |
 | 2026-10-18 | Final audit fixes: documented detached compose-history injection and clarified that split/create-new-persistent-terminal creates a separate tile rather than converting or transferring a temporary process. Static sources only; no tests or manual UI runs. | — |
 | 2026-10-18 | Added temporary-versus-persistent local creation, privacy-safe metadata, host-scoped editor lease, detached restore/process-exit threats, and static/manual gap accounting. Later production-fix status is recorded above. | — |
 | 2026-10-16 | Added regression controls for surface-scoped Spotlight identity and geometry-safe flattened reorder persistence, including minimized standalone terminals. | — |

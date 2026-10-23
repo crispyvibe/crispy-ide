@@ -3,7 +3,7 @@ title: "File Previews"
 feature: "F009"
 domain: "editor"
 audience: "user"
-version: "1.5"
+version: "2.0"
 sidebar:
   label: "Previews"
   order: 2
@@ -165,14 +165,19 @@ Open the **Smart Tools** menu in the raster toolbar.
 4. Edit content directly in the rendered view.
 5. Toggle to source view to edit raw HTML (content preserved across toggles).
 6. Use ⌘F for find and replace with match highlighting.
-7. The renderer has read access scoped to the project root for resolving local file references.
+7. The trusted editor host currently has filesystem-root read access so bundled resources and local file references can resolve; the authored iframe still has only the sandbox capabilities described next.
+8. An empty HTML document is valid. **Save** and **Open in System** can intentionally replace earlier content with an empty file.
+9. Rich mode places your authored document in an iframe sandboxed exactly as `allow-same-origin`. Authored scripts, forms, top-level navigation, popups, downloads, and modals are unavailable. Crispy's trusted editor host still uses JavaScript for editing, synchronization, find/comments, and recovery; that host capability is not granted to the authored document.
+10. In either **Rich** or **Source** mode, choose **Open in System**. Crispy immediately captures the current document and content, cancels that document's pending autosave, waits for its active save token to finish, saves the captured revision in order, and only then asks macOS to open it. Switching tabs does not retarget the operation. If you continue editing after invocation, those later edits stay unsaved/dirty and autosave resumes when the command finishes.
+
+For local HTML, Open in System opens the original file. For remote HTML, Crispy saves remotely and then performs a separate, unversioned SFTP re-read into an owner-only temporary copy. If the remote file changes between those operations, the external application may open a different remote revision from the one Crispy just saved. This editor action uses the editor's busy indicator and normal error alert; it is independent of the explorer's app-wide transfer overlay. If macOS declines the open, Crispy reports failure and removes the newly created remote copy. Changes made to an externally opened remote copy do not sync or write back to the SSH source.
 
 ### Working with Remote Files
 
 1. Remote raster images are staged as local preview files for native rendering.
 2. Safe edits are written back to the SSH source on Save or ⌘S.
 3. Remote PDFs are downloaded and staged locally for PDFKit rendering.
-4. Staged files are cleaned up when the active document changes.
+4. Remote HTML opened in another app uses a retained owner-only temporary copy; stale copies are cleaned up after 24 hours.
 
 ## Keyboard Shortcuts
 
@@ -196,7 +201,7 @@ Open the **Smart Tools** menu in the raster toolbar.
 
 - Raster ratio labels, percentages, format names, controls, and status text follow the app's localization.
 - **Theme**: PDF background and HTML rendering adapt to the active application theme.
-- **Large File Threshold**: Files exceeding the configured size (default 10 MB for remote) prompt before downloading.
+- Large-file editing confirmation is not implemented. Remote files may begin downloading for editing without a size prompt; the separate explicit Download workflow reports manifest/item/byte progress but also has no size-confirmation prompt.
 
 ## Tips
 
@@ -221,7 +226,8 @@ Open the **Smart Tools** menu in the raster toolbar.
 | Image edits remain after save failure | This is intentional. Correct the reported file error and retry Save. |
 | External-change banner shown | Choose Reload from Disk to discard your work, or Keep My Edits to retain it. Remote conflicts refresh the staged bytes before you decide. |
 | Crop selects the wrong area after updating | Reopen the source and retry. Phase 0 uses top-left pixel mapping and normalized orientation; report the format and EXIF orientation if the issue persists. |
-| HTML assets not loading | Ensure referenced files exist relative to the HTML file's parent directory or project root. |
+| HTML assets not loading | Ensure the referenced local file exists and the path/base URL is valid. Rich authored content is sandboxed even though the trusted host has broad local read access. |
+| A tab was closed while saving | Crispy waits for the active save, then saves any later edit. If that close-time write fails, the dirty buffer is retained rather than silently discarded; reopen the file and retry after correcting the error. |
 | PDF appears blank | The file may be corrupted. Try opening in Preview.app. For remote PDFs, check SSH connection status. |
 | HTML editor crash | The WKWebView auto-recovers from crashes by re-rendering content. No data is lost. |
 
@@ -234,3 +240,17 @@ Open the **Smart Tools** menu in the raster toolbar.
 - Local Save has a small remaining race between its final identity check and atomic write. Remote SFTP has no compare-and-swap, and same-size changes within its one-second mtime resolution can evade conflict detection.
 - Full-resolution Save/Copy/OCR/background removal can use substantial memory for very large sources. Vision requests are cancellable, but already-allocated framework buffers may persist briefly.
 - A legacy synchronous canvas save API remains for standalone use/tests; Crispy's app save path uses the asynchronous editor services.
+- A remote HTML file opened in a system application is a single retained copy: external edits do not synchronize or write back, and sibling scripts, styles, images, or other relative assets may not resolve.
+- Remote HTML Open in System saves first and then performs an unversioned SFTP re-read. If the remote file changes between those steps, the external application can open a different revision; this is broader than a narrow metadata-check/open TOCTOU.
+- Rich-mode authored HTML cannot execute its own scripts, submit forms, navigate the top level, open popups, start downloads, or show modal dialogs. Use Source mode to edit such markup; preview active behavior in a separately trusted browser if needed.
+
+## Documentation Verification
+
+Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. `EditorHTMLSecurityTests.testAuthoredHTMLIframeIsSandboxedWithoutScriptCapability` directly checks the exact `allow-same-origin` string and rejects `allow-scripts` variants. `Resources/MarkdownRuntime/editor.html` and `MarkupRenderedEditor` show the exact authored-frame sandbox and separate trusted-host JavaScript. The other omitted authored capabilities and mounted WebKit enforcement remain production/resource inspection; close/save/provider and intentional-empty-HTML cases are compiled static source only.
+
+## Change History
+
+- 2026-10-23: Version 2.0 confirms the exact authored-frame sandbox/trusted-host boundary and final static/build inventory; no test pass is claimed.
+- 2026-10-23: Version 1.9 documents the exact authored-HTML iframe sandbox, the separate trusted editor JavaScript bridge, and static/build-only verification limits.
+- 2026-10-23: Version 1.8 documents intentional empty HTML and close-time save serialization/failure retention.
+- 2026-10-20: Reconciled Rich/Source Open in System with captured saves and the unversioned remote re-read/different-revision limitation; removed the unimplemented large-file prompt/setting claim and documented Download progress without size confirmation.

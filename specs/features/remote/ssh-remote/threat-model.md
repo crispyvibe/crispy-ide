@@ -15,6 +15,9 @@ SSH Remote Development enables opening projects, browsing files, running termina
 | `~/.ssh/known_hosts` ↔ Host key validation | Host keys are verified against known_hosts. New keys are written on user acceptance. |
 | Local port forward ↔ Network | Port forwards expose remote services on localhost. |
 | Connection profile ↔ Disk | Profiles store host, port, username, and key file path. No secrets stored. |
+| Remote source ↔ Transfer manifest | Canonical SFTP realpath, entry type/name validation, size, and modification time determine what may leave the configured root. |
+| Remote transfer ↔ Local staging/destination | Download writes a hidden sibling before final publication; Open in System writes an owner-only retained app temporary snapshot. |
+| Temporary snapshot ↔ External application | macOS receives a local copy with no synchronization or writeback relationship to the SSH source. |
 
 ## Attack Surfaces
 
@@ -26,6 +29,10 @@ SSH Remote Development enables opening projects, browsing files, running termina
 6. **Local port forwarding** — exposes remote services on localhost, accessible to any local process.
 7. **Remote terminal PTY** — spawns `/usr/bin/ssh -t` with a PTY. The remote shell has full access to the remote system.
 8. **Key file path in profile** — profile references a local private key file path.
+9. **Recursive remote manifest** — attacker-controlled names, symlinks, special files, or deep/wide trees may escape the root or exhaust resources.
+10. **Local destination publication** — failure or cancellation can expose partial data or replace an existing destination incorrectly.
+11. **System-open snapshots** — sensitive remote data persists temporarily on local disk and is handed to another application.
+12. **Concurrent remote mutation** — a remote source can change between metadata checks, handle open, and streamed reads.
 
 ## Threats
 
@@ -83,7 +90,7 @@ SSH Remote Development enables opening projects, browsing files, running termina
 - **Vector:** If the SFTP subprocess crashes or hangs without being detected, subsequent file operations create new subprocesses. Repeated failures could accumulate zombie processes.
 - **Impact:** Process table exhaustion; file descriptor leaks.
 - **Likelihood:** Low — the subprocess tracks `isRunning` state via termination handler. `availableSFTP()` checks `isRunning` before reuse.
-- **Mitigation:** `SFTPSubprocess` sets `isRunning = false` via `terminationHandler`. `availableSFTP()` creates a new subprocess only when the existing one is not running. The SFTP init handshake has a 10-second timeout — if connection fails, the subprocess is terminated immediately. Connection disconnect terminates the SFTP subprocess explicitly. Linked NFR: PERF-Responsiveness.
+- **Mitigation:** `SFTPSubprocess` serializes shared-channel wire operations with `NSLock`. A separate lifecycle lock protects running state and one-time resource closure across process termination, explicit disconnect, transfer cancellation, and deinit. Termination closes stdin, requests graceful exit, waits up to one second, sends SIGKILL if needed, and waits for exit; timed generic SSH commands also wait and escalate before releasing pipes. Connection checks replace a subprocess only after protected lifecycle state reports it stopped. Dedicated transfer channels terminate through structured cleanup before the coordinator slot is released. Linked NFR: PERF-Responsiveness, REL-2.
 
 ### F034-T09: Sensitive data in remote terminal scrollback
 
@@ -99,19 +106,92 @@ SSH Remote Development enables opening projects, browsing files, running termina
 - **Likelihood:** Low — mutations are user initiated and the enhanced mode is opt-in.
 - **Mitigation:** Enhanced rename rejects empty names, separators, `.` and `..`. Watch requests are normalized, deduplicated, capped at 256 paths, and use one shared two-second polling task. Failed listings preserve the last successful snapshot rather than synthesizing deletion. The legacy behavior remains available through the default-off Connections setting. Linked NFRs: SEC-Input-Sanitization, PERF-Responsiveness.
 
+### F034-T11: Sensitive remote content leaks from a retained local snapshot
+
+- **Vector:** Open in System copies SSH content into local temporary storage and another application reads it. Weak permissions, predictable paths, or missing cleanup could expose data after the operation.
+- **Impact:** Confidential source, credentials, or project data persists on the local machine and is available outside Crispy.
+- **Likelihood:** Medium because local materialization is required by the feature.
+- **Mitigation:** Snapshot paths are app-owned and uniquely named, directories/files use owner-only permissions, no prior snapshot is reused after failure, and stale snapshots older than 24 hours are removed. The system launch happens only after successful verified transfer. Linked NFR: SEC-Data-Protection.
+- **Residual risk:** The chosen external application and processes running as the same local user can read the retained copy. A snapshot intentionally remains for up to 24 hours.
+
+### F034-T12: Recursive transfer escapes the remote root through names or links
+
+- **Vector:** A malicious remote tree contains `..`-style names, separators, symlinks, a similarly prefixed sibling path, special files, or server responses whose canonical path lies outside the selected root.
+- **Impact:** The app reads unintended remote files, creates an unsafe local hierarchy, or interacts with devices/FIFOs rather than regular data.
+- **Likelihood:** Medium for untrusted or concurrently modified remote trees.
+- **Mitigation:** The configured remote root may itself resolve through its configured symlink to establish the canonical confinement root. A selected source and each child are classified with `lstat` before any `realpath`; symbolic links and special entries are rejected immediately. Directory limits count only accepted non-dot entries, are enforced before append, and cancellation is checked per decoded entry and again per transfer child. Every accepted regular-file or directory child then receives `realpath` plus a component-aware canonical-root check. Every regular file must provide size and modification time, and traversal fails above 250,000 items or 256 levels. Linked NFR: SEC-Input-Sanitization, SEC-Data-Protection.
+- **Residual risk:** Correctness depends on the remote SFTP server's `lstat`/`realpath` and metadata responses; a malicious server controls them.
+
+### F034-T13: Failed or cancelled download publishes a partial destination
+
+- **Vector:** A network failure, cancellation, disk-full condition, or app exit occurs after some bytes are written, or replacement of an existing destination fails midway.
+- **Impact:** Incomplete files appear successful, consumers process corrupt data, or a prior destination is lost.
+- **Likelihood:** Medium on slow or unreliable links.
+- **Mitigation:** Download writes a uniquely named hidden sibling and publishes/replaces the selected destination only after the full manifest transfers and verifies successfully. Before replace/move, the service synchronously awaits MainActor acknowledgment that publication state is visible and performs a second `Task` cancellation check immediately before the filesystem call. Cancel is unavailable during publishing. Failure or cancellation before that boundary removes staging, and the global overlay reports the terminal state. Replacement behavior follows save-panel consent and filesystem destination semantics. Linked NFR: SEC-Data-Protection, REL-2.
+- **Residual risk:** Final publish/replacement is a separate filesystem operation that may itself fail. Cancellation arriving after the final check can coincide with the atomic replace/move and may not prevent publication. Earlier cancellation can still be delayed by an active chunk or transport call; transfers cannot resume.
+
+### F034-T14: Remote mutation produces an inconsistent snapshot
+
+- **Vector:** Files are modified, replaced, or retargeted after manifest metadata is captured but before or during SFTP open/read.
+- **Impact:** A downloaded directory combines revisions, or Open in System launches bytes different from the user's intended saved revision.
+- **Likelihood:** Medium on shared or generated remote trees.
+- **Mitigation:** Every regular transfer file must have size and mtime and is revalidated before and after streaming for regular type, canonical-path equality/root confinement, size, and mtime. The local byte count must exactly equal the recorded size. SFTP validates request IDs across metadata, directory, handle, read/write/close, and mutation operations; strictly parses NAME; requires explicit EOF for READ/READDIR and OK for WRITE/CLOSE; and bounds packets to 1…64 MiB. Explorer/root transfers fail before publication on mismatch. Independently, HTML Open in System captures buffer/content/file/provider synchronously, suppresses same-buffer autosaves, waits for `activeSaveToken`, and saves via `beginSave(capturedContent:)` before `ExternalFileOpenService` performs a separate unversioned SFTP re-read. Linked NFR: SEC-Data-Protection, REL-2.
+- **Residual risk:** SFTP metadata check and handle open/read are not atomic, so same-size mutation within timestamp resolution can evade transfer checks. The HTML post-save re-read has a broader risk: it is not version-bound and may open a different remote revision from the one just saved.
+
+### F034-T15: Invalid port values cross parsing boundaries
+
+- **Vector:** A malformed persisted `ssh://` identifier, connection form/profile, port-forward field, or imported SSH config supplies zero, malformed/non-numeric, negative, or greater-than-65535 ports.
+- **Impact:** Truncation, wraparound, connection to an unintended endpoint, invalid project identity, or a forward bound to the wrong service.
+- **Likelihood:** Low after failable validation at each ingress.
+- **Mitigation:** URI parsing range-checks 1...65535 before `UInt16`; connection/profile and forwarding text use failable `UInt16` conversion plus a nonzero guard; SSH config marks the host invalid and omits it when `Port` fails the same constraints. Invalid values never reach process arguments or persisted profile construction. Linked NFR: SEC-Input-Sanitization.
+- **Residual risk:** A syntactically valid but unintended in-range port remains user/configuration controlled.
+
+### F034-T16: Same-root remote repository uses the wrong project or provider
+
+- **Vector:** Two SSH hosts expose the same raw repository path and source control attaches by path overlap, loads a diff through the wrong backend, or opens an untracked file with another project's provider.
+- **Impact:** Git commands execute on the wrong host, a diff misrepresents staged/working changes, or file content crosses an SSH project boundary.
+- **Likelihood:** Medium without host-qualified repository identity.
+- **Mitigation:** Project-backed repository IDs and view models retain the exact host-qualified `projectIdentifier`; attachment returns only that project. Tracked diffs call its `gitExplorer`, combine staged then working output, and open a preloaded project-qualified tab. Untracked/new files use the same project's exact file provider. Linked NFR: SEC-Data-Protection, REL-2.
+- **Residual risk:** Static source inspection does not replace mounted multi-host testing, and historically incorrect persisted ownership may require separate migration.
+
+### F034-T17: Legacy SSH identity migration loses state or upgrades untrusted data
+
+- **Vector:** A reserved-character remote path exists under the prior raw full identifier, raw remote-path key, or malformed local normalization. Migration loads only active projects, omits parked/unresolved configs, prunes dormant settings, or immediately re-saves a tampered parent.
+- **Impact:** Remote terminals, browser sessions, color/startup/ACP/shell overrides, or shortcut slots disappear; duplicate logical projects survive; or untrusted config receives a valid signature.
+- **Likelihood:** Medium during upgrade from raw SSH identifiers.
+- **Mitigation:** Canonicalize live, unresolved, focused, and parked values; deduplicate parked values and remove active/unresolved collisions. Persist a changed parent immediately only when its prior signature verified. Resolve every per-project read/mutation through canonical plus raw-path, prior raw-full, and malformed-normalization aliases; migrate the complete config, delete the alias, load live/unresolved/parked configs, and preserve dormant settings/shortcut slots in runtime pruning. Linked NFR: SEC-2, SEC-Data-Protection, REL-2.
+- **Residual risk:** Divergent independently persisted aliases are not merged; the first supported alias found becomes authoritative.
+
 ## Residual Risks
 
 - The remote host is fully trusted once connected. Any command executed via SSH has the remote user's full permissions. This is inherent to SSH.
 - TOFU (Trust On First Use) for host keys means the first connection is vulnerable to MITM. This is standard SSH behavior.
 - Port forwarding exposes remote services to local processes. This is by design and documented.
 - The system ssh binary handles all cryptographic operations. Vulnerabilities in OpenSSH are outside Crispy's control.
+- Owner-only temporary snapshots still expose content to the external application and same-user processes until cleanup.
+- Canonical confinement permits the configured remote root itself to resolve through its configured symlink. Each child is classified by `lstat`; symlink/special children are rejected without `realpath`, and accepted regular/directory children are canonicalized and root-checked. Correctness still trusts SFTP server metadata.
+- Hidden sibling staging prevents visible partial destinations; final replacement still follows save-panel and filesystem semantics and may fail.
+- Source size/mtime validation is check-then-open/read, not a remote atomic snapshot. Same-size, coarse-timestamp changes may evade it.
+- Only one coordinator-backed explorer file/folder or active project-root transfer runs at a time. Structured cancellation retains that slot through transport/staging cleanup, Cancel is absent during cancelling and publishing, failure remains visible, and transfers cannot resume. Editor-triggered remote HTML Open in System is independent and uses its own app-level service and editor state.
+- Remote drag/drop remains unsupported.
 
 ## NFR Compliance
 
 | NFR | Status | Notes |
 |-----|--------|-------|
-| SEC-Input-Sanitization | Compliant | Shell escaping for remote commands; Process.arguments for local ssh; config parsing bounded. |
-| SEC-Data-Protection | Compliant | No secrets on disk; HMAC-signed profiles; 0700 socket directory; host key validation. |
-| PERF-Responsiveness | Compliant | SFTP timeout; connection health monitoring; async connection. |
-| A11Y | Compliant | Connection status visible; host badge on terminals; error states actionable. |
-| OBS | Compliant | Connection events logged via AppDiagnostics. |
+| SEC-Input-Sanitization | Compliant | Shell escaping, discrete ssh arguments, bounded config parsing, canonical root confinement, invalid-name checks, and symlink/special-file rejection. |
+| SEC-Data-Protection | Partial | No stored secrets, signed profiles, owner-only SSH/temp storage, host-key validation, verified manifests, and staged destination publication; retained copies and SFTP check/open TOCTOU remain. |
+| PERF-Responsiveness | Partial | Async connection, dedicated streamed SFTP, bounded manifest, 128 KiB writes, and progress/cancel UI; one transfer slot and transport-bounded cancellation can delay later operations. |
+| A11Y | Compliant | Actionable connection status, host badges, privacy-minimized parked-row labels, hashed AX identifiers, and transfer state/completion/failure presentation. |
+| OBS | Partial | Remote connection/transfer lifecycle and newly relevant diagnostics are logged via `AppDiagnostics`; exported event metadata sanitizes path-like strings. This does not establish observability for every local file operation. |
+
+## Verification Status
+
+Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. Static tests cover connection-form invalid ports and SSH-config zero/out-of-range ports; URI and forwarding boundaries remain production-source inspection. Remote discovery/refresh tests do not directly assert exact same-root attachment, staged-then-working preloaded diff routing, or exact untracked providers. `VibeSpaceManagementServiceTests.testCanonicalRemoteIdentifierMigratesPriorRawFullIdentifierAndAllProjectState` directly covers complete prior-raw-full alias migration, browser/shortcut reads, canonical loading, parked deduplication, and immediate trusted-parent rewrite; raw-path and malformed-normalization aliases also have static cases. Runtime preservation of all unresolved/parked settings remains source inspection. Existing confinement, file-kind, encoded-ID, and coordinator cases are compiled static source, while cap/cancellation placement and process escalation/reaping are production-source inspection.
+
+## Change History
+
+- 2026-10-23: Added F034-T17 for canonical SSH migration loss/trust risks and corrected migration, source-control, and port evidence to final build/test-build-only status.
+- 2026-10-23: Expanded F034-T15 across URI, form/profile, forwarding, and SSH-config boundaries; added F034-T16 for exact same-root repository/diff/provider ownership; corrected evidence to static/build-only scope.
+- 2026-10-23: Hardened F034-T08/T12 and added F034-T15 for bounded enumeration/cancellation, lstat ordering, process reap/SIGKILL fallback, and port validation; recorded static-only verification.
+- 2026-10-20: Corrected configured-root versus nested-symlink confinement, full SFTPv3 response validation, synchronous publication acknowledgment/final cancellation race, broader unversioned HTML reread risk, and partial diagnostics coverage with sanitized exported metadata.

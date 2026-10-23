@@ -45,20 +45,31 @@ final class DocumentBufferStore: ObservableObject {
 
         buffer.cancelLoad()
 
-        if buffer.isDirty, let writer {
+        if let writer, buffer.isDirty || buffer.activeSaveToken != nil {
+            refCounts[id] = 0
             return Task { [weak self] in
-                guard let token = buffer.beginSave() else {
-                    self?.removeBuffer(id: id)
+                let activeSaveDeadline = Date().addingTimeInterval(30)
+                while buffer.activeSaveToken != nil, Date() < activeSaveDeadline {
+                    try? await Task.sleep(nanoseconds: 20_000_000)
+                }
+                guard buffer.activeSaveToken == nil else {
+                    return URLError(.timedOut)
+                }
+
+                guard buffer.isDirty else {
+                    self?.removeBufferIfUnreferenced(id: id)
                     return nil
+                }
+                guard let token = buffer.beginSave() else {
+                    return CocoaError(.fileWriteUnknown)
                 }
                 do {
                     try await writer(buffer.fileURL, token)
                     buffer.didSave(token: token)
-                    self?.removeBuffer(id: id)
+                    self?.removeBufferIfUnreferenced(id: id)
                     return nil
                 } catch {
                     buffer.didFailSave(token: token)
-                    self?.removeBuffer(id: id)
                     return error
                 }
             }
@@ -100,6 +111,11 @@ final class DocumentBufferStore: ObservableObject {
     }
 
     // MARK: - Private
+
+    private func removeBufferIfUnreferenced(id: String) {
+        guard refCounts[id] == 0 else { return }
+        removeBuffer(id: id)
+    }
 
     private func removeBuffer(id: String) {
         buffers.removeValue(forKey: id)

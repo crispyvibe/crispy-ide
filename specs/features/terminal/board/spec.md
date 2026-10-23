@@ -265,11 +265,133 @@ Every surface MUST persist its own `spotlightLayout`, tile layout, active/minimi
 **And** grid IDs/counts/weights and session lifetime are unchanged
 **And** semantic metadata is redacted and contains no screenshot, terminal screen excerpt, command, or live output.
 
+### Scenario F002-S19: Project cleanup removes owned members across every surface
+
+**Given** a project owns visible, minimized, and Spotlight members on primary and detached board surfaces
+**When** project park or remove supplies frozen ownership evidence to the board store
+**Then** one normalized and persisted mutation removes every proven owned tile from all visible and minimized collections
+**And** every matching Spotlight member is removed
+**And** unrelated or ambiguous tiles remain
+
+### Scenario F002-S20: Tile ownership decodes and migrates safely
+
+**Given** persisted board tiles were written before `projectIdentifier` existed
+**When** board state decodes and `syncProjects` reconciles current projects
+**Then** the missing optional field decodes without invalidating the layout
+**And** a host-qualified owner is stamped only when one project is uniquely provable
+**And** ambiguous legacy remote raw-root-only tiles remain unstamped and retained
+
+### Scenario F002-S21: Same remote root on different hosts remains isolated
+
+**Given** two SSH projects use the same raw root on different hosts
+**And** their board runtime contexts use distinct host-qualified project identifiers
+**When** either project is synchronized, parked, removed, restored, or opened in Spotlight
+**Then** subscriptions, terminal context, reconciliation, tile ownership, and Spotlight identity remain scoped to the correct host
+**And** the other host's panes are not removed or adopted
+
+### Scenario F002-S22: Cleanup recognizes all supported project-owned tile kinds
+
+**Given** project-owned terminal, browser, file, and ACP tiles exist
+**When** automatic project cleanup evaluates ownership
+**Then** terminal and browser `projectIdentifier` evidence is accepted
+**And** terminal tab membership may prove a legacy remote terminal owner
+**And** a stamped file `projectIdentifier` is accepted
+**And** an unstamped local file is matched only by root containment with a path-component boundary
+**And** ACP ownership uses `selectedProjectIdentifier`
+
+### Scenario F002-S23: Empty detached surfaces close after project cleanup
+
+**Given** cleanup removes the final visible, minimized, and Spotlight members from a detached surface
+**When** the board mutation normalizes
+**Then** the empty detached surface is removed from persisted state
+**And** its managed window closes
+**And** no stale blank surface is restored
+
+### Scenario F002-S24: Restored project content retains unique ownership
+
+**Given** an unparked project has pinned browser snapshots and terminal session entries
+**When** restoration runs
+**Then** each pinned browser tile and view model is recreated on the primary surface with its original tile ID, snapshot, and unique project owner
+**And** terminal reconciliation recreates restored project terminals
+**And** user-initiated remote tile drag behavior remains unchanged
+
+### Scenario F002-S25: Remote file and web routes retain their host-qualified owner
+
+**Given** two SSH projects share a raw root path
+**When** a terminal target, dock preview, main or detached Spotlight file/browser/link route, or restored persistent Spotlight identity is created
+**Then** the originating host-qualified `projectIdentifier` reaches provider lookup, document/tile ownership, and navigation identity
+**And** `ssh://` survives Spotlight Codable round-trip verbatim
+**And** a legacy remote file tile migrates before local stale-file pruning when uniquely owned
+**And** an ambiguous legacy remote tile is retained rather than guessed or deleted
+
+### Scenario F002-S26: Send All moves only the initiating unique owner
+
+**Given** two SSH projects use the same raw root on different hosts
+**When** Send All From This Project is invoked from one owned tile
+**Then** the operation uses that tile's unique `projectIdentifier`
+**And** only tiles with that owner move to the new board window
+**And** the other host's tiles remain on the source surface
+
+### Scenario F002-S27: Every Spotlight route retains the exact project owner
+
+**Given** two SSH projects share a raw root but have different host-qualified identifiers
+**When** Spotlight is entered from any main or detached direct, temporary, project-shortcut, split, permanent-terminal, ACP, link, file, browser, editor-pane, restore, or detached-attachment route
+**Then** `owningProjectIdentifier` remains the originating project's exact identifier
+**And** project/provider lookup does not fall back to the other same-root host
+**And** detached attachment copies the identifier unchanged
+**And** any nested split, permanent creation, preview, or shortcut action continues with that same owner
+
+## Automatic Project Cleanup Requirements
+
+### F002-R19: Migration-Safe Project Ownership
+
+`VibeSpaceTerminalBoardTile` MUST support an optional Codable `projectIdentifier`. Missing ownership MUST decode as legacy state. `syncProjects` MUST stamp or migrate a host-qualified owner only when ownership is uniquely provable.
+
+### F002-R20: Atomic Multi-Surface Project Cleanup
+
+Given frozen project ownership evidence, the board store MUST perform one normalized and persisted mutation that removes every proven project-owned tile from visible and minimized collections across primary and detached surfaces and removes every corresponding Spotlight member.
+
+### F002-R21: Evidence-Based, Fail-Closed Matching
+
+Cleanup MUST recognize terminal/browser tile `projectIdentifier`, terminal tab membership for legacy remote terminal tiles, component-boundary local file-root containment, stamped file `projectIdentifier`, and ACP `selectedProjectIdentifier`. Same raw remote roots on different SSH hosts MUST remain isolated; ambiguous legacy remote raw-root-only tiles MUST be retained.
+
+### F002-R22: Empty Detached Surface Lifecycle
+
+Normalization after cleanup MUST remove empty detached surfaces, persist their absence, and cause the managed detached windows to close.
+
+### F002-R23: Host-Qualified Remote Runtime Identity
+
+Remote board runtime terminal subscriptions, project context, reconciliation, tile ownership, and Spotlight member identities MUST use the host-qualified project owner rather than raw remote root text. Existing remote drag/transfer behavior MUST remain unchanged.
+
+### F002-R24: Ownership-Preserving Project Restoration
+
+Unpark restoration MUST recreate pinned browser tiles and browser view models on the primary surface with the original tile ID, browser snapshot, and unique owner. Terminal reconciliation MUST recreate restored project terminals.
+
+### F002-R25: Host-Qualified File, Web, and Spotlight Routing
+`TerminalFileSystemTarget`, `DockPreviewBridge`, and main/detached Spotlight file, browser, and link routes MUST preserve the host-qualified `projectIdentifier` through provider resolution, document identity, pinning, and navigation. `SpotlightPersistentItemID` Codable MUST preserve `ssh://` identifiers verbatim rather than normalize them as local paths. Legacy remote file tiles MUST be migrated before local missing-file pruning; uniquely owned tiles are stamped, while ambiguous remote tiles remain fail-closed.
+
+### F002-R26: Unique Send-All Ownership
+Send All From This Project MUST select tiles by the unique `projectIdentifier` carried by the initiating tile/context. It MUST NOT bulk-move another SSH project's tiles merely because both projects expose the same raw remote root.
+
+### F002-R27: Complete Project-Qualified Spotlight Routing
+`TerminalSpotlightState.owningProjectIdentifier` MUST retain the exact `projectIdentifier` through main-window and detached-window direct presentation, temporary terminal creation, project-scoped shortcut dispatch, split and permanent-terminal creation, ACP presentation, link activation, file and browser preview/persistent presentation, editor-pane routes, restoration, and detached attachment. Provider/project lookup MUST prefer that identifier over raw-root inference, and `DetachedSpotlightStateFactory.attach` MUST copy it unchanged. Same-root SSH projects MUST therefore remain distinct throughout every route.
+
 ## Static Coverage Status
 
-No build, test, app, process, or manual UI verification was run for this documentation update. Static inspection found source/test coverage for surface-local `spotlightLayout`, visible/minimized standalone identity, detached factory attachment, AppContainer compose-history injection, shortcut launch routing, exact restore/process-exit guards, browser URL redaction, and unequal geometry persistence. Mounted detached toolbar delivery, local link/file preview UI, independent pane-history behavior, multi-host editor-lease release, and complete window restoration remain UI/manual or missing dedicated regression gaps.
+Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. Static source includes board same-root isolation, dock-preview identity, legacy remote-file migration-before-prune, fail-closed removal, and verbatim SSH Spotlight Codable cases. `SpotlightEnhancementTests.testDetachedFactoryAttachesEveryDirectKindAndRetainsCanonicalCallbacksAndIdentity` directly checks that every direct persistent kind copied by detached attachment retains `owningProjectIdentifier` and callbacks. `testDetachedTemporaryShortcutRouterDispatchesCurrentNestedAndPermanentExactlyOnce` directly checks the detached temporary shortcut router, and `testDetachedPermanentStandaloneShortcutCreatesTileOnlyOnOriginatingSurface` checks surface-local permanent creation. These tests still do not mount both hosts or exercise the complete direct/temporary/split/permanent/ACP/link/file/browser/editor route matrix. Remaining nested routes, unique-owner Send All, managed-window closure, and unpinned cleanup were verified by static production-source inspection only.
 
 ## Acceptance Criteria
+
+- Project lifecycle cleanup removes every proven owned visible/minimized tile and Spotlight member from primary and detached surfaces in one normalized/persisted mutation.
+- Optional tile `projectIdentifier` decoding preserves legacy layouts, while `syncProjects` stamps only uniquely proven host-qualified owners.
+- Terminal/browser owner stamps, legacy terminal-tab evidence, component-boundary local file containment, stamped file ownership, and ACP selected-project ownership are recognized; ambiguous remote raw-root-only tiles remain.
+- Same raw roots on different SSH hosts remain isolated through runtime subscriptions, context, reconciliation, cleanup, and Spotlight identity.
+- Empty detached surfaces normalize away and their managed windows close.
+- Unpark restores pinned browsers on primary with original tile ID/snapshot/owner, and terminal reconciliation recreates restored terminals.
+- Remote drag and transfer semantics remain unchanged.
+- Terminal targets, dock previews, main/detached file/web/link Spotlight routes, and Spotlight Codable preserve host-qualified project identity; legacy remote file migration precedes local stale pruning and ambiguous tiles fail closed (F002-R25).
+- Send All selects the initiating tile's unique owner and cannot merge same-root projects across hosts (F002-R26).
+- Every main/detached direct, temporary, shortcut, split, permanent, ACP, link, file, browser, editor-pane, restore, and detached-attachment Spotlight route retains the exact owner, including nested actions (F002-R27).
 
 - Tile add/remove/move operations complete within 100ms (PERF-3).
 - Layout persistence writes complete within 200ms (PERF-4).
@@ -298,6 +420,10 @@ No build, test, app, process, or manual UI verification was run for this documen
 
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-23 | Final production reconciliation corrected static route coverage for detached direct kinds, temporary shortcut dispatch, and originating-surface permanent creation; validation is build/test-build only with no executed test pass. | — |
+| 2026-10-23 | Added F002-R27/S27 for exact project identity across the complete main/detached Spotlight route matrix and detached attachment; narrowed full-route verification to production-source inspection and retained static/build-only status. | — |
+| 2026-10-23 | Added F002-R25–R26/S25–S26 for host-qualified file/web/Spotlight routing, remote-file migration-before-prune, verbatim ssh Codable, fail-closed legacy retention, and unique-owner Send All; refreshed compile/static-only coverage. | — |
+| 2026-10-20 | Added implemented automatic project-cleanup requirements F002-R19–R24 and scenarios F002-S19–S24: migration-safe ownership, one cross-surface mutation, evidence-based fail-closed matching, detached-window cleanup, host-qualified remote identity, and restoration. Static evidence reached build/test-build only; no executed pass is claimed. | — |
 | 2026-10-18 | Final audit fixes: documented AppContainer-backed detached terminal/ACP/VibeCast history parity and replaced obsolete temporary-terminal conversion wording with the implemented split/create-new-persistent-tile flow, which creates a separate persistent terminal. Static sources only; no tests or manual runs. | — |
 | 2026-10-18 | Review added detached-local shelf/grid/combo parity, terminal-first two-pass catalog ordering plus built-in Vibe Lanes fallback, pane-local drafts/activation, temporary versus persistent creation routes, the Terminal/Agent/Browser/VibeCast/Vibe Lanes toolbar, local browser/file previews, host-scoped editor leases, restore validation, safe metadata, geometry-preserving surface persistence/reconciliation, and the unmet tile-logging target; later production-fix status is recorded above. | — |
 | 2026-10-16 | Documented Spotlight shelf mirroring as a geometry-preserving operation: destination column/row slots retain their weights and primary/detached surfaces retain independent canonical member identities. | — |

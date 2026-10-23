@@ -16,6 +16,7 @@ struct AppKitTreeView: NSViewRepresentable {
     let changedDirectoryIDs: Set<String>
     let treeMutationRevision: Int
     let allowsFileTransfers: Bool
+    let isRemoteProject: Bool
     let allowsScrolling: Bool
     let usesIntrinsicContentHeight: Bool
     var rootURL: URL? = nil
@@ -34,6 +35,7 @@ struct AppKitTreeView: NSViewRepresentable {
         changedDirectoryIDs: Set<String> = [],
         treeMutationRevision: Int = 0,
         allowsFileTransfers: Bool = true,
+        isRemoteProject: Bool = false,
         allowsScrolling: Bool,
         usesIntrinsicContentHeight: Bool = true,
         rootURL: URL? = nil,
@@ -51,6 +53,7 @@ struct AppKitTreeView: NSViewRepresentable {
         self.changedDirectoryIDs = changedDirectoryIDs
         self.treeMutationRevision = treeMutationRevision
         self.allowsFileTransfers = allowsFileTransfers
+        self.isRemoteProject = isRemoteProject
         self.allowsScrolling = allowsScrolling
         self.usesIntrinsicContentHeight = usesIntrinsicContentHeight
         self.rootURL = rootURL

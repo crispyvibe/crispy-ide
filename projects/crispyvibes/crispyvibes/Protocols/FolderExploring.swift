@@ -52,6 +52,7 @@ protocol FolderExploring: ObservableObject {
     // MARK: - Events
 
     var renameEvents: PassthroughSubject<ExplorerRenameEvent, Never> { get }
+    var deletionEvents: PassthroughSubject<ExplorerDeletionEvent, Never> { get }
     var observedFileSystemChanges: PassthroughSubject<Set<String>, Never> { get }
 
     // MARK: - Tree Operations

@@ -35,6 +35,7 @@ extension VibeSpaceHydrationCoordinator {
             appShellStore: appShellStore,
             vibespaceCatalogStore: vibespaceCatalogStore,
             dockPreviewBridge: dockPreviewBridge,
+            dockedFileViewerCoordinator: dockedFileViewerCoordinator,
             canvasModeProvider: canvasModeProvider
         )
     }

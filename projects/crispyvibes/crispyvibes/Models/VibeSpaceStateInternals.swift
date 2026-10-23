@@ -3,12 +3,20 @@ import Foundation
 @MainActor
 extension VibeSpaceState {
     mutating func pruneColorTags() {
-        let validPaths = Set(projects.map { $0.projectIdentifier } + unresolvedProjectPaths)
+        let validPaths = Set(
+            projects.map { $0.projectIdentifier }
+                + unresolvedProjectPaths
+                + parkedProjectPaths
+        )
         projectColorTagsByPath = projectColorTagsByPath.filter { validPaths.contains($0.key) }
         projectStartupOverridesByPath = projectStartupOverridesByPath.filter { validPaths.contains($0.key) }
         projectACPAgentOverrideIDsByPath = projectACPAgentOverrideIDsByPath.filter { validPaths.contains($0.key) }
         projectTerminalShellOverridesByPath = projectTerminalShellOverridesByPath.filter { validPaths.contains($0.key) }
-        let validProjectPaths = Set(projects.map { $0.projectIdentifier })
+        let validProjectPaths = Set(
+            projects.map { $0.projectIdentifier }
+                + parkedProjectPaths
+                + unresolvedProjectPaths
+        )
         projectShortcutByPath = projectShortcutByPath.filter { validProjectPaths.contains($0.key) }
         normalizeProjectShortcuts()
     }
@@ -60,7 +68,11 @@ extension VibeSpaceState {
     }
 
     mutating func normalizeProjectShortcuts() {
-        let validProjectPaths = Set(projects.map { $0.projectIdentifier })
+        let validProjectPaths = Set(
+            projects.map { $0.projectIdentifier }
+                + parkedProjectPaths
+                + unresolvedProjectPaths
+        )
 
         var normalizedShortcuts: [String: Int] = [:]
         var usedShortcuts = Set<Int>()
@@ -192,7 +204,10 @@ extension VibeSpaceState {
 
     nonisolated static func normalizedPath(from rawPath: String) -> String {
         // SSH URIs must not be treated as local filesystem paths
-        if rawPath.hasPrefix("ssh://") { return rawPath }
+        if rawPath.hasPrefix("ssh://") {
+            guard let parsed = SSHConnectionProfile.parse(identifier: rawPath) else { return rawPath }
+            return parsed.profile.projectIdentifier(remotePath: parsed.remotePath)
+        }
         let cleanedRawPath = rawPath.replacingOccurrences(of: "\\/", with: "/")
         return URL(fileURLWithPath: cleanedRawPath).standardizedFileURL.path
     }

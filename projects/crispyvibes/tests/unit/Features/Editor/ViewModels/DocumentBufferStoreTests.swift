@@ -54,6 +54,47 @@ final class DocumentBufferStoreTests: XCTestCase {
         await fulfillment(of: [wrote], timeout: 1)
     }
 
+    func test_closeBuffer_waitsForActiveSaveThenFlushesLaterEdit() async {
+        let store = DocumentBufferStore()
+        let ref = makeRef()
+        let buffer = store.openBuffer(for: ref)
+        buffer.didLoad(content: "base")
+        buffer.applyEdit("first")
+        let firstToken = buffer.beginSave()!
+        buffer.applyEdit("later")
+
+        var flushedContent: String?
+        let closeTask = store.closeBuffer(id: buffer.id) { _, token in
+            flushedContent = token.content
+        }
+        XCTAssertNotNil(closeTask)
+        XCTAssertNotNil(store.buffer(for: buffer.id))
+
+        buffer.didSave(token: firstToken)
+        let error = await closeTask?.value
+
+        XCTAssertNil(error)
+        XCTAssertEqual(flushedContent, "later")
+        XCTAssertNil(store.buffer(for: buffer.id))
+    }
+
+    func test_closeBuffer_retainsDirtyBufferWhenFlushFails() async {
+        let store = DocumentBufferStore()
+        let ref = makeRef()
+        let buffer = store.openBuffer(for: ref)
+        buffer.didLoad(content: "base")
+        buffer.applyEdit("unsaved")
+
+        let closeTask = store.closeBuffer(id: buffer.id) { _, _ in
+            throw CocoaError(.fileWriteNoPermission)
+        }
+        let error = await closeTask?.value
+
+        XCTAssertNotNil(error)
+        XCTAssertTrue(store.buffer(for: buffer.id) === buffer)
+        XCTAssertTrue(buffer.isDirty)
+    }
+
     func test_closeBuffer_cancelsLoadTaskOnDisposal() {
         let store = DocumentBufferStore()
         let ref = makeRef()

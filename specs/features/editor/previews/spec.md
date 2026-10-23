@@ -3,9 +3,9 @@
 **Domain:** Editor
 Status: draft
 
-## Status Notes (2026-10-01)
+## Status Notes (2026-10-20)
 
-The final audit reports 1,683 unit tests passing with 0 failures. Remaining limitations: markup before a later crop/rotate/flip/straighten/resize/background-removal operation is flattened and becomes non-editable until Undo; local Save retains a final identity-check-to-atomic-write TOCTOU window, while remote SFTP has no provider CAS and uses one-second mtime tokens; output is one upright 8-bit sRGB-or-source-RGB frame without EXIF/IPTC/GPS or ICC beyond the working color space; no layered Save As format such as PSD is available. The legacy synchronous `EditableRasterImageCanvasView.saveCompositedImage(to:)` remains only for standalone use/tests and is not used by the app save path.
+Current implementation audit limitations: markup before a later crop/rotate/flip/straighten/resize/background-removal operation is flattened and becomes non-editable until Undo; local Save retains a final identity-check-to-atomic-write TOCTOU window, while remote SFTP has no provider CAS and uses one-second mtime tokens; after a remote HTML save, `ExternalFileOpenService` performs an unversioned SFTP re-read that may obtain a different remote revision, a broader stale-revision risk than the narrow metadata-check/open TOCTOU; output is one upright 8-bit sRGB-or-source-RGB frame without EXIF/IPTC/GPS or ICC beyond the working color space; no layered Save As format such as PSD is available. Large-file editing confirmation is not implemented, and the explicit Download workflow has manifest progress but no size-confirmation prompt. The legacy synchronous `EditableRasterImageCanvasView.saveCompositedImage(to:)` remains only for standalone compatibility and is not used by the app save path. Final validation completed production build and test-build/compilation only; no test case executed and no test pass is claimed.
 
 ---
 
@@ -66,7 +66,7 @@ Remote PDFs materialize a staged local preview file for PDFKit; the staged file 
 PDF preview background adapts to the active theme without affecting page content rendering.
 
 ### F009-R19: HTML Opening and Editing
-HTML files open in an editable rendered mode with relative resources resolving against the file parent directory.
+HTML files open in an editable rendered mode with relative resources resolving against the file parent directory. Authored markup renders inside the `sandbox="allow-same-origin"` iframe defined by F009-R70; only the trusted native editor host retains JavaScript capability.
 
 ### F009-R20: HTML Content Sync and Asset Resolution
 HTML mode stores full document content including doctype. A base tag is injected for relative asset resolution.
@@ -78,7 +78,7 @@ HTML editor supports toggling between rendered rich view and raw HTML source vie
 Find and replace is available in the HTML editor with match highlighting.
 
 ### F009-R23: HTML Root-Level Read Access
-The HTML renderer has read access scoped to the project root for resolving local file references outside the parent directory.
+The HTML renderer currently loads the bundled editor with filesystem-root read access so bundled resources and local references outside the document folder can resolve. The authored iframe remains constrained by F009-R70; this read scope is broader than a project-only boundary.
 
 ### F009-R24: HTML WKWebView Crash Recovery
 The HTML editor detects WKWebView crashes and re-renders content automatically with no data loss.
@@ -210,6 +210,20 @@ Same-key markup changes coalesce only within one second and end when selection c
 
 ### F009-R66: Raster Editor Type Boundaries
 Output, file-loading, file-observation, viewport, pixel-rendering, and markup-painting responsibilities are split into focused extensions rather than retained in their large owner types.
+
+### F009-R67: HTML Open in System
+The Rich and Source HTML toolbars MUST provide Open in System. Invocation MUST synchronously capture the active `DocumentBuffer`, its displayed content, file URL, and file-content provider before asynchronous work begins. It MUST cancel pending autosave for that buffer, suppress later autosaves for the same buffer while the command owns it, wait for `DocumentBuffer.activeSaveToken` to clear rather than infer completion from visual state, and serialize the captured revision through `DocumentBuffer.beginSave(capturedContent:)`. Edits arriving after capture MUST remain dirty against the newly saved baseline and MUST cause autosave to be rescheduled when the command ends. Captured references MUST keep the operation attached to the invoked document even if the user switches tabs.
+
+After the captured revision is persisted, local HTML MUST open its original URL through the app-level `ExternalFileOpenService`. Remote HTML MUST be fetched again through the captured provider into an owner-only retained application temporary snapshot with no writeback relationship. That post-save fetch is an unversioned SFTP re-read and MAY return a different remote revision from the one just saved; the workflow does not provide version-bound read-after-write consistency. This editor command is independent of the app-wide `RemoteTransferCoordinator`: it uses editor busy state and the existing editor alert rather than the global transfer overlay or a dedicated bulk-transfer channel. The `NSWorkspace.open` Boolean result MUST be propagated; save, remote-read, snapshot-write, or launch failure MUST surface an error, MUST NOT fall back to an older snapshot, and MUST remove a newly created remote snapshot when launch fails.
+
+### F009-R68: Lossless Document Close and Docked Group Teardown
+When the final reference to a text document closes, Crispy MUST wait up to 30 seconds for any active save token to finish. If an edit arrived during that save, its completion MUST advance the baseline and close MUST flush the later dirty revision before disposal. A timeout or write failure MUST return an error and retain the dirty buffer for retry rather than discard it. Docked preview and tile groups MUST close all tabs before releasing the group; the close writer MUST strongly retain the worker and the closing tab's own `FileContentProviding` instance so group/view-model release cannot cancel or retarget the write.
+
+### F009-R69: Empty HTML Is Valid Content
+An intentionally empty HTML document MUST remain a valid editable revision. Explicit Save and HTML Open in System MUST persist zero-length content and open that saved revision; they MUST NOT treat an empty document as invalid or preserve older non-empty bytes.
+
+### F009-R70: Authored HTML Iframe Sandbox
+Authored HTML rich mode MUST place the document in an iframe whose exact sandbox token is `allow-same-origin`. It MUST NOT grant authored content scripts, forms, top-level navigation, popups, downloads, or modals. JavaScript MUST remain enabled in the native editor WKWebView so Crispy's trusted editor bridge can create, edit, synchronize, find, comment, and recover the iframe. The sandbox MUST apply equally to non-empty and intentionally empty HTML.
 
 
 ---
@@ -393,8 +407,9 @@ And search matches are highlighted in the active view
 ### F009-S27: HTML renderer has root-level read access for resolving local file references
 Given an HTML document references local assets outside its parent directory
 When content is loaded into the renderer
-Then the renderer has read access scoped to the project root
-And referenced local files resolve correctly
+Then the bundled editor host has filesystem-root read access
+And local references outside the document folder can resolve
+And the authored iframe remains restricted by its exact sandbox
 
 ### F009-S28: HTML editor recovers from WKWebView crash
 Given an HTML document is rendered in WKWebView
@@ -417,7 +432,7 @@ And an edge within 1e-6 pixel of an integer snaps instead of growing by a row or
 And the rectangle is clamped to the bitmap
 And a top selection crops top pixel rows without Y inversion
 
-Coverage: `RasterImageCropGeometryTests/test_coveringPixelRect_snapsFloatingErrorInsteadOfGrowing`, `test_coveringPixelRect_usesIndependentAxisScalesForRoundedProxies`, `test_coveringPixelRect_stillRoundsGenuineFractionsOutward`, `EditableRasterImageCanvasViewTests/test_proxyCropOnOddDimensions_matchesFullResolutionCoverage`, `test_cropEachCorner_keepsThatQuadrantsPixels`, and `test_cropOnRetinaBackedImage_mapsPointsToPixels`.
+Static source candidate: `RasterImageCropGeometryTests/test_coveringPixelRect_snapsFloatingErrorInsteadOfGrowing`, `test_coveringPixelRect_usesIndependentAxisScalesForRoundedProxies`, `test_coveringPixelRect_stillRoundsGenuineFractionsOutward`, `EditableRasterImageCanvasViewTests/test_proxyCropOnOddDimensions_matchesFullResolutionCoverage`, `test_cropEachCorner_keepsThatQuadrantsPixels`, and `test_cropOnRetinaBackedImage_mapsPointsToPixels`.
 
 ### F009-S31: Every decode and export remains upright
 Given a JPEG or HEIC uses any EXIF orientation from 1 through 8
@@ -425,7 +440,7 @@ When it follows the full-resolution or proxy decode path and is exported
 Then each decoded result has the same upright orientation
 And the export contains upright pixels with orientation 1
 
-Coverage: `RasterImageDecoderTests/test_jpegOrientations1Through8_fullResolutionMatchesImageIOTransform`, `test_heicOrientations1Through8_fullResolutionMatchesImageIOTransform`, and `test_export_writesOrientation1AndUprightPixels`.
+Static source candidate: `RasterImageDecoderTests/test_jpegOrientations1Through8_fullResolutionMatchesImageIOTransform`, `test_heicOrientations1Through8_fullResolutionMatchesImageIOTransform`, and `test_export_writesOrientation1AndUprightPixels`.
 
 ### F009-S32: Unsupported source fidelity is blocked without blocking Copy
 Given a raster source has multiple frames, exceeds 8 bits per component, or contains an HDR gain map
@@ -434,7 +449,7 @@ Then Save is disabled with the specific fidelity-loss reason
 And Copy remains available
 But a reduced-resolution display proxy alone does not disable Save
 
-Coverage: `RasterImageDecoderTests` save-policy tests, `RasterImageRendererTests/test_exportFromFile_usesFullResolutionNotDisplayProxy`, and `RasterImageEditorViewModelTests/test_save_isBlockedBySavePolicy`.
+Static source candidate: `RasterImageDecoderTests` save-policy tests, `RasterImageRendererTests/test_exportFromFile_usesFullResolutionNotDisplayProxy`, and `RasterImageEditorViewModelTests/test_save_isBlockedBySavePolicy`.
 
 ### F009-S33: Only a changed crop box is pending
 Given the user enters Crop mode
@@ -444,7 +459,7 @@ When the user changes the box and switches modes
 Then that pending box remains visible with the outside area dimmed and blocks Save
 Until Return/Apply Crop commits it or Escape/Cancel Crop resets it
 
-Coverage: `EditableRasterImageCanvasViewTests/test_enteringCropMode_showsFullImageBox_thatIsNotPending`, `test_applyingFullImageBox_isRejected`, `test_cropMarquee_isNotAPersistableEdit`, `test_returnAndEscape_forwardCropCommands`, and `RasterImageEditorViewModelTests/test_save_isBlockedWhileCropSelectionPending`.
+Static source candidate: `EditableRasterImageCanvasViewTests/test_enteringCropMode_showsFullImageBox_thatIsNotPending`, `test_applyingFullImageBox_isRejected`, `test_cropMarquee_isNotAPersistableEdit`, `test_returnAndEscape_forwardCropCommands`, and `RasterImageEditorViewModelTests/test_save_isBlockedWhileCropSelectionPending`.
 
 ### F009-S34: Image save routing delivers and locks one request
 Given an image has committed unsaved edits
@@ -453,7 +468,7 @@ Then `saveActiveDocument()` leaves one pending request until the raster host ack
 And that request reaches raster Save exactly once
 And the canvas locks mutating interaction until Save and any post-save file reload complete
 
-Coverage: `RasterImageEditorViewModelTests/test_saveActiveDocument_routesImagesToRasterEditor_exactlyOnce` and `test_save_rendersOffMain_locksUntilWritten_thenRebases`.
+Static source candidate: `RasterImageEditorViewModelTests/test_saveActiveDocument_routesImagesToRasterEditor_exactlyOnce` and `test_save_rendersOffMain_locksUntilWritten_thenRebases`.
 
 ### F009-S35: External change requires an explicit conflict choice
 Given an image has pending edits or a crop marquee
@@ -461,7 +476,7 @@ When the source changes on disk
 Then the current work is not silently replaced
 And a conflict banner offers Reload from Disk and Keep My Edits
 
-Coverage: `RasterImageEditorViewModelTests/test_externalChangeConflict_offersReloadOrKeep`.
+Static source candidate: `RasterImageEditorViewModelTests/test_externalChangeConflict_offersReloadOrKeep`.
 
 ### F009-S36: Undo and Redo replay committed edits
 Given a raster image has committed crop, markup, adjustment, or background-removal operations
@@ -470,7 +485,7 @@ Then bounded history restores the corresponding operation list
 And command and menu availability follows the history state
 And a new edit after Undo clears Redo
 
-Coverage: `RasterImageDocumentTests/test_history_undoRedo_andRedoInvalidation`, `test_history_isBounded`, `test_history_appendEntriesDoNotSnapshotOperations`, `EditableRasterImageCanvasViewTests/test_undoRedo_roundTripsCropAndStroke`, `test_revertIsUndoable`, and `test_undoMenuValidation_followsHistory`.
+Static source candidate: `RasterImageDocumentTests/test_history_undoRedo_andRedoInvalidation`, `test_history_isBounded`, `test_history_appendEntriesDoNotSnapshotOperations`, `EditableRasterImageCanvasViewTests/test_undoRedo_roundTripsCropAndStroke`, `test_revertIsUndoable`, and `test_undoMenuValidation_followsHistory`.
 
 ### F009-S37: Save and Copy render full resolution off the main thread
 Given a file-backed image is displayed through a reduced-resolution proxy
@@ -479,7 +494,7 @@ Then the exporter re-decodes the immutable file source at full resolution
 And replays the same ordered operations on its serial background queue
 And delivers the result on the main actor
 
-Coverage: `RasterImageRendererTests/test_exportFromFile_usesFullResolutionNotDisplayProxy` and `test_exportService_deliversOnMain_andHonorsCancellation`, plus `RasterImageEditorViewModelTests/test_save_rendersOffMain_locksUntilWritten_thenRebases` and `test_copy_rendersFullResolutionToPasteboard`.
+Static source candidate: `RasterImageRendererTests/test_exportFromFile_usesFullResolutionNotDisplayProxy` and `test_exportService_deliversOnMain_andHonorsCancellation`, plus `RasterImageEditorViewModelTests/test_save_rendersOffMain_locksUntilWritten_thenRebases` and `test_copy_rendersFullResolutionToPasteboard`.
 
 ### F009-S38: A stale or post-shutdown completion cannot replace work
 Given a Save output job captured one document revision and operation generation
@@ -488,7 +503,7 @@ Then the result is rejected or ignored
 And no stale bytes are submitted for persistence
 And shutdown cancels work, clears busy flags, and unlocks the canvas for reuse
 
-Coverage: `RasterImageEditorViewModelTests/test_staleRender_isDiscarded` and `test_shutdown_cancelsInFlightWork_andLeavesEditorUsable`.
+Static source candidate: `RasterImageEditorViewModelTests/test_staleRender_isDiscarded` and `test_shutdown_cancelsInFlightWork_andLeavesEditorUsable`.
 
 ### F009-S39: Async decode installs only the current request and focuses the canvas
 Given raster loading is in progress
@@ -499,7 +514,7 @@ And a newly opened image is fit to the viewport at no more than actual size
 And its canvas becomes first responder unless a text field is active
 And selecting another mode applies the same non-text-focus rule
 
-Coverage: `RasterImageFilePreviewIntegrationTests/test_exifRotatedJPEG_cropAndSave_writesUprightFullResolutionCrop` exercises asynchronous installation. Load-generation supersession, fit, and conditional focus are source-grounded in `RasterImageFilePreviewCoordinator.install`, `RasterImageFilePreview.updatePreview`, and `EditableRasterImageCanvasView.focusIfPossible`.
+Static source candidate: `RasterImageFilePreviewIntegrationTests/test_exifRotatedJPEG_cropAndSave_writesUprightFullResolutionCrop` exercises asynchronous installation. Load-generation supersession, fit, and conditional focus are source-grounded in `RasterImageFilePreviewCoordinator.install`, `RasterImageFilePreview.updatePreview`, and `EditableRasterImageCanvasView.focusIfPossible`.
 
 ### F009-S40: Same-size replacement and render-time changes are detected before write
 Given an open raster source is atomically replaced by another file with the same size and modification date
@@ -507,7 +522,7 @@ When identity is checked before rendering or again immediately before writing
 Then the changed file-resource identifier is detected
 And Save presents an external-change conflict without overwriting the replacement
 
-Coverage: `RasterImageDocumentTests/test_fileState_detectsSameSizeReplacement`, `RasterImageEditorViewModelTests/test_save_isBlockedByExternalChange_untilKeepMine`, and `test_externalChangeDuringRender_blocksWrite`.
+Static source candidate: `RasterImageDocumentTests/test_fileState_detectsSameSizeReplacement`, `RasterImageEditorViewModelTests/test_save_isBlockedByExternalChange_untilKeepMine`, and `test_externalChangeDuringRender_blocksWrite`.
 
 ### F009-S41: Non-text previews remain unchanged by line-number settings
 
@@ -524,7 +539,7 @@ And a handle drag below that minimum leaves the prior anchor, ratio, and box unc
 And the outside area is dimmed
 And a rule-of-thirds grid, live W×H pixel label, and matching status line are shown
 
-Coverage: `RasterImageCropInteractionTests/test_minimumSize_keepsAnchorAndAspect_forEveryHandle` and `EditableRasterImageCanvasViewTests/test_enteringCropMode_showsFullImageBox_thatIsNotPending`.
+Static source candidate: `RasterImageCropInteractionTests/test_minimumSize_keepsAnchorAndAspect_forEveryHandle` and `EditableRasterImageCanvasViewTests/test_enteringCropMode_showsFullImageBox_thatIsNotPending`.
 
 ### F009-S43: Crop presets and keyboard adjustment are deterministic
 Given a pending crop uses Freeform, Original, Square, 4:3, 3:2, or 16:9
@@ -535,7 +550,7 @@ Then the box moves by one or ten export pixels respectively
 And Command-, Option-, or Control-modified Arrow events are not consumed
 And Escape resets it while Return applies a valid changed box
 
-Coverage: `RasterImageCropInteractionTests/test_aspectPresets`, `test_cornerResize_withAspect_preservesRatio`, `EditableRasterImageCanvasViewTests/test_aspectRatio_constrainsCropBox`, `test_arrowKeys_nudgeCropBox`, and `RasterImageEditorViewModelTests/test_cropAspectSelection_entersCropMode_andComputesRatio`.
+Static source candidate: `RasterImageCropInteractionTests/test_aspectPresets`, `test_cornerResize_withAspect_preservesRatio`, `EditableRasterImageCanvasViewTests/test_aspectRatio_constrainsCropBox`, `test_arrowKeys_nudgeCropBox`, and `RasterImageEditorViewModelTests/test_cropAspectSelection_entersCropMode_andComputesRatio`.
 
 ### F009-S44: Rotate, flip, and straighten are full-resolution undoable edits
 Given a raster image has pixels and overlays
@@ -545,7 +560,7 @@ And Undo/Redo restores the prior and transformed operation lists
 And Straighten output has the original aspect ratio with no transparent corners
 And Save/Copy/Export As replay the operation against full-resolution source pixels
 
-Coverage: `RasterImageGeometryTests`, `EditableRasterImageCanvasViewTests/test_geometricEdit_clearsPendingMarquee`, `test_rotateClockwise_movesTopLeftToTopRight`, and `RasterImageEditorViewModelTests/test_rotateFlipStraightenResize_areUndoableGeometricEdits`.
+Static source candidate: `RasterImageGeometryTests`, `EditableRasterImageCanvasViewTests/test_geometricEdit_clearsPendingMarquee`, `test_rotateClockwise_movesTopLeftToTopRight`, and `RasterImageEditorViewModelTests/test_rotateFlipStraightenResize_areUndoableGeometricEdits`.
 
 ### F009-S45: Resize commits bounded pixel dimensions
 Given the Resize sheet is open
@@ -553,7 +568,7 @@ When the user enters width/height, toggles Keep proportions, or selects 25%, 50%
 Then valid changed dimensions up to 16,384 pixels per edge commit one undoable resize
 And unchanged or out-of-range dimensions do not commit
 
-Coverage: `RasterImageGeometryTests/test_resize_scalesPixels_andPreservesLayout`, `RasterImageEditorViewModelTests/test_resize_rejectsOversizeAndNoOp`, and `test_rotateFlipStraightenResize_areUndoableGeometricEdits`.
+Static source candidate: `RasterImageGeometryTests/test_resize_scalesPixels_andPreservesLayout`, `RasterImageEditorViewModelTests/test_resize_rejectsOversizeAndNoOp`, and `test_rotateFlipStraightenResize_areUndoableGeometricEdits`.
 
 ### F009-S46: Export As flattens to a separate chosen file
 Given a raster image is renderable, including a source whose overwrite Save is fidelity-blocked
@@ -563,7 +578,7 @@ And JPEG warns that transparency is dropped
 And the open document source, operation list, dirty state, and baseline are unchanged
 But selecting the open file directly or through a symbolic or hard link is refused
 
-Coverage: `RasterImageGeometryTests/test_exportOptions_encodeRequestedFormatAndQuality`, `RasterImageEditorViewModelTests/test_exportAs_writesChosenFormat_withoutTouchingDocument`, `test_exportAs_ontoOpenFile_isRefused`, `test_exportAs_ontoSymlinkOfOpenFile_isRefused`, and `test_exportAs_cancelledPicker_doesNothing`.
+Static source candidate: `RasterImageGeometryTests/test_exportOptions_encodeRequestedFormatAndQuality`, `RasterImageEditorViewModelTests/test_exportAs_writesChosenFormat_withoutTouchingDocument`, `test_exportAs_ontoOpenFile_isRefused`, `test_exportAs_ontoSymlinkOfOpenFile_isRefused`, and `test_exportAs_cancelledPicker_doesNothing`.
 
 ### F009-S47: Raster navigation distinguishes fit and actual pixels
 Given a raster image is open on a display with a known backing scale
@@ -572,7 +587,7 @@ Then magnification and the displayed zoom percentage update without creating an 
 And Actual Size reports 100% at one export pixel per device pixel
 And Space-drag pans temporarily without changing the selected editing mode
 
-Coverage: `RasterImageEditorViewModelTests/test_viewportCommands_forwardToViewport` and `EditableRasterImageCanvasViewTests/test_spaceKey_enablesTemporaryPan`; actual-size/backing-scale math is implemented by `RasterImageFilePreviewCoordinatorViewport`.
+Static source candidate: `RasterImageEditorViewModelTests/test_viewportCommands_forwardToViewport` and `EditableRasterImageCanvasViewTests/test_spaceKey_enablesTemporaryPan`; actual-size/backing-scale math is implemented by `RasterImageFilePreviewCoordinatorViewport`.
 
 ### F009-S48: Successful file Save installs the encoded baseline
 Given a file-backed raster edit is saved successfully
@@ -581,7 +596,7 @@ Then the editor remains locked while the file is decoded again
 And that decoded file becomes the displayed clean session
 And the next export begins from the same persisted pixels
 
-Coverage: `RasterImageEditorViewModelTests/test_save_rendersOffMain_locksUntilWritten_thenRebases`; the post-save reload gate is `RasterImageEditorViewModel.isAwaitingPostSaveReload`.
+Static source candidate: `RasterImageEditorViewModelTests/test_save_rendersOffMain_locksUntilWritten_thenRebases`; the post-save reload gate is `RasterImageEditorViewModel.isAwaitingPostSaveReload`.
 
 ### F009-S49: Remote polling refreshes staging without losing edits
 Given a remote raster image captured its baseline token before materialization read
@@ -593,7 +608,7 @@ Then it fails with the remote-change error, preserves edits, and refreshes stagi
 But a provider returning no token is trusted
 And a successful later write records its new remote token
 
-Coverage: `MarkdownViewModelRemoteImageTests/test_openCapturesBaseline_soImmediateSaveSucceeds_andTracksOwnWrite`, `test_remoteChangeAfterStaging_blocksSave_andRefreshesStagedFile`, `test_versionLookupFailure_failsClosed`, `test_missingBaseline_withVersionedProvider_failsClosed`, and `test_providerWithoutVersions_isTrusted`.
+Static source candidate: `MarkdownViewModelRemoteImageTests/test_openCapturesBaseline_soImmediateSaveSucceeds_andTracksOwnWrite`, `test_remoteChangeAfterStaging_blocksSave_andRefreshesStagedFile`, `test_versionLookupFailure_failsClosed`, `test_missingBaseline_withVersionedProvider_failsClosed`, and `test_providerWithoutVersions_isTrusted`.
 
 ### F009-S50: Pan cursor and focus recovery do not corrupt UI state
 Given the raster canvas opens or the user changes editing mode
@@ -602,7 +617,7 @@ Then the canvas takes focus for crop, pan, and undo keys
 When a pan starts or is interrupted
 Then the cursor uses direct set plus cursor-rect restoration rather than an unmatched push/pop stack
 
-Coverage: source-grounded in `EditableRasterImageCanvasView.focusIfPossible`, `beginPan`, `endPan`, and `RasterImageFilePreview.updatePreview`.
+Static source candidate: source-grounded in `EditableRasterImageCanvasView.focusIfPossible`, `beginPan`, `endPan`, and `RasterImageFilePreview.updatePreview`.
 
 ### F009-S51: Repeated geometry keeps model and pixels synchronized
 Given Straighten, quarter-turn rotation, and Resize operations are committed in sequence
@@ -610,7 +625,7 @@ When the operation list is replayed for display or full-resolution output
 Then each Straighten uses its committed export-pixel-snapped output size
 And fixed per-axis replay scale, swapped after odd quarter turns, produces exactly `RasterImageCanvasTransform.pixelSize`
 
-Coverage: `RasterImageGeometryTests/test_repeatedStraighten_keepsModelAndRenderedPixelsInSync` and `test_fixedScaleReplay_onOddProxy_tracksCanonicalSize`.
+Static source candidate: `RasterImageGeometryTests/test_repeatedStraighten_keepsModelAndRenderedPixelsInSync` and `test_fixedScaleReplay_onOddProxy_tracksCanonicalSize`.
 
 ### F009-S52: Undo and Redo fail transactionally
 Given an Undo or Redo target contains geometric operations
@@ -618,7 +633,7 @@ When rendering that target fails
 Then the command returns false
 And the document, rendered pixels, and undo/redo availability remain unchanged
 
-Coverage: `RasterImageDocumentTests/test_undo_whenTargetFailsToRender_leavesStateUntouched`.
+Static source candidate: `RasterImageDocumentTests/test_undo_whenTargetFailsToRender_leavesStateUntouched`.
 
 ### F009-S53: Append history remains compact
 Given more edits are appended than the configured history limit
@@ -627,7 +642,7 @@ Then each ordinary append is represented by a remove-last count rather than an o
 And Revert uses one prior-list snapshot
 And retained history memory is O(limit) entries rather than O(limit × operation count)
 
-Coverage: `RasterImageDocumentTests/test_history_appendEntriesDoNotSnapshotOperations` and `test_history_isBounded`.
+Static source candidate: `RasterImageDocumentTests/test_history_appendEntriesDoNotSnapshotOperations` and `test_history_isBounded`.
 
 ### F009-S54: Atomic raster writes do not block UI state
 Given local Save, Export As, or remote staging has encoded bytes to persist
@@ -636,7 +651,7 @@ Then the write runs on `RasterImageEditorServices.ioQueue` or a detached task
 And completion returns to the main actor
 And editor-owned local Save/Export completion cannot install after its generation becomes stale
 
-Coverage: `RasterImageEditorViewModelTests/test_localSave_writesOffMainThenFinishes`; remote staging is source-grounded in `MarkdownViewModel.writeOffMain`.
+Static source candidate: `RasterImageEditorViewModelTests/test_localSave_writesOffMainThenFinishes`; remote staging is source-grounded in `MarkdownViewModel.writeOffMain`.
 
 ### F009-S55: Modified canvas keys remain available to shortcuts
 Given the raster canvas has focus
@@ -644,7 +659,7 @@ When Space or an Arrow key arrives with Command, Option, or Control
 Then temporary pan and crop nudge do not consume or act on the event
 But unmodified Space pans and unmodified/Shift Arrow nudges still work
 
-Coverage: `EditableRasterImageCanvasViewTests/test_modifiedSpaceAndArrows_areNotConsumed`, `test_spaceKey_enablesTemporaryPan`, and `test_arrowKeys_nudgeCropBox`.
+Static source candidate: `EditableRasterImageCanvasViewTests/test_modifiedSpaceAndArrows_areNotConsumed`, `test_spaceKey_enablesTemporaryPan`, and `test_arrowKeys_nudgeCropBox`.
 
 ### F009-S56: Markup exposes the implemented tool palette
 Given Markup mode is selected
@@ -652,7 +667,7 @@ When its tool palette renders
 Then Select, Pen, Line, Arrow, Rectangle, Ellipse, Highlight, Text, Blur, Pixelate, and Redact are available
 And selecting a tool exposes its localized hint and selected accessibility trait
 
-Coverage: `RasterImageEditorViewModelTests/test_toolSelection_entersMarkupMode_andShowsHint`; tool enumeration and selected traits are source-grounded in `RasterMarkupTool` and `RasterImageMarkupToolbar`.
+Static source candidate: `RasterImageEditorViewModelTests/test_toolSelection_entersMarkupMode_andShowsHint`; tool enumeration and selected traits are source-grounded in `RasterMarkupTool` and `RasterImageMarkupToolbar`.
 
 ### F009-S57: Markup objects remain editable until geometry flattens them
 Given one or more markup items follow the last geometric operation
@@ -663,7 +678,7 @@ When a later crop, rotate, flip, straighten, resize, or background removal commi
 Then the visual result is preserved but earlier markup is flattened and no longer selectable
 And Undo restores the pre-geometry editable state
 
-Coverage: `EditableRasterImageCanvasViewTests/test_rectangleTool_createsSelectsAndMovesItem`, `test_selectTool_resizesWithHandle_andClickOnEmptyDeselects`, `test_keyboard_deleteNudgeTabEscape`; `RasterImageMarkupTests/test_updateAndDeleteMarkup_areUndoable`, `test_coalescedUpdates_formOneUndoStep`, and `test_markupBeforeGeometricEdit_isFlattenedAndNoLongerEditable`.
+Static source candidate: `EditableRasterImageCanvasViewTests/test_rectangleTool_createsSelectsAndMovesItem`, `test_selectTool_resizesWithHandle_andClickOnEmptyDeselects`, `test_keyboard_deleteNudgeTabEscape`; `RasterImageMarkupTests/test_updateAndDeleteMarkup_areUndoable`, `test_coalescedUpdates_formOneUndoStep`, and `test_markupBeforeGeometricEdit_isFlattenedAndNoLongerEditable`.
 
 ### F009-S58: Pixel effects and Redact produce scale-consistent output
 Given markup covers visible image detail
@@ -673,7 +688,7 @@ When Redact is added and output is rendered
 Then its opaque fill replaces the covered pixels
 And the UI warns that Blur and Pixelate are not secure substitutes for Redact
 
-Coverage: `RasterImageMarkupTests/test_redact_isOpaque_andUnderlyingPixelsAreGone`, `test_pixelate_replacesDetailWithinRectOnly`, `test_blurUsesPixelsComposedSoFar_includingEarlierMarkup`, `test_proxyAndFullResolutionMarkupMatch`, and `EditableRasterImageCanvasViewTests/test_pixelEffect_usesAsyncComposite`.
+Static source candidate: `RasterImageMarkupTests/test_redact_isOpaque_andUnderlyingPixelsAreGone`, `test_pixelate_replacesDetailWithinRectOnly`, `test_blurUsesPixelsComposedSoFar_includingEarlierMarkup`, `test_proxyAndFullResolutionMarkupMatch`, and `EditableRasterImageCanvasViewTests/test_pixelEffect_usesAsyncComposite`.
 
 ### F009-S59: Adjustments preview live and remain compact
 Given Adjust mode is active
@@ -683,7 +698,7 @@ And the document retains one `.adjust` operation replaced through undoable `.set
 And Undo steps through prior committed adjustment states without operation-list growth
 And Reset restores identity while Compare temporarily shows the unadjusted source
 
-Coverage: `RasterImageEditorViewModelTests/test_adjustments_previewThenCommitOnce_andReset`; `RasterImageMarkupTests/test_onlyLastAdjustCounts`, `test_sessionAdjust_rerendersFlattenedDisplay_andUndoRestores`, and `test_exportAppliesAdjustmentsAtFullResolution`.
+Static source candidate: `RasterImageEditorViewModelTests/test_adjustments_previewThenCommitOnce_andReset`; `RasterImageMarkupTests/test_onlyLastAdjustCounts`, `test_sessionAdjust_rerendersFlattenedDisplay_andUndoRestores`, and `test_exportAppliesAdjustmentsAtFullResolution`.
 
 ### F009-S60: Markup and status expose accessible state
 Given a raster image and markup items are visible
@@ -694,7 +709,7 @@ And selected markup tools expose the selected trait
 When a distinct action status changes
 Then it is announced through the injected accessibility announcer
 
-Coverage: `EditableRasterImageCanvasViewTests/test_accessibility_exposesMarkupItems` and `RasterImageEditorViewModelTests/test_statusMessages_areAnnounced`.
+Static source candidate: `EditableRasterImageCanvasViewTests/test_accessibility_exposesMarkupItems` and `RasterImageEditorViewModelTests/test_statusMessages_areAnnounced`.
 
 ### F009-S61: Recognize Text returns selectable reading-order lines
 Given a raster document is renderable
@@ -703,7 +718,7 @@ Then current operations render at full resolution before on-device Vision OCR
 And found lines are sorted top-to-bottom and left-to-right, outlined on the canvas, and shown in a selectable sheet
 And only Copy Selected, Copy All, or a per-line Copy writes recognized text to the clipboard
 
-Coverage: `RasterImageVisionTests/test_recognizeText_findsLinesInReadingOrder_withTopLeftBoxes`, `test_recognizeText_onBlankImage_reportsNoText`, and `RasterImageEditorViewModelTests/test_recognizeText_analyzesFullResolution_presentsAndCopies`.
+Static source candidate: `RasterImageVisionTests/test_recognizeText_findsLinesInReadingOrder_withTopLeftBoxes`, `test_recognizeText_onBlankImage_reportsNoText`, and `RasterImageEditorViewModelTests/test_recognizeText_analyzesFullResolution_presentsAndCopies`.
 
 ### F009-S62: Stale recognition cannot annotate changed pixels
 Given text recognition is in flight
@@ -713,7 +728,7 @@ And a stale active-session result reports that the image changed during analysis
 When any image load or reload installs a session, including at the same path
 Then in-flight analysis is cancelled and its text list and canvas boxes are cleared
 
-Coverage: `RasterImageEditorViewModelTests/test_recognizeText_staleResultIsDiscarded`, `test_recognizedText_isClearedWhenDocumentChanges`, and `test_shutdownDuringAnalysis_ignoresResult`.
+Static source candidate: `RasterImageEditorViewModelTests/test_recognizeText_staleResultIsDiscarded`, `test_recognizedText_isClearedWhenDocumentChanges`, and `test_shutdownDuringAnalysis_ignoresResult`.
 
 ### F009-S63: Remove Background is scale-independent and undoable
 Given Vision finds one or more foreground instances
@@ -722,7 +737,7 @@ Then a grayscale mask becomes one undoable operation
 And pixels outside the mask are transparent at display and output scales
 And earlier markup is flattened into the masked result
 
-Coverage: `RasterImageVisionTests/test_removeBackground_makesMaskedOutPixelsTransparent_atAnyScale`, `test_removeBackground_flattensEarlierMarkup_andIsUndoable`, and `RasterImageEditorViewModelTests/test_removeBackground_commitsUndoableMask`.
+Static source candidate: `RasterImageVisionTests/test_removeBackground_makesMaskedOutPixelsTransparent_atAnyScale`, `test_removeBackground_flattensEarlierMarkup_andIsUndoable`, and `RasterImageEditorViewModelTests/test_removeBackground_commitsUndoableMask`.
 
 ### F009-S64: Transparency-unsafe overwrite is blocked
 Given background removal has introduced transparency
@@ -731,7 +746,7 @@ When Save availability is evaluated
 Then overwrite Save is disabled with guidance to Export As PNG, HEIC, or TIFF
 And Export As remains available
 
-Coverage: `RasterImageEditorViewModelTests/test_removeBackground_onJPEG_blocksSave_butAllowsExport` and `test_removeBackground_onGIF_blocksSave`; the gate is `RasterImageEditorViewModel.formatsWithoutAlpha`.
+Static source candidate: `RasterImageEditorViewModelTests/test_removeBackground_onJPEG_blocksSave_butAllowsExport` and `test_removeBackground_onGIF_blocksSave`; the gate is `RasterImageEditorViewModel.formatsWithoutAlpha`.
 
 ### F009-S65: Same-file reload invalidates Vision state
 Given OCR or background removal belongs to the currently displayed session
@@ -740,7 +755,7 @@ Then the Vision work handle is cancelled
 And OCR boxes and text are cleared
 And a late result cannot install into the replacement session
 
-Coverage: `RasterImageEditorViewModelTests/test_reloadingTheSameFile_cancelsAnalysis_andClearsOCR` and `test_backgroundMaskForReplacedSession_isNotApplied`.
+Static source candidate: `RasterImageEditorViewModelTests/test_reloadingTheSameFile_cancelsAnalysis_andClearsOCR` and `test_backgroundMaskForReplacedSession_isNotApplied`.
 
 ### F009-S66: Cancelling Vision suppresses completion
 Given a Vision OCR or foreground-mask request is queued or running
@@ -755,7 +770,7 @@ Then it becomes selected and Delete or directional Move actions can edit it
 When Crop mode is active
 Then Shrink, Expand, directional Move, Apply, and Cancel actions make crop pointer-independent.
 
-Coverage: `EditableRasterImageCanvasViewTests/test_accessibility_itemsArePressable_andCustomActionsOperate`.
+Static source candidate: `EditableRasterImageCanvasViewTests/test_accessibility_itemsArePressable_andCustomActionsOperate`.
 
 ### F009-S68: Live composite cannot ghost edits
 Given an asynchronous adjustment or pixel-effect composite exists
@@ -764,14 +779,14 @@ Then the stale composite is not drawn
 And drag preview appears once rather than over its baked copy
 And a render failure clears the previous composite.
 
-Coverage: `EditableRasterImageCanvasViewTests/test_liveComposite_isNotUsedWhileDraggingAnItem`.
+Static source candidate: `EditableRasterImageCanvasViewTests/test_liveComposite_isNotUsedWhileDraggingAnItem`.
 
 ### F009-S69: Coalescing has time and selection boundaries
 Given repeated edits use the same coalescing key
 When more than one second passes or the selected item changes
 Then the next edit starts a new undo step.
 
-Coverage: `RasterImageDocumentTests/test_coalescing_endsAfterWindowOrExplicitBoundary`.
+Static source candidate: `RasterImageDocumentTests/test_coalescing_endsAfterWindowOrExplicitBoundary`.
 
 ### F009-S70: Repeated adjustment commits keep one operation
 Given several adjustment states are committed
@@ -779,17 +794,74 @@ When the operation list and Undo history are inspected
 Then exactly one `.adjust` remains
 And Undo restores earlier values through `.set` inverses.
 
-Coverage: `RasterImageEditorViewModelTests/test_repeatedAdjustments_keepOneOperation_andUndoStepsBack`.
+Static source candidate: `RasterImageEditorViewModelTests/test_repeatedAdjustments_keepOneOperation_andUndoStepsBack`.
 
 ### F009-S71: Final raster types have focused extensions
 Given the raster editor implementation is maintained
 When output, loading, observation, viewport, pixel, or markup behavior changes
 Then it resides in the corresponding focused extension file rather than enlarging the owner type.
 
+### F009-S72: Local HTML opens the saved captured revision in the system
+Given a local HTML document is open in Rich or Source mode
+And edits may have a pending autosave or an active save token
+When the user chooses Open in System
+Then the buffer, displayed content, file URL, and provider are captured synchronously
+And pending autosave is cancelled and same-buffer autosaves are suppressed
+And the command waits for `activeSaveToken` to clear before `beginSave(capturedContent:)`
+And tab switching cannot retarget the captured operation
+And the original local file is opened through macOS only after that revision saves successfully
+And later edits remain dirty and autosave is rescheduled
+And a save or false system-open result is shown in the existing editor alert without opening stale content.
+
+### F009-S73: Remote HTML opens an isolated retained snapshot
+Given a remote HTML document is open in Rich or Source mode
+When the user chooses Open in System
+Then the same captured-reference and serialized-save ordering completes first
+And the independent `ExternalFileOpenService` performs a separate unversioned SFTP re-read through the captured provider
+And that re-read may return a different remote revision from the revision just saved
+And Crispy writes the returned bytes to an owner-only application temporary file
+And the system opens that retained snapshot without any writeback relationship to the remote source
+And the editor busy state is used instead of the global transfer overlay or dedicated bulk-transfer channel
+And stale cleanup runs at service construction/startup and later staging
+And a save, remote read, snapshot write, or system-open failure does not open an older snapshot
+And a newly created snapshot is removed when system launch fails.
+
+### F009-S74: Closing a dirty tab serializes saves without losing the buffer
+Given a document has an active save and receives a later edit
+When its final tab or owning docked group closes
+Then close waits no more than 30 seconds for the active token
+And successful completion advances the baseline before the later revision is flushed through that tab's own provider
+And the worker and provider remain alive even if the group and view model are released
+And successful flush removes the unreferenced buffer
+But timeout or write failure returns an error and leaves the buffer dirty for retry.
+
+### F009-S75: Empty HTML saves and opens
+Given a non-empty HTML file is edited to an empty document
+When the user explicitly saves it or chooses Open in System
+Then Crispy writes zero bytes as the intentional current revision
+And Open in System launches only after that empty revision is persisted
+And no older non-empty content is substituted.
+
+### F009-S76: Authored HTML is editable through a trusted host bridge but cannot run authored capabilities
+Given authored HTML is open in Rich mode, including an intentionally empty document
+When Crispy creates its rendering iframe
+Then the iframe sandbox is exactly `allow-same-origin`
+And authored scripts, forms, top-level navigation, popups, downloads, and modals are not granted
+And native WKWebView content JavaScript remains enabled only so the trusted editor host can edit and synchronize the iframe
+And switching Rich/Source modes or recovering the web process does not broaden the iframe sandbox.
+
+## Verification Status
+
+Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. `Resources/MarkdownRuntime/editor.html` sets the authored iframe to the exact single sandbox token `allow-same-origin`; `MarkupRenderedEditor` keeps native content JavaScript enabled for the trusted editor bridge. `EditorHTMLSecurityTests.testAuthoredHTMLIframeIsSandboxedWithoutScriptCapability` directly asserts the exact sandbox string and absence of `allow-scripts` variants. The single-token assertion is static evidence that forms, top navigation, popups, downloads, and modals are not granted; those capabilities do not each have a separate runtime assertion. `DocumentBufferStoreTests` and `EditorGroupStoreTests` contain the named close/save/provider cases, but no mounted WKWebView behavior or test case was executed.
 
 ## Change History
 
-- 2026-10-01: Documented final audit fixes for analysis/session cancellation, GIF alpha safety, pointer-free VoiceOver editing, live-composite freshness, bounded coalescing, compact adjustments, type splits, and known output/save limitations; reported full suite: 1,683 tests, 0 failures.
+- 2026-10-23: Final reconciliation confirms the exact authored iframe sandbox, separate trusted-host JavaScript, precise static source/test inventory, and build/test-build-only validation with no executed pass.
+- 2026-10-23: Added F009-R70/S76 for the exact authored-HTML iframe sandbox, distinguished trusted native editor JavaScript from authored-script capability, and narrowed security evidence to the assertions present in static/build-only source.
+- 2026-10-23: Added F009-R68–R69 and F009-S74–S75 for 30-second serialized close flushing, per-tab provider/worker retention, dirty-buffer failure retention, and valid empty-HTML save/open behavior; recorded compile/static-only coverage and the known test-host connection hang.
+- 2026-10-20: Reconciled HTML Open in System with captured-revision serialization and the actual unversioned post-save SFTP re-read, which may open a different remote revision; recorded unmet large-file confirmation and build/test-build-only evidence with no executed pass.
+
+- 2026-10-01: Documented final audit fixes for analysis/session cancellation, GIF alpha safety, pointer-free VoiceOver editing, live-composite freshness, bounded coalescing, compact adjustments, type splits, and known output/save limitations.
 - 2026-10-01: Documented Phase 3 markup, adjustments, history coalescing, and accessibility, plus Phase 4 on-device OCR and background removal.
 
 - 2026-10-01: Documented Phase 2 audit fixes: canonical pixel geometry, fail-closed remote versioning, alias-safe Export As, stable minimum crop drags, transactional compact history, off-main atomic writes, shortcut coexistence, and remaining localization.

@@ -17,7 +17,7 @@ struct RemoteProjectMetadata: ProjectMetadata {
 
     @MainActor
     init(connection: SSHConnection, remotePath: String) {
-        self.identifier = "\(connection.profile.sshURI)\(remotePath)"
+        self.identifier = connection.profile.projectIdentifier(remotePath: remotePath)
         self.displayName = (remotePath as NSString).lastPathComponent
         self.displayPath = "\(connection.profile.host):\(remotePath)"
         self.hostLabel = connection.profile.displayName

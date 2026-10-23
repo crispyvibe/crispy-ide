@@ -130,7 +130,12 @@ struct ShelfSidebarSectionView: View {
             }
         }
         .alert(
-            AppStrings.Explorer.deleteItemTitle,
+            pendingDeletionPath.map {
+                ExplorerDeleteConfirmation(
+                    itemName: ShelfEntry(path: $0).title,
+                    fullPath: $0
+                ).title
+            } ?? AppStrings.Explorer.deleteItemTitle,
             isPresented: Binding(
                 get: { pendingDeletionPath != nil },
                 set: { isPresented in
@@ -153,7 +158,10 @@ struct ShelfSidebarSectionView: View {
                 pendingDeletionPath = nil
             }
         } message: { path in
-            Text("Are you sure you want to delete \"\(ShelfEntry(path: path).title)\"?")
+            Text(ExplorerDeleteConfirmation(
+                itemName: ShelfEntry(path: path).title,
+                fullPath: path
+            ).message)
         }
         .alert(
             AppStrings.Explorer.errorTitle,

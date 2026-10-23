@@ -124,9 +124,29 @@ Blur and Pixelate operate on a snapshot of pixels composited so far. `RasterImag
 The canvas treats unmodified Space as temporary pan without changing `editingMode`; unmodified Arrow and Shift+Arrow perform crop nudges. Space or Arrow events carrying Command, Option, or Control fall through to the responder chain so app shortcuts are not swallowed. Pan uses `NSCursor.closedHand.set()` plus cursor-rect invalidation rather than push/pop. First install and mode changes call `focusIfPossible()`, which makes the canvas first responder unless an `NSText` field is active.
 
 
+### HTML Open in System
+
+Both Rich and Source toolbars call `MarkdownViewModel.openHTMLInSystem()`. Before creating its task, the method synchronously captures the active `DocumentBuffer`, `buffer.displayContent`, `fileURL`, `fileContentProvider`, and injected `ExternalFileOpenService`. It cancels that buffer's pending autosave, records `externalOpenBufferID` so edits to the same buffer do not schedule competing autosaves, and sets editor-owned `isOpeningInSystem`/busy state. The task uses only those captured references, so a later tab switch cannot retarget the save or open.
+
+`saveCapturedRevisionForExternalOpen` polls the captured buffer's `activeSaveToken` with cancellation and a 15-second deadline; it does not use `BufferState.isSaving` or toolbar presentation as a completion signal. Once the token clears, it calls `DocumentBuffer.beginSave(capturedContent:)`, which serializes the captured content. `didSave(token:)` updates the baseline to that captured revision while preserving any later content as dirty. The task's `defer` removes autosave suppression and reschedules autosave when the captured buffer remains dirty.
+
+The open phase uses the app-level `ExternalFileOpenService`, not `RemoteTransferCoordinator`. Local HTML passes the captured original URL to `VibeSpaceInteractionService.open`. After the remote save completes, remote HTML is fetched again through the captured `FileContentProviding`; this is an unversioned SFTP re-read, so the bytes staged for opening may be a different remote revision from the revision just saved. The service atomically stages that one file in an app temporary container and applies owner-only directory/file permissions. `ExternalFileOpenService` performs 24-hour stale-container cleanup during construction (application startup) and again whenever it stages; `RemoteItemTransferService` separately performs opportunistic cleanup for explorer/root snapshots. The editor path does not use the global transfer overlay or dedicated bulk-transfer SFTP channel; its progress is the editor busy state and failures use the existing editor alert.
+
+`VibeSpaceInteractionService.open` returns the `NSWorkspace.open` Boolean. Both local and remote launch paths treat `false` as failure. A failed remote launch removes the newly created snapshot container. Save, remote-read, temporary-write, and launch errors terminate the pipeline, never reuse an older snapshot, and leave later edits dirty for autosave/retry. Intentional zero-length HTML is not an error: explicit Save and this captured-revision path write and open the empty revision.
+
+### Document Close and Docked File Teardown
+
+`DocumentBufferStore.closeBuffer` keeps the final unreferenced buffer registered while close is pending. If a save token is active, it polls for at most 30 seconds; after that token completes, a later edit remains dirty against the advanced baseline and is flushed with a new token. Success removes the still-unreferenced buffer. Timeout or writer failure returns through `Task<Error?, Never>` and preserves the dirty buffer.
+
+`EditorGroupStore` stores `FileContentProviding` per tab. `closeTab` removes and captures the closing tab's provider, creates a writer that strongly captures that provider and the pane worker, and returns the close task. `DockedFileViewerCoordinator` closes every tab before discarding a preview/tile group and returns all tasks to lifecycle callers, so releasing the group or `MarkdownViewModel` does not invalidate a pending write.
+
 ### SVG Preview
 
 SVG files rendered read-only in `WKWebView` with JavaScript disabled. No editing canvas. `SVGFilePreview` applies `WebViewPresentationScale` during creation and update so the global document-size ratio changes the existing page zoom without reloading the SVG.
+
+### Authored HTML Sandbox and Trusted Editor Bridge
+
+`MarkupRenderedEditor` keeps `WKWebpagePreferences.allowsContentJavaScript = true` because the bundled native editor host needs JavaScript for content synchronization, editing commands, find/comment bridges, mode changes, and crash recovery. Authored HTML itself is written into `html-frame`, whose sandbox is set to the exact single token `allow-same-origin`. Because no other sandbox token is present, authored content receives no script, form, top-navigation, popup, download, or modal capability. Same-origin access is retained so the trusted parent editor can read and edit `contentDocument`. Every new/recovered iframe receives the same sandbox before content is installed. Intentional zero-length HTML follows this path and remains valid.
 
 ### Authored HTML Presentation Scale
 
@@ -209,3 +229,16 @@ The app Save/Copy/Export path uses injected asynchronous services. The synchrono
 - Two local identity checks narrow but do not close the final identity-check-to-atomic-write TOCTOU window. Remote SFTP writes have no provider-level compare-and-swap; tokens use size plus one-second-resolution mtime.
 - Vision analyzes a full-resolution composite. Cancellation reaches `VNRequest`, but already-allocated decode/render/Vision buffers can still create substantial memory pressure for huge sources.
 - The legacy synchronous `EditableRasterImageCanvasView.saveCompositedImage(to:)` remains for standalone use/tests only and is not used by the app path.
+- A remote HTML Open in System action creates a single-file copy. Edits made by the external application do not synchronize or write back, and relative sibling assets may not resolve because only the HTML file is materialized.
+- Remote Save token checks and transfer-manifest metadata checks narrow specific races, but remote HTML Open in System performs a separate unversioned SFTP re-read after Save. It can therefore stage a different remote revision; this is broader than the narrow metadata-check/open TOCTOU and has no version-bound read-after-write guarantee.
+
+## Verification Status
+
+Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. `Resources/MarkdownRuntime/editor.html` contains the exact authored-frame assignment, while `MarkupRenderedEditor` enables JavaScript for the trusted host bridge. `EditorHTMLSecurityTests.testAuthoredHTMLIframeIsSandboxedWithoutScriptCapability` checks exact `allow-same-origin` and rejects `allow-scripts` variants. The other omitted iframe capabilities follow from that exact single-token source invariant and are not separately asserted in mounted WebKit. `DocumentBufferStoreTests` covers close serialization/failure retention statically, and `EditorGroupStoreTests` covers per-tab provider/worker retention; these and intentional-empty-HTML sources were compiled but not executed.
+
+## Change History
+
+- 2026-10-23: Final reconciliation names the exact iframe resource, trusted bridge, security test, and close/provider inventories and records build/test-build-only validation.
+- 2026-10-23: Documented the exact authored-HTML sandbox/trusted-host JavaScript split, intentional-empty applicability, and precise static/build-only evidence limits.
+- 2026-10-23: Documented 30-second close serialization, later-revision flushing, retained dirty buffers on failure, strongly retained per-tab providers/workers, and valid empty HTML; refreshed compile/static-only coverage.
+- 2026-10-20: Reconciled HTML Open in System with captured save ordering, independent staging, and its unversioned post-save SFTP re-read/different-revision risk; static references reached build/test-build only and no test pass is claimed.

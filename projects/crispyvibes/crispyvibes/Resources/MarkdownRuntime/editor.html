@@ -1028,6 +1028,10 @@
       htmlFrame.id = "html-frame";
       htmlFrame.spellcheck = true;
       htmlFrame.setAttribute("title", "HTML Document");
+      // Keep same-origin DOM access for designMode/serialization, but omit
+      // allow-scripts, navigation, popups, forms, downloads, and modals so
+      // authored HTML cannot execute code or escape the editor surface.
+      htmlFrame.setAttribute("sandbox", "allow-same-origin");
       editor.replaceChildren(htmlFrame);
       resizeHTMLFrame();
     }

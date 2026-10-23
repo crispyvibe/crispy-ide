@@ -46,6 +46,7 @@ final class SpotlightPresentationTests: XCTestCase {
             onSwitchSpotlight: { _ in },
             onSelectSpotlight: { _ in },
             onCommitLayout: { _ in },
+            resolveCurrentLayout: { snapshot },
             onReconcile: {},
             stateForItem: state(for:),
             positionCardContent: { presentation in
@@ -138,7 +139,7 @@ final class SpotlightPresentationTests: XCTestCase {
             onFocusMember: { _ in },
             onToggleComboOrientation: {},
             spotlightContent: { state, _ in Text(state.title) },
-            inputBarContent: { _, _ in EmptyView() }
+            inputBarContent: { _, _, _ in EmptyView() }
         )
         let hosting = mount(card.environmentObject(themeManager))
 
@@ -364,7 +365,7 @@ private struct SpotlightTerminalComboInteractionHarness: View {
                     onFocusedActivation: { model.activateFocused(member) }
                 )
             },
-            inputBarContent: { _, _ in EmptyView() }
+            inputBarContent: { _, _, _ in EmptyView() }
         )
     }
 }
@@ -443,7 +444,7 @@ private struct SpotlightComboMountHarness: View {
             onFocusMember: { _ in },
             onToggleComboOrientation: {},
             spotlightContent: { state, _ in Text(state.title) },
-            inputBarContent: { _, _ in EmptyView() }
+            inputBarContent: { _, _, _ in EmptyView() }
         )
     }
 }

@@ -16,6 +16,7 @@ extension ContentView {
         title: String,
         workingDirectoryURL: URL,
         owningProjectRootURL: URL? = nil,
+        owningProjectIdentifier: String? = nil,
         surfaceID: UUID? = nil
     ) -> TerminalSpotlightState {
         TerminalSpotlightState(
@@ -28,12 +29,14 @@ extension ContentView {
             onTemporaryTerminalRequested: nil,
             isTemporary: false,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: owningProjectIdentifier,
             surfaceID: surfaceID
         )
     }
 
     func resolvedFileOpenContext(
         for fileURL: URL,
+        preferredProjectIdentifier: String? = nil,
         preferredProjectRootURL: URL? = nil
     ) -> (
         reference: FileDocumentReference,
@@ -44,6 +47,7 @@ extension ContentView {
         let project = VibeSpaceProjectRoutingUseCase()
             .terminalProjectMatch(
                 for: normalizedURL,
+                preferredProjectIdentifier: preferredProjectIdentifier,
                 preferredProjectRootURL: preferredProjectRootURL,
                 candidates: vibespaceCatalogStore.allProjects()
             )?
@@ -134,7 +138,8 @@ extension ContentView {
                         in: terminalViewModel,
                         directoryURL: workingDirectoryURL,
                         surfaceID: surfaceID,
-                        owningProjectRootURL: project.rootURL
+                        owningProjectRootURL: project.rootURL,
+                        owningProjectIdentifier: project.projectIdentifier
                     )
                 },
                 onTemporaryTerminalRequested: {
@@ -148,14 +153,17 @@ extension ContentView {
                                 in: terminalViewModel,
                                 directoryURL: workingDirectoryURL,
                                 surfaceID: surfaceID,
-                                owningProjectRootURL: project.rootURL
+                                owningProjectRootURL: project.rootURL,
+                                owningProjectIdentifier: project.projectIdentifier
                             )
                         },
-                        owningProjectRootURL: project.rootURL
+                        owningProjectRootURL: project.rootURL,
+                        owningProjectIdentifier: project.projectIdentifier
                     )
                 },
                 shortcutDefinitions: spotlightShortcutDefinitions(
                     for: project.rootURL,
+                    projectIdentifier: project.projectIdentifier,
                     fallback: terminalViewModel.shortcutCommands
                 ),
                 onShortcutSelected: { shortcut in
@@ -166,6 +174,7 @@ extension ContentView {
                             shortcut,
                             directoryURL: workingDirectoryURL,
                             owningProjectRootURL: project.rootURL,
+                            owningProjectIdentifier: project.projectIdentifier,
                             surfaceID: surfaceID,
                             boardStore: boardStore
                        ) {
@@ -188,10 +197,12 @@ extension ContentView {
                                         in: terminalViewModel,
                                         directoryURL: directoryURL,
                                         surfaceID: surfaceID,
-                                        owningProjectRootURL: project.rootURL
+                                        owningProjectRootURL: project.rootURL,
+                                        owningProjectIdentifier: project.projectIdentifier
                                     )
                                 },
                                 owningProjectRootURL: project.rootURL,
+                                owningProjectIdentifier: project.projectIdentifier,
                                 initialCommand: shortcut.command
                             )
                         }
@@ -206,7 +217,12 @@ extension ContentView {
                 },
                 isTemporary: false,
                 owningProjectRootURL: project.rootURL,
-                surfaceID: surfaceID
+                owningProjectIdentifier: project.projectIdentifier,
+                surfaceID: surfaceID,
+                navigationIdentityOverride: .terminal(
+                    projectScope: .projectPath(project.projectIdentifier),
+                    tabID: tab.id
+                )
             )
         case let .standaloneTerminal(surfaceID, tileID, terminalViewModel, tab):
             return TerminalSpotlightState(
@@ -322,10 +338,20 @@ extension ContentView {
                 workingDirectoryURL: owningProjectRootURL ?? URL(fileURLWithPath: NSHomeDirectory()),
                 onSplitTerminalRequested: nil, onTemporaryTerminalRequested: nil,
                 isTemporary: false, owningProjectRootURL: owningProjectRootURL,
+                owningProjectIdentifier: selectedProject?.projectIdentifier,
                 surfaceID: inheritedSurfaceID
             )
         case let .file(tileID, fileURL):
-            let context = resolvedFileOpenContext(for: fileURL)
+            let boardStore = vibespaceHydrationCoordinator.boardStore
+            let surfaceID = inheritedSurfaceID ?? boardStore?.primarySurfaceID
+            let tile = surfaceID.flatMap { surfaceID in
+                boardStore?.tile(for: tileID, includeMinimized: true, surfaceID: surfaceID)
+            }
+            let context = resolvedFileOpenContext(
+                for: fileURL,
+                preferredProjectIdentifier: tile?.projectIdentifier,
+                preferredProjectRootURL: tile?.projectPath.map(URL.init(fileURLWithPath:))
+            )
             let group = dockedFileViewerCoordinator.assignedEditorGroup(for: tileID)
                 ?? dockedFileViewerCoordinator.editorGroup(
                     for: tileID, fileURL: fileURL, documentReference: context.reference,
@@ -341,6 +367,7 @@ extension ContentView {
                 onTemporaryTerminalRequested: nil,
                 isTemporary: false,
                 owningProjectRootURL: context.owningProjectRootURL,
+                owningProjectIdentifier: tile?.projectIdentifier,
                 surfaceID: inheritedSurfaceID
             )
         case let .browser(tileID, url):
@@ -349,6 +376,11 @@ extension ContentView {
             let tile = surfaceID.flatMap { surfaceID in
                 boardStore?.tile(for: tileID, includeMinimized: true, surfaceID: surfaceID)
             }
+            let owningProjectRootURL = tile?.projectIdentifier.flatMap { identifier in
+                vibespaceView.activeVibeSpaceProjects.first(where: {
+                    $0.projectIdentifier == identifier
+                })?.rootURL
+            } ?? tile?.projectPath.map(URL.init(fileURLWithPath:))
             return TerminalSpotlightState(
                 id: UUID(),
                 source: .browser(tileID: tileID, url: url),
@@ -358,7 +390,8 @@ extension ContentView {
                 onSplitTerminalRequested: nil,
                 onTemporaryTerminalRequested: nil,
                 isTemporary: false,
-                owningProjectRootURL: tile?.projectPath.map(URL.init(fileURLWithPath:)),
+                owningProjectRootURL: owningProjectRootURL,
+                owningProjectIdentifier: tile?.projectIdentifier,
                 surfaceID: inheritedSurfaceID
             )
         }
@@ -368,7 +401,7 @@ extension ContentView {
         (identity: VibeSpaceSpotlightTerminalOrderEntry, item: SpotlightItem)
     ] {
         vibespaceView.activeVibeSpaceProjects.flatMap { project in
-            let projectPath = project.rootURL.standardizedFileURL.path
+            let projectPath = project.projectIdentifier
             return project.terminal.tabs.map { tab in
                 (
                     identity: VibeSpaceSpotlightTerminalOrderEntry(
@@ -390,7 +423,7 @@ extension ContentView {
         tab: TerminalTab
     ) -> VibeSpaceSpotlightTerminalOrderEntry {
         VibeSpaceSpotlightTerminalOrderEntry(
-            projectPath: project.rootURL.standardizedFileURL.path,
+            projectPath: project.projectIdentifier,
             tabID: tab.id
         )
     }
@@ -512,11 +545,13 @@ extension ContentView {
         let normalizedTarget = TerminalFileSystemTarget(
             url: target.standardizedFileURL,
             line: target.line,
-            column: target.column
+            column: target.column,
+            projectIdentifier: target.projectIdentifier
         )
         let group = appContainer.makeEditorGroupStore(bufferStore: DocumentBufferStore())
         let fileContext = resolvedFileOpenContext(
             for: normalizedTarget.url,
+            preferredProjectIdentifier: normalizedTarget.projectIdentifier,
             preferredProjectRootURL: owningProjectRootURL
         )
         group.openFileInTab(
@@ -531,6 +566,7 @@ extension ContentView {
             title: normalizedTarget.url.lastPathComponent,
             workingDirectoryURL: normalizedTarget.url.deletingLastPathComponent(),
             owningProjectRootURL: fileContext.owningProjectRootURL ?? owningProjectRootURL,
+            owningProjectIdentifier: normalizedTarget.projectIdentifier,
             surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
@@ -543,9 +579,16 @@ extension ContentView {
         surfaceID: UUID? = nil,
         animated: Bool = true
     ) {
+        let boardStore = vibespaceHydrationCoordinator.boardStore
+        let resolvedSurfaceID = surfaceID ?? boardStore?.primarySurfaceID
+        let tile = resolvedSurfaceID.flatMap { surfaceID in
+            boardStore?.tile(for: tileID, includeMinimized: true, surfaceID: surfaceID)
+        }
         let fileContext = resolvedFileOpenContext(
             for: fileURL,
-            preferredProjectRootURL: owningProjectRootURL
+            preferredProjectIdentifier: tile?.projectIdentifier,
+            preferredProjectRootURL: tile?.projectPath.map(URL.init(fileURLWithPath:))
+                ?? owningProjectRootURL
         )
         let group = dockedFileViewerCoordinator.assignedEditorGroup(for: tileID)
             ?? dockedFileViewerCoordinator.editorGroup(
@@ -559,7 +602,8 @@ extension ContentView {
             title: fileURL.lastPathComponent,
             workingDirectoryURL: fileURL.deletingLastPathComponent(),
             owningProjectRootURL: fileContext.owningProjectRootURL ?? owningProjectRootURL,
-            surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
+            owningProjectIdentifier: tile?.projectIdentifier,
+            surfaceID: resolvedSurfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }

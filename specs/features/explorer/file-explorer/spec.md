@@ -36,11 +36,11 @@ Search MUST filter recursively with ancestry preservation and highlight matching
 
 ### F024-R06: Create, Rename, Delete
 
-Create file/folder MUST enter immediate inline rename mode with collision handling. Creation from a stale folder selection MUST fall back to the nearest existing project directory. Rename MUST validate names and remap selections. Delete MUST require confirmation and clear dependent selections.
+Create file/folder MUST enter immediate inline rename mode with collision handling. Creation from a stale folder selection MUST fall back to the nearest existing project directory. Rename MUST validate names and remap selections. Delete MUST require the shared `ExplorerDeleteConfirmation` for the exact file or folder targeted by the initiating context-menu action, and MUST clear dependent selections only after confirmed deletion. Cancelling MUST perform no filesystem deletion.
 
 ### F024-R07: Context Menu and Header Actions
 
-Root context menu MUST provide New File and New Folder. Files header MUST expose quick create actions. File/folder context menus MUST include Reveal in Finder, Copy Path, Copy Relative Path, and Open in Tab.
+Root context menu MUST provide New File and New Folder. Files header MUST expose quick create actions. Active local file/folder context menus MUST include Open in System, Reveal in Finder, Copy Path, and Copy Relative Path; file menus also include Open in Tab. Active remote file/folder context menus MUST include Open in System and Download… but MUST NOT include Reveal in Finder.
 
 ### F024-R08: File Activation Modes
 
@@ -73,6 +73,28 @@ Clicking a visible project or directory disclosure control MUST expand or collap
 ### F024-R15: Consistent Incremental Refresh
 
 Refreshes for the same directory MUST be serialized and coalesced so an older snapshot cannot overwrite newer filesystem state. Watcher changes received while the Files tab or initial tree load is inactive MUST be retained and applied when the tree becomes active. File mutations MUST refresh the affected parent before starting inline rename or completing their visible update.
+
+### F024-R16: Local Open in System
+
+Active local file and folder menus MUST provide Open in System and pass the original local URL to macOS. The Boolean result from `NSWorkspace.open` MUST be propagated; failure MUST surface through the explorer's existing alert rather than report success.
+
+### F024-R17: Remote Open and Download Actions
+
+Active remote file and folder menus MUST provide Open in System and Download… and MUST omit Reveal in Finder. These explorer actions MUST use the app-wide `RemoteTransferCoordinator`, which permits one explorer file/folder/project-root transfer at a time and owns the shared overlay. The overlay MUST represent preparing, transferring, cancelling, publishing, completed, and failed states; Cancel MUST be unavailable during cancelling, publication, and terminal states, and failure MUST remain in the overlay until dismissed. Before destination replace/move, the service MUST synchronously await the MainActor publication-state acknowledgment and MUST perform a second `Task` cancellation check immediately before the filesystem operation. Structured cancellation MUST retain the coordinator slot until transport termination and staging cleanup finish. A cancellation arriving after the final check may race with the atomic replace/move boundary; no Cancel UI is offered in publishing. Open in System MUST open a protected temporary local copy and remove a newly created copy when `NSWorkspace.open` returns false. Download… MUST prompt for a local destination and publish it only after successful staged transfer; it has manifest/item/byte progress but no size-confirmation prompt. Editor-triggered remote HTML Open in System is independent: it uses `ExternalFileOpenService` plus editor busy/alert state, not this overlay or its dedicated transfer channel. Remote transfer lifecycle and newly relevant diagnostics are recorded, but comprehensive logging of every local file operation is not implemented.
+
+### F024-R18: Remote Drag and Drop Exclusion
+
+Remote explorer drag and drop MUST remain unsupported. Local rows retain native drag recognition and local drag/drop behavior.
+
+### F024-R19: Exact-Target Delete Confirmation Across Explorer Surfaces
+
+Every file or folder filesystem deletion initiated from the AppKit unified explorer, SwiftUI explorer, or Shelf Files sidebar MUST create the shared `ExplorerDeleteConfirmation` from the exact retained right-click target, never from mutable current selection. For both local and remote targets, the dialog title MUST be `Delete “name”?` using the exact item name. Its message MUST present a permanent-deletion warning paragraph that repeats the exact item name and states that deletion cannot be undone, followed by a separate paragraph containing a localized `Path:` block with the exact full local or remote path captured from that same retained target. Its destructive button MUST be `Delete`. Cancelling MUST dismiss the confirmation without invoking deletion. The UI MUST NOT expose an unresolved raw placeholder in place of the target name or path. AppKit, SwiftUI explorer, and Shelf confirmations MUST have content and behavior parity. Displaying the full path is intentional disclosure in this local confirmation dialog so the user can distinguish ambiguous names before a destructive action.
+
+### F024-R20: Repeated-Scroll Responsiveness
+The multi-project Files sidebar MUST remain responsive after repeated bidirectional scrolling. The user UI test for F024-R20/S54 MUST verify responsiveness by sending ⌘T after repeated scrolling and observing that Terminal Board becomes reachable; it MUST NOT be described as asserting that every project was listed or that a particular scroll offset was preserved.
+
+### F024-R21: Successful Deletion Closes Open File Presentations
+After a local or remote filesystem deletion succeeds, the explorer MUST emit an `ExplorerDeletionEvent` containing the exact target URL and whether the target was a directory. The owning local or remote project session MUST forward that typed event. Detailed editor groups and docked/floating file groups MUST close file tabs at the exact deleted path and, for a directory, every path-component descendant. Those deletion-driven closes MUST set `discardUnsavedChanges` so no close flush or later autosave can recreate a deleted file or descendant. Failed or cancelled deletion MUST emit no event and close no tab.
 
 ## Scenarios
 
@@ -275,11 +297,15 @@ Refreshes for the same directory MUST be serialized and coalesced so an older sn
 
 ### Scenario F024-S28: Delete requires confirmation
 
-**Given** user requests delete for a file/folder
-**When** destructive confirmation is accepted
-**Then** target path is removed from disk
+**Given** the user requests deletion from a file or folder context menu
+**When** the confirmation is created
+**Then** it represents the exact right-clicked item rather than a stale selection
+**When** the destructive `Delete` action is accepted
+**Then** that target path is removed from its local or remote filesystem
 **And** dependent selections under that subtree are cleared/reset
 **And** tree refresh runs
+**When** the user cancels instead
+**Then** no filesystem deletion is invoked
 
 ### Scenario F024-S29: Files header exposes quick create actions
 
@@ -342,11 +368,13 @@ Note: This action exists in the view model but is not currently wired into any c
 **When** the connection later needs attention
 **Then** the user can retry through the remote status control or by refreshing the explorer explicitly
 
-### Scenario F024-S37: Reveal in Finder context menu action
+### Scenario F024-S37: Reveal in Finder is local-only
 
-**Given** a file or folder row context menu is open
+**Given** a local file or folder row context menu is open
 **When** user selects `Reveal in Finder`
 **Then** the item's path is revealed in macOS Finder
+**Given** an active remote file or folder row context menu is open
+**Then** `Reveal in Finder` is not present
 
 ### Scenario F024-S38: Copy Path and Copy Relative Path context menu actions
 
@@ -433,12 +461,87 @@ Note: This action exists in the view model but is not currently wired into any c
 **Then** unchanged expanded subtrees are not recursively reloaded
 **And** cached nodes removed from the model are pruned
 
+### Scenario F024-S50: Active local rows open original items in the system
+
+**Given** an active local file or folder row is visible
+**When** the user chooses `Open in System`
+**Then** macOS opens the item's original local URL
+**And** an open failure is surfaced to the user
+
+### Scenario F024-S51: Active remote rows expose transfer-backed external actions
+
+**Given** an active remote file or folder row is visible
+**When** its context menu opens
+**Then** `Open in System` and `Download…` are available
+**And** `Reveal in Finder` is absent
+**When** either action runs
+**Then** the app-wide coordinator overlay owns the one active explorer file/folder/project-root transfer, reports preparing/transferring/cancelling/publishing progress, and reports completion or persistent failure
+**And** Cancel is unavailable while cancelling or publishing
+**And** the coordinator slot remains occupied until cancellation cleanup finishes
+**And** publication synchronously acknowledges MainActor state before a second cancellation check immediately ahead of replace/move
+**And** cancellation after that check may not prevent atomic publication
+**And** editor-triggered remote HTML Open in System remains independent
+**And** failed or cancelled work does not publish a partial destination or open stale content
+
+### Scenario F024-S52: Remote rows do not start drag and drop
+
+**Given** a remote file or folder row is visible
+**When** the user attempts to drag it
+**Then** no drag/drop transfer begins
+**And** the user can use `Download…` instead
+
+### Scenario F024-S53: Every explorer surface confirms deletion for the exact right-clicked item
+
+**Given** a local or remote file or folder is right-clicked in the AppKit unified explorer, SwiftUI explorer, or Shelf Files sidebar
+**And** mutable current selection may identify another item
+**When** the user chooses `Delete`
+**Then** that surface retains the exact right-clicked item or path and creates `ExplorerDeleteConfirmation` from it rather than current selection
+**And** the title is `Delete “name”?` using that retained item's exact name
+**And** the first message paragraph repeats the exact name, warns that deletion is permanent, and states that it cannot be undone
+**And** a separate following paragraph contains the localized `Path:` block and that retained item's exact full local or remote path
+**And** AppKit, SwiftUI explorer, and Shelf present the same content and behavior
+**And** the destructive button is `Delete`
+**And** no unresolved raw name or path placeholder is shown
+**And** full-path disclosure is intentional in this local confirmation dialog so the user can distinguish ambiguous targets
+**When** the user cancels
+**Then** the dialog closes and no filesystem deletion occurs
+
+### Scenario F024-S54: Files sidebar remains responsive after repeated scrolling
+
+**Given** a fixture with eight projects is open and the Files sidebar exists
+**When** the sidebar is scrolled down and up repeatedly
+**And** the user presses ⌘T
+**Then** the application remains responsive
+**And** Terminal Board becomes reachable
+**But** this scenario does not assert that all projects are listed or that a specific scroll offset is preserved
+
+### Scenario F024-S55: Successful deletion closes matching file tabs without recreating content
+
+**Given** a local or remote file, or a directory containing open files, is represented in detailed and docked/floating editor groups
+**When** confirmed filesystem deletion succeeds
+**Then** the explorer emits one typed event with the exact target URL and directory flag
+**And** the owning project session forwards it to the file-presentation coordinator
+**And** detailed and docked/floating tabs at the exact path, plus directory descendants when applicable, close
+**And** each deletion-driven close discards unsaved changes instead of flushing or scheduling autosave
+**And** no deleted path is recreated
+**But** cancellation or deletion failure emits no event and leaves tabs open
+
 ## Acceptance Criteria
 
 - Tree load completes within 200ms for projects with up to 10,000 files (PERF-3).
-- All file operations logged (OBS-1, OBS-2).
+- Observability is partial: remote transfer lifecycle and newly relevant diagnostics are recorded, and diagnostics export sanitizes path-like event-metadata strings; comprehensive logging of every local file operation required by OBS-1/OBS-2 is not implemented.
 - Keyboard-only navigation supported for all tree operations (A11Y-2).
 - Error alerts are dismissible and non-blocking (REL-6).
+- Active local file/folder menus open original URLs through macOS; active remote menus instead provide transfer-backed Open in System and Download… without Reveal in Finder (F024-R16, R17).
+- Coordinator-backed remote explorer file/folder and active project-root actions share one app-wide transfer slot, retain it through cancellation cleanup, expose cancelling/publishing/persistent-failure states, and never publish partial downloads or open stale content; editor-triggered remote HTML Open in System is independent (F024-R17).
+- Remote drag/drop remains unsupported while local native drag recognition is retained (F024-R18).
+- AppKit unified explorer, SwiftUI explorer, and Shelf Files sidebar deletions share exact-target `ExplorerDeleteConfirmation` content and cancellation behavior for local and remote files and folders: the exact name appears in the title and permanent warning paragraph, and a separate following localized `Path:` paragraph displays the exact full path captured from the retained right-click target rather than mutable current selection (F024-R06, R19).
+- Successful local/remote deletion emits and forwards a typed exact-target event; detailed and docked/floating file tabs at that path or below a deleted directory close with `discardUnsavedChanges`, preventing close flush/autosave from recreating deleted items (F024-R21, S55).
+- The F024-R20/S54 user UI test sends ⌘T after repeated Files-sidebar scrolling and waits for Terminal Board; it does not enumerate all projects or assert scroll-offset preservation.
+
+## Verification Status
+
+Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. Production source for F024-R21/S55 is `FolderExplorerTypes.swift`, `FolderExplorerViewModelActions.swift`, `RemoteFolderExplorer.swift`, `ProjectSession.swift`, `RemoteProjectSession.swift`, `VibeSpaceCanvasFileOpenUseCase.swift`, `ContentViewerStore.swift`, `EditorGroupStore.swift`, and `DockedFileViewerCoordinator.swift`. `FolderExplorerViewModelTests` directly checks only shared `ExplorerDeleteConfirmation` formatting for representative names and paths; no static test directly invokes `ExplorerDeletionEvent`, `closeFileTabs`, `handleDeletion`, or `discardUnsavedChanges`, so emission/forwarding and exact/descendant detailed+docked+floating discard closure remain production-source inspection. The F024-R20/S54 UI source is `VibeSpaceAndNavigationUITests.testFilesSidebarRemainsResponsiveAfterRepeatedProjectScrolling`; it creates eight projects, performs six down/up scroll pairs, sends ⌘T, and waits for Terminal Board without enumerating rows or checking scroll offset.
 
 ## Open Questions
 
@@ -448,7 +551,12 @@ Note: This action exists in the view model but is not currently wired into any c
 
 | Date | Change | Author |
 |------|--------|--------|
-| 2026-10-01 | Updated S41 so local folder rows preserve native drag recognition by deferring expansion until mouse-up and cancelling it when a drag begins | — |
-| 2026-04-15 | Migrated from docs/features/sidebar (SDB-001–SDB-006, SDB-009–SDB-011, SDB-014, SDB-016) and docs/features/sidebar/folder-explorer (SDF-001–SDF-019, SDF-021–SDF-023, SDF-025–SDF-031) | — |
-| 2026-04-16 | Added targeted watcher refresh (S42), silent subtree refresh (S43), disclosure toggle (S44), tree mutation tracking (S45) | — |
-| 2026-07-14 | Added serialized refreshes, deferred watcher replay, deterministic create/rename visibility, and incremental outline updates (S46-S49) | — |
+| 2026-10-23 | Final reconciliation names the complete typed deletion production path, confirms exact/descendant detailed+docked+floating discard closure with no recreation, and corrects static/build evidence. | — |
+| 2026-10-23 | Added F024-R21/S55 for post-success typed local/remote deletion events, project-session forwarding, and exact/descendant detailed+docked discard closure that prevents autosave resurrection; identified the F024-R20/S54 user UI test exactly and narrowed all evidence to static/build-only scope. | — |
+| 2026-10-23 | Added F024-R20/S54 with the exact repeated-scroll responsiveness assertion; narrowed delete-confirmation evidence to direct shared-model formatting; final validation reached build/test-build only with no executed pass. | — |
+| 2026-10-20 | Expanded F024-R19/S53 exact-target confirmation requirements across AppKit, SwiftUI, and Shelf. Static evidence is limited to direct shared-model formatting for representative file, folder, and remote-style inputs; it does not prove per-surface target retention, Cancel, or delete dispatch. | — |
+| 2026-10-20 | Reconciled remote publication with synchronous MainActor acknowledgment plus a final cancellation check and residual atomic boundary; marked all-file-operation observability partial, documented metadata sanitization and absent size confirmation, and recorded build/test-build-only evidence with no executed test pass. | — |
+| 2026-10-01 | Updated S41 so local folder rows preserve native drag recognition by deferring expansion until mouse-up and cancelling it when a drag begins. | — |
+| 2026-07-14 | Added serialized refreshes, deferred watcher replay, deterministic create/rename visibility, and incremental outline updates (S46–S49). | — |
+| 2026-04-16 | Added targeted watcher refresh (S42), silent subtree refresh (S43), disclosure toggle (S44), and tree mutation tracking (S45). | — |
+| 2026-04-15 | Migrated from the legacy sidebar and folder-explorer documents. | — |

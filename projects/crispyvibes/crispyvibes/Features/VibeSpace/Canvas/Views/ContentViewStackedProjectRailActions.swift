@@ -103,7 +103,8 @@ extension ContentView {
             tabID: tab.id,
             title: tab.title,
             accentColor: vibespaceCanvasActionsCoordinator.colorTag(for: project)?.color,
-            owningProjectRootURL: project.rootURL
+            owningProjectRootURL: project.rootURL,
+            owningProjectIdentifier: project.projectIdentifier
         )
     }
 

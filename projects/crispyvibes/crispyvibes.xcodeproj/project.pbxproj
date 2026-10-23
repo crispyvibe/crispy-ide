@@ -784,6 +784,12 @@
 		DD000000000000000000006E /* SSHConnectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000006D /* SSHConnectionSheet.swift */; };
 		DD0000000000000000000099 /* RemoteFileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000099 /* RemoteFileBrowserView.swift */; };
 		DD00000000000000000000A0 /* SFTPSubprocess.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC00000000000000000000A0 /* SFTPSubprocess.swift */; };
+		F07100000000000000000001 /* RemoteItemTransferring.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07000000000000000000001 /* RemoteItemTransferring.swift */; };
+		F07100000000000000000002 /* ExternalFileOpening.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07000000000000000000002 /* ExternalFileOpening.swift */; };
+		F07100000000000000000003 /* ExternalFileOpenService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07000000000000000000003 /* ExternalFileOpenService.swift */; };
+		F07100000000000000000004 /* RemoteItemTransferService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07000000000000000000004 /* RemoteItemTransferService.swift */; };
+		F07100000000000000000005 /* RemoteTransferCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07000000000000000000005 /* RemoteTransferCoordinator.swift */; };
+		F07100000000000000000006 /* RemoteTransferProgressOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07000000000000000000006 /* RemoteTransferProgressOverlay.swift */; };
 		DD2AE35E202FEDAE25DDAE90 /* AppUpdateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DAFC08ACF27FB2EA6382047 /* AppUpdateModels.swift */; };
 		DD2AE35E202FEDAE25DDAE91 /* AppUpdateChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DAFC08ACF27FB2EA6382048 /* AppUpdateChannel.swift */; };
 		DDC5EB118F22CFF315D4B56C /* TodoPipelineModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3114BF3EE3054946C165C732 /* TodoPipelineModelTests.swift */; };
@@ -1666,6 +1672,12 @@
 		CC000000000000000000006D /* SSHConnectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionSheet.swift; sourceTree = "<group>"; };
 		CC0000000000000000000099 /* RemoteFileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteFileBrowserView.swift; sourceTree = "<group>"; };
 		CC00000000000000000000A0 /* SFTPSubprocess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTPSubprocess.swift; sourceTree = "<group>"; };
+		F07000000000000000000001 /* RemoteItemTransferring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteItemTransferring.swift; sourceTree = "<group>"; };
+		F07000000000000000000002 /* ExternalFileOpening.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalFileOpening.swift; sourceTree = "<group>"; };
+		F07000000000000000000003 /* ExternalFileOpenService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalFileOpenService.swift; sourceTree = "<group>"; };
+		F07000000000000000000004 /* RemoteItemTransferService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteItemTransferService.swift; sourceTree = "<group>"; };
+		F07000000000000000000005 /* RemoteTransferCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTransferCoordinator.swift; sourceTree = "<group>"; };
+		F07000000000000000000006 /* RemoteTransferProgressOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTransferProgressOverlay.swift; sourceTree = "<group>"; };
 		CC88DC71693F1743BE1E4977 /* DockedBrowserCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DockedBrowserCoordinator.swift; path = crispyvibes/Features/VibeSpace/Services/Browser/DockedBrowserCoordinator.swift; sourceTree = "<group>"; };
 		CD35DBB00AD4DD604BEF0E0A /* ContextSummaryGeneratorIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContextSummaryGeneratorIntegrationTests.swift; sourceTree = "<group>"; };
 		CD4508145612C68104576AED /* RasterImageDecoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RasterImageDecoder.swift; sourceTree = "<group>"; };
@@ -2180,6 +2192,7 @@
 				B100000000000000000000003 /* AppDelegate.swift */,
 				59F000000000000000000002 /* AppInstallationGuard.swift */,
 				649D02C9194B28AFD89D47F6 /* AppContainer.swift */,
+				F07000000000000000000003 /* ExternalFileOpenService.swift */,
 				219E2E03341D1B19CC04A003 /* AppContainer+ScreenCapture.swift */,
 				E7A100000000000000000101 /* VibeSpaceInteractionService.swift */,
 				E7A100000000000000000102 /* ContentViewDependencies.swift */,
@@ -3297,6 +3310,8 @@
 				CC0000000000000000000015 /* ProjectMetadata.swift */,
 				CC0000000000000000000013 /* DirectoryWatching.swift */,
 				CC0000000000000000000011 /* FileContentProviding.swift */,
+				F07000000000000000000002 /* ExternalFileOpening.swift */,
+				F07000000000000000000001 /* RemoteItemTransferring.swift */,
 				CC000000000000000000000F /* FileSystemProviding.swift */,
 				CC000000000000000000000D /* CommandExecuting.swift */,
 				CC000000000000000000000B /* FileItemDescriptor.swift */,
@@ -3341,6 +3356,7 @@
 				CC000000000000000000004F /* SSHPortForwardService.swift */,
 				CC000000000000000000004D /* PollingDirectoryWatcher.swift */,
 				CC000000000000000000004B /* SFTPFileContentProvider.swift */,
+				F07000000000000000000004 /* RemoteItemTransferService.swift */,
 				CC00000000000000000000A0 /* SFTPSubprocess.swift */,
 				CC0000000000000000000049 /* SFTPFileSystemProvider.swift */,
 				CC0000000000000000000047 /* RemoteCommandExecutor.swift */,
@@ -3376,6 +3392,7 @@
 		BB0000000000000000000007 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				F07000000000000000000005 /* RemoteTransferCoordinator.swift */,
 				CC0000000000000000000063 /* SSHProfileTestViewModel.swift */,
 				CC0000000000000000000061 /* SSHConnectionSheetViewModel.swift */,
 				CC000000000000000000005F /* SSHConnectionPickerViewModel.swift */,
@@ -3387,6 +3404,7 @@
 		BB0000000000000000000008 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				F07000000000000000000006 /* RemoteTransferProgressOverlay.swift */,
 				CC00000000000000000000386 /* SSHProfileRow.swift */,
 				CC0000000000000000000099 /* RemoteFileBrowserView.swift */,
 				CC000000000000000000006D /* SSHConnectionSheet.swift */,
@@ -4635,6 +4653,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F07100000000000000000001 /* RemoteItemTransferring.swift in Sources */,
+				F07100000000000000000002 /* ExternalFileOpening.swift in Sources */,
+				F07100000000000000000003 /* ExternalFileOpenService.swift in Sources */,
+				F07100000000000000000004 /* RemoteItemTransferService.swift in Sources */,
+				F07100000000000000000005 /* RemoteTransferCoordinator.swift in Sources */,
+				F07100000000000000000006 /* RemoteTransferProgressOverlay.swift in Sources */,
 				DD00000000000000000000387 /* AnyProjectSession+BackwardCompat.swift in Sources */,
 				DD00000000000000000000386 /* SSHProfileRow.swift in Sources */,
 				DD00000000000000000000385 /* SSHRemoteError.swift in Sources */,

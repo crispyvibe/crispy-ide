@@ -129,6 +129,9 @@ final class VibeSpaceManagementService: VibeSpaceManaging {
     func loadVibeSpace(id: UUID) -> (config: VibeSpaceConfigFile, trusted: Bool)? {
         guard let result = persistenceStore.loadVibeSpaceConfig(for: id) else { return nil }
         let validated = VibeSpaceValidator.validateVibeSpaceConfig(result.value)
+        if result.verified, validated != result.value {
+            persistenceStore.saveVibeSpaceConfig(validated)
+        }
         return (validated, result.verified)
     }
 
@@ -176,7 +179,10 @@ final class VibeSpaceManagementService: VibeSpaceManaging {
             }
         }
         for path in normalized {
-            let existing = persistenceStore.loadProjectConfig(for: path, in: vibespaceID)
+            let existing = loadProjectConfigMigratingAliases(
+                normalizedIdentifier: path,
+                vibespaceID: vibespaceID
+            )
             if existing == nil {
                 persistenceStore.saveProjectConfig(ProjectConfigFile.empty(projectPath: path), in: vibespaceID)
             }
@@ -195,6 +201,10 @@ final class VibeSpaceManagementService: VibeSpaceManaging {
         // INV-009: Delete project file — all per-project config gone
         projectShortcutsCache.removeValue(forKey: "\(vibespaceID.uuidString):\(normalized)")
         persistenceStore.deleteProjectConfig(for: normalized, in: vibespaceID)
+        for alias in legacyProjectSessionAliases(for: normalized) {
+            projectShortcutsCache.removeValue(forKey: "\(vibespaceID.uuidString):\(alias)")
+            persistenceStore.deleteProjectConfig(for: alias, in: vibespaceID)
+        }
     }
 
     func setFocusedProject(path: String, in vibespaceID: UUID) {
@@ -327,9 +337,35 @@ final class VibeSpaceManagementService: VibeSpaceManaging {
         }
 
         append(parsed.remotePath)
+        append("\(parsed.profile.sshURI)\(parsed.remotePath)")
         append(URL(fileURLWithPath: normalizedIdentifier).standardizedFileURL.path)
 
         return aliases
+    }
+
+    private func loadProjectConfigMigratingAliases(
+        normalizedIdentifier: String,
+        vibespaceID: UUID
+    ) -> ProjectConfigFile? {
+        if let direct = persistenceStore.loadProjectConfig(
+            for: normalizedIdentifier,
+            in: vibespaceID
+        )?.value {
+            return direct
+        }
+        for alias in legacyProjectSessionAliases(for: normalizedIdentifier) {
+            guard let legacy = persistenceStore.loadProjectConfig(
+                for: alias,
+                in: vibespaceID
+            )?.value else { continue }
+            return migrateLegacyProjectSession(
+                legacy,
+                from: alias,
+                to: normalizedIdentifier,
+                in: vibespaceID
+            )
+        }
+        return nil
     }
 
     private func migrateLegacyProjectSession(
@@ -371,7 +407,10 @@ final class VibeSpaceManagementService: VibeSpaceManaging {
         in vibespaceID: UUID
     ) -> [BrowserSessionEntry] {
         let normalized = VibeSpaceValidator.normalizedPath(path)
-        return persistenceStore.loadProjectConfig(for: normalized, in: vibespaceID)?.value.browserSessionEntries ?? []
+        return loadProjectConfigMigratingAliases(
+            normalizedIdentifier: normalized,
+            vibespaceID: vibespaceID
+        )?.browserSessionEntries ?? []
     }
 
     // MARK: - Scoped Shortcuts
@@ -414,7 +453,10 @@ final class VibeSpaceManagementService: VibeSpaceManaging {
         if let cached = projectShortcutsCache[key] {
             return cached
         }
-        let shortcuts = persistenceStore.loadProjectConfig(for: normalized, in: vibespaceID)?.value.shortcuts ?? []
+        let shortcuts = loadProjectConfigMigratingAliases(
+            normalizedIdentifier: normalized,
+            vibespaceID: vibespaceID
+        )?.shortcuts ?? []
         projectShortcutsCache[key] = shortcuts
         return shortcuts
     }
@@ -445,14 +487,20 @@ final class VibeSpaceManagementService: VibeSpaceManaging {
 
     func loadProjectConfig(forProject path: String, in vibespaceID: UUID) -> ProjectConfigFile? {
         let normalized = VibeSpaceValidator.normalizedPath(path)
-        return persistenceStore.loadProjectConfig(for: normalized, in: vibespaceID)?.value
+        return loadProjectConfigMigratingAliases(
+            normalizedIdentifier: normalized,
+            vibespaceID: vibespaceID
+        )
     }
 
     func loadProjectConfigs(for config: VibeSpaceConfigFile) -> [String: ProjectConfigFile] {
         var configs: [String: ProjectConfigFile] = [:]
-        for path in config.projectPaths {
+        let paths = config.projectPaths
+            + config.unresolvedProjectPaths
+            + config.parkedProjectPaths
+        for path in paths {
             if let projectConfig = loadProjectConfig(forProject: path, in: config.id) {
-                configs[path] = projectConfig
+                configs[projectConfig.projectPath] = projectConfig
             }
         }
         return configs
@@ -561,7 +609,10 @@ final class VibeSpaceManagementService: VibeSpaceManaging {
         let normalized = VibeSpaceValidator.normalizedPath(path)
         let key = "\(vibespaceID.uuidString):\(normalized)"
         var config = dirtyProjectConfigs[key]?.config
-            ?? persistenceStore.loadProjectConfig(for: normalized, in: vibespaceID)?.value
+            ?? loadProjectConfigMigratingAliases(
+                normalizedIdentifier: normalized,
+                vibespaceID: vibespaceID
+            )
             ?? ProjectConfigFile.empty(projectPath: normalized)
         mutate(&config)
         config = VibeSpaceValidator.validateProjectConfig(config, validProjectPaths: [])

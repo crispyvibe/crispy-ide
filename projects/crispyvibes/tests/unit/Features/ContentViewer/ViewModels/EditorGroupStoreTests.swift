@@ -5,6 +5,7 @@ import XCTest
 actor RecordingFileContentProvider: FileContentProviding {
     private let contentByPath: [String: Data]
     private var readPaths: [String] = []
+    private var writes: [(path: String, contents: Data)] = []
 
     init(contentByPath: [String: Data]) {
         self.contentByPath = contentByPath
@@ -18,7 +19,13 @@ actor RecordingFileContentProvider: FileContentProviding {
         return data
     }
 
-    func writeFile(at path: String, contents: Data) async throws {}
+    func writeFile(at path: String, contents: Data) async throws {
+        writes.append((path, contents))
+    }
+
+    func recordedWrites() -> [(path: String, contents: Data)] {
+        writes
+    }
 
     func recordedReadPaths() -> [String] {
         readPaths
@@ -413,6 +420,109 @@ final class EditorGroupNavigationRegressionTests: XCTestCase {
         XCTAssertNotNil(group.fileContentProvider(for: ContentViewerTab.file(reference: qualifiedRoot).id))
         XCTAssertTrue(group.tabs.contains { $0.id == ContentViewerTab.file(reference: qualifiedRoot).id })
         XCTAssertFalse(group.tabs.contains { $0.id == ContentViewerTab.file(url: rootURL).id })
+    }
+
+    func testDockedFileViewerCoordinatorRemoveGroupFlushesAfterViewModelRelease() async throws {
+        let root = try makeTempDirectory(prefix: "crispyvibes-docked-editor-teardown")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fileURL = root.appendingPathComponent("notes.md")
+        try Data("base".utf8).write(to: fileURL)
+        let bufferStore = DocumentBufferStore()
+        var viewModel: MarkdownViewModel? = container.makeMarkdownViewModel(bufferStore: bufferStore)
+        var ownedGroup: EditorGroupStore? = EditorGroupStore(
+            markdownViewModel: try XCTUnwrap(viewModel),
+            commentsPanel: CommentsPanelStore()
+        )
+        try XCTUnwrap(ownedGroup).openFileInTab(at: fileURL)
+        let loaded = await waitForCondition(timeout: 8) {
+            viewModel?.workerStatus == .ready
+        }
+        XCTAssertTrue(loaded)
+        viewModel?.updateText("dirty")
+        let reference = try XCTUnwrap(ownedGroup?.activeFileDocumentReference)
+
+        let tileID = UUID()
+        let coordinator = DockedFileViewerCoordinator(editorGroupFactory: { [container] id in
+            EditorGroupStore(
+                id: id,
+                markdownViewModel: container!.makeMarkdownViewModel(bufferStore: DocumentBufferStore()),
+                commentsPanel: CommentsPanelStore()
+            )
+        })
+        coordinator.assignEditorGroup(
+            try XCTUnwrap(ownedGroup),
+            for: tileID,
+            fileURL: fileURL,
+            documentReference: reference
+        )
+        weak var weakGroup = ownedGroup
+        weak var weakViewModel = viewModel
+        ownedGroup = nil
+        viewModel = nil
+        coordinator.removeGroup(for: tileID)
+
+        let released = await waitForCondition(timeout: 8) {
+            bufferStore.buffer(for: reference.documentIdentity) == nil
+        }
+        XCTAssertTrue(released)
+        XCTAssertEqual(try String(contentsOf: fileURL, encoding: .utf8), "dirty")
+        XCTAssertNil(weakGroup)
+        XCTAssertNil(weakViewModel)
+    }
+
+    func testCloseAllTabsFlushesNonActiveDirtyFileThroughItsOwnProvider() async throws {
+        let firstURL = URL(fileURLWithPath: "/remote/one/file.md")
+        let secondURL = URL(fileURLWithPath: "/remote/two/file.md")
+        let firstProvider = RecordingFileContentProvider(
+            contentByPath: [firstURL.path: Data("first".utf8)]
+        )
+        let secondProvider = RecordingFileContentProvider(
+            contentByPath: [secondURL.path: Data("second".utf8)]
+        )
+        let bufferStore = DocumentBufferStore()
+        let viewModel = container.makeMarkdownViewModel(bufferStore: bufferStore)
+        let ownedGroup = EditorGroupStore(
+            markdownViewModel: viewModel,
+            commentsPanel: CommentsPanelStore()
+        )
+        let firstReference = FileDocumentReference(
+            url: firstURL,
+            projectIdentifier: "ssh://dev@one.example:22/remote/one"
+        )
+        let secondReference = FileDocumentReference(
+            url: secondURL,
+            projectIdentifier: "ssh://dev@two.example:22/remote/two"
+        )
+        ownedGroup.openFileInTab(
+            at: firstURL,
+            documentReference: firstReference,
+            fileContentProvider: firstProvider
+        )
+        let firstLoaded = await waitForCondition(timeout: 2) {
+            viewModel.workerStatus == .ready
+        }
+        XCTAssertTrue(firstLoaded)
+        ownedGroup.openFileInTab(
+            at: secondURL,
+            documentReference: secondReference,
+            fileContentProvider: secondProvider
+        )
+        let secondLoaded = await waitForCondition(timeout: 2) {
+            viewModel.workerStatus == .ready && ownedGroup.activeFileDocumentReference == secondReference
+        }
+        XCTAssertTrue(secondLoaded)
+        let firstBuffer = try XCTUnwrap(bufferStore.buffer(for: firstReference.documentIdentity))
+        firstBuffer.applyEdit("dirty first")
+
+        let flushTasks = ownedGroup.closeAllTabsForTeardown()
+        for task in flushTasks { _ = await task.value }
+
+        let firstWrites = await firstProvider.recordedWrites()
+        let secondWrites = await secondProvider.recordedWrites()
+        XCTAssertTrue(firstWrites.contains {
+            $0.path == firstURL.path && String(data: $0.contents, encoding: .utf8) == "dirty first"
+        })
+        XCTAssertFalse(secondWrites.contains { $0.path == firstURL.path })
     }
 
     func testClosingTabsPrunesBackAndForwardHistorySafely() throws {

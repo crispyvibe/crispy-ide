@@ -17,10 +17,10 @@ struct VibeSpaceTerminalBoardDesiredTabState {
     let desiredByIdentity: [VibeSpaceTerminalBoardTerminalIdentity: TerminalTab]
     let orderedIdentities: [VibeSpaceTerminalBoardTerminalIdentity]
     let activeProjectPaths: Set<String>
+    let projectRootPathsByIdentifier: [String: String]
 
     init(
-        orderedProjectPaths: [String],
-        projectsByPath: [String: AnyProjectSession],
+        projects: [AnyProjectSession],
         hiddenTerminalIDsByProjectPath: [String: Set<UUID>],
         standaloneTabs: [TerminalTab],
         excludedTerminalIdentities: Set<VibeSpaceTerminalBoardTerminalIdentity> = []
@@ -29,12 +29,16 @@ struct VibeSpaceTerminalBoardDesiredTabState {
         var orderedIdentities: [VibeSpaceTerminalBoardTerminalIdentity] = []
         orderedIdentities.reserveCapacity(VibeSpaceTerminalBoardLayout.maximumTileCount)
 
-        for projectPath in orderedProjectPaths {
-            guard let project = projectsByPath[projectPath] else { continue }
+        for project in projects {
+            let projectIdentifier = project.projectIdentifier
+            let projectRootPath = project.rootURL.standardizedFileURL.path
+            let hiddenIDs = hiddenTerminalIDsByProjectPath[projectIdentifier]
+                ?? hiddenTerminalIDsByProjectPath[projectRootPath]
+                ?? []
             for tab in project.terminal.tabs {
-                guard !(hiddenTerminalIDsByProjectPath[projectPath]?.contains(tab.id) ?? false) else { continue }
+                guard !hiddenIDs.contains(tab.id) else { continue }
                 let identity = VibeSpaceTerminalBoardTerminalIdentity(
-                    scope: .project(projectPath),
+                    scope: .project(projectIdentifier),
                     tabID: tab.id
                 )
                 guard !excludedTerminalIdentities.contains(identity) else { continue }
@@ -55,7 +59,12 @@ struct VibeSpaceTerminalBoardDesiredTabState {
 
         self.desiredByIdentity = desiredByIdentity
         self.orderedIdentities = orderedIdentities
-        self.activeProjectPaths = Set(orderedProjectPaths)
+        self.activeProjectPaths = Set(projects.map(\.projectIdentifier))
+        self.projectRootPathsByIdentifier = Dictionary(
+            uniqueKeysWithValues: projects.map {
+                ($0.projectIdentifier, $0.rootURL.standardizedFileURL.path)
+            }
+        )
     }
 }
 
@@ -77,8 +86,8 @@ enum VibeSpaceTerminalBoardLayoutSync {
                   desiredTabState.desiredByIdentity[identity] != nil else {
                 // Tab exists but is hidden/filtered → remove. Tab doesn't exist yet → keep (hydration pending).
                 let tabExists = tile.terminalTabID.map { allKnownTabIDs.contains($0) } ?? false
-                if !tabExists, let pp = tile.projectPath {
-                    pendingTileCountByProject[pp, default: 0] += 1
+                if !tabExists, let owner = tile.projectIdentifier ?? tile.projectPath {
+                    pendingTileCountByProject[owner, default: 0] += 1
                     return false
                 }
                 didChange = true
@@ -94,8 +103,8 @@ enum VibeSpaceTerminalBoardLayoutSync {
                   let desiredTab = desiredTabState.desiredByIdentity[identity],
                   !seenIdentities.contains(identity) else {
                 let tabExists = existingTile.terminalTabID.map { allKnownTabIDs.contains($0) } ?? false
-                if !tabExists, let pp = existingTile.projectPath {
-                    pendingTileCountByProject[pp, default: 0] += 1
+                if !tabExists, let owner = existingTile.projectIdentifier ?? existingTile.projectPath {
+                    pendingTileCountByProject[owner, default: 0] += 1
                 } else {
                     _ = layout.removeTile(withID: existingTile.id)
                     didChange = true
@@ -129,21 +138,25 @@ enum VibeSpaceTerminalBoardLayoutSync {
             guard let desiredTab = desiredTabState.desiredByIdentity[identity] else { continue }
 
             let tileProjectPath: String?
+            let tileProjectIdentifier: String?
             switch identity.scope {
-            case let .project(projectPath):
+            case let .project(projectIdentifier):
                 // Skip if we're holding pending tiles for this project (awaiting hydration rebind)
-                if let pending = pendingTileCountByProject[projectPath], pending > 0 {
-                    pendingTileCountByProject[projectPath] = pending - 1
+                if let pending = pendingTileCountByProject[projectIdentifier], pending > 0 {
+                    pendingTileCountByProject[projectIdentifier] = pending - 1
                     continue
                 }
-                tileProjectPath = projectPath
+                tileProjectIdentifier = projectIdentifier
+                tileProjectPath = desiredTabState.projectRootPathsByIdentifier[projectIdentifier]
             case .standalone:
                 tileProjectPath = nil
+                tileProjectIdentifier = nil
             }
 
             let tile = VibeSpaceTerminalBoardTile(
                 heightWeight: 1,
                 projectPath: tileProjectPath,
+                projectIdentifier: tileProjectIdentifier,
                 terminalTabID: identity.tabID,
                 workingDirectoryPath: desiredTab.workingDirectory.standardizedFileURL.path
             )
@@ -171,33 +184,45 @@ enum VibeSpaceTerminalBoardLayoutSync {
         activeProjectPath: String?
     ) -> String? {
         if let preferredProjectPath {
-            let normalizedPath = preferredProjectPath.trimmingCharacters(in: .whitespacesAndNewlines)
-            if projectsByPath[normalizedPath] != nil {
-                return normalizedPath
+            let preferred = preferredProjectPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            if projectsByPath[preferred] != nil { return preferred }
+            let normalizedPreferred = URL(fileURLWithPath: preferred).standardizedFileURL.path
+            let matchingIdentifiers = orderedProjectPaths.filter { identifier in
+                projectsByPath[identifier]?.rootURL.standardizedFileURL.path == normalizedPreferred
             }
+            if let activeProjectPath, matchingIdentifiers.contains(activeProjectPath) {
+                return activeProjectPath
+            }
+            if matchingIdentifiers.count == 1 { return matchingIdentifiers[0] }
         }
 
         if let workingDirectoryPath {
             let trimmedPath = workingDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedPath.isEmpty {
                 let normalizedWorkingDirectoryPath = URL(fileURLWithPath: trimmedPath).standardizedFileURL.path
-                let matchedProjectPath = orderedProjectPaths
-                    .filter { projectPath in
-                        normalizedWorkingDirectoryPath == projectPath
-                            || normalizedWorkingDirectoryPath.hasPrefix(projectPath + "/")
+                let matchingIdentifiers = orderedProjectPaths.filter { identifier in
+                    guard let root = projectsByPath[identifier]?.rootURL.standardizedFileURL.path else {
+                        return false
                     }
-                    .max(by: { lhs, rhs in lhs.count < rhs.count })
-                if let matchedProjectPath {
-                    return matchedProjectPath
+                    return normalizedWorkingDirectoryPath == root
+                        || normalizedWorkingDirectoryPath.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+                }
+                if let activeProjectPath, matchingIdentifiers.contains(activeProjectPath) {
+                    return activeProjectPath
+                }
+                if let deepest = matchingIdentifiers.max(by: { lhs, rhs in
+                    let lhsCount = projectsByPath[lhs]?.rootURL.standardizedFileURL.path.count ?? 0
+                    let rhsCount = projectsByPath[rhs]?.rootURL.standardizedFileURL.path.count ?? 0
+                    return lhsCount < rhsCount
+                }) {
+                    return deepest
                 }
             }
         }
 
-        if let activeProjectPath,
-           projectsByPath[activeProjectPath] != nil {
+        if let activeProjectPath, projectsByPath[activeProjectPath] != nil {
             return activeProjectPath
         }
-
         return orderedProjectPaths.first
     }
 
@@ -206,8 +231,8 @@ enum VibeSpaceTerminalBoardLayoutSync {
             return nil
         }
 
-        if let projectPath = tile.projectPath {
-            return VibeSpaceTerminalBoardTerminalIdentity(scope: .project(projectPath), tabID: terminalTabID)
+        if let projectIdentity = tile.projectIdentifier ?? tile.projectPath {
+            return VibeSpaceTerminalBoardTerminalIdentity(scope: .project(projectIdentity), tabID: terminalTabID)
         }
 
         return VibeSpaceTerminalBoardTerminalIdentity(scope: .standalone, tabID: terminalTabID)

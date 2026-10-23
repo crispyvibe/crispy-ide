@@ -112,7 +112,8 @@ struct FolderExplorerView: View {
             gitHistorySheet(scope: scope)
         }
         .alert(
-            AppStrings.Explorer.deleteItemTitle,
+            pendingDeletion.map(ExplorerDeleteConfirmation.init(item:))?.title
+                ?? AppStrings.Explorer.deleteItemTitle,
             isPresented: Binding(
                 get: { pendingDeletion != nil },
                 set: { isPresented in
@@ -129,7 +130,7 @@ struct FolderExplorerView: View {
                 pendingDeletion = nil
             }
         } message: { item in
-            Text("Are you sure you want to delete \"\(item.displayName)\"?")
+            Text(ExplorerDeleteConfirmation(item: item).message)
         }
         .alert(
             AppStrings.Explorer.errorTitle,

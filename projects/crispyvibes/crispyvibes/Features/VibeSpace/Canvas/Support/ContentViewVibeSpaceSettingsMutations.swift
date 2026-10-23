@@ -264,7 +264,7 @@ extension ContentView {
             viewModel: pickerVM,
             profileStore: profileStore,
             onFolderSelected: { connection, remotePath in
-                let identifier = "\(connection.profile.sshURI)\(remotePath)"
+                let identifier = connection.profile.projectIdentifier(remotePath: remotePath)
                 let session = container.makeProjectSessionFromIdentifier(identifier, vibespaceID: vibespaceID)
                 catalogStore.mutateVibeSpace(id: vibespaceID) { vibespace in
                     vibespace.projects.append(session)

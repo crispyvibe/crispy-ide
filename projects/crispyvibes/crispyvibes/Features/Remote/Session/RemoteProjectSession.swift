@@ -15,10 +15,12 @@ final class RemoteProjectSession: ProjectProviding {
     let gitExplorer: any GitExploring
     let terminal: any TerminalProviding
     let fileContent: any FileContentProviding
+    let remoteItemTransfer: (any RemoteItemTransferring)?
     @Published var paneLayout: ProjectPaneLayoutState = .default
 
     var onFileOpenRequested: ((ExplorerOpenRequest) -> Void)?
     var onFileRenamed: ((ExplorerRenameEvent) -> Void)?
+    var onFileDeleted: ((ExplorerDeletionEvent) -> Void)?
 
     private let connection: SSHConnection
     private let remotePath: String
@@ -52,6 +54,10 @@ final class RemoteProjectSession: ProjectProviding {
         )
 
         self.fileContent = SFTPFileContentProvider(connection: connection)
+        self.remoteItemTransfer = RemoteItemTransferService(
+            connection: connection,
+            remoteRoot: remotePath
+        )
         let explorer = RemoteFolderExplorer(
             remotePath: remotePath,
             fileSystem: fileSystem,
@@ -67,7 +73,7 @@ final class RemoteProjectSession: ProjectProviding {
         let profile = connection.profile
         let conn = connection
         let rPath = remotePath
-        let stableRemoteTmuxSessionName = "crispyvibes-\(Self.stableHash("\(profile.sshURI)\(rPath)"))"
+        let stableRemoteTmuxSessionName = "crispyvibes-\(Self.stableHash(profile.projectIdentifier(remotePath: rPath)))"
         terminalVM.sessionConfigurator = { [weak terminalVM] session in
             let existingSessionNames = Set(terminalVM?.sessions.values.compactMap(\.tmuxSessionName) ?? [])
             session.tmuxSessionName = Self.resolveRemoteTmuxSessionName(
@@ -103,6 +109,11 @@ final class RemoteProjectSession: ProjectProviding {
         explorer.renameEvents
             .receive(on: RunLoop.main)
             .sink { [weak self] event in self?.onFileRenamed?(event) }
+            .store(in: &cancellables)
+
+        explorer.deletionEvents
+            .receive(on: RunLoop.main)
+            .sink { [weak self] event in self?.onFileDeleted?(event) }
             .store(in: &cancellables)
 
         connection.statePublisher
@@ -242,7 +253,7 @@ final class RemoteProjectSession: ProjectProviding {
     /// reverse forward. Lives in `/tmp` (transient across reboots);
     /// `StreamLocalBindUnlink=yes` removes it when the forward closes.
     static func remoteRelaySocketPath(profile: SSHConnectionProfile, workingDirectory: String) -> String {
-        "/tmp/.crispy-relay-\(stableHash("\(profile.sshURI)\(workingDirectory)")).sock"
+        "/tmp/.crispy-relay-\(stableHash(profile.projectIdentifier(remotePath: workingDirectory))).sock"
     }
 
     /// Best-effort POSIX-sh that installs a session `crispy` shim on `PATH`. The

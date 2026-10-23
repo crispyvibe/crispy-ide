@@ -15,6 +15,11 @@ final class DockedFileViewerCoordinator: ObservableObject {
     private var previewGroup: EditorGroupStore?
     private var previewRootReference: FileDocumentReference?
     private var spotlightOwnershipByHost: [String: Set<UUID>] = [:]
+    private struct OutstandingFlush {
+        let projectIdentifier: String?
+        let task: Task<Error?, Never>
+    }
+    private var outstandingFlushes: [OutstandingFlush] = []
 
     @Published var previewFileURL: URL?
     @Published private(set) var spotlightOwnedTileIDs: Set<UUID> = []
@@ -33,6 +38,12 @@ final class DockedFileViewerCoordinator: ObservableObject {
         fileContentProvider: (any FileContentProviding)? = nil
     ) {
         let reference = documentReference ?? FileDocumentReference(url: fileURL)
+        if let previewGroup {
+            track(
+                previewGroup.closeAllTabsForTeardown(),
+                projectIdentifier: previewRootReference?.projectIdentifier
+            )
+        }
         previewFileURL = reference.url
         previewRootReference = reference
         let group = editorGroupFactory(UUID())
@@ -44,10 +55,15 @@ final class DockedFileViewerCoordinator: ObservableObject {
         previewGroup = group
     }
 
-    func dismissPreview() {
+    @discardableResult
+    func dismissPreview() -> [Task<Error?, Never>] {
+        let projectIdentifier = previewRootReference?.projectIdentifier
+        let flushTasks = previewGroup?.closeAllTabsForTeardown() ?? []
+        track(flushTasks, projectIdentifier: projectIdentifier)
         previewFileURL = nil
         previewGroup = nil
         previewRootReference = nil
+        return flushTasks
     }
 
     /// Promotes the live preview editor group into the pinned tile, avoiding a fresh load.
@@ -66,20 +82,28 @@ final class DockedFileViewerCoordinator: ObservableObject {
     func assignEditorGroup(
         _ group: EditorGroupStore,
         for tileID: UUID?,
-        fileURL: URL
+        fileURL: URL,
+        documentReference: FileDocumentReference? = nil
     ) {
         guard let tileID else {
             dismissPreview()
             return
         }
+        if let previewGroup, previewGroup !== group {
+            track(
+                previewGroup.closeAllTabsForTeardown(),
+                projectIdentifier: previewRootReference?.projectIdentifier
+            )
+        }
         groups[tileID] = group
-        rootReferences[tileID] = FileDocumentReference(url: fileURL)
+        rootReferences[tileID] = documentReference ?? FileDocumentReference(url: fileURL)
         previewFileURL = nil
         previewGroup = nil
         previewRootReference = nil
     }
 
     var previewEditorGroup: EditorGroupStore? { previewGroup }
+    var previewProjectIdentifier: String? { previewRootReference?.projectIdentifier }
 
     // MARK: - Pinned Tile Groups
 
@@ -138,8 +162,89 @@ final class DockedFileViewerCoordinator: ObservableObject {
         spotlightOwnedTileIDs = combined
     }
 
-    func removeGroup(for tileID: UUID) {
-        groups.removeValue(forKey: tileID)
-        rootReferences.removeValue(forKey: tileID)
+    @discardableResult
+    func removeGroup(
+        for tileID: UUID,
+        projectIdentifier fallbackProjectIdentifier: String? = nil
+    ) -> [Task<Error?, Never>] {
+        let group = groups.removeValue(forKey: tileID)
+        let projectIdentifier = rootReferences.removeValue(forKey: tileID)?.projectIdentifier
+            ?? fallbackProjectIdentifier
+        let flushTasks = group?.closeAllTabsForTeardown() ?? []
+        track(flushTasks, projectIdentifier: projectIdentifier)
+        return flushTasks
+    }
+
+    func handleDeletion(_ event: ExplorerDeletionEvent) {
+        if let previewGroup {
+            previewGroup.closeFileTabs(
+                at: event.url,
+                includeDescendants: event.isDirectory
+            )
+            if previewGroup.tabs.isEmpty {
+                previewFileURL = nil
+                self.previewGroup = nil
+                previewRootReference = nil
+            }
+        }
+
+        for (tileID, group) in groups {
+            group.closeFileTabs(
+                at: event.url,
+                includeDescendants: event.isDirectory
+            )
+            if group.tabs.isEmpty {
+                groups.removeValue(forKey: tileID)
+                rootReferences.removeValue(forKey: tileID)
+            }
+        }
+        let rootPath = event.url.standardizedFileURL.path
+        let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        dockedFiles.removeAll { entry in
+            let path = entry.fileURL.standardizedFileURL.path
+            return path == rootPath || (event.isDirectory && path.hasPrefix(prefix))
+        }
+    }
+
+    @discardableResult
+    func removeAllGroups() -> [Task<Error?, Never>] {
+        let existingGroups = groups
+        groups.removeAll()
+        for (tileID, group) in existingGroups {
+            let flushTasks = group.closeAllTabsForTeardown()
+            track(
+                flushTasks,
+                projectIdentifier: rootReferences[tileID]?.projectIdentifier
+            )
+        }
+        rootReferences.removeAll()
+        _ = dismissPreview()
+        dockedFiles = []
+        spotlightOwnershipByHost.removeAll()
+        spotlightOwnedTileIDs = []
+        let flushTasks = outstandingFlushes.map(\.task)
+        outstandingFlushes.removeAll()
+        return flushTasks
+    }
+
+    func takeOutstandingFlushTasks(
+        forProjectIdentifier projectIdentifier: String
+    ) -> [Task<Error?, Never>] {
+        let matching = outstandingFlushes.filter {
+            $0.projectIdentifier == projectIdentifier
+        }
+        outstandingFlushes.removeAll {
+            $0.projectIdentifier == projectIdentifier
+        }
+        return matching.map(\.task)
+    }
+
+    private func track(
+        _ tasks: [Task<Error?, Never>],
+        projectIdentifier: String?
+    ) {
+        outstandingFlushes.append(contentsOf: tasks.map {
+            OutstandingFlush(projectIdentifier: projectIdentifier, task: $0)
+        })
     }
 }

@@ -62,10 +62,10 @@ extension VibeSpaceTerminalBoardStore {
     ) -> Bool {
         let layout = layout(for: surfaceID)
         guard let sourceTileID = layout.tiles.first(where: {
-            $0.projectPath == projectPath && $0.terminalTabID == tabID
+            ($0.projectIdentifier ?? $0.projectPath) == projectPath && $0.terminalTabID == tabID
         })?.id,
         let targetTileID = layout.tiles.first(where: {
-            $0.projectPath == targetProjectPath && $0.terminalTabID == targetTabID
+            ($0.projectIdentifier ?? $0.projectPath) == targetProjectPath && $0.terminalTabID == targetTabID
         })?.id else {
             return false
         }
@@ -180,10 +180,14 @@ extension VibeSpaceTerminalBoardStore {
     ) -> UUID? {
         switch id {
         case let .terminal(projectPath, tabID):
-            let normalizedPath = URL(fileURLWithPath: projectPath).standardizedFileURL.path
-            return layout.tiles.first {
-                $0.projectPath.map { URL(fileURLWithPath: $0).standardizedFileURL.path } == normalizedPath
-                    && $0.terminalTabID == tabID
+            return layout.tiles.first { tile in
+                guard tile.terminalTabID == tabID,
+                      let tileOwner = tile.projectIdentifier ?? tile.projectPath else { return false }
+                if projectPath.hasPrefix("ssh://") || tileOwner.hasPrefix("ssh://") {
+                    return tileOwner == projectPath
+                }
+                return URL(fileURLWithPath: tileOwner).standardizedFileURL.path
+                    == URL(fileURLWithPath: projectPath).standardizedFileURL.path
             }?.id
         case let .standaloneTerminal(_, tileID, _),
              let .file(tileID),
@@ -363,6 +367,83 @@ extension VibeSpaceTerminalBoardStore {
         return didAttach
     }
 
+
+    /// Removes every board presentation owned by a project across primary and
+    /// detached surfaces without closing terminal sessions individually. Project
+    /// lifecycle teardown owns the sessions; this mutation owns only layout,
+    /// Spotlight membership, active-tile repair, and persistence.
+    @discardableResult
+    func removeTilesForProject(
+        rootPath: String,
+        projectIdentifier: String,
+        terminalTabIDs: Set<UUID> = []
+    ) -> [VibeSpaceTerminalBoardTile] {
+        let normalizedRoot = URL(fileURLWithPath: rootPath).standardizedFileURL.path
+        var removedTiles: [VibeSpaceTerminalBoardTile] = []
+
+        mutate { state in
+            for surfaceIndex in state.surfaces.indices {
+                let candidates = state.surfaces[surfaceIndex].layout.tiles
+                    + state.surfaces[surfaceIndex].layout.minimizedTiles
+                let matchingIDs = candidates.filter { tile in
+                    Self.tile(
+                        tile,
+                        belongsToProjectRoot: normalizedRoot,
+                        projectIdentifier: projectIdentifier,
+                        terminalTabIDs: terminalTabIDs
+                    )
+                }.map(\.id)
+
+                for tileID in matchingIDs {
+                    guard let removed = state.surfaces[surfaceIndex].layout.removeTile(withID: tileID) else {
+                        continue
+                    }
+                    Self.removeSpotlightMember(for: removed, from: &state.surfaces[surfaceIndex])
+                    removedTiles.append(removed)
+                }
+            }
+        }
+
+        hiddenTerminalIDsByProjectPath[normalizedRoot] = nil
+        return removedTiles
+    }
+
+    private static func tile(
+        _ tile: VibeSpaceTerminalBoardTile,
+        belongsToProjectRoot rootPath: String,
+        projectIdentifier: String,
+        terminalTabIDs: Set<UUID>
+    ) -> Bool {
+        if let tileProjectIdentifier = tile.projectIdentifier {
+            return tileProjectIdentifier == projectIdentifier
+        }
+        if let selectedProject = tile.acpSnapshot?.selectedProjectIdentifier {
+            return selectedProject == projectIdentifier
+                || (!projectIdentifier.hasPrefix("ssh://") && selectedProject == rootPath)
+        }
+        if let terminalTabID = tile.terminalTabID,
+           terminalTabIDs.contains(terminalTabID) {
+            return true
+        }
+
+        // Local identifiers are their canonical root path, so legacy tiles can
+        // still be matched by root containment. A remote root path is not
+        // globally unique; ambiguous legacy SSH tiles are deliberately retained
+        // rather than deleting another host's presentation.
+        guard !projectIdentifier.hasPrefix("ssh://") else { return false }
+        if tile.projectPath == rootPath { return true }
+        if let fileURL = tile.fileURL,
+           path(fileURL.standardizedFileURL.path, isWithin: rootPath) {
+            return true
+        }
+        return false
+    }
+
+    private static func path(_ candidate: String, isWithin root: String) -> Bool {
+        let candidate = URL(fileURLWithPath: candidate).standardizedFileURL.path
+        let root = URL(fileURLWithPath: root).standardizedFileURL.path
+        return candidate == root || candidate.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+    }
     // MARK: - Bulk Cross-Surface Transfer (F048-R13/R16)
 
     /// F048-R13: collect all tile IDs on `surfaceID` whose `projectPath` matches
@@ -371,10 +452,10 @@ extension VibeSpaceTerminalBoardStore {
     func tileIDs(forProject projectPath: String, onSurface surfaceID: UUID) -> [UUID] {
         let surfaceLayout = layout(for: surfaceID)
         let visible = surfaceLayout.tiles
-            .filter { $0.projectPath == projectPath }
+            .filter { ($0.projectIdentifier ?? $0.projectPath) == projectPath }
             .map(\.id)
         let minimized = surfaceLayout.minimizedTiles
-            .filter { $0.projectPath == projectPath }
+            .filter { ($0.projectIdentifier ?? $0.projectPath) == projectPath }
             .map(\.id)
         return visible + minimized
     }
@@ -392,10 +473,10 @@ extension VibeSpaceTerminalBoardStore {
         mutate { state in
             guard let index = state.surfaces.firstIndex(where: { $0.id == surfaceID }) else { return }
             let visibleIDs = state.surfaces[index].layout.tiles
-                .filter { $0.projectPath == projectPath }
+                .filter { ($0.projectIdentifier ?? $0.projectPath) == projectPath }
                 .map(\.id)
             let minimizedIDs = state.surfaces[index].layout.minimizedTiles
-                .filter { $0.projectPath == projectPath }
+                .filter { ($0.projectIdentifier ?? $0.projectPath) == projectPath }
                 .map(\.id)
             // Preserve original order: visible first (column-flattened), then minimized.
             for tileID in visibleIDs + minimizedIDs {
@@ -535,7 +616,8 @@ extension VibeSpaceTerminalBoardStore {
             guard let context = tileContext(for: tile) else { return nil }
             if let projectPath = context.projectPath,
                let project = projects.first(where: {
-                   $0.rootURL.standardizedFileURL.path == projectPath
+                   $0.projectIdentifier == projectPath
+                       || $0.rootURL.standardizedFileURL.path == projectPath
                }) {
                 guard includeProjectTerminals else { return nil }
                 return .terminal(project: project, tab: context.terminalTab)
@@ -578,8 +660,8 @@ extension VibeSpaceTerminalBoardStore {
         surfaceID: UUID
     ) -> SpotlightPersistentItemID? {
         if let tabID = tile.terminalTabID {
-            if let projectPath = tile.projectPath {
-                return .terminal(projectPath: projectPath, tabID: tabID)
+            if let projectIdentity = tile.projectIdentifier ?? tile.projectPath {
+                return .terminal(projectPath: projectIdentity, tabID: tabID)
             }
             return .standaloneTerminal(surfaceID: surfaceID, tileID: tile.id, tabID: tabID)
         }

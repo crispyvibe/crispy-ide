@@ -429,6 +429,11 @@ final class VibeSpaceTerminalBoardDetachedWindowManager {
         closeWindow(id: id, notifyUserClose: false)
     }
 
+    func closeWindow(forSurfaceID surfaceID: UUID, vibespaceID: UUID?) {
+        guard let windowID = windowID(forSurfaceID: surfaceID, vibespaceID: vibespaceID) else { return }
+        closeWindow(id: windowID, notifyUserClose: false)
+    }
+
     func window(id: UUID?, contains screenPoint: CGPoint) -> Bool {
         guard let id, let record = windowsByID[id] else { return false }
         return record.window.frame.contains(NSPoint(x: screenPoint.x, y: screenPoint.y))

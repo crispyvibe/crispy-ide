@@ -375,7 +375,15 @@ final class ContentViewerStoreTests: XCTestCase {
         guard case let .previewFile(resolvedTarget, owningProjectRootURL) = resolution else {
             return XCTFail("Expected file preview resolution")
         }
-        XCTAssertEqual(resolvedTarget, TerminalFileSystemTarget(url: fileURL.standardizedFileURL, line: 18, column: 6))
+        XCTAssertEqual(
+            resolvedTarget,
+            TerminalFileSystemTarget(
+                url: fileURL.standardizedFileURL,
+                line: 18,
+                column: 6,
+                projectIdentifier: project.projectIdentifier
+            )
+        )
         XCTAssertEqual(owningProjectRootURL, projectRoot.standardizedFileURL)
     }
 

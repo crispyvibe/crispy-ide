@@ -3,7 +3,7 @@ title: "File Explorer"
 feature: "F024"
 domain: "explorer"
 audience: "user"
-version: "1.0"
+version: "1.6"
 sidebar:
   label: "File Explorer"
   order: 1
@@ -61,11 +61,15 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 
 ### Deleting Items
 
-1. Right-click a file or folder and choose **Delete**.
-2. A destructive confirmation dialog appears.
-3. Confirm to remove the item from disk.
-4. Dependent selections under the deleted subtree are cleared.
-5. Items removed outside Crispy are also deselected when their directory refreshes.
+1. Right-click a file or folder in the AppKit unified explorer, SwiftUI explorer, or Shelf Files sidebar and choose **Delete**.
+2. Crispy retains the exact item you right-clicked and creates the shared confirmation from that target, not from another row that is or later becomes selected. This is identical for local and remote files and folders on all three surfaces.
+3. Verify the title is **Delete “name”?** with the exact item name.
+4. Verify the first message paragraph is a permanent-deletion warning that repeats the exact item name and says the action cannot be undone.
+5. In the following, separate paragraph, verify the localized **Path:** block displays the exact full local or remote path of the item you right-clicked. The dialog never substitutes an unresolved raw placeholder for the name or path. Showing this full path is intentional in the local confirmation dialog so you can distinguish same-named targets before deleting.
+6. Choose the destructive **Delete** button to remove that exact retained item from its filesystem.
+7. Choose **Cancel** to close the dialog without deleting anything.
+8. After a successful local or remote deletion, Crispy closes open detailed and docked/floating file tabs at that exact path. Deleting a directory also closes tabs for files below it. These deletion-driven closes discard their buffers rather than saving, so Crispy autosave cannot recreate the deleted item. Cancellation or deletion failure leaves tabs open.
+9. Dependent selections under the deleted subtree are cleared. Items removed outside Crispy are also deselected when their directory refreshes.
 
 ### Opening Files
 
@@ -75,13 +79,16 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 
 ### Context Menu Actions
 
-1. Right-click any file or folder row to access the context menu.
-2. Available actions:
-   - **Reveal in Finder** — opens the item's location in macOS Finder.
+1. Right-click any active file or folder row to access its context menu.
+2. Local items can provide:
+   - **Open in System** — opens the original item in its default macOS application.
+   - **Reveal in Finder** — reveals the item in Finder.
    - **Copy Path** — copies the absolute path to clipboard.
    - **Copy Relative Path** — copies the path relative to the project root.
-   - **Open in Tab** — opens the file as a persistent editor tab.
+   - **Open in Tab** — opens a file as a persistent editor tab.
    - **Open in Terminal** — opens a terminal at the folder path (or file's parent path).
+3. Remote items provide **Open in System** and **Download…**, but never **Reveal in Finder**. Open in System first creates a protected temporary local copy. Download… asks you to choose a local destination.
+4. Remote explorer and active project-root actions use one app-wide transfer overlay. Only one of those transfers runs at a time. The overlay shows preparation and manifest/item/byte transfer progress, **Cancelling…**, publication, completion, or failure. Cancel is available only before publication; cancelling keeps the slot occupied until network shutdown and partial-file cleanup finish, and a failure remains visible until dismissed. Publication is acknowledged before a final cancellation check immediately ahead of the atomic replace/move. A cancellation arriving after that check may not stop publication, so no Cancel control is shown while publishing. The Download action does not currently ask for size confirmation. Remote HTML opened from its editor is independent and uses the editor's busy indicator and normal alert instead of this overlay.
 
 ### Programmatic Sidebar Reveal
 
@@ -96,6 +103,8 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 3. By default, use the refresh button for remote updates.
 4. Testers can enable **Enhanced remote file explorer (Beta)** in Settings → Connections; reopen remote projects afterward. Enhanced mode polls the root and expanded directories and applies targeted refreshes.
 5. The explicit refresh button remains available in both modes.
+6. Use **Open in System** on an active remote file/folder to create and open a temporary local copy, or **Download…** to choose a durable local destination.
+7. Remote drag and drop is not supported. Use Download… to copy remote content locally.
 
 ## Keyboard Shortcuts
 
@@ -122,6 +131,7 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 - Each project header includes dedicated refresh, new file, and new folder buttons that target that specific project regardless of focus.
 - Selecting a file from a non-focused project automatically focuses that project.
 - The explorer uses NSOutlineView for native macOS tree performance and drag recognition.
+- Repeatedly scrolling a multi-project Files sidebar should not make the app unresponsive; ⌘T should still open Terminal Board. This responsiveness check does not guarantee that every project row is visible at once or that a prior scroll offset is restored.
 
 ## Troubleshooting
 
@@ -130,6 +140,27 @@ The File Explorer provides a tree-based file browser in the sidebar that lists e
 | Directory won't expand | Check for loading indicator. If stuck, use the project header refresh button. For remote projects, verify SSH connection. |
 | Files not appearing after creation | The affected folder refreshes before inline rename begins. If the worker reports an error, dismiss it and retry the operation. |
 | Error alert on operation | Sidebar operation failures surface as dismissible alerts. Read the message and retry. |
+| Delete dialog names or paths the wrong item, shows a raw placeholder, or combines warning and path | Cancel so no deletion occurs, then reopen the exact item's context menu. Report the mismatch; the title and permanent warning should repeat the retained target's exact name, and a separate following localized **Path:** paragraph should show its exact full local or remote path on AppKit, SwiftUI explorer, and Shelf. |
 | Remote explorer shows no files | Check SSH connection status in the toolbar. Use explicit refresh once connected. |
 | Git status not showing | Ensure the project is inside a git repository. Check source control settings for ignored directories. |
 | Search not finding files | Search filters by filename. Ensure your query matches part of the filename or path. |
+
+## Known Limitations
+
+- Remote drag and drop is unsupported; use **Download…** for a local copy.
+- Edits made to a remote item opened in another macOS application do not synchronize or write back to the SSH source.
+- Only one coordinator-backed remote transfer from an explorer file/folder row or active project root runs at a time. Cancellation retains the slot through cleanup and interrupted transfers cannot resume. Before publication, Crispy synchronously acknowledges publishing and checks cancellation again immediately before replace/move; cancellation after that check may not prevent the atomic publication. Editor-triggered remote HTML Open in System is independent.
+- Explicit Download shows manifest/item/byte progress but does not provide a size-confirmation prompt. Large-file editing confirmation is also not implemented.
+- Replacing an existing download follows the save panel and destination filesystem's replacement behavior.
+
+## Documentation Verification
+
+Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. Static unit source directly checks shared confirmation formatting only. Test-source search found no direct use of `ExplorerDeletionEvent`, `closeFileTabs`, `handleDeletion`, or `discardUnsavedChanges`; typed local/remote emission and forwarding plus exact/descendant detailed+docked+floating discard closure were verified from production source. `VibeSpaceAndNavigationUITests.testFilesSidebarRemainsResponsiveAfterRepeatedProjectScrolling` sends ⌘T after six scroll pairs and waits for Terminal Board without asserting all rows or scroll offset.
+
+## Change History
+
+- 2026-10-23: Version 1.6 records the exact successful-deletion production pipeline, detailed+docked+floating discard closure, no-recreation guarantee, and build/test-build-only validation.
+- 2026-10-23: Version 1.5 documents post-success local/remote deletion-driven tab closure with discarded buffers, names the F024-R20/S54 user UI test exactly, and narrows verification to static/build-only evidence.
+- 2026-10-23: Version 1.4 adds repeated-scroll responsiveness guidance and narrows documentation verification to the assertions present in static source.
+- 2026-10-20: Expanded exact-target delete guidance across AppKit, SwiftUI, and Shelf; static evidence is limited to shared-model formatting and does not exercise each surface's right-click target, Cancel, or deletion route.
+- 2026-10-20: Reconciled publication acknowledgment and final cancellation/atomic-move boundary; documented manifest/item/byte progress and the absence of editing or Download size-confirmation prompts.

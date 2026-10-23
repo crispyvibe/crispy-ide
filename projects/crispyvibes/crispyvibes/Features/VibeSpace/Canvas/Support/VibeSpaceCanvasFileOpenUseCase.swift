@@ -22,6 +22,7 @@ struct VibeSpaceCanvasFileOpenUseCase {
         appShellStore: AppShellStore,
         vibespaceCatalogStore: VibeSpaceCatalogStore,
         dockPreviewBridge: DockPreviewBridge? = nil,
+        dockedFileViewerCoordinator: DockedFileViewerCoordinator? = nil,
         canvasModeProvider: (() -> VibeSpaceCanvasMode)? = nil
     ) {
         let projectRootURL = project.rootURL
@@ -32,7 +33,10 @@ struct VibeSpaceCanvasFileOpenUseCase {
                 if let canvasModeProvider, let dockPreviewBridge,
                    request.action == .preview || request.action == .openTab,
                    ContentSurfacePolicy.surface(for: .file, mode: canvasModeProvider()) == .dockedPreview {
-                    dockPreviewBridge.requestPreview(for: request.fileURL)
+                    dockPreviewBridge.requestPreview(
+                        for: request.fileURL,
+                        projectIdentifier: projectIdentifier
+                    )
                     return
                 }
                 switch request.action {
@@ -91,6 +95,16 @@ struct VibeSpaceCanvasFileOpenUseCase {
             }
         }
 
+        if project.onFileDeleted == nil {
+            project.onFileDeleted = { event in
+                contentViewerStore.closeFileTabs(
+                    at: event.url,
+                    includeDescendants: event.isDirectory
+                )
+                dockedFileViewerCoordinator?.handleDeletion(event)
+            }
+        }
+
         contentViewerStore.onActiveFileCleared = { [weak appShellStore, weak vibespaceCatalogStore] in
             guard let activeVibeSpaceID = appShellStore?.activeVibeSpaceID,
                   let focusedProject = vibespaceCatalogStore?.vibespaceValue(for: activeVibeSpaceID, { $0.focusedProject }) else {
@@ -113,6 +127,7 @@ struct VibeSpaceCanvasFileOpenUseCase {
 
         if let match = projectRoutingUseCase.terminalProjectMatch(
             for: normalizedURL,
+            preferredProjectIdentifier: target.projectIdentifier,
             preferredProjectRootURL: preferredProjectRootURL,
             candidates: candidates
         ) {
@@ -120,7 +135,8 @@ struct VibeSpaceCanvasFileOpenUseCase {
                 target: TerminalFileSystemTarget(
                     url: normalizedURL,
                     line: target.line,
-                    column: target.column
+                    column: target.column,
+                    projectIdentifier: match.project.projectIdentifier
                 ),
                 owningProjectRootURL: match.project.rootURL.standardizedFileURL
             )
@@ -130,7 +146,8 @@ struct VibeSpaceCanvasFileOpenUseCase {
             target: TerminalFileSystemTarget(
                 url: normalizedURL,
                 line: target.line,
-                column: target.column
+                column: target.column,
+                projectIdentifier: target.projectIdentifier
             ),
             owningProjectRootURL: nil
         )
@@ -138,6 +155,7 @@ struct VibeSpaceCanvasFileOpenUseCase {
 
     func openSourceControlDiff(
         repositoryRootURL: URL,
+        preferredProjectIdentifier: String? = nil,
         item: VibeSpaceSourceControlStatusItem,
         focusedProject: AnyProjectSession?,
         projects: [AnyProjectSession],
@@ -150,7 +168,9 @@ struct VibeSpaceCanvasFileOpenUseCase {
 
         prepareVibeSpacePresentation()
 
-        let targetProject = projectRoutingUseCase.sourceControlProjectMatch(
+        let targetProject = preferredProjectIdentifier.flatMap { identifier in
+            projects.first(where: { $0.projectIdentifier == identifier })
+        } ?? projectRoutingUseCase.sourceControlProjectMatch(
             for: normalizedFileURL,
             repositoryRootURL: normalizedRepositoryRootURL,
             focusedProject: focusedProject,
@@ -160,18 +180,55 @@ struct VibeSpaceCanvasFileOpenUseCase {
         guard let targetProject else { return }
 
         wireProjectFileOpenHandler(targetProject)
+        if targetProject.sshConnection != nil {
+            if item.lacksCommittedHistory {
+                contentViewerStore.openFileInTab(
+                    at: normalizedFileURL,
+                    projectIdentifier: targetProject.projectIdentifier,
+                    fileContentProvider: targetProject.fileContent
+                )
+                return
+            }
+            let gitExplorer = targetProject.gitExplorer
+            let projectIdentifier = targetProject.projectIdentifier
+            Task { [weak contentViewerStore] in
+                do {
+                    let content = try await gitExplorer.loadDiff(
+                        relativePath: item.relativePath,
+                        in: normalizedRepositoryRootURL.path
+                    )
+                    contentViewerStore?.previewGitDiffContent(
+                        content,
+                        fileURL: normalizedFileURL,
+                        relativePath: item.relativePath,
+                        statusCode: item.code,
+                        projectIdentifier: projectIdentifier
+                    )
+                } catch {
+                    contentViewerStore?.activeGroup.markdownViewModel.errorMessage =
+                        AppStrings.Explorer.gitDiffLoadFailed(error.localizedDescription)
+                }
+            }
+            return
+        }
+
         if item.isDeleted {
             contentViewerStore.previewGitFileContent(
                 rootURL: normalizedRepositoryRootURL,
                 fileURL: normalizedFileURL,
                 relativePath: item.relativePath,
-                titleSuffix: "Deleted"
+                titleSuffix: "Deleted",
+                projectIdentifier: targetProject.projectIdentifier
             )
             return
         }
 
         if item.lacksCommittedHistory {
-            contentViewerStore.openFileInTab(at: normalizedFileURL)
+            contentViewerStore.openFileInTab(
+                at: normalizedFileURL,
+                projectIdentifier: targetProject.projectIdentifier,
+                fileContentProvider: targetProject.fileContent
+            )
             return
         }
 
@@ -179,7 +236,8 @@ struct VibeSpaceCanvasFileOpenUseCase {
             rootURL: normalizedRepositoryRootURL,
             fileURL: normalizedFileURL,
             relativePath: item.relativePath,
-            statusCode: item.code
+            statusCode: item.code,
+            projectIdentifier: targetProject.projectIdentifier
         )
     }
 }

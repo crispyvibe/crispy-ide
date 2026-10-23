@@ -30,6 +30,7 @@ final class SSHConnection: ObservableObject, SSHConnectionProviding {
 
     nonisolated(unsafe) var hasTmux: Bool = false
     nonisolated(unsafe) private var sftpSubprocess: SFTPSubprocess?
+    nonisolated(unsafe) private let sftpLock = NSLock()
     let portForwardService = SSHPortForwardService()
 
     private var healthTask: Task<Void, Never>?
@@ -72,28 +73,72 @@ final class SSHConnection: ObservableObject, SSHConnectionProviding {
 
     /// Returns the shared SFTP subprocess, creating it on first use.
     nonisolated func availableSFTP() throws -> SFTPSubprocess {
+        sftpLock.lock()
+        defer { sftpLock.unlock() }
         if let sftp = sftpSubprocess, sftp.isRunning { return sftp }
         guard FileManager.default.fileExists(atPath: controlPath) else {
             throw SFTPError.notConnected
         }
         AppDiagnostics.record(category: .remote, level: .info, event: "sftp_subprocess_creating", metadata: ["host": profile.host])
-        let sftp = try SFTPSubprocess(
+        let sftp = try makeDedicatedSFTP()
+        sftpSubprocess = sftp
+        AppDiagnostics.record(category: .remote, level: .info, event: "sftp_subprocess_ready", metadata: ["host": profile.host])
+        return sftp
+    }
+
+    /// Creates an independent SFTP channel over the existing ControlMaster.
+    /// Long-running transfers use this instead of blocking explorer and editor I/O.
+    nonisolated func makeDedicatedSFTP() throws -> SFTPSubprocess {
+        guard FileManager.default.fileExists(atPath: controlPath) else {
+            throw SFTPError.notConnected
+        }
+        return try SFTPSubprocess(
             controlPath: controlPath,
             user: profile.user,
             host: profile.host,
             port: profile.port
         )
-        sftpSubprocess = sftp
-        AppDiagnostics.record(category: .remote, level: .info, event: "sftp_subprocess_ready", metadata: ["host": profile.host])
-        return sftp
+    }
+
+    /// Joins an in-flight connection attempt or establishes one, then verifies
+    /// that file-service operations can create an SFTP channel.
+    func ensureFileServicesConnected(timeout: TimeInterval = 20) async throws {
+        if state != .connected, state != .connecting {
+            try await connect()
+        }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        while state == .connecting, Date() < deadline {
+            try Task.checkCancellation()
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        switch state {
+        case .connected:
+            let probe = try makeDedicatedSFTP()
+            probe.terminate()
+        case .failed(let message):
+            throw SFTPError.operationFailed(message)
+        case .disconnected:
+            throw SFTPError.notConnected
+        case .connecting:
+            throw SFTPError.timeout("connection readiness")
+        }
+    }
+
+    nonisolated private func resetSharedSFTP() {
+        sftpLock.lock()
+        let existing = sftpSubprocess
+        sftpSubprocess = nil
+        sftpLock.unlock()
+        existing?.terminate()
     }
 
     func connect() async throws {
         guard state != .connected, state != .connecting else { return }
         masterProcess?.terminate()
         masterProcess = nil
-        sftpSubprocess?.terminate()
-        sftpSubprocess = nil
+        resetSharedSFTP()
         hasTmux = false
         state = .connecting
 
@@ -177,8 +222,7 @@ final class SSHConnection: ObservableObject, SSHConnectionProviding {
     func disconnect() async {
         healthTask?.cancel()
         healthTask = nil
-        sftpSubprocess?.terminate()
-        sftpSubprocess = nil
+        resetSharedSFTP()
         await portForwardService.removeAll(controlPath: controlPath, profile: profile)
         // Tell ControlMaster to exit
         let _ = try? await runSSH(args: [
@@ -233,8 +277,7 @@ final class SSHConnection: ObservableObject, SSHConnectionProviding {
                 ], timeout: 3)
                 guard !Task.isCancelled else { return }
                 if result?.status != 0 {
-                    self.sftpSubprocess?.terminate()
-                    self.sftpSubprocess = nil
+                    self.resetSharedSFTP()
                     self.masterProcess = nil
                     self.state = .disconnected
                     AppDiagnostics.record(category: .remote, level: .error, event: "ssh_health_lost", metadata: ["host": profileHost])

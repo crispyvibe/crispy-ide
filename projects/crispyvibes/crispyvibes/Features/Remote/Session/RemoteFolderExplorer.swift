@@ -45,6 +45,7 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
     let supportsLiveWatching = false
     let supportsFileTransfers = false
     let renameEvents = PassthroughSubject<ExplorerRenameEvent, Never>()
+    let deletionEvents = PassthroughSubject<ExplorerDeletionEvent, Never>()
     let observedFileSystemChanges = PassthroughSubject<Set<String>, Never>()
 
     private struct DirectoryRefreshOperation {
@@ -181,6 +182,9 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
                 do {
                     try await self.fileSystem.removeItem(at: item.url.path)
                     guard self.treeGeneration == mutationGeneration else { return }
+                    self.deletionEvents.send(
+                        ExplorerDeletionEvent(url: item.url, isDirectory: item.isDirectory)
+                    )
                     await self.refreshLegacyMutation(
                         in: item.url.deletingLastPathComponent(),
                         generation: mutationGeneration
@@ -200,6 +204,9 @@ final class RemoteFolderExplorer: ObservableObject, FolderExploring {
             do {
                 try await self.fileSystem.removeItem(at: item.url.path)
                 guard self.treeGeneration == mutationGeneration else { return }
+                self.deletionEvents.send(
+                    ExplorerDeletionEvent(url: item.url, isDirectory: item.isDirectory)
+                )
                 self.clearSelections(under: item.url.path)
                 self.expandedDirectoryIDs = Set(self.expandedDirectoryIDs.filter {
                     $0 != item.id && !Self.isDescendantPath($0, of: item.id)

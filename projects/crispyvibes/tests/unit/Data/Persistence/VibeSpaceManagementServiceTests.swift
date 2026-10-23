@@ -634,6 +634,103 @@ final class VibeSpaceManagementServiceTests: XCTestCase {
             canonicalIdentifier
         )
     }
+
+    func testCanonicalRemoteIdentifierMigratesPriorRawFullIdentifierAndAllProjectState() throws {
+        let tempDir = try makeTempDirectory(prefix: "crispyvibes-raw-ssh-migration")
+        defer { cleanup(tempDir) }
+        let persistenceStore = VibeSpacePersistenceStore(
+            store: AppPersistenceDataStore(fileManager: .default, appDirectoryURL: tempDir)
+        )
+        let service = VibeSpaceManagementService(persistenceStore: persistenceStore)
+        let vibespaceID = UUID()
+        let profile = SSHConnectionProfile(
+            id: UUID(), displayName: "Remote", host: "example.com", port: 22,
+            user: "testuser", authMethod: .agent, importedFromConfig: false
+        )
+        let remotePath = "/srv/My Project/what?#100%"
+        let rawIdentifier = "\(profile.sshURI)\(remotePath)"
+        let canonicalIdentifier = profile.projectIdentifier(remotePath: remotePath)
+        let entries = [TerminalSessionEntry(
+            workingDirectoryPath: remotePath,
+            customName: "Legacy",
+            origin: .adHoc,
+            tmuxSessionName: "legacy-main"
+        )]
+        let browser = BrowserSessionEntry(
+            browserID: UUID(),
+            snapshot: BrowserSessionSnapshot(urlString: "https://example.com"),
+            pinnedTileID: nil
+        )
+        let shortcut = TerminalShortcutDefinition(name: "Run", command: "make")
+
+        persistenceStore.saveProjectConfig(
+            ProjectConfigFile(
+                projectPath: rawIdentifier,
+                colorTag: "#FF0000",
+                shortcutIndex: 3,
+                acpAgentOverrideID: "agent-id",
+                terminalEntries: entries,
+                activeTerminalDirectory: remotePath,
+                activeTerminalIdentity: "legacy-active",
+                browserSessionEntries: [browser],
+                shortcuts: [shortcut]
+            ),
+            in: vibespaceID
+        )
+
+        let migrated = try XCTUnwrap(
+            service.loadProjectConfig(forProject: canonicalIdentifier, in: vibespaceID)
+        )
+
+        XCTAssertEqual(migrated.projectPath, canonicalIdentifier)
+        XCTAssertEqual(migrated.terminalEntries, entries)
+        XCTAssertEqual(migrated.browserSessionEntries, [browser])
+        XCTAssertEqual(migrated.shortcuts, [shortcut])
+        XCTAssertEqual(migrated.colorTag, "#FF0000")
+        XCTAssertEqual(migrated.shortcutIndex, 3)
+        XCTAssertEqual(migrated.acpAgentOverrideID, "agent-id")
+        XCTAssertEqual(
+            service.loadBrowserSessions(forProject: canonicalIdentifier, in: vibespaceID),
+            [browser]
+        )
+        XCTAssertEqual(
+            service.projectShortcuts(vibespaceID: vibespaceID, projectPath: canonicalIdentifier),
+            [shortcut]
+        )
+        XCTAssertNil(service.loadProjectConfig(forProject: rawIdentifier, in: vibespaceID))
+
+        let legacyVibeSpaceConfig = VibeSpaceConfigFile(
+            id: vibespaceID,
+            name: "Remote",
+            projectPaths: [rawIdentifier],
+            unresolvedProjectPaths: [],
+            focusedProjectPath: rawIdentifier,
+            startupSettings: .default
+        )
+        let loadedConfigs = service.loadProjectConfigs(for: legacyVibeSpaceConfig)
+        XCTAssertNotNil(loadedConfigs[canonicalIdentifier])
+        XCTAssertNil(loadedConfigs[rawIdentifier])
+        XCTAssertEqual(VibeSpaceState.normalizedPath(from: rawIdentifier), canonicalIdentifier)
+
+        let parkedLegacyConfig = VibeSpaceConfigFile(
+            id: vibespaceID,
+            name: "Remote",
+            projectPaths: [],
+            unresolvedProjectPaths: [],
+            parkedProjectPaths: [rawIdentifier, canonicalIdentifier],
+            startupSettings: .default
+        )
+        XCTAssertNotNil(
+            service.loadProjectConfigs(for: parkedLegacyConfig)[canonicalIdentifier]
+        )
+        persistenceStore.saveVibeSpaceConfig(parkedLegacyConfig)
+        let loadedVibeSpace = try XCTUnwrap(service.loadVibeSpace(id: vibespaceID)?.config)
+        XCTAssertEqual(loadedVibeSpace.parkedProjectPaths, [canonicalIdentifier])
+        XCTAssertEqual(
+            persistenceStore.loadVibeSpaceConfig(for: vibespaceID)?.value.parkedProjectPaths,
+            [canonicalIdentifier]
+        )
+    }
 }
 
 // MARK: - SIGN-003: Untrusted vibespace blocks startup commands

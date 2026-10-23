@@ -2,15 +2,20 @@ import Foundation
 
 @MainActor
 final class DockPreviewBridge: ObservableObject {
-    @Published var pendingFileURL: URL?
+    @Published private(set) var pendingTarget: TerminalFileSystemTarget?
 
-    func requestPreview(for fileURL: URL) {
-        pendingFileURL = fileURL.standardizedFileURL
+    func requestPreview(for fileURL: URL, projectIdentifier: String? = nil) {
+        pendingTarget = TerminalFileSystemTarget(
+            url: fileURL.standardizedFileURL,
+            line: nil,
+            column: nil,
+            projectIdentifier: projectIdentifier
+        )
     }
 
-    func consumePending() -> URL? {
-        guard let url = pendingFileURL else { return nil }
-        pendingFileURL = nil
-        return url
+    func consumePending() -> TerminalFileSystemTarget? {
+        guard let target = pendingTarget else { return nil }
+        pendingTarget = nil
+        return target
     }
 }

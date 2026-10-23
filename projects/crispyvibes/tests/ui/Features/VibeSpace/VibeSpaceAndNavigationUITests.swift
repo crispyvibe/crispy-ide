@@ -69,6 +69,36 @@ final class VibeSpaceAndNavigationUITests: CrispyVibesUIBaseTestCase {
         )
     }
 
+    func testFilesSidebarRemainsResponsiveAfterRepeatedProjectScrolling() throws {
+        // F024-S54 regression: variable-height project trees inside a LazyVStack
+        // could trap SwiftUI in LazyLayoutViewCache.updateItemPhases on macOS 26.
+        let fixture = try makeFixture(projectCount: 8)
+        fixtureRoot = fixture.root
+        let app = makeApplication(fixture: fixture)
+        app.launch()
+
+        XCTAssertTrue(waitForFocusedProjectShell(in: app, index: 1, timeout: 20))
+
+        let filesButton = identifiedElement(in: app, identifier: "app.side-menu.files")
+        XCTAssertTrue(filesButton.waitForExistence(timeout: 8))
+        filesButton.tap()
+
+        let sidebar = identifiedElement(in: app, identifier: "vibespace.sidebar.files")
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 8))
+
+        for _ in 0..<6 {
+            sidebar.scroll(byDeltaX: 0, deltaY: -8)
+            sidebar.scroll(byDeltaX: 0, deltaY: 8)
+        }
+
+        app.typeKey("t", modifierFlags: .command)
+        XCTAssertTrue(
+            identifiedElement(in: app, identifier: "vibespace.terminal-only")
+                .waitForExistence(timeout: 8),
+            "The app should remain responsive after scrolling the Files sidebar."
+        )
+    }
+
     func testDetailedVibeSpaceSidebarRenameFieldStaysEditableWhileTyping() throws {
         let fixture = try makeFixture(projectCount: 1)
         fixtureRoot = fixture.root

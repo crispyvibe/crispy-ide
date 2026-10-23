@@ -7,13 +7,18 @@ extension AppKitTreeView.Coordinator {
         let dirURL = item.isDirectory ? item.url : item.url.deletingLastPathComponent()
 
         if item.isDirectory {
-            addMenuItem(to: menu, title: "New File", action: .createNewFile(item))
-            addMenuItem(to: menu, title: "New Folder", action: .createNewFolder(item))
+            addMenuItem(to: menu, title: AppStrings.Explorer.newFile, action: .createNewFile(item))
+            addMenuItem(to: menu, title: AppStrings.Explorer.newFolder, action: .createNewFolder(item))
             menu.addItem(.separator())
         }
 
-        addMenuItem(to: menu, title: "Open in Terminal", action: .openInTerminal(dirURL))
-        addMenuItem(to: menu, title: "Reveal in Finder", action: .openInFinder(item.url))
+        addMenuItem(to: menu, title: AppStrings.Explorer.openInTerminal, action: .openInTerminal(dirURL))
+        addMenuItem(to: menu, title: AppStrings.Explorer.openInSystem, action: .openInSystem(item))
+        if parent.isRemoteProject {
+            addMenuItem(to: menu, title: AppStrings.Explorer.download, action: .download(item))
+        } else {
+            addMenuItem(to: menu, title: AppStrings.Explorer.revealInFinder, action: .openInFinder(item.url))
+        }
 
         if !item.isDirectory {
             menu.addItem(.separator())

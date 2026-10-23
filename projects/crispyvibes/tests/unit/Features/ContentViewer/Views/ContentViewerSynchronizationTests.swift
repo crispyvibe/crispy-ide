@@ -379,11 +379,21 @@ final class ContentViewerMountedSynchronizationTests: XCTestCase {
         window.contentView = container
         windows.append(window)
 
-        container.attach(a, allowsOwnershipParticipation: true, ownershipPriority: 220)
+        container.attach(
+            a,
+            allowsOwnershipParticipation: true,
+            ownershipPriority: 220,
+            onInteraction: nil
+        )
         container.layoutSubtreeIfNeeded()
         XCTAssertTrue(a.webView.superview === container)
 
-        container.attach(b, allowsOwnershipParticipation: true, ownershipPriority: 220)
+        container.attach(
+            b,
+            allowsOwnershipParticipation: true,
+            ownershipPriority: 220,
+            onInteraction: nil
+        )
         container.layoutSubtreeIfNeeded()
 
         XCTAssertNil(a.webView.superview)

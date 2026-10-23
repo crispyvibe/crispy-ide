@@ -93,7 +93,8 @@ extension ContentView {
                             in: terminalViewModel,
                             directoryURL: tab.workingDirectory,
                             surfaceID: spotlight.surfaceID,
-                            owningProjectRootURL: spotlight.owningProjectRootURL
+                            owningProjectRootURL: spotlight.owningProjectRootURL,
+                            owningProjectIdentifier: spotlight.owningProjectIdentifier
                         )
                     },
                     onTemporaryTerminalRequested: { tab in
@@ -107,26 +108,34 @@ extension ContentView {
                                     in: terminalViewModel,
                                     directoryURL: tab.workingDirectory,
                                     surfaceID: spotlight.surfaceID,
-                                    owningProjectRootURL: spotlight.owningProjectRootURL
+                                    owningProjectRootURL: spotlight.owningProjectRootURL,
+                                    owningProjectIdentifier: spotlight.owningProjectIdentifier
                                 )
                             },
                             owningProjectRootURL: spotlight.owningProjectRootURL,
+                            owningProjectIdentifier: spotlight.owningProjectIdentifier,
                             surfaceID: spotlight.surfaceID
                         )
                     },
                     onOpenInEditorPaneRequested: { tab in
-                        openTerminalInEditorPane(tabID: tab.id, projectRootURL: spotlight.owningProjectRootURL)
+                        openTerminalInEditorPane(
+                            tabID: tab.id,
+                            projectRootURL: spotlight.owningProjectRootURL,
+                            projectIdentifier: spotlight.owningProjectIdentifier
+                        )
                     },
                     onLinkTargetActivated: { url in
                         openTerminalLinkTarget(
                             url,
-                            preferredProjectRootURL: spotlight.owningProjectRootURL
+                            preferredProjectRootURL: spotlight.owningProjectRootURL,
+                            preferredProjectIdentifier: spotlight.owningProjectIdentifier
                         )
                     },
                     onFileSystemTargetActivated: { url in
                         openTerminalFileSystemTarget(
                             url,
-                            preferredProjectRootURL: spotlight.owningProjectRootURL
+                            preferredProjectRootURL: spotlight.owningProjectRootURL,
+                            preferredProjectIdentifier: spotlight.owningProjectIdentifier
                         )
                     }
                 )
@@ -156,13 +165,15 @@ extension ContentView {
                 onLinkTargetActivated: { url in
                     openTerminalLinkTarget(
                         url,
-                        preferredProjectRootURL: spotlight.owningProjectRootURL
+                        preferredProjectRootURL: spotlight.owningProjectRootURL,
+                        preferredProjectIdentifier: spotlight.owningProjectIdentifier
                     )
                 },
                 onFileSystemTargetActivated: { url in
                     openTerminalFileSystemTarget(
                         url,
-                        preferredProjectRootURL: spotlight.owningProjectRootURL
+                        preferredProjectRootURL: spotlight.owningProjectRootURL,
+                        preferredProjectIdentifier: spotlight.owningProjectIdentifier
                     )
                 }
             )
@@ -211,13 +222,15 @@ extension ContentView {
                     onLinkTargetActivated: { url in
                         openTerminalLinkTarget(
                             url,
-                            preferredProjectRootURL: spotlight.owningProjectRootURL
+                            preferredProjectRootURL: spotlight.owningProjectRootURL,
+                            preferredProjectIdentifier: spotlight.owningProjectIdentifier
                         )
                     },
                     onFileSystemTargetActivated: { target in
                         openTerminalFileSystemTarget(
                             target,
-                            preferredProjectRootURL: spotlight.owningProjectRootURL
+                            preferredProjectRootURL: spotlight.owningProjectRootURL,
+                            preferredProjectIdentifier: spotlight.owningProjectIdentifier
                         )
                     }
                 )
@@ -241,7 +254,9 @@ extension ContentView {
         case let .browserPreview(snapshot):
             let vm = spotlightBrowserPreviewViewModel(
                 snapshot: snapshot,
-                projectPath: spotlight.owningProjectRootURL?.path
+                projectPath: spotlight.owningProjectIdentifier
+                    ?? dockedBrowserCoordinator.previewProjectPath
+                    ?? spotlight.owningProjectRootURL?.path
             )
             BrowserContentView(viewModel: vm, presentation: .spotlight, onInteraction: interaction.requestFocus)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -323,7 +338,9 @@ extension ContentView {
             let effectiveSnapshot = dockedBrowserCoordinator.previewSnapshot(fallbackURL: fallbackURL) ?? snapshot
             let reference = BrowserTabReference(
                 url: effectiveSnapshot.urlString.flatMap(URL.init(string:)) ?? fallbackURL,
-                projectPath: spotlight.owningProjectRootURL?.path
+                projectPath: spotlight.owningProjectIdentifier
+                    ?? dockedBrowserCoordinator.previewProjectPath
+                    ?? spotlight.owningProjectRootURL?.path
             )
             dockedBrowserCoordinator.restoreDetailedBrowser(reference: reference, snapshot: effectiveSnapshot)
             contentViewerStore.activeGroup.openTab(.webPage(reference: reference))
@@ -332,7 +349,7 @@ extension ContentView {
             let currentURL = viewModel.currentURL ?? url
             let reference = BrowserTabReference(
                 url: currentURL,
-                projectPath: spotlight.owningProjectRootURL?.path,
+                projectPath: viewModel.projectPath,
                 linkedTileID: tileID
             )
             dockedBrowserCoordinator.restoreDetailedBrowser(
@@ -351,11 +368,18 @@ extension ContentView {
 
         switch spotlight.source {
         case let .filePreview(target, group):
-            guard let tileID = boardStore.pinPreviewToDock(fileURL: target.url) else { return }
+            guard let tileID = boardStore.pinPreviewToDock(
+                fileURL: target.url,
+                projectIdentifier: target.projectIdentifier
+            ) else { return }
             dockedFileViewerCoordinator.assignEditorGroup(
                 group,
                 for: tileID,
-                fileURL: target.url
+                fileURL: target.url,
+                documentReference: FileDocumentReference(
+                    url: target.url,
+                    projectIdentifier: target.projectIdentifier
+                )
             )
         case let .browserPreview(snapshot):
             let fallbackURL = snapshot.urlString.flatMap(URL.init(string:)) ?? URL(string: "about:blank")!
@@ -366,6 +390,8 @@ extension ContentView {
                 id: tileID,
                 url: resolvedURL,
                 projectPath: spotlight.owningProjectRootURL?.path,
+                projectIdentifier: spotlight.owningProjectIdentifier
+                    ?? dockedBrowserCoordinator.previewProjectPath,
                 surfaceID: spotlight.surfaceID ?? boardStore.primarySurfaceID,
                 browserSession: effectiveSnapshot
             ) != nil else { return }

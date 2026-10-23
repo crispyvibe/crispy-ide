@@ -27,7 +27,8 @@ extension ContentView {
                 sessionConfigurator: { terminalSession in
                     terminalSession.tmuxSessionName = session.sessionName
                 },
-                owningProjectRootURL: project?.rootURL
+                owningProjectRootURL: project?.rootURL,
+                owningProjectIdentifier: project?.projectIdentifier
             )
 
         case .remote:
@@ -57,7 +58,8 @@ extension ContentView {
                         )
                     }
                 },
-                owningProjectRootURL: project.rootURL
+                owningProjectRootURL: project.rootURL,
+                owningProjectIdentifier: project.projectIdentifier
             )
         }
     }

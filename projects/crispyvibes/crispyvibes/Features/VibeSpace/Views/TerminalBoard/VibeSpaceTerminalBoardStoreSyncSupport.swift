@@ -37,15 +37,15 @@ enum TerminalTileReconciler {
                 guard let tile = state.surfaces[surfaceIndex].layout.tile(for: tileID) else { continue }
                 guard tile.isTerminal else { continue }
 
-                if let projectPath = tile.projectPath {
-                    if projectsByPath[projectPath] != nil {
+                if let projectIdentity = tile.projectIdentifier ?? tile.projectPath {
+                    if projectsByPath[projectIdentity] != nil {
                         bindTile(
                             tileID: tileID,
                             surfaces: &state.surfaces,
                             surfaceIndex: surfaceIndex,
-                            projectPath: projectPath,
-                            tabsByID: tabsByProjectPathAndID[projectPath] ?? [:],
-                            tabsByDirectory: tabsByProjectPathAndDirectory[projectPath] ?? [:]
+                            projectIdentifier: projectIdentity,
+                            tabsByID: tabsByProjectPathAndID[projectIdentity] ?? [:],
+                            tabsByDirectory: tabsByProjectPathAndDirectory[projectIdentity] ?? [:]
                         )
                     }
                     // Project not in the current snapshot (e.g. still resolving on
@@ -59,7 +59,7 @@ enum TerminalTileReconciler {
                     tileID: tileID,
                     surfaces: &state.surfaces,
                     surfaceIndex: surfaceIndex,
-                    projectPath: nil,
+                    projectIdentifier: nil,
                     tabsByID: standaloneTabsByID,
                     tabsByDirectory: standaloneTabsByDirectory
                 )
@@ -83,8 +83,8 @@ enum TerminalTileReconciler {
             let tiles = state.surfaces[surfaceIndex].layout.tiles
             for tile in tiles where tile.isTerminal {
                 let viewModel: TerminalViewModel
-                if let projectPath = tile.projectPath {
-                    guard let project = projectsByPath[projectPath] else { continue }
+                if let projectIdentity = tile.projectIdentifier ?? tile.projectPath {
+                    guard let project = projectsByPath[projectIdentity] else { continue }
                     viewModel = project.terminalViewModel
                 } else {
                     viewModel = standaloneViewModel
@@ -93,8 +93,8 @@ enum TerminalTileReconciler {
                 // Skip tiles that are already bound to a live tab.
                 if let tabID = tile.terminalTabID {
                     let knownTabs: [UUID: TerminalTab]
-                    if let projectPath = tile.projectPath {
-                        knownTabs = tabsByProjectPathAndID[projectPath] ?? [:]
+                    if let projectIdentity = tile.projectIdentifier ?? tile.projectPath {
+                        knownTabs = tabsByProjectPathAndID[projectIdentity] ?? [:]
                     } else {
                         knownTabs = standaloneTabsByID
                     }
@@ -106,7 +106,7 @@ enum TerminalTileReconciler {
                     directoryURL: tile.workingDirectoryURL,
                     startImmediately: true
                 )
-                onTabCreated(tile.projectPath, viewModel)
+                onTabCreated(tile.projectIdentifier ?? tile.projectPath, viewModel)
 
                 if let createdTab = viewModel.activeTab {
                     state.surfaces[surfaceIndex].layout.updateTile(tile.id) { updated in
@@ -126,7 +126,7 @@ enum TerminalTileReconciler {
         tileID: UUID,
         surfaces: inout [VibeSpaceTerminalBoardSurface],
         surfaceIndex: Int,
-        projectPath: String?,
+        projectIdentifier: String?,
         tabsByID: [UUID: TerminalTab],
         tabsByDirectory: [String: [TerminalTab]]
     ) {
@@ -150,7 +150,7 @@ enum TerminalTileReconciler {
             }
         }) {
             surfaces[surfaceIndex].layout.updateTile(tileID) { updated in
-                updated.projectPath = projectPath
+                updated.projectIdentifier = projectIdentifier
                 updated.terminalTabID = directoryMatchedTab.id
                 updated.workingDirectoryPath = directoryMatchedTab.workingDirectory.standardizedFileURL.path
             }
@@ -169,8 +169,8 @@ extension VibeSpaceTerminalBoardStore {
         guard let tile = layout(for: surfaceID).tile(for: tileID), tile.isTerminal else { return }
 
         let terminalViewModel: TerminalViewModel
-        if let projectPath = tile.projectPath {
-            guard let project = projectsByPath[projectPath] else { return }
+        if let projectIdentity = tile.projectIdentifier ?? tile.projectPath {
+            guard let project = projectsByIdentifier[projectIdentity] else { return }
             terminalViewModel = project.terminalViewModel
         } else {
             terminalViewModel = standaloneTerminalViewModel
@@ -179,8 +179,8 @@ extension VibeSpaceTerminalBoardStore {
         // If the tile's terminalTabID is already known, nothing to do.
         if let terminalTabID = tile.terminalTabID {
             let knownTabs: [UUID: TerminalTab]
-            if let projectPath = tile.projectPath {
-                knownTabs = tabsByProjectPathAndID[projectPath] ?? [:]
+            if let projectIdentity = tile.projectIdentifier ?? tile.projectPath {
+                knownTabs = tabsByProjectPathAndID[projectIdentity] ?? [:]
             } else {
                 knownTabs = standaloneTabsByID
             }
@@ -191,8 +191,8 @@ extension VibeSpaceTerminalBoardStore {
             directoryURL: tile.workingDirectoryURL,
             startImmediately: true
         )
-        if let projectPath = tile.projectPath {
-            refreshProjectTabLookup(projectPath: projectPath, terminalViewModel: terminalViewModel)
+        if let projectIdentity = tile.projectIdentifier ?? tile.projectPath {
+            refreshProjectTabLookup(projectPath: projectIdentity, terminalViewModel: terminalViewModel)
         } else {
             refreshStandaloneTabLookup()
         }

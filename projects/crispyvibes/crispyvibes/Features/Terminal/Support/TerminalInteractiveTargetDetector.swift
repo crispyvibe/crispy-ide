@@ -10,6 +10,19 @@ struct TerminalFileSystemTarget: Equatable {
     let url: URL
     let line: Int?
     let column: Int?
+    let projectIdentifier: String?
+
+    init(
+        url: URL,
+        line: Int?,
+        column: Int?,
+        projectIdentifier: String? = nil
+    ) {
+        self.url = url
+        self.line = line
+        self.column = column
+        self.projectIdentifier = projectIdentifier
+    }
 
     var standardizedFileURL: URL {
         url.standardizedFileURL

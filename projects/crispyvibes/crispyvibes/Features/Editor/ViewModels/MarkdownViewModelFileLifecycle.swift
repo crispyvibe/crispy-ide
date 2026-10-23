@@ -101,30 +101,39 @@ extension MarkdownViewModel {
         }
     }
 
-    func closeEditorTab(withID tabID: String) {
-        guard let closingIndex = editorTabs.firstIndex(where: { $0.id == tabID }) else { return }
+    @discardableResult
+    func closeEditorTab(
+        withID tabID: String,
+        writer: ((URL, SaveToken) async throws -> Void)? = nil,
+        discardUnsavedChanges: Bool = false
+    ) -> Task<Error?, Never>? {
+        guard let closingIndex = editorTabs.firstIndex(where: { $0.id == tabID }) else { return nil }
         let closingWasActive = activeEditorTabID == tabID
         clearMarkupViewMode(forDocumentID: tabID)
         clearRenderedNavigation(for: tabID)
 
         // Close the buffer for this tab
         autosave.cancel(for: tabID)
-        bufferStore.closeBuffer(id: tabID, writer: makeBufferWriter())
+        let closeTask = bufferStore.closeBuffer(
+            id: tabID,
+            writer: discardUnsavedChanges ? nil : (writer ?? makeBufferWriter())
+        )
 
         editorTabs.remove(at: closingIndex)
 
-        guard closingWasActive else { return }
+        guard closingWasActive else { return closeTask }
 
         if editorTabs.isEmpty {
             activeEditorTabID = nil
             clearCurrentDocument()
-            return
+            return closeTask
         }
 
         let fallbackIndex = min(closingIndex, editorTabs.count - 1)
         let fallbackTab = editorTabs[fallbackIndex]
         activeEditorTabID = fallbackTab.id
         openFileIfNeeded(at: fallbackTab.fileURL, documentReference: fallbackTab.documentReference)
+        return closeTask
     }
 
     func previewGitDiff(
@@ -195,6 +204,42 @@ extension MarkdownViewModel {
         }
     }
 
+
+    func previewGitDiffContent(
+        _ content: String,
+        fileURL: URL,
+        relativePath: String,
+        statusCode: String,
+        documentReference: FileDocumentReference
+    ) {
+        autosave.cancel(for: currentDocumentID ?? "")
+        cancelInFlightOpenTasks()
+        activeEditorTabID = nil
+        self.fileURL = documentReference.url
+        currentDocumentID = documentReference.documentIdentity
+        observeActiveBuffer(nil)
+        displayTitleOverride = "\(relativePath) (Changes)"
+        unsupportedFileMessage = nil
+        errorMessage = nil
+        imageFileURL = nil
+        pdfFileURL = nil
+        officeFileURL = nil
+        codeLanguageKind = nil
+        rawContent = content.contains(where: { !$0.isWhitespace })
+            ? content
+            : """
+              ### Git Status
+              \(statusCode) \(relativePath)
+
+              No textual diff is available for this file revision.
+              """
+        lastSavedContent = rawContent
+        hasUnsavedChanges = false
+        hasUnsavedTextChanges = false
+        hasUnsavedImageEdits = false
+        documentType = .gitDiff
+        workerStatus = .ready
+    }
     func previewGitFileContent(
         rootURL: URL,
         fileURL: URL,
@@ -580,18 +625,24 @@ extension MarkdownViewModel {
 
     /// Creates a writer closure for buffer flush-on-close.
     func makeBufferWriter() -> (URL, SaveToken) async throws -> Void {
-        { [weak self] url, token in
-            guard let self else { return }
-            if let provider = self.fileContentProvider {
+        makeBufferWriter(fileContentProvider: fileContentProvider)
+    }
+
+    func makeBufferWriter(
+        fileContentProvider provider: (any FileContentProviding)?
+    ) -> (URL, SaveToken) async throws -> Void {
+        let worker = worker
+        return { [weak self] url, token in
+            if let provider {
                 try await provider.writeFile(at: url.path, contents: Data(token.content.utf8))
             } else {
-                _ = try await self.worker.execute(
+                _ = try await worker.execute(
                     .writeFile,
                     arguments: ["filePath": url.path, "content": token.content],
                     timeout: 10
                 )
             }
-            self.lastSaveDate = Date()
+            self?.lastSaveDate = Date()
             NotificationCenter.default.post(name: .vibespaceFileDidSave, object: url.standardizedFileURL)
         }
     }

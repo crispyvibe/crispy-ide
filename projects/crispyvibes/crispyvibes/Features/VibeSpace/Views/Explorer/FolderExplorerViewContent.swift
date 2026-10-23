@@ -48,6 +48,11 @@ extension FolderExplorerView {
         case .toggleExpansion(let item): viewModel.toggleExpansion(for: item)
         case .select(let item): viewModel.select(item)
         case .openInTab(let item): viewModel.openInTab(item)
+        case .openInSystem(let item):
+            if !vibespaceInteraction.open(item.url) {
+                viewModel.userFacingError = AppStrings.Editor.systemApplicationLaunchFailed
+            }
+        case .download: break
         case .openInFinder(let url): vibespaceInteraction.revealInFinder(url)
         case .createNewFile(let item): viewModel.createNewFile(in: item)
         case .createNewFolder(let item): viewModel.createNewFolder(in: item)

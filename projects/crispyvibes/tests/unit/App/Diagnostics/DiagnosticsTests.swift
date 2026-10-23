@@ -106,6 +106,14 @@ final class DiagnosticsTests: XCTestCase {
                 store: AppPersistenceDataStore(fileManager: .default, appDirectoryURL: exportRoot)
             )
 
+            let diagnosticEvent = "diagnostics_export_path_sanitization_\(UUID().uuidString)"
+            let sensitivePath = "/srv/private/project/secret.txt"
+            AppDiagnostics.record(
+                category: .remote,
+                level: .info,
+                event: diagnosticEvent,
+                metadata: ["error": "read(\(sensitivePath)) failed"]
+            )
             let previousEventCount = AppDiagnostics.eventStore.snapshot().count
             let exportedEventCount = try DiagnosticsExportService.export(
                 to: destination,
@@ -120,6 +128,12 @@ final class DiagnosticsTests: XCTestCase {
             let defaultsSnapshot = try XCTUnwrap(jsonObject["defaultsSnapshot"] as? [String: Any])
             XCTAssertEqual(defaultsSnapshot[AppPreferences.appearancePreferenceKey] as? String, "light")
             XCTAssertEqual(defaultsSnapshot[AppPreferences.terminalPresetLaunchModeKey] as? String, "standard")
+
+            let recentEvents = try XCTUnwrap(jsonObject["recentEvents"] as? [[String: Any]])
+            let sanitizedEvent = try XCTUnwrap(recentEvents.first { $0["event"] as? String == diagnosticEvent })
+            let metadata = try XCTUnwrap(sanitizedEvent["metadata"] as? [String: String])
+            XCTAssertTrue(metadata["error"]?.hasPrefix("path#") == true)
+            XCTAssertFalse(raw.contains(sensitivePath))
         }
     }
 

@@ -67,6 +67,21 @@ actor SequencedTextFileContentProvider: FileContentProviding {
 }
 
 @MainActor
+private final class RecordingExternalFileOpener: ExternalFileOpening {
+    private(set) var openedURLs: [URL] = []
+    private(set) var receivedRemoteProvider = false
+
+    func open(
+        fileURL: URL,
+        fileContentProvider: (any FileContentProviding)?
+    ) async throws -> URL {
+        openedURLs.append(fileURL)
+        receivedRemoteProvider = fileContentProvider?.requiresMaterializedLocalPreview == true
+        return fileURL
+    }
+}
+
+@MainActor
 final class MarkdownViewModelTests: XCTestCase {
     private var container: AppContainer!
     private var tempRoot: URL!
@@ -272,8 +287,84 @@ final class MarkdownViewModelTests: XCTestCase {
         XCTAssertEqual(saved, "# Updated\n")
     }
 
+    func testExternalFileOpenServiceRemovesRemoteSnapshotWhenLaunchFails() async {
+        let sourceURL = URL(fileURLWithPath: "/srv/app/page.html")
+        let provider = RecordingBinaryFileContentProvider(
+            readDataByPath: [sourceURL.path: Data("<p>remote</p>".utf8)]
+        )
+        var attemptedURL: URL?
+        let service = ExternalFileOpenService(openURL: { url in
+            attemptedURL = url
+            return false
+        })
+
+        do {
+            _ = try await service.open(fileURL: sourceURL, fileContentProvider: provider)
+            XCTFail("Expected Launch Services failure")
+        } catch {
+            XCTAssertEqual(error as? ExternalFileOpenError, .launchFailed)
+        }
+
+        XCTAssertNotNil(attemptedURL)
+        if let attemptedURL {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: attemptedURL.path))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: attemptedURL.deletingLastPathComponent().path))
+        }
+    }
+
+    func testOpenHTMLInSystemSavesCurrentRevisionBeforeOpening() async throws {
+        let fileURL = tempRoot.appendingPathComponent("page.html")
+        try Data("<p>before</p>".utf8).write(to: fileURL)
+        let opener = RecordingExternalFileOpener()
+        let htmlViewModel = MarkdownViewModel(
+            worker: container.makePaneWorker(pane: .editor),
+            bufferStore: DocumentBufferStore(),
+            externalFileOpener: opener
+        )
+
+        htmlViewModel.openFile(at: fileURL)
+        let opened = await waitForCondition(timeout: 8) {
+            htmlViewModel.workerStatus == .ready && htmlViewModel.documentType == .html
+        }
+        XCTAssertTrue(opened)
+
+        htmlViewModel.updateText("<p>after</p>")
+        htmlViewModel.openHTMLInSystem()
+        let externallyOpened = await waitForCondition(timeout: 8) {
+            opener.openedURLs == [fileURL] && !htmlViewModel.isOpeningInSystem
+        }
+        XCTAssertTrue(externallyOpened)
+        XCTAssertEqual(try String(contentsOf: fileURL, encoding: .utf8), "<p>after</p>")
+        XCTAssertFalse(htmlViewModel.hasUnsavedChanges)
+    }
+
     // MARK: - F057 LaTeX editor
 
+
+    func testOpenHTMLInSystemPersistsIntentionalEmptyRevision() async throws {
+        let fileURL = tempRoot.appendingPathComponent("empty-page.html")
+        try Data("<p>before</p>".utf8).write(to: fileURL)
+        let opener = RecordingExternalFileOpener()
+        let htmlViewModel = MarkdownViewModel(
+            worker: container.makePaneWorker(pane: .editor),
+            bufferStore: DocumentBufferStore(),
+            externalFileOpener: opener
+        )
+
+        htmlViewModel.openFile(at: fileURL)
+        let opened = await waitForCondition(timeout: 8) {
+            htmlViewModel.workerStatus == .ready && htmlViewModel.documentType == .html
+        }
+        XCTAssertTrue(opened)
+        htmlViewModel.updateText("")
+        htmlViewModel.openHTMLInSystem()
+        let openedExternally = await waitForCondition(timeout: 8) {
+            opener.openedURLs == [fileURL] && !htmlViewModel.isOpeningInSystem
+        }
+        XCTAssertTrue(openedExternally)
+
+        XCTAssertEqual(try String(contentsOf: fileURL, encoding: .utf8), "")
+    }
     func testDetectDocumentTypeRoutesLatexExtensions() {
         for ext in ["tex", "latex", "ltx", "TEX", "Latex", "LTX"] {
             let url = URL(fileURLWithPath: "/tmp/doc.\(ext)")

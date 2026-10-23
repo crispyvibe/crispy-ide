@@ -179,10 +179,23 @@ final class LocalGitExplorer: ObservableObject, GitExploring {
 
     func loadDiff(relativePath: String, in rootPath: String) async throws -> String {
         if !isRemote { return "" }
-        let result = try await commandExecutor.execute(
-            tool: "git", arguments: ["-C", rootPath, "diff", "--", relativePath], stdinData: nil, timeout: 15
+        let stagedResult = try await commandExecutor.execute(
+            tool: "git",
+            arguments: ["-C", rootPath, "diff", "--cached", "--", relativePath],
+            stdinData: nil,
+            timeout: 15
         )
-        return String(data: result.stdoutData, encoding: .utf8) ?? ""
+        let workingResult = try await commandExecutor.execute(
+            tool: "git",
+            arguments: ["-C", rootPath, "diff", "--", relativePath],
+            stdinData: nil,
+            timeout: 15
+        )
+        let staged = String(data: stagedResult.stdoutData, encoding: .utf8) ?? ""
+        let working = String(data: workingResult.stdoutData, encoding: .utf8) ?? ""
+        return [staged, working]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: "\n")
     }
 
     func loadHistory(for rootPath: String, scope: GitHistoryScope?) async throws {

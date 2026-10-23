@@ -43,7 +43,7 @@ extension ContentView {
                 VibeSpaceSettingsProjectItem(
                     id: project.id,
                     title: project.title,
-                    path: project.rootURL.path,
+                    path: project.projectIdentifier,
                     shortcutIndex: vibespace.shortcutIndex(for: project),
                     colorTag: vibespace.colorTag(for: project)
                 )
@@ -132,7 +132,11 @@ extension ContentView {
                 addRemoteProjectToVibeSpace(vibespaceID)
             },
             onRemoveProject: { projectID in
-                removeProjectFromVibeSpaceSettings(projectID, vibespaceID: vibespaceID)
+                if vibespaceID == activeVibeSpaceID {
+                    vibespaceCanvasActionsCoordinator.removeProject(id: projectID)
+                } else {
+                    removeProjectFromVibeSpaceSettings(projectID, vibespaceID: vibespaceID)
+                }
             },
             onMoveProjects: { sourceOffsets, destinationOffset in
                 moveVibeSpaceProjects(

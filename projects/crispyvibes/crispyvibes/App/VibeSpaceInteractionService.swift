@@ -3,7 +3,8 @@ import Foundation
 
 @MainActor
 final class VibeSpaceInteractionService {
-    func open(_ url: URL) {
+    @discardableResult
+    func open(_ url: URL) -> Bool {
         NSWorkspace.shared.open(url)
     }
 

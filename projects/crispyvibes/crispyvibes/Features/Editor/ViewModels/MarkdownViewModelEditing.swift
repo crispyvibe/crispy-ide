@@ -30,7 +30,7 @@ extension MarkdownViewModel {
         rawContent = buffer.displayContent
         hasUnsavedTextChanges = buffer.isDirty
         refreshUnsavedChangesFlag()
-        if buffer.isDirty {
+        if buffer.isDirty, buffer.id != externalOpenBufferID {
             autosave.scheduleSave(for: buffer)
         }
     }
@@ -144,6 +144,104 @@ extension MarkdownViewModel {
         }
     }
 
+    var canOpenHTMLInSystem: Bool {
+        documentType == .html
+            && fileURL != nil
+            && !isBufferLoading
+            && externalFileOpener != nil
+            && !isOpeningInSystem
+    }
+
+    /// Flushes the active HTML revision to its source and opens it with the macOS default handler.
+    func openHTMLInSystem() {
+        guard documentType == .html,
+              let fileURL,
+              currentDocumentID != nil,
+              let buffer = activeBuffer,
+              let externalFileOpener,
+              !isOpeningInSystem else { return }
+
+        let provider = fileContentProvider
+        let capturedContent = buffer.displayContent
+        autosave.cancel(for: buffer.id)
+        externalOpenBufferID = buffer.id
+        isOpeningInSystem = true
+        workerStatus = .busy(AppStrings.Editor.openingInSystem)
+        externalOpenTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                self.externalOpenBufferID = nil
+                self.isOpeningInSystem = false
+                self.externalOpenTask = nil
+                if buffer.isDirty {
+                    self.autosave.scheduleSave(for: buffer)
+                }
+            }
+            do {
+                try await self.saveCapturedRevisionForExternalOpen(
+                    capturedContent,
+                    buffer: buffer,
+                    fileURL: fileURL,
+                    provider: provider
+                )
+                try Task.checkCancellation()
+                _ = try await externalFileOpener.open(
+                    fileURL: fileURL,
+                    fileContentProvider: provider
+                )
+                self.workerStatus = .ready
+            } catch is CancellationError {
+                self.workerStatus = .ready
+            } catch {
+                self.errorMessage = AppStrings.Editor.openInSystemFailed(error.localizedDescription)
+                self.workerStatus = .unavailable(AppStrings.Editor.openInSystemUnavailable)
+            }
+        }
+    }
+
+    private func saveCapturedRevisionForExternalOpen(
+        _ capturedContent: String,
+        buffer: DocumentBuffer,
+        fileURL: URL,
+        provider: (any FileContentProviding)?
+    ) async throws {
+        let deadline = Date().addingTimeInterval(15)
+        while buffer.activeSaveToken != nil, Date() < deadline {
+            try Task.checkCancellation()
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        guard buffer.activeSaveToken == nil else { throw EditorExternalOpenError.saveTimedOut }
+
+        guard buffer.displayContent != capturedContent || buffer.isDirty else { return }
+        guard let token = buffer.beginSave(capturedContent: capturedContent) else { return }
+
+        do {
+            if let provider {
+                try await provider.writeFile(at: fileURL.path, contents: Data(token.content.utf8))
+            } else {
+                _ = try await worker.execute(
+                    .writeFile,
+                    arguments: ["filePath": fileURL.path, "content": token.content],
+                    timeout: 10
+                )
+            }
+            buffer.didSave(token: token)
+            if activeBuffer === buffer {
+                hasUnsavedTextChanges = buffer.isDirty
+                refreshUnsavedChangesFlag()
+            }
+            lastSaveDate = Date()
+            postVibeSpaceFileDidSaveNotification(for: fileURL)
+        } catch {
+            buffer.didFailSave(token: token)
+            if activeBuffer === buffer {
+                hasUnsavedTextChanges = buffer.isDirty
+                refreshUnsavedChangesFlag()
+            }
+            throw error
+        }
+    }
+
     func saveAndExitEditing() {
         save()
     }
@@ -166,5 +264,19 @@ extension MarkdownViewModel {
             return activeEditorTabID
         }
         return currentDocumentID
+    }
+}
+
+private enum EditorExternalOpenError: LocalizedError {
+    case saveTimedOut
+    case documentChanged
+
+    var errorDescription: String? {
+        switch self {
+        case .saveTimedOut:
+            return AppStrings.Editor.openInSystemSaveTimedOut
+        case .documentChanged:
+            return AppStrings.Editor.openInSystemDocumentChanged
+        }
     }
 }

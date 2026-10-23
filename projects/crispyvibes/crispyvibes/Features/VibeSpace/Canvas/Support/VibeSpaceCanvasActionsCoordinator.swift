@@ -15,6 +15,7 @@ final class VibeSpaceCanvasActionsCoordinator {
     private let layoutPersistence: LayoutPersistenceService
     private let vibespaceCanvasFileOpenUseCase: VibeSpaceCanvasFileOpenUseCase
     private let vibespaceProjectFocusUseCase = VibeSpaceProjectFocusUseCase()
+    private var projectTeardownTasks: [UUID: Task<Void, Never>] = [:]
 
     var dockPreviewBridge: DockPreviewBridge?
     var canvasModeProvider: (() -> VibeSpaceCanvasMode)?
@@ -23,6 +24,8 @@ final class VibeSpaceCanvasActionsCoordinator {
     /// and tear down all browsers belonging to a project being removed or
     /// parked. Wired by `AppContainer` after construction.
     weak var dockedBrowserCoordinator: DockedBrowserCoordinator?
+    weak var dockedFileViewerCoordinator: DockedFileViewerCoordinator?
+    weak var terminalBoardDetachedWindowManager: VibeSpaceTerminalBoardDetachedWindowManager?
 
     /// Floating agent-conversation preview used when surfacing a conversation
     /// thread in board mode. Wired by `AppContainer` after construction.
@@ -173,24 +176,36 @@ final class VibeSpaceCanvasActionsCoordinator {
             appShellStore: appShellStore,
             vibespaceCatalogStore: vibespaceCatalogStore,
             dockPreviewBridge: dockPreviewBridge,
+            dockedFileViewerCoordinator: dockedFileViewerCoordinator,
             canvasModeProvider: canvasModeProvider
         )
     }
 
     func openSourceControlDiff(
         repositoryRootURL: URL,
+        projectIdentifier: String? = nil,
         item: VibeSpaceSourceControlStatusItem
     ) {
-        // A git diff has no board surface. In board mode, show the file in the
+        let targetProject = projectIdentifier.flatMap { identifier in
+            activeVibeSpace?.projects.first(where: { $0.projectIdentifier == identifier })
+        } ?? activeVibeSpace?.focusedProject
+        let resolvedTargetProject = targetProject
+            ?? activeVibeSpace?.projects.first(where: {
+                $0.rootURL.standardizedFileURL.path == repositoryRootURL.standardizedFileURL.path
+            })
         // floating docked preview (consistent with every other file open on the
         // board) instead of yanking the layout to detailed; the diff view itself
         // is a detailed-view feature. Decision comes from the central policy.
         if ContentSurfacePolicy.surface(for: .file, mode: selectedCanvasMode) == .dockedPreview {
-            dockPreviewBridge?.requestPreview(for: item.url.standardizedFileURL)
+            dockPreviewBridge?.requestPreview(
+                for: item.url.standardizedFileURL,
+                projectIdentifier: resolvedTargetProject?.projectIdentifier
+            )
             return
         }
         vibespaceCanvasFileOpenUseCase.openSourceControlDiff(
             repositoryRootURL: repositoryRootURL,
+            preferredProjectIdentifier: resolvedTargetProject?.projectIdentifier,
             item: item,
             focusedProject: activeVibeSpace?.focusedProject,
             projects: activeVibeSpace?.projects ?? [],
@@ -205,45 +220,173 @@ final class VibeSpaceCanvasActionsCoordinator {
     }
 
     func removeProject(id: UUID) {
-        var vibespaceID: UUID?
-        var removedProjectPath: String?
-        mutateActiveVibeSpace { vibespace, resolvedVibeSpaceID in
-            vibespaceID = resolvedVibeSpaceID
-            removedProjectPath = vibespace.projects.first(where: { $0.id == id })?.rootURL.path
-            vibespace.removeProject(id: id)
+        guard let vibespaceID = activeVibeSpaceID,
+              let project = activeVibeSpace?.projects.first(where: { $0.id == id }) else { return }
+        let projectIdentifier = project.projectIdentifier
+        let boardProjectRootPath = project.rootURL.standardizedFileURL.path
+        let terminalTabIDs = Set(project.terminal.tabs.map(\.id))
+        let browserOwnershipKeys = browserOwnershipKeys(
+            projectIdentifier: projectIdentifier,
+            rootPath: boardProjectRootPath
+        )
+
+        let fileFlushTasks = removeBoardTiles(
+            vibespaceID: vibespaceID,
+            rootPath: boardProjectRootPath,
+            projectIdentifier: projectIdentifier,
+            terminalTabIDs: terminalTabIDs
+        )
+        mutateActiveVibeSpace { vibespace, _ in
+            vibespace.removeProject(id: id, shutdown: false)
         }
-        guard let vibespaceID else { return }
-        if let removedProjectPath {
-            // F012-R18: tear down all browsers owned by the removed project
-            // AFTER state mutation. Browser close runs notification handlers
-            // that may activate fallback tabs in the content viewer; those
-            // activations post `.contentViewerTabActivated`, which the
-            // click-to-select listener consumes. By mutating state first,
-            // the listener's `projects.first(where:)` returns nil for the
-            // removed path and short-circuits — no stray focus changes
-            // re-enter while removal is mid-flight.
-            dockedBrowserCoordinator?.closeBrowsers(forProjectPath: removedProjectPath)
-            vibespaceHydrationCoordinator.clearStartupExecutionFlag(
-                forProjectPath: removedProjectPath,
-                in: vibespaceID
-            )
+
+        // F012-R18: tear down all browsers owned by the removed project
+        // AFTER state mutation. Browser close runs notification handlers
+        // that may activate fallback tabs in the content viewer; those
+        // activations post `.contentViewerTabActivated`, which the
+        // click-to-select listener consumes. By mutating state first,
+        // the listener's `projects.first(where:)` returns nil for the
+        // removed identifier and short-circuits — no stray focus changes
+        // re-enter while removal is mid-flight.
+        for ownershipKey in browserOwnershipKeys {
+            dockedBrowserCoordinator?.closeBrowsers(forProjectPath: ownershipKey)
         }
+        scheduleProjectShutdown(project, waitingFor: fileFlushTasks)
+        vibespaceHydrationCoordinator.clearStartupExecutionFlag(
+            forProjectPath: boardProjectRootPath,
+            in: vibespaceID
+        )
         persistVibeSpaceCatalog()
     }
 
+    private func removeBoardTiles(
+        vibespaceID: UUID,
+        rootPath: String,
+        projectIdentifier: String,
+        terminalTabIDs: Set<UUID>
+    ) -> [Task<Error?, Never>] {
+        guard let boardStore = vibespaceHydrationCoordinator.boardStore else { return [] }
+        boardStore.updateVibeSpaceID(vibespaceID)
+        let detachedSurfaceIDs = Set(boardStore.detachedSurfaces.map(\.id))
+        let removedTiles = boardStore.removeTilesForProject(
+            rootPath: rootPath,
+            projectIdentifier: projectIdentifier,
+            terminalTabIDs: terminalTabIDs
+        )
+        var flushTasks = dockedFileViewerCoordinator?
+            .takeOutstandingFlushTasks(forProjectIdentifier: projectIdentifier) ?? []
+        if dockedFileViewerCoordinator?.previewProjectIdentifier == projectIdentifier {
+            _ = dockedFileViewerCoordinator?.dismissPreview()
+            flushTasks.append(contentsOf: dockedFileViewerCoordinator?
+                .takeOutstandingFlushTasks(forProjectIdentifier: projectIdentifier) ?? [])
+        }
+        for tile in removedTiles {
+            if tile.isFile {
+                _ = dockedFileViewerCoordinator?.removeGroup(
+                    for: tile.id,
+                    projectIdentifier: projectIdentifier
+                )
+                flushTasks.append(contentsOf: dockedFileViewerCoordinator?
+                    .takeOutstandingFlushTasks(forProjectIdentifier: projectIdentifier) ?? [])
+            }
+            if let storeID = tile.acpSnapshot?.id {
+                contentViewerStore.removeACPStore(id: storeID)
+            }
+        }
+        let survivingSurfaceIDs = Set(boardStore.boardState.surfaces.map(\.id))
+        for surfaceID in detachedSurfaceIDs.subtracting(survivingSurfaceIDs) {
+            terminalBoardDetachedWindowManager?.closeWindow(
+                forSurfaceID: surfaceID,
+                vibespaceID: vibespaceID
+            )
+        }
+        return flushTasks
+    }
+
+
+    private func scheduleProjectShutdown(
+        _ project: AnyProjectSession,
+        waitingFor flushTasks: [Task<Error?, Never>]
+    ) {
+        if flushTasks.isEmpty {
+            project.shutdown()
+            return
+        }
+        projectTeardownTasks[project.id]?.cancel()
+        projectTeardownTasks[project.id] = Task { [weak self, project] in
+            let race = ProjectFileFlushRace()
+            let flushMonitor = Task {
+                var failures = 0
+                for flushTask in flushTasks {
+                    if await flushTask.value != nil { failures += 1 }
+                }
+                await race.resolve(.flushed(failures: failures))
+            }
+            let timeoutMonitor = Task {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                guard !Task.isCancelled else { return }
+                await race.resolve(.timedOut)
+            }
+
+            let result = await race.wait()
+            flushMonitor.cancel()
+            timeoutMonitor.cancel()
+            project.shutdown()
+
+            switch result {
+            case .flushed(let failures) where failures > 0:
+                AppDiagnostics.record(
+                    category: .vibespaceLifecycle,
+                    level: .error,
+                    event: "project_teardown_file_flush_failed",
+                    metadata: [
+                        "project_token": AppDiagnostics.pathToken(project.projectIdentifier),
+                        "failure_count": String(failures)
+                    ]
+                )
+            case .timedOut:
+                AppDiagnostics.record(
+                    category: .vibespaceLifecycle,
+                    level: .error,
+                    event: "project_teardown_file_flush_timeout",
+                    metadata: [
+                        "project_token": AppDiagnostics.pathToken(project.projectIdentifier)
+                    ]
+                )
+            case .flushed:
+                break
+            }
+            self?.projectTeardownTasks[project.id] = nil
+        }
+    }
+
+    private func browserOwnershipKeys(
+        projectIdentifier: String,
+        rootPath: String
+    ) -> Set<String> {
+        var keys: Set<String> = [projectIdentifier]
+        let matchingRootCount = activeVibeSpace?.projects.filter {
+            $0.rootURL.standardizedFileURL.path == rootPath
+        }.count ?? 0
+        if matchingRootCount <= 1 {
+            keys.insert(rootPath)
+        }
+        return keys
+    }
     /// F021-R10 + F012-R18: park the project with the given session ID.
     ///
     /// Order of operations (matters — see "Re-entrancy guard" below):
     /// 1. Capture browser session entries owned by the project and persist them
     ///    into the project's `ProjectConfigFile.browserSessionEntries`.
     /// 2. Mark `isParked = true` in the project's config file.
-    /// 3. Mutate live vibespace state via `vibespace.parkProject(id:)` (which
+    /// 3. Remove all project-owned board tiles across every surface.
+    /// 4. Mutate live vibespace state via `vibespace.parkProject(id:)` (which
     ///    shuts down the live `ProjectSession` and moves the path to
     ///    `parkedProjectPaths`). After this, the project is no longer in
     ///    `state.projects`.
-    /// 4. Dispatch close requests for the browsers via the standard
+    /// 5. Dispatch close requests for the browsers via the standard
     ///    `.closeBrowserRequested` notification pipeline.
-    /// 5. Persist the vibespace catalog so `parkedProjectPaths` is durable.
+    /// 6. Persist the vibespace catalog so `parkedProjectPaths` is durable.
     ///
     /// **Re-entrancy guard:** browser-close runs notification handlers
     /// synchronously, which can activate fallback tabs in the content viewer.
@@ -259,47 +402,76 @@ final class VibeSpaceCanvasActionsCoordinator {
     func parkProject(id: UUID) {
         var vibespaceID: UUID?
         var parkedProjectPath: String?
+        var boardProjectRootPath: String?
+        var terminalTabIDs: Set<UUID> = []
+        var parkingProject: AnyProjectSession?
 
-        // Resolve project path BEFORE mutating state.
-        if let vibespace = activeVibeSpace {
+        // Resolve project identity BEFORE mutating state.
+        if let vibespace = activeVibeSpace,
+           let project = vibespace.projects.first(where: { $0.id == id }) {
             vibespaceID = activeVibeSpaceID
-            parkedProjectPath = vibespace.projects.first(where: { $0.id == id })?.projectIdentifier
+            parkedProjectPath = project.projectIdentifier
+            boardProjectRootPath = project.rootURL.standardizedFileURL.path
+            terminalTabIDs = Set(project.terminal.tabs.map(\.id))
+            parkingProject = project
         }
-        guard let vibespaceID, let parkedProjectPath else { return }
+        guard let vibespaceID,
+              let parkedProjectPath,
+              let boardProjectRootPath,
+              let parkingProject else { return }
 
-        // 1. Capture browser sessions while VMs are still resolvable.
-        let browserEntries = dockedBrowserCoordinator?
-            .snapshotBrowserSessions(forProjectPath: parkedProjectPath) ?? []
-        if !browserEntries.isEmpty {
-            vibespaceManagement.saveBrowserSessions(
-                browserEntries,
-                forProject: parkedProjectPath,
-                in: vibespaceID
-            )
-        }
+        // 1. Capture browser sessions while VMs are still resolvable. Remote
+        // board browsers historically used either the SSH identifier or raw
+        // root path, so query both and deduplicate by browser identity.
+        let browserOwnershipKeys = browserOwnershipKeys(
+            projectIdentifier: parkedProjectPath,
+            rootPath: boardProjectRootPath
+        )
+        var seenBrowserIDs = Set<UUID>()
+        let browserEntries = browserOwnershipKeys.flatMap { ownershipKey in
+            dockedBrowserCoordinator?.snapshotBrowserSessions(forProjectPath: ownershipKey) ?? []
+        }.filter { seenBrowserIDs.insert($0.browserID).inserted }
+        vibespaceManagement.saveBrowserSessions(
+            browserEntries,
+            forProject: parkedProjectPath,
+            in: vibespaceID
+        )
 
         // 2. Mark parked in the per-project config.
         vibespaceManagement.setProjectParked(true, forProject: parkedProjectPath, in: vibespaceID)
 
-        // 3. Mutate live state (shuts down ProjectSession including folder
+        // 3. Remove every board presentation while ownership metadata and
+        // browser snapshots are still available. This is one persisted board
+        // mutation across primary/detached and visible/minimized tiles.
+        let fileFlushTasks = removeBoardTiles(
+            vibespaceID: vibespaceID,
+            rootPath: boardProjectRootPath,
+            projectIdentifier: parkedProjectPath,
+            terminalTabIDs: terminalTabIDs
+        )
+
+        // 4. Mutate live state (shuts down ProjectSession including folder
         // explorer per F021-S25; removes from projects[]; appends to
         // parkedProjectPaths). Do this BEFORE closing browsers so that any
         // fallback-tab activation triggered by browser close cannot re-focus
         // the now-parked project (the click-to-select listener will see no
         // live project for that path and short-circuit).
         mutateActiveVibeSpace { vibespace, _ in
-            vibespace.parkProject(id: id)
+            vibespace.parkProject(id: id, shutdown: false)
         }
 
-        // 4. Close all browsers for this project. Fallback-tab activations
+        // 5. Close all browsers for this project. Fallback-tab activations
         // emitted during this loop are safe — the project is already gone
         // from state.projects.
-        dockedBrowserCoordinator?.closeBrowsers(forProjectPath: parkedProjectPath)
+        for ownershipKey in browserOwnershipKeys {
+            dockedBrowserCoordinator?.closeBrowsers(forProjectPath: ownershipKey)
+        }
+        scheduleProjectShutdown(parkingProject, waitingFor: fileFlushTasks)
 
-        // 5. Clear hydration-execution flag so re-hydrating after unpark
+        // 6. Clear hydration-execution flag so re-hydrating after unpark
         // behaves like a fresh load.
         vibespaceHydrationCoordinator.clearStartupExecutionFlag(
-            forProjectPath: parkedProjectPath,
+            forProjectPath: boardProjectRootPath,
             in: vibespaceID
         )
 
@@ -328,12 +500,23 @@ final class VibeSpaceCanvasActionsCoordinator {
             forProject: unparked.projectIdentifier,
             in: vibespaceID
         )
+        let boardProjectRootPath = unparked.rootURL.standardizedFileURL.path
+        let boardStore = vibespaceHydrationCoordinator.boardStore
+        boardStore?.updateVibeSpaceID(vibespaceID)
         for entry in entries {
             if let pinnedTileID = entry.pinnedTileID {
-                // Board tile browser — restore via tile factory if a tile slot exists.
-                // Note: actual board-tile reconstruction happens via the board
-                // hydration flow; here we ensure the VM is ready when the tile
-                // hydrates.
+                let restoredURL = entry.snapshot.urlString.flatMap(URL.init(string:))
+                    ?? URL(string: "about:blank")
+                if let restoredURL,
+                   boardStore?.tile(for: pinnedTileID, includeMinimized: true) == nil {
+                    _ = boardStore?.pinBrowserToDock(
+                        id: pinnedTileID,
+                        url: restoredURL,
+                        projectPath: boardProjectRootPath,
+                        projectIdentifier: unparked.projectIdentifier,
+                        browserSession: entry.snapshot
+                    )
+                }
                 dockedBrowserCoordinator?.restoreTile(id: pinnedTileID, snapshot: entry.snapshot)
             } else {
                 let url = entry.snapshot.urlString.flatMap(URL.init(string:))
@@ -665,5 +848,33 @@ final class VibeSpaceCanvasActionsCoordinator {
         for vibespace in vibespaceCatalogStore.vibespaces.prefix(1) {
             vibespaceManagement.persistVibeSpaceState(vibespace)
         }
+    }
+}
+
+private actor ProjectFileFlushRace {
+    enum Result: Sendable {
+        case flushed(failures: Int)
+        case timedOut
+    }
+
+    private var result: Result?
+    private var continuation: CheckedContinuation<Result, Never>?
+
+    func wait() async -> Result {
+        if let result { return result }
+        return await withCheckedContinuation { continuation in
+            if let result {
+                continuation.resume(returning: result)
+            } else {
+                self.continuation = continuation
+            }
+        }
+    }
+
+    func resolve(_ result: Result) {
+        guard self.result == nil else { return }
+        self.result = result
+        continuation?.resume(returning: result)
+        continuation = nil
     }
 }

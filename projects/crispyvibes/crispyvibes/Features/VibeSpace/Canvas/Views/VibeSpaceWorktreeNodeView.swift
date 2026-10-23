@@ -111,6 +111,7 @@ struct VibeSpaceWorktreeNodeView: View {
                     ProjectFileTreeView(
                         viewModel: project.folderExplorer,
                         projectRootURLs: projectRootURLs,
+                        isRemoteProject: project.metadata.hostLabel != nil,
                         onAction: onProjectAction,
                         onTransferDrop: onProjectTransferDrop
                     )

@@ -60,6 +60,7 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
 
     var onFileOpenRequested: ((ExplorerOpenRequest) -> Void)?
     var onFileRenamed: ((ExplorerRenameEvent) -> Void)?
+    var onFileDeleted: ((ExplorerDeletionEvent) -> Void)?
 
     // MARK: - ProjectProviding conformance
 
@@ -208,6 +209,13 @@ final class ProjectSession: ObservableObject, Identifiable, ProjectProviding {
             .receive(on: RunLoop.main)
             .sink { [weak self] event in
                 self?.onFileRenamed?(event)
+            }
+            .store(in: &cancellables)
+
+        folderExplorerViewModel.deletionEvents
+            .receive(on: RunLoop.main)
+            .sink { [weak self] event in
+                self?.onFileDeleted?(event)
             }
             .store(in: &cancellables)
     }

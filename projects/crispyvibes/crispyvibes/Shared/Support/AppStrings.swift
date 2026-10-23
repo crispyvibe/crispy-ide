@@ -2069,6 +2069,22 @@ enum AppStrings {
         static let removeProjectAction = String(localized: "vibespace.removeProject.action", defaultValue: "Remove Project")
         // Make the right-clicked project the current (focused) project.
         static let makeCurrentProjectAction = String(localized: "vibespace.makeCurrentProject.action", defaultValue: "Make Current Project")
+        static let remoteProjectBadge = String(localized: "vibespace.remoteProject.badge", defaultValue: "SSH")
+        static func remoteHostPort(host: String, port: UInt16) -> String {
+            String(localized: "vibespace.remoteProject.hostPort", defaultValue: "\(host):\(Int(port))")
+        }
+        static func remotePathBasename(_ name: String) -> String {
+            String(localized: "vibespace.remoteProject.pathBasename", defaultValue: "…/\(name)")
+        }
+        static func remoteProjectDetail(host: String, path: String) -> String {
+            String(localized: "vibespace.remoteProject.detail", defaultValue: "\(host) • \(path)")
+        }
+        static func parkedRemoteProjectAccessibility(name: String, host: String) -> String {
+            String(
+                localized: "vibespace.parkedRemoteProject.accessibility",
+                defaultValue: "Parked remote project \(name) on \(host), inactive"
+            )
+        }
     }
 
     // MARK: - Worktree (F055 / F056: unified sidebar + git worktrees)
@@ -2239,14 +2255,114 @@ enum AppStrings {
         static let openInTerminal = String(localized: "explorer.openInTerminal")
         static let openInSplitHorizontal = String(localized: "explorer.openInSplitHorizontal")
         static let openInSplitVertical = String(localized: "explorer.openInSplitVertical")
+        static let openInSystem = String(localized: "explorer.openInSystem", defaultValue: "Open in System")
+        static let download = String(localized: "explorer.download", defaultValue: "Download…")
         static let revealInFinder = String(localized: "explorer.revealInFinder")
         static let deleteItemTitle = String(localized: "explorer.deleteItem.title")
         static let deleteItemConfirm = String(localized: "explorer.deleteItem.confirm")
+        static func deleteConfirmationTitle(_ name: String) -> String {
+            String(
+                localized: "explorer.deleteItem.namedTitle",
+                defaultValue: "Delete “\(name)”?"
+            )
+        }
+        static func deleteConfirmationMessage(_ name: String) -> String {
+            String(
+                localized: "explorer.deleteItem.namedMessage",
+                defaultValue: "“\(name)” will be permanently deleted. This action cannot be undone."
+            )
+        }
+        static func deleteConfirmationPath(_ path: String) -> String {
+            String(
+                localized: "explorer.deleteItem.path",
+                defaultValue: "Path:\n\(path)"
+            )
+        }
         static let errorTitle = String(localized: "explorer.error.title")
         static let refreshFileList = String(localized: "explorer.refreshFileList")
         static let createNewFile = String(localized: "explorer.createNewFile")
         static let createNewFolder = String(localized: "explorer.createNewFolder")
         static let copyPath = String(localized: "explorer.copyPath", defaultValue: "Copy Path")
+        static func gitDiffLoadFailed(_ reason: String) -> String {
+            String(
+                localized: "explorer.gitDiff.loadFailed",
+                defaultValue: "Unable to load git changes: \(reason)"
+            )
+        }
+    }
+
+    enum RemoteTransfer {
+        static let download = String(localized: "remoteTransfer.download", defaultValue: "Download")
+        static let downloadTitle = String(localized: "remoteTransfer.download.title", defaultValue: "Download Remote Item")
+        static let preparing = String(localized: "remoteTransfer.preparing", defaultValue: "Preparing remote items…")
+        static let transferring = String(localized: "remoteTransfer.transferring", defaultValue: "Transferring…")
+        static let cancelling = String(localized: "remoteTransfer.cancelling", defaultValue: "Cancelling…")
+        static let publishing = String(localized: "remoteTransfer.publishing", defaultValue: "Finishing download…")
+        static let downloadComplete = String(localized: "remoteTransfer.complete", defaultValue: "Download complete.")
+        static let showInFinder = String(localized: "remoteTransfer.showInFinder", defaultValue: "Show in Finder")
+        static let temporaryCopyNotice = String(
+            localized: "remoteTransfer.temporaryCopy.notice",
+            defaultValue: "Opened a temporary copy. Changes made outside Crispy won’t be saved to the remote item."
+        )
+        static let alreadyInProgress = String(
+            localized: "remoteTransfer.alreadyInProgress",
+            defaultValue: "Another remote transfer is already in progress."
+        )
+        static let errorTitle = String(localized: "remoteTransfer.error.title", defaultValue: "Remote Transfer Failed")
+        static let outsideProjectRoot = String(
+            localized: "remoteTransfer.error.outsideProjectRoot",
+            defaultValue: "The selected item resolves outside the remote project root."
+        )
+        static let limitExceeded = String(
+            localized: "remoteTransfer.error.limitExceeded",
+            defaultValue: "The remote folder is too large or deeply nested to transfer safely."
+        )
+
+        static func downloading(_ name: String) -> String {
+            String(localized: "remoteTransfer.downloading", defaultValue: "Downloading \(name)")
+        }
+        static func preparingToOpen(_ name: String) -> String {
+            String(localized: "remoteTransfer.preparingToOpen", defaultValue: "Preparing \(name) to open")
+        }
+        static func fileProgress(completed: Int, total: Int) -> String {
+            String(localized: "remoteTransfer.fileProgress", defaultValue: "\(completed) of \(total) files")
+        }
+        static func symbolicLinkUnsupported(_ path: String) -> String {
+            String(
+                localized: "remoteTransfer.error.symbolicLink",
+                defaultValue: "The transfer contains a symbolic link that cannot be exported safely: \(path)"
+            )
+        }
+        static func unsupportedItem(_ path: String) -> String {
+            String(
+                localized: "remoteTransfer.error.unsupportedItem",
+                defaultValue: "The transfer contains an unsupported remote item: \(path)"
+            )
+        }
+        static func invalidName(_ name: String) -> String {
+            String(
+                localized: "remoteTransfer.error.invalidName",
+                defaultValue: "The transfer contains an invalid file name: \(name)"
+            )
+        }
+        static func sourceChanged(_ path: String) -> String {
+            String(
+                localized: "remoteTransfer.error.sourceChanged",
+                defaultValue: "The remote item changed while it was being downloaded: \(path)"
+            )
+        }
+        static func missingMetadata(_ path: String) -> String {
+            String(
+                localized: "remoteTransfer.error.missingMetadata",
+                defaultValue: "The remote server did not provide the metadata required to verify: \(path)"
+            )
+        }
+        static func incompleteTransfer(_ path: String) -> String {
+            String(
+                localized: "remoteTransfer.error.incomplete",
+                defaultValue: "The remote item was not downloaded completely: \(path)"
+            )
+        }
     }
 
     // MARK: - Whiteboard
@@ -2678,6 +2794,35 @@ enum AppStrings {
         static let draw = String(localized: "editor.draw")
         static let unsaved = String(localized: "editor.unsaved")
         static let cannotPreview = String(localized: "editor.cannotPreview")
+        static let openInSystem = String(localized: "editor.openInSystem", defaultValue: "Open in System")
+        static let openInSystemHelp = String(
+            localized: "editor.openInSystem.help",
+            defaultValue: "Save this HTML file and open it with the default system application"
+        )
+        static let openingInSystem = String(localized: "editor.openInSystem.opening", defaultValue: "Opening in System")
+        static let openInSystemUnavailable = String(
+            localized: "editor.openInSystem.unavailable",
+            defaultValue: "External open unavailable"
+        )
+        static let openInSystemSaveTimedOut = String(
+            localized: "editor.openInSystem.error.saveTimedOut",
+            defaultValue: "Timed out while waiting for the current save to finish."
+        )
+        static let openInSystemEmptyRejected = String(
+            localized: "editor.openInSystem.error.emptyRejected",
+            defaultValue: "Crispy refused to replace non-empty HTML with an empty document."
+        )
+        static let openInSystemDocumentChanged = String(
+            localized: "editor.openInSystem.error.documentChanged",
+            defaultValue: "The active document changed before it could be opened."
+        )
+        static let systemApplicationLaunchFailed = String(
+            localized: "editor.openInSystem.error.launchFailed",
+            defaultValue: "macOS could not open the item with its default application."
+        )
+        static func openInSystemFailed(_ reason: String) -> String {
+            String(localized: "editor.openInSystem.error.failed", defaultValue: "Unable to open in system: \(reason)")
+        }
         static let viewModeRich = String(localized: "editor.viewMode.rich", defaultValue: "Rich")
         static let viewModeEdit = String(localized: "editor.viewMode.edit", defaultValue: "Edit")
         static let viewModeSource = String(localized: "editor.viewMode.source", defaultValue: "Source")

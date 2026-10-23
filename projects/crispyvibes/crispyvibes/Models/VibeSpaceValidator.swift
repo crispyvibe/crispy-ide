@@ -14,6 +14,15 @@ enum VibeSpaceValidator {
         // INV-003: Normalize all paths
         c.projectPaths = c.projectPaths.map { normalizedPath($0) }
         c.unresolvedProjectPaths = c.unresolvedProjectPaths.map { normalizedPath($0) }
+        let activeOrUnresolved = Set(c.projectPaths + c.unresolvedProjectPaths)
+        c.parkedProjectPaths = c.parkedProjectPaths.reduce(
+            into: (paths: [String](), seen: Set<String>())
+        ) { result, rawPath in
+            let normalized = normalizedPath(rawPath)
+            guard !activeOrUnresolved.contains(normalized),
+                  result.seen.insert(normalized).inserted else { return }
+            result.paths.append(normalized)
+        }.paths
         if let fp = c.focusedProjectPath {
             let normalized = normalizedPath(fp)
             c.focusedProjectPath = c.projectPaths.contains(normalized) ? normalized : c.projectPaths.first
@@ -74,7 +83,8 @@ enum VibeSpaceValidator {
 
     static func normalizedPath(_ path: String) -> String {
         if path.hasPrefix("ssh://") {
-            return path
+            guard let parsed = SSHConnectionProfile.parse(identifier: path) else { return path }
+            return parsed.profile.projectIdentifier(remotePath: parsed.remotePath)
         }
         return URL(fileURLWithPath: path).standardizedFileURL.path
     }

@@ -179,7 +179,8 @@ extension ContentView {
 
         let owningProject = projectPath.flatMap { path in
             vibespaceView.activeVibeSpaceProjects.first(where: {
-                $0.rootURL.standardizedFileURL.path == path
+                $0.projectIdentifier == path
+                    || $0.rootURL.standardizedFileURL.path == path
             })
         }
         let title = owningProject?.title ?? directoryURL.lastPathComponent
@@ -198,7 +199,8 @@ extension ContentView {
             accentColor: accentColor,
             directoryURL: directoryURL.standardizedFileURL,
             shellResolutionProvider: shellResolutionProvider,
-            owningProjectRootURL: owningProject?.rootURL
+            owningProjectRootURL: owningProject?.rootURL,
+            owningProjectIdentifier: owningProject?.projectIdentifier
         )
     }
 }

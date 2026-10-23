@@ -28,6 +28,8 @@ extension ContentView {
             onOpenSourceControlDiff: { repository, item in
                 vibespaceCanvasActionsCoordinator.openSourceControlDiff(
                     repositoryRootURL: repository.repositoryRootURL,
+                    projectIdentifier: repository.projectIdentifier
+                        ?? repository.attachedProjects.first?.projectIdentifier,
                     item: item
                 )
             },
@@ -326,6 +328,23 @@ extension ContentView {
             vm.toggleExpansion(for: item)
         case .select(let item): selectVibeSpaceSidebarItem(item, in: project)
         case .openInTab(let item): openVibeSpaceSidebarItemInTab(item, in: project)
+        case .openInSystem(let item):
+            if let transfer = project.remoteItemTransfer {
+                appContainer.remoteTransferCoordinator.requestExternalOpen(
+                    item: remoteTransferItem(for: item),
+                    projectName: project.title,
+                    using: transfer
+                )
+            } else {
+                appContainer.remoteTransferCoordinator.requestLocalOpen(item.url)
+            }
+        case .download(let item):
+            guard let transfer = project.remoteItemTransfer else { return }
+            appContainer.remoteTransferCoordinator.requestDownload(
+                item: remoteTransferItem(for: item),
+                projectName: project.title,
+                using: transfer
+            )
         case .openInFinder(let url): appContainer.vibespaceInteraction.revealInFinder(url)
         case .createNewFile(let item): vm.createNewFile(in: item)
         case .createNewFolder(let item): vm.createNewFolder(in: item)
@@ -338,9 +357,10 @@ extension ContentView {
         case .openInSplitHorizontal(let item): vm.openInSplitHorizontal(item)
         case .openInSplitVertical(let item): vm.openInSplitVertical(item)
         case .requestDelete(let item):
+            let confirmation = ExplorerDeleteConfirmation(item: item)
             let alert = NSAlert()
-            alert.messageText = AppStrings.Explorer.deleteItemTitle
-            alert.informativeText = item.displayName
+            alert.messageText = confirmation.title
+            alert.informativeText = confirmation.message
             alert.addButton(withTitle: AppStrings.Explorer.deleteItemConfirm)
             alert.addButton(withTitle: AppStrings.Common.cancel)
             alert.alertStyle = .warning
@@ -358,6 +378,14 @@ extension ContentView {
               !plans.isEmpty else { return false }
         project.folderExplorer.transferItems(using: plans)
         return true
+    }
+
+    private func remoteTransferItem(for item: FileItem) -> RemoteTransferItem {
+        RemoteTransferItem(
+            path: item.url.standardizedFileURL.path,
+            displayName: item.displayName,
+            isDirectory: item.isDirectory
+        )
     }
 
     private var defaultExpandedVibeSpaceSidebarProjectPaths: Set<String> {

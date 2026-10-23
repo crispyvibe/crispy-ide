@@ -42,10 +42,10 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
     /// and notification handlers regardless of canvas mode.
     let boardStore: VibeSpaceTerminalBoardStore
     let onAddProjectsRequested: () -> Void
-    let onSpotlightRequested: (TerminalViewModel, UUID, String, Color?, URL?, UUID) -> Void
+    let onSpotlightRequested: (TerminalViewModel, UUID, String, Color?, URL?, String?, UUID) -> Void
     let onACPSpotlightRequested: (UUID, UUID) -> Void
-    let onTemporaryTerminalRequested: (TerminalViewModel, URL, String, Color?, URL?) -> Void
-    let onTemporaryShortcutRequested: (TerminalViewModel, TerminalShortcutDefinition, URL, String, Color?, URL?) -> Void
+    let onTemporaryTerminalRequested: (TerminalViewModel, URL, String, Color?, URL?, String?) -> Void
+    let onTemporaryShortcutRequested: (TerminalViewModel, TerminalShortcutDefinition, URL, String, Color?, URL?, String?) -> Void
     let onManageShortcutsRequested: () -> Void
     let shortcutDefinitionsForProjectPath: (String?) -> [TerminalShortcutDefinition]
     let onVibeCastSpotlightRequested: () -> Void
@@ -58,7 +58,7 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
     /// matches the right-clicked tile's project to a new detached board window.
     let onTileSendAllFromProjectToNewBoardWindowRequested: (String, VibeSpaceTerminalBoardStore, UUID) -> Void
     let onOpenTerminalInEditorPane: (UUID, UUID) -> Void
-    let onLinkTargetActivated: (URL, URL?) -> Void
+    let onLinkTargetActivated: (URL, URL?, String?) -> Void
     let onFileSystemTargetActivated: (TerminalFileSystemTarget, URL?) -> Void
     let onSynchronizeStackedRailStore: () -> Void
     let onDismissTerminalSpotlight: () -> Void
@@ -203,7 +203,11 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
             },
             dockedBrowserCoordinator: dockedBrowserCoordinator,
             onLinkTargetActivated: { url in
-                onLinkTargetActivated(url, vibespaceView.focusedProject?.rootURL)
+                onLinkTargetActivated(
+                    url,
+                    vibespaceView.focusedProject?.rootURL,
+                    vibespaceView.focusedProject?.projectIdentifier
+                )
             },
             onFileSystemTargetActivated: { target in
                 onFileSystemTargetActivated(target, vibespaceView.focusedProject?.rootURL)
@@ -298,33 +302,43 @@ struct VibeSpaceCanvasSurfaceView<StackedProjectRail: View, FocusedProjectPane: 
             onAddProjectsRequested: {
                 onAddProjectsRequested()
             },
-            onSpotlightRequested: { terminalViewModel, tabID, title, accentColor, owningProjectRootURL, tileID in
-                onSpotlightRequested(terminalViewModel, tabID, title, accentColor, owningProjectRootURL, tileID)
+            onSpotlightRequested: { terminalViewModel, tabID, title, accentColor, owningProjectRootURL, projectIdentifier, tileID in
+                onSpotlightRequested(
+                    terminalViewModel,
+                    tabID,
+                    title,
+                    accentColor,
+                    owningProjectRootURL,
+                    projectIdentifier,
+                    tileID
+                )
             },
             onACPSpotlightRequested: { tileID, storeID in
                 onACPSpotlightRequested(tileID, storeID)
             },
-            onTemporaryTerminalRequested: { terminalViewModel, directoryURL, title, accentColor, owningProjectRootURL in
+            onTemporaryTerminalRequested: { terminalViewModel, directoryURL, title, accentColor, owningProjectRootURL, projectIdentifier in
                 onTemporaryTerminalRequested(
                     terminalViewModel,
                     directoryURL,
                     title,
                     accentColor,
-                    owningProjectRootURL
+                    owningProjectRootURL,
+                    projectIdentifier
                 )
             },
-            onTemporaryShortcutRequested: { terminalViewModel, shortcut, directoryURL, title, accentColor, owningProjectRootURL in
+            onTemporaryShortcutRequested: { terminalViewModel, shortcut, directoryURL, title, accentColor, owningProjectRootURL, projectIdentifier in
                 onTemporaryShortcutRequested(
                     terminalViewModel,
                     shortcut,
                     directoryURL,
                     title,
                     accentColor,
-                    owningProjectRootURL
+                    owningProjectRootURL,
+                    projectIdentifier
                 )
             },
-            onLinkTargetActivated: { url, preferredProjectRootURL in
-                onLinkTargetActivated(url, preferredProjectRootURL)
+            onLinkTargetActivated: { url, preferredProjectRootURL, projectIdentifier in
+                onLinkTargetActivated(url, preferredProjectRootURL, projectIdentifier)
             },
             onFileSystemTargetActivated: { url, preferredProjectRootURL in
                 onFileSystemTargetActivated(url, preferredProjectRootURL)
@@ -498,13 +512,14 @@ extension ContentView {
                     }
                 )
             },
-            onSpotlightRequested: { terminalViewModel, tabID, title, accentColor, owningProjectRootURL, tileID in
+            onSpotlightRequested: { terminalViewModel, tabID, title, accentColor, owningProjectRootURL, projectIdentifier, tileID in
                 presentTerminalSpotlight(
                     terminalViewModel: terminalViewModel,
                     tabID: tabID,
                     title: title,
                     accentColor: accentColor,
                     owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: projectIdentifier,
                     surfaceID: VibeSpaceTerminalBoardState.primarySurfaceID,
                     navigationIdentityOverride: owningProjectRootURL == nil
                         ? .terminal(projectScope: .unscoped(tileID), tabID: tabID)
@@ -518,7 +533,7 @@ extension ContentView {
                     surfaceID: VibeSpaceTerminalBoardState.primarySurfaceID
                 )
             },
-            onTemporaryTerminalRequested: { terminalViewModel, directoryURL, title, accentColor, owningProjectRootURL in
+            onTemporaryTerminalRequested: { terminalViewModel, directoryURL, title, accentColor, owningProjectRootURL, projectIdentifier in
                 presentTemporaryTerminalSpotlight(
                     title: title,
                     accentColor: accentColor,
@@ -529,14 +544,16 @@ extension ContentView {
                             in: terminalViewModel,
                             directoryURL: directoryURL,
                             surfaceID: VibeSpaceTerminalBoardState.primarySurfaceID,
-                            owningProjectRootURL: owningProjectRootURL
+                            owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: projectIdentifier
                         )
                     },
                     owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: projectIdentifier,
                     surfaceID: VibeSpaceTerminalBoardState.primarySurfaceID
                 )
             },
-            onTemporaryShortcutRequested: { terminalViewModel, shortcut, directoryURL, title, accentColor, owningProjectRootURL in
+            onTemporaryShortcutRequested: { terminalViewModel, shortcut, directoryURL, title, accentColor, owningProjectRootURL, projectIdentifier in
                 presentTemporaryTerminalSpotlight(
                     title: shortcut.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         ? title
@@ -549,10 +566,12 @@ extension ContentView {
                             in: terminalViewModel,
                             directoryURL: directoryURL,
                             surfaceID: VibeSpaceTerminalBoardState.primarySurfaceID,
-                            owningProjectRootURL: owningProjectRootURL
+                            owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: projectIdentifier
                         )
                     },
                     owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: projectIdentifier,
                     surfaceID: VibeSpaceTerminalBoardState.primarySurfaceID,
                     initialCommand: shortcut.command
                 )
@@ -1211,7 +1230,8 @@ extension ContentView {
                         tabID: tabID,
                         title: focusedProject.title,
                         accentColor: vibespaceCanvasActionsCoordinator.colorTag(for: focusedProject)?.color,
-                        owningProjectRootURL: focusedProject.rootURL
+                        owningProjectRootURL: focusedProject.rootURL,
+                        owningProjectIdentifier: focusedProject.projectIdentifier
                     )
                 },
                 onTemporaryTerminalRequested: { directoryURL in
@@ -1228,7 +1248,8 @@ extension ContentView {
                                 directoryURL: directoryURL
                             )
                         },
-                        owningProjectRootURL: focusedProject.rootURL
+                        owningProjectRootURL: focusedProject.rootURL,
+                        owningProjectIdentifier: focusedProject.projectIdentifier
                     )
                 },
                 onTemporaryShortcutRequested: { shortcut, directoryURL in
@@ -1248,6 +1269,7 @@ extension ContentView {
                             )
                         },
                         owningProjectRootURL: focusedProject.rootURL,
+                        owningProjectIdentifier: focusedProject.projectIdentifier,
                         initialCommand: shortcut.command
                     )
                 },
@@ -1260,13 +1282,15 @@ extension ContentView {
                 onLinkTargetActivated: { url in
                     openTerminalLinkTarget(
                         url,
-                        preferredProjectRootURL: focusedProject.rootURL
+                        preferredProjectRootURL: focusedProject.rootURL,
+                        preferredProjectIdentifier: focusedProject.projectIdentifier
                     )
                 },
                 onFileSystemTargetActivated: { url in
                     openTerminalFileSystemTarget(
                         url,
-                        preferredProjectRootURL: focusedProject.rootURL
+                        preferredProjectRootURL: focusedProject.rootURL,
+                        preferredProjectIdentifier: focusedProject.projectIdentifier
                     )
                 },
                 shortcutProvider: vibespaceShortcutProvider
@@ -1372,7 +1396,7 @@ private struct DetachedTerminalBoardWindowContent: View {
     /// `projectPath` to a new detached window.
     let onTileSendAllFromProjectToNewBoardWindowRequested: (String) -> Void
     let onOpenTerminalInEditorPane: (UUID, UUID) -> Void
-    let onLinkTargetActivated: (URL, URL?) -> Void
+    let onLinkTargetActivated: (URL, URL?, String?) -> Void
     let onFileSystemTargetActivated: (TerminalFileSystemTarget, URL?) -> Void
     let acpStoreLookup: (UUID) -> ACPStandaloneSessionStore?
     let createACPPaneStore: (() -> ACPStandaloneSessionStore)?
@@ -1407,7 +1431,7 @@ private struct DetachedTerminalBoardWindowContent: View {
         onTileSendToBoardWindowRequested: @escaping (UUID, UUID) -> Void,
         onTileSendAllFromProjectToNewBoardWindowRequested: @escaping (String) -> Void,
         onOpenTerminalInEditorPane: @escaping (UUID, UUID) -> Void,
-        onLinkTargetActivated: @escaping (URL, URL?) -> Void,
+        onLinkTargetActivated: @escaping (URL, URL?, String?) -> Void,
         onFileSystemTargetActivated: @escaping (TerminalFileSystemTarget, URL?) -> Void,
         acpStoreLookup: @escaping (UUID) -> ACPStandaloneSessionStore?,
         createACPPaneStore: (() -> ACPStandaloneSessionStore)? = nil,
@@ -1464,7 +1488,10 @@ private struct DetachedTerminalBoardWindowContent: View {
 
     private func presentToolbarTemporaryTerminal(_ request: DetachedToolbarTemporaryTerminalRequest) {
         let project = request.projectPath.flatMap { projectPath in
-            projects.first(where: { $0.rootURL.standardizedFileURL.path == projectPath })
+            projects.first(where: {
+                $0.projectIdentifier == projectPath
+                    || $0.rootURL.standardizedFileURL.path == projectPath
+            })
         }
         let terminalViewModel = project?.terminalViewModel ?? boardStore.standaloneTerminalViewModel
         let title = project?.title ?? AppStrings.Spotlight.terminal
@@ -1484,7 +1511,8 @@ private struct DetachedTerminalBoardWindowContent: View {
                     surfaceID: surfaceID
                 )
             },
-            owningProjectRootURL: project?.rootURL
+            owningProjectRootURL: project?.rootURL,
+            owningProjectIdentifier: project?.projectIdentifier
         )
     }
 
@@ -1503,7 +1531,7 @@ private struct DetachedTerminalBoardWindowContent: View {
             onAddProjectsRequested: {},
             onSpotlightRequested: presentTerminalSpotlight,
             onACPSpotlightRequested: presentACPSpotlight,
-            onTemporaryTerminalRequested: { terminalViewModel, directoryURL, title, accentColor, owningProjectRootURL in
+            onTemporaryTerminalRequested: { terminalViewModel, directoryURL, title, accentColor, owningProjectRootURL, projectIdentifier in
                 presentTemporaryTerminalSpotlight(
                     title: title,
                     accentColor: accentColor,
@@ -1512,13 +1540,15 @@ private struct DetachedTerminalBoardWindowContent: View {
                     onSplitTerminalRequested: {
                         addTerminalTile(
                             directoryURL: directoryURL,
-                            owningProjectRootURL: owningProjectRootURL
+                            owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: projectIdentifier
                         )
                     },
-                    owningProjectRootURL: owningProjectRootURL
+                    owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: projectIdentifier
                 )
             },
-            onTemporaryShortcutRequested: { terminalViewModel, shortcut, directoryURL, title, accentColor, owningProjectRootURL in
+            onTemporaryShortcutRequested: { terminalViewModel, shortcut, directoryURL, title, accentColor, owningProjectRootURL, projectIdentifier in
                 presentTemporaryTerminalSpotlight(
                     title: shortcut.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? title : shortcut.name,
                     accentColor: accentColor,
@@ -1527,15 +1557,21 @@ private struct DetachedTerminalBoardWindowContent: View {
                     onSplitTerminalRequested: {
                         addTerminalTile(
                             directoryURL: directoryURL,
-                            owningProjectRootURL: owningProjectRootURL
+                            owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: projectIdentifier
                         )
                     },
                     owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: projectIdentifier,
                     initialCommand: shortcut.command
                 )
             },
-            onLinkTargetActivated: { url, preferredRoot in
-                presentLinkTarget(url, owningProjectRootURL: preferredRoot)
+            onLinkTargetActivated: { url, preferredRoot, projectIdentifier in
+                presentLinkTarget(
+                    url,
+                    owningProjectRootURL: preferredRoot,
+                    owningProjectIdentifier: projectIdentifier
+                )
             },
             onFileSystemTargetActivated: { target, preferredProjectRootURL in
                 presentFilePreviewSpotlight(target: target, owningProjectRootURL: preferredProjectRootURL)
@@ -1731,6 +1767,7 @@ private struct DetachedTerminalBoardWindowContent: View {
                 title: tab.title.isEmpty ? project.title : tab.title,
                 accentColor: projectColorTagsByPath[project.rootURL.standardizedFileURL.path]?.color,
                 owningProjectRootURL: project.rootURL,
+                owningProjectIdentifier: project.projectIdentifier,
                 surfaceID: surfaceID
             )
         case let .standaloneTerminal(itemSurfaceID, tileID, terminalViewModel, tab):
@@ -1748,29 +1785,64 @@ private struct DetachedTerminalBoardWindowContent: View {
         case .vibeLanes:
             return basicSpotlightState(source: .vibeLanes, title: AppStrings.VibeLanes.title)
         case let .acp(tileID, storeID, title, accentColor):
+            let selectedProject = acpStoreLookup(storeID)?.selectedProject(from: projects)
+            let owningProjectRootURL = selectedProject?.rootURL.standardizedFileURL
             return TerminalSpotlightState(
                 id: UUID(), source: .acp(tileID: tileID, storeID: storeID), title: title,
-                accentColor: accentColor, workingDirectoryURL: URL(fileURLWithPath: NSHomeDirectory()),
+                accentColor: accentColor,
+                workingDirectoryURL: owningProjectRootURL ?? URL(fileURLWithPath: NSHomeDirectory()),
                 onSplitTerminalRequested: nil, onTemporaryTerminalRequested: nil,
-                isTemporary: false, owningProjectRootURL: nil, surfaceID: surfaceID
+                isTemporary: false,
+                owningProjectRootURL: owningProjectRootURL,
+                owningProjectIdentifier: selectedProject?.projectIdentifier,
+                surfaceID: surfaceID
             )
         case let .file(tileID, fileURL):
+            let tile = boardStore.tile(
+                for: tileID,
+                includeMinimized: true,
+                surfaceID: surfaceID
+            )
+            let fileContext = detachedFileOpenContext(
+                for: fileURL,
+                projectIdentifier: tile?.projectIdentifier
+            )
             let group = dockedFileViewerCoordinator.assignedEditorGroup(for: tileID)
-                ?? dockedFileViewerCoordinator.editorGroup(for: tileID, fileURL: fileURL)
+                ?? dockedFileViewerCoordinator.editorGroup(
+                    for: tileID,
+                    fileURL: fileURL,
+                    documentReference: fileContext.reference,
+                    fileContentProvider: fileContext.provider
+                )
             return TerminalSpotlightState(
                 id: UUID(), source: .file(tileID: tileID, fileURL: fileURL, group: group),
                 title: fileURL.lastPathComponent, accentColor: activeThemePalette.accentColor,
                 workingDirectoryURL: fileURL.deletingLastPathComponent(),
                 onSplitTerminalRequested: nil, onTemporaryTerminalRequested: nil,
-                isTemporary: false, owningProjectRootURL: nil, surfaceID: surfaceID
+                isTemporary: false,
+                owningProjectRootURL: tile?.projectIdentifier.flatMap { identifier in
+                    projects.first(where: { $0.projectIdentifier == identifier })?.rootURL
+                },
+                owningProjectIdentifier: tile?.projectIdentifier,
+                surfaceID: surfaceID
             )
         case let .browser(tileID, url):
+            let tile = boardStore.tile(
+                for: tileID,
+                includeMinimized: true,
+                surfaceID: surfaceID
+            )
             return TerminalSpotlightState(
                 id: UUID(), source: .browser(tileID: tileID, url: url),
                 title: SpotlightSafeMetadata.browserLocation(url).host, accentColor: activeThemePalette.accentColor,
                 workingDirectoryURL: URL(fileURLWithPath: NSHomeDirectory()),
                 onSplitTerminalRequested: nil, onTemporaryTerminalRequested: nil,
-                isTemporary: false, owningProjectRootURL: nil, surfaceID: surfaceID
+                isTemporary: false,
+                owningProjectRootURL: tile?.projectIdentifier.flatMap { identifier in
+                    projects.first(where: { $0.projectIdentifier == identifier })?.rootURL
+                },
+                owningProjectIdentifier: tile?.projectIdentifier,
+                surfaceID: surfaceID
             )
         }
     }
@@ -1832,6 +1904,7 @@ private struct DetachedTerminalBoardWindowContent: View {
         title: String,
         accentColor: Color?,
         owningProjectRootURL: URL?,
+        owningProjectIdentifier: String?,
         tileID: UUID
     ) {
         presentTerminalSpotlight(
@@ -1840,6 +1913,7 @@ private struct DetachedTerminalBoardWindowContent: View {
             title: title,
             accentColor: accentColor,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: owningProjectIdentifier,
             animated: true,
             navigationIdentityOverride: owningProjectRootURL == nil
                 ? .terminal(projectScope: .unscoped(tileID), tabID: tabID)
@@ -1853,6 +1927,7 @@ private struct DetachedTerminalBoardWindowContent: View {
         title: String,
         accentColor: Color?,
         owningProjectRootURL: URL?,
+        owningProjectIdentifier: String? = nil,
         surfaceID targetSurfaceID: UUID? = nil,
         navigationIdentityOverride: SpotlightNavigationIdentity? = nil
     ) -> TerminalSpotlightState? {
@@ -1873,7 +1948,8 @@ private struct DetachedTerminalBoardWindowContent: View {
             onSplitTerminalRequested: {
                 addTerminalTile(
                     directoryURL: workingDirectoryURL,
-                    owningProjectRootURL: owningProjectRootURL
+                    owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: owningProjectIdentifier
                 )
             },
             onTemporaryTerminalRequested: {
@@ -1885,19 +1961,24 @@ private struct DetachedTerminalBoardWindowContent: View {
                     onSplitTerminalRequested: {
                         addTerminalTile(
                             directoryURL: workingDirectoryURL,
-                            owningProjectRootURL: owningProjectRootURL
+                            owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: owningProjectIdentifier
                         )
                     },
-                    owningProjectRootURL: owningProjectRootURL
+                    owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: owningProjectIdentifier
                 )
             },
-            shortcutDefinitions: shortcutDefinitionsForProjectPath(owningProjectRootURL?.standardizedFileURL.path),
+            shortcutDefinitions: shortcutDefinitionsForProjectPath(
+                owningProjectIdentifier ?? owningProjectRootURL?.standardizedFileURL.path
+            ),
             onShortcutSelected: { shortcut in
                 if shortcut.launchBehavior == .newPermanentTerminal {
                     launchPermanentShortcutTile(
                         shortcut,
                         directoryURL: workingDirectoryURL,
-                        owningProjectRootURL: owningProjectRootURL
+                        owningProjectRootURL: owningProjectRootURL,
+                        owningProjectIdentifier: owningProjectIdentifier
                     )
                     return
                 }
@@ -1914,10 +1995,12 @@ private struct DetachedTerminalBoardWindowContent: View {
                             onSplitTerminalRequested: {
                                 addTerminalTile(
                                     directoryURL: directoryURL,
-                                    owningProjectRootURL: owningProjectRootURL
+                                    owningProjectRootURL: owningProjectRootURL,
+                                    owningProjectIdentifier: owningProjectIdentifier
                                 )
                             },
                             owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: owningProjectIdentifier,
                             initialCommand: shortcut.command
                         )
                     }
@@ -1932,8 +2015,13 @@ private struct DetachedTerminalBoardWindowContent: View {
             },
             isTemporary: false,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: owningProjectIdentifier,
             surfaceID: targetSurfaceID ?? surfaceID,
-            navigationIdentityOverride: navigationIdentityOverride ?? (owningProjectRootURL == nil ? inferredIdentity : nil)
+            navigationIdentityOverride: navigationIdentityOverride
+                ?? owningProjectIdentifier.map {
+                    .terminal(projectScope: .projectPath($0), tabID: tabID)
+                }
+                ?? (owningProjectRootURL == nil ? inferredIdentity : nil)
         )
         return spotlight
     }
@@ -1944,6 +2032,7 @@ private struct DetachedTerminalBoardWindowContent: View {
         title: String,
         accentColor: Color?,
         owningProjectRootURL: URL?,
+        owningProjectIdentifier: String? = nil,
         surfaceID targetSurfaceID: UUID? = nil,
         animated: Bool,
         navigationIdentityOverride: SpotlightNavigationIdentity? = nil
@@ -1954,6 +2043,7 @@ private struct DetachedTerminalBoardWindowContent: View {
             title: title,
             accentColor: accentColor,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: owningProjectIdentifier,
             surfaceID: targetSurfaceID,
             navigationIdentityOverride: navigationIdentityOverride
         ) else { return }
@@ -1963,9 +2053,11 @@ private struct DetachedTerminalBoardWindowContent: View {
     @discardableResult
     private func addTerminalTile(
         directoryURL: URL,
-        owningProjectRootURL: URL?
+        owningProjectRootURL: URL?,
+        owningProjectIdentifier: String? = nil
     ) -> Bool {
-        let projectPath = owningProjectRootURL?.standardizedFileURL.path
+        let projectPath = owningProjectIdentifier
+            ?? owningProjectRootURL?.standardizedFileURL.path
         return boardStore.addTile(
             projectPath: projectPath,
             directoryURL: directoryURL.standardizedFileURL,
@@ -1981,6 +2073,7 @@ private struct DetachedTerminalBoardWindowContent: View {
         shellResolutionProvider: @escaping @Sendable () -> TerminalShellResolution,
         onSplitTerminalRequested: (() -> Void)? = nil,
         owningProjectRootURL: URL?,
+        owningProjectIdentifier: String? = nil,
         initialCommand: String? = nil
     ) {
         let normalizedDirectoryURL = directoryURL.standardizedFileURL
@@ -1991,6 +2084,9 @@ private struct DetachedTerminalBoardWindowContent: View {
             shellResolutionProvider: shellResolutionProvider
         )
         let agentPresets = projects.first(where: { project in
+            if let owningProjectIdentifier {
+                return project.projectIdentifier == owningProjectIdentifier
+            }
             guard let owningProjectRootURL else { return false }
             return project.rootURL.standardizedFileURL == owningProjectRootURL.standardizedFileURL
         })?.terminalViewModel.availablePresets
@@ -2018,10 +2114,13 @@ private struct DetachedTerminalBoardWindowContent: View {
                     shellResolutionProvider: shellResolutionProvider,
                     onSplitTerminalRequested: onSplitTerminalRequested,
                     owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: owningProjectIdentifier,
                     initialCommand: initialCommand
                 )
             },
-            shortcutDefinitions: shortcutDefinitionsForProjectPath(owningProjectRootURL?.standardizedFileURL.path),
+            shortcutDefinitions: shortcutDefinitionsForProjectPath(
+                owningProjectIdentifier ?? owningProjectRootURL?.standardizedFileURL.path
+            ),
             onShortcutSelected: { shortcut in
                 let command = shortcut.command.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !command.isEmpty else { return }
@@ -2041,6 +2140,7 @@ private struct DetachedTerminalBoardWindowContent: View {
                             shellResolutionProvider: shellResolutionProvider,
                             onSplitTerminalRequested: onSplitTerminalRequested,
                             owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: owningProjectIdentifier,
                             initialCommand: command
                         )
                     },
@@ -2048,7 +2148,8 @@ private struct DetachedTerminalBoardWindowContent: View {
                         launchPermanentShortcutTile(
                             shortcut,
                             directoryURL: normalizedDirectoryURL,
-                            owningProjectRootURL: owningProjectRootURL
+                            owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: owningProjectIdentifier
                         )
                     }
                 )
@@ -2061,6 +2162,7 @@ private struct DetachedTerminalBoardWindowContent: View {
             },
             isTemporary: true,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: owningProjectIdentifier,
             surfaceID: surfaceID
         )
         setSpotlight(spotlight)
@@ -2073,12 +2175,14 @@ private struct DetachedTerminalBoardWindowContent: View {
     private func launchPermanentShortcutTile(
         _ shortcut: TerminalShortcutDefinition,
         directoryURL: URL,
-        owningProjectRootURL: URL?
+        owningProjectRootURL: URL?,
+        owningProjectIdentifier: String? = nil
     ) {
         DetachedPermanentShortcutTileLauncher.launch(
             shortcut,
             directoryURL: directoryURL,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: owningProjectIdentifier,
             surfaceID: surfaceID,
             boardStore: boardStore
         )
@@ -2132,23 +2236,35 @@ private struct DetachedTerminalBoardWindowContent: View {
                 onSplitTerminalRequested: nil,
                 onTemporaryTerminalRequested: nil,
                 isTemporary: false,
-                owningProjectRootURL: owningProjectRootURL
+                owningProjectRootURL: owningProjectRootURL,
+                owningProjectIdentifier: selectedProject?.projectIdentifier
             )
         )
     }
 
-    private func presentLinkTarget(_ url: URL, owningProjectRootURL: URL?) {
+    private func presentLinkTarget(
+        _ url: URL,
+        owningProjectRootURL: URL?,
+        owningProjectIdentifier: String? = nil
+    ) {
         if url.isFileURL {
             presentFilePreviewSpotlight(
-                target: TerminalFileSystemTarget(url: url, line: nil, column: nil),
-                owningProjectRootURL: owningProjectRootURL
+                target: TerminalFileSystemTarget(
+                    url: url,
+                    line: nil,
+                    column: nil,
+                    projectIdentifier: owningProjectIdentifier
+                ),
+                owningProjectRootURL: owningProjectRootURL,
+                owningProjectIdentifier: owningProjectIdentifier
             )
             return
         }
         let viewModel = BrowserPanelViewModel(
             initialURL: url,
             usesEphemeralDataStore: true,
-            projectPath: owningProjectRootURL?.standardizedFileURL.path
+            projectPath: owningProjectIdentifier
+                ?? owningProjectRootURL?.standardizedFileURL.path
         )
         browserPreviewViewModel = viewModel
         let snapshot = BrowserSessionSnapshot(urlString: url.absoluteString)
@@ -2160,6 +2276,7 @@ private struct DetachedTerminalBoardWindowContent: View {
                 workingDirectoryURL: URL(fileURLWithPath: NSHomeDirectory()),
                 onSplitTerminalRequested: nil, onTemporaryTerminalRequested: nil,
                 isTemporary: true, owningProjectRootURL: owningProjectRootURL,
+                owningProjectIdentifier: owningProjectIdentifier,
                 surfaceID: surfaceID
             )
         )
@@ -2168,15 +2285,20 @@ private struct DetachedTerminalBoardWindowContent: View {
     private func presentFilePreviewSpotlight(
         target: TerminalFileSystemTarget,
         owningProjectRootURL: URL?,
+        owningProjectIdentifier: String? = nil,
         animated: Bool = true
     ) {
         let normalizedTarget = TerminalFileSystemTarget(
             url: target.standardizedFileURL,
             line: target.line,
-            column: target.column
+            column: target.column,
+            projectIdentifier: target.projectIdentifier ?? owningProjectIdentifier
         )
         let group = makePreviewEditorGroup()
-        let fileContext = detachedFileOpenContext(for: normalizedTarget.url)
+        let fileContext = detachedFileOpenContext(
+            for: normalizedTarget.url,
+            projectIdentifier: normalizedTarget.projectIdentifier
+        )
         group.openFileInTab(
             at: normalizedTarget.url,
             line: normalizedTarget.line,
@@ -2194,17 +2316,21 @@ private struct DetachedTerminalBoardWindowContent: View {
                 onSplitTerminalRequested: nil,
                 onTemporaryTerminalRequested: nil,
                 isTemporary: true,
-                owningProjectRootURL: owningProjectRootURL
+                owningProjectRootURL: owningProjectRootURL,
+                owningProjectIdentifier: normalizedTarget.projectIdentifier
             ),
             animated: animated
         )
     }
 
     private func detachedFileOpenContext(
-        for fileURL: URL
+        for fileURL: URL,
+        projectIdentifier: String?
     ) -> (reference: FileDocumentReference, provider: (any FileContentProviding)?) {
         let path = fileURL.standardizedFileURL.path
-        let owner = projects
+        let owner = projectIdentifier.flatMap { identity in
+            projects.first(where: { $0.projectIdentifier == identity })
+        } ?? projects
             .filter { project in
                 let rootPath = project.rootURL.standardizedFileURL.path
                 return path == rootPath || path.hasPrefix(rootPath + "/")
@@ -2220,7 +2346,15 @@ private struct DetachedTerminalBoardWindowContent: View {
     }
 
     private func presentFileSpotlight(tileID: UUID, fileURL: URL, animated: Bool = true) {
-        let fileContext = detachedFileOpenContext(for: fileURL)
+        let projectIdentifier = boardStore.tile(
+            for: tileID,
+            includeMinimized: true,
+            surfaceID: surfaceID
+        )?.projectIdentifier
+        let fileContext = detachedFileOpenContext(
+            for: fileURL,
+            projectIdentifier: projectIdentifier
+        )
         let group = dockedFileViewerCoordinator.assignedEditorGroup(for: tileID)
             ?? dockedFileViewerCoordinator.editorGroup(
                 for: tileID,
@@ -2365,6 +2499,7 @@ private struct DetachedTerminalBoardWindowContent: View {
                 title: tab.title.isEmpty ? project.title : tab.title,
                 accentColor: projectColorTagsByPath[project.rootURL.standardizedFileURL.path]?.color,
                 owningProjectRootURL: project.rootURL,
+                owningProjectIdentifier: project.projectIdentifier,
                 surfaceID: surfaceID,
                 animated: false
             )
@@ -2435,7 +2570,8 @@ private struct DetachedTerminalBoardWindowContent: View {
                     onSplitTerminalRequested: { tab in
                         addTerminalTile(
                             directoryURL: tab.workingDirectory,
-                            owningProjectRootURL: spotlight.owningProjectRootURL
+                            owningProjectRootURL: spotlight.owningProjectRootURL,
+                            owningProjectIdentifier: spotlight.owningProjectIdentifier
                         )
                     },
                     onTemporaryTerminalRequested: { tab in
@@ -2447,23 +2583,39 @@ private struct DetachedTerminalBoardWindowContent: View {
                             onSplitTerminalRequested: {
                                 addTerminalTile(
                                     directoryURL: tab.workingDirectory,
-                                    owningProjectRootURL: spotlight.owningProjectRootURL
+                                    owningProjectRootURL: spotlight.owningProjectRootURL,
+                                    owningProjectIdentifier: spotlight.owningProjectIdentifier
                                 )
                             },
-                            owningProjectRootURL: spotlight.owningProjectRootURL
+                            owningProjectRootURL: spotlight.owningProjectRootURL,
+                            owningProjectIdentifier: spotlight.owningProjectIdentifier
                         )
                     },
                     onOpenInEditorPaneRequested: { tab in
-                        if let owningProjectRootURL = spotlight.owningProjectRootURL?.standardizedFileURL,
-                           let project = projects.first(where: { $0.rootURL.standardizedFileURL == owningProjectRootURL }) {
+                        let project = spotlight.owningProjectIdentifier.flatMap { identifier in
+                            projects.first(where: { $0.projectIdentifier == identifier })
+                        } ?? spotlight.owningProjectRootURL.flatMap { rootURL in
+                            projects.first(where: {
+                                $0.rootURL.standardizedFileURL == rootURL.standardizedFileURL
+                            })
+                        }
+                        if let project {
                             onOpenTerminalInEditorPane(project.id, tab.id)
                         }
                     },
                     onLinkTargetActivated: { url in
-                        presentLinkTarget(url, owningProjectRootURL: spotlight.owningProjectRootURL)
+                        presentLinkTarget(
+                            url,
+                            owningProjectRootURL: spotlight.owningProjectRootURL,
+                            owningProjectIdentifier: spotlight.owningProjectIdentifier
+                        )
                     },
                     onFileSystemTargetActivated: { target in
-                        presentFilePreviewSpotlight(target: target, owningProjectRootURL: spotlight.owningProjectRootURL)
+                        presentFilePreviewSpotlight(
+                            target: target,
+                            owningProjectRootURL: spotlight.owningProjectRootURL,
+                            owningProjectIdentifier: spotlight.owningProjectIdentifier
+                        )
                     }
                 )
             } else {
@@ -2481,9 +2633,19 @@ private struct DetachedTerminalBoardWindowContent: View {
                 onManageInlineTriggerShortcutsRequested: spotlight.onManageShortcutsRequested,
                 onSplitTerminalRequested: spotlight.onSplitTerminalRequested,
                 onTemporaryTerminalRequested: spotlight.onTemporaryTerminalRequested,
-                onLinkTargetActivated: { url in presentLinkTarget(url, owningProjectRootURL: spotlight.owningProjectRootURL) },
+                onLinkTargetActivated: { url in
+                    presentLinkTarget(
+                        url,
+                        owningProjectRootURL: spotlight.owningProjectRootURL,
+                        owningProjectIdentifier: spotlight.owningProjectIdentifier
+                    )
+                },
                 onFileSystemTargetActivated: { target in
-                    presentFilePreviewSpotlight(target: target, owningProjectRootURL: spotlight.owningProjectRootURL)
+                    presentFilePreviewSpotlight(
+                        target: target,
+                        owningProjectRootURL: spotlight.owningProjectRootURL,
+                        owningProjectIdentifier: spotlight.owningProjectIdentifier
+                    )
                 }
             )
         case .vibeCast:
@@ -2518,9 +2680,19 @@ private struct DetachedTerminalBoardWindowContent: View {
                     store: store,
                     projects: projects,
                     displayMode: .spotlight,
-                    onLinkTargetActivated: { url in presentLinkTarget(url, owningProjectRootURL: spotlight.owningProjectRootURL) },
+                    onLinkTargetActivated: { url in
+                    presentLinkTarget(
+                        url,
+                        owningProjectRootURL: spotlight.owningProjectRootURL,
+                        owningProjectIdentifier: spotlight.owningProjectIdentifier
+                    )
+                },
                     onFileSystemTargetActivated: { target in
-                        presentFilePreviewSpotlight(target: target, owningProjectRootURL: spotlight.owningProjectRootURL)
+                        presentFilePreviewSpotlight(
+                            target: target,
+                            owningProjectRootURL: spotlight.owningProjectRootURL,
+                            owningProjectIdentifier: spotlight.owningProjectIdentifier
+                        )
                     }
                 )
             } else {

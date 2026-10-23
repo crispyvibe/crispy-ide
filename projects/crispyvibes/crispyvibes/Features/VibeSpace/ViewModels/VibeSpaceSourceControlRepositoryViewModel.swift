@@ -12,6 +12,7 @@ final class VibeSpaceSourceControlRepositoryViewModel: ObservableObject, Identif
 
     let id: String
     let repositoryRootURL: URL
+    let projectIdentifier: String?
     let worker: any PaneWorkerExecuting
     let gitExplorer: AnyGitExplorer?
 
@@ -40,11 +41,13 @@ final class VibeSpaceSourceControlRepositoryViewModel: ObservableObject, Identif
     init(
         id: String? = nil,
         repositoryRootURL: URL,
+        projectIdentifier: String? = nil,
         worker: any PaneWorkerExecuting,
         gitExplorer: AnyGitExplorer? = nil
     ) {
         self.id = id ?? repositoryRootURL.standardizedFileURL.path
         self.repositoryRootURL = repositoryRootURL.standardizedFileURL
+        self.projectIdentifier = projectIdentifier
         self.worker = worker
         self.gitExplorer = gitExplorer
     }

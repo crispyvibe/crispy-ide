@@ -19,6 +19,7 @@ struct VibeSpaceProjectRoutingUseCase {
 
     func terminalProjectMatch(
         for fileURL: URL,
+        preferredProjectIdentifier: String? = nil,
         preferredProjectRootURL: URL?,
         candidates: [(vibespaceID: UUID, project: AnyProjectSession)]
     ) -> (vibespaceID: UUID, project: AnyProjectSession)? {
@@ -29,6 +30,14 @@ struct VibeSpaceProjectRoutingUseCase {
                 project: entry.project,
                 rootPath: entry.project.rootURL.standardizedFileURL.path
             )
+        }
+
+        if let preferredProjectIdentifier,
+           let exact = normalizedCandidates.first(where: {
+               $0.project.projectIdentifier == preferredProjectIdentifier
+                   && isPath(normalizedFilePath, containedIn: $0.rootPath)
+           }) {
+            return (exact.vibespaceID, exact.project)
         }
 
         if let preferredProjectRootURL {

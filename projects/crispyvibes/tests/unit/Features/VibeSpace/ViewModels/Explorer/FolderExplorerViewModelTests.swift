@@ -880,6 +880,57 @@ final class FolderExplorerViewModelTests: XCTestCase {
         wait(for: [expectation], timeout: 5.0)
         watcher.invalidate()
     }
+
+    func testDeleteConfirmationIncludesRightClickedFileName() {
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Quarterly Report.html"),
+            isDirectory: false
+        )
+
+        let confirmation = ExplorerDeleteConfirmation(item: item)
+
+        XCTAssertTrue(confirmation.title.contains("Quarterly Report.html"))
+        XCTAssertTrue(confirmation.message.contains("Quarterly Report.html"))
+        XCTAssertEqual(confirmation.pathDetail, "Path:\n/tmp/project/Quarterly Report.html")
+        XCTAssertTrue(confirmation.message.contains("permanently deleted"))
+        XCTAssertTrue(confirmation.message.contains("cannot be undone"))
+        XCTAssertFalse(confirmation.title.contains("%@"))
+        XCTAssertFalse(confirmation.message.contains("%@"))
+    }
+
+    func testDeleteConfirmationIncludesRightClickedFolderName() {
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/project/Generated Assets"),
+            isDirectory: true
+        )
+
+        let confirmation = ExplorerDeleteConfirmation(item: item)
+
+        XCTAssertTrue(confirmation.title.contains("Generated Assets"))
+        XCTAssertTrue(confirmation.message.contains("Generated Assets"))
+        XCTAssertEqual(confirmation.pathDetail, "Path:\n/tmp/project/Generated Assets")
+    }
+
+    func testDeleteConfirmationSupportsExactShelfOrRemoteName() {
+        let fullPath = "/remote/home/dev/remote-build-artifacts"
+        let confirmation = ExplorerDeleteConfirmation(
+            itemName: "remote-build-artifacts",
+            fullPath: fullPath
+        )
+
+        XCTAssertEqual(confirmation.title, "Delete “remote-build-artifacts”?")
+        XCTAssertEqual(
+            confirmation.warning,
+            "“remote-build-artifacts” will be permanently deleted. This action cannot be undone."
+        )
+        XCTAssertEqual(confirmation.pathDetail, "Path:\n\(fullPath)")
+        XCTAssertEqual(
+            confirmation.message,
+            "“remote-build-artifacts” will be permanently deleted. This action cannot be undone.\n\nPath:\n\(fullPath)"
+        )
+        XCTAssertFalse(confirmation.title.contains("%@"))
+        XCTAssertFalse(confirmation.message.contains("%@"))
+    }
 }
 
 @MainActor

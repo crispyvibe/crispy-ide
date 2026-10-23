@@ -15,7 +15,13 @@ extension ContentView {
         projectPath: String?,
         surfaceID: UUID?
     ) -> TerminalSpotlightState {
-        TerminalSpotlightState(
+        let owningProjectRootURL = projectPath.flatMap { identity in
+            vibespaceView.activeVibeSpaceProjects.first(where: {
+                $0.projectIdentifier == identity
+                    || $0.rootURL.standardizedFileURL.path == identity
+            })?.rootURL
+        }
+        return TerminalSpotlightState(
             id: UUID(),
             source: source,
             title: title,
@@ -24,7 +30,8 @@ extension ContentView {
             onSplitTerminalRequested: nil,
             onTemporaryTerminalRequested: nil,
             isTemporary: false,
-            owningProjectRootURL: projectPath.map { URL(fileURLWithPath: $0) },
+            owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: projectPath,
             surfaceID: surfaceID
         )
     }
@@ -91,7 +98,7 @@ extension ContentView {
         let spotlight = browserSpotlightState(
             source: .browser(tileID: tileID, url: url),
             title: browserSpotlightTitle(for: url),
-            projectPath: tile?.projectPath,
+            projectPath: tile.flatMap { $0.projectIdentifier ?? $0.projectPath },
             surfaceID: resolvedSurfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)

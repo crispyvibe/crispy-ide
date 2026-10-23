@@ -13,6 +13,7 @@ final class AnyProjectSession: ObservableObject, Identifiable {
     let gitExplorer: AnyGitExplorer
     let terminal: AnyTerminalProvider
     let fileContent: any FileContentProviding
+    let remoteItemTransfer: (any RemoteItemTransferring)?
 
     let _wrapped: any ProjectProviding
     private var cancellables = Set<AnyCancellable>()
@@ -25,6 +26,7 @@ final class AnyProjectSession: ObservableObject, Identifiable {
         self.gitExplorer = AnyGitExplorer(project.gitExplorer)
         self.terminal = AnyTerminalProvider(project.terminal)
         self.fileContent = project.fileContent
+        self.remoteItemTransfer = project.remoteItemTransfer
 
         // Bubble up objectWillChange from sub-components
         folderExplorer.objectWillChange
@@ -51,6 +53,11 @@ final class AnyProjectSession: ObservableObject, Identifiable {
     var onFileRenamed: ((ExplorerRenameEvent) -> Void)? {
         get { _wrapped.onFileRenamed }
         set { _wrapped.onFileRenamed = newValue }
+    }
+
+    var onFileDeleted: ((ExplorerDeletionEvent) -> Void)? {
+        get { _wrapped.onFileDeleted }
+        set { _wrapped.onFileDeleted = newValue }
     }
 
     func activate() { _wrapped.activate() }

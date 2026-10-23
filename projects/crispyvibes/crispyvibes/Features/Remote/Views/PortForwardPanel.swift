@@ -91,7 +91,8 @@ struct PortForwardPanel: View {
     }
 
     private func addForward() {
-        guard let lp = UInt16(localPort), let rp = UInt16(remotePort) else {
+        guard let lp = UInt16(localPort), lp > 0,
+              let rp = UInt16(remotePort), rp > 0 else {
             error = "Invalid port"
             return
         }

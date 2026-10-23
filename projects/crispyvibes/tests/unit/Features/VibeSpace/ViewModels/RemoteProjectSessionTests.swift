@@ -9,6 +9,45 @@ private final class NoopTriageRunner: TodoTriageRunning {
     func runTriage(prompt: String, projectPath: String) async -> String? { nil }
 }
 
+
+private struct FailingRemoteItemTransferService: RemoteItemTransferring {
+    func download(
+        _ item: RemoteTransferItem,
+        to destinationURL: URL,
+        progress: @escaping @Sendable (RemoteTransferProgress) -> Void
+    ) async throws -> RemoteTransferReceipt {
+        throw CocoaError(.fileReadUnknown)
+    }
+
+    func materializeForExternalOpen(
+        _ item: RemoteTransferItem,
+        progress: @escaping @Sendable (RemoteTransferProgress) -> Void
+    ) async throws -> RemoteTransferReceipt {
+        throw CocoaError(.fileReadUnknown)
+    }
+}
+
+private struct BlockingRemoteItemTransferService: RemoteItemTransferring {
+    func download(
+        _ item: RemoteTransferItem,
+        to destinationURL: URL,
+        progress: @escaping @Sendable (RemoteTransferProgress) -> Void
+    ) async throws -> RemoteTransferReceipt {
+        try await wait()
+    }
+
+    func materializeForExternalOpen(
+        _ item: RemoteTransferItem,
+        progress: @escaping @Sendable (RemoteTransferProgress) -> Void
+    ) async throws -> RemoteTransferReceipt {
+        try await wait()
+    }
+
+    private func wait() async throws -> RemoteTransferReceipt {
+        try await Task.sleep(nanoseconds: 30_000_000_000)
+        throw CancellationError()
+    }
+}
 @MainActor
 final class RemoteProjectSessionTests: XCTestCase {
     private var container: AppContainer!
@@ -775,6 +814,8 @@ final class RemoteProjectSessionTests: XCTestCase {
             themeManager: CrispyVibesThemeManager(),
             experimentalFeatures: experimentalFeatures,
             vibespaceInteraction: vibespaceInteraction,
+            externalFileOpenService: ExternalFileOpenService(interaction: vibespaceInteraction),
+            remoteTransferCoordinator: RemoteTransferCoordinator(interaction: vibespaceInteraction),
             terminalServices: terminalServices,
             terminalViewModelDependencies: terminalViewModelDependencies,
             operationMetricsStore: operationMetricsStore,
@@ -814,5 +855,135 @@ final class RemoteProjectSessionTests: XCTestCase {
             cliSocketServer: cliSocketServer,
             jupyterServerService: JupyterServerService()
         )
+    }
+
+    func testRemoteTransferPathConfinementRejectsSiblingPrefixAndTraversal() {
+        XCTAssertTrue(RemoteItemTransferService.isPath("/srv/project", within: "/srv/project"))
+        XCTAssertTrue(RemoteItemTransferService.isPath("/srv/project/src/main.swift", within: "/srv/project"))
+        XCTAssertFalse(RemoteItemTransferService.isPath("/srv/project-other/secret", within: "/srv/project"))
+        XCTAssertFalse(RemoteItemTransferService.isPath("/srv/project/../secret", within: "/srv/project"))
+    }
+
+    func testSFTPFileKindClassifiesSymlinksAndSpecialFiles() {
+        XCTAssertEqual(SFTPFileKind(permissions: 0o100644), .regular)
+        XCTAssertEqual(SFTPFileKind(permissions: 0o040755), .directory)
+        XCTAssertEqual(SFTPFileKind(permissions: 0o120777), .symbolicLink)
+        XCTAssertEqual(SFTPFileKind(permissions: 0o010600), .other)
+        XCTAssertEqual(SFTPFileKind(permissions: nil), .other)
+    }
+
+    func testParkedRemotePresentationDistinguishesSSHAndRedactsUser() {
+        let presentation = ParkedProjectPresentation(
+            identifier: "ssh://secret-user@example.com:2222/home/secret-user/project"
+        )
+
+        XCTAssertTrue(presentation.isRemote)
+        XCTAssertEqual(presentation.displayName, "project")
+        XCTAssertEqual(presentation.remoteDetail, "example.com:2222 • …/project")
+        XCTAssertFalse(presentation.remoteDetail?.contains("secret-user") == true)
+        XCTAssertFalse(presentation.remoteDetail?.contains("secret-user@") == true)
+        XCTAssertTrue(presentation.accessibilityLabel.contains("example.com:2222"))
+    }
+
+    func testSSHProjectIdentifierRoundTripsReservedCharactersAndUnicode() {
+        let profile = SSHConnectionProfile(
+            id: UUID(),
+            displayName: "Remote",
+            host: "2001:db8::1",
+            port: 2222,
+            user: "dev user",
+            authMethod: .agent,
+            importedFromConfig: false
+        )
+        let remotePath = "/srv/My Project/what?#100%/日本語"
+
+        let identifier = profile.projectIdentifier(remotePath: remotePath)
+        let parsed = SSHConnectionProfile.parseIdentifierLocation(identifier)
+
+        XCTAssertEqual(parsed?.user, profile.user)
+        XCTAssertEqual(parsed?.host, profile.host)
+        XCTAssertEqual(parsed?.port, profile.port)
+        XCTAssertEqual(parsed?.remotePath, remotePath)
+        XCTAssertFalse(identifier.contains("My Project"))
+        XCTAssertFalse(identifier.contains("?#"))
+    }
+
+    func testRemoteTransferCoordinatorRetainsFailureUntilDismissed() async {
+        let coordinator = RemoteTransferCoordinator(interaction: VibeSpaceInteractionService())
+        coordinator.requestExternalOpen(
+            item: RemoteTransferItem(path: "/srv/app/file", displayName: "file", isDirectory: false),
+            projectName: "Remote",
+            using: FailingRemoteItemTransferService()
+        )
+
+        let failed = await waitForCondition(timeout: 2) {
+            guard case .failed = coordinator.operation?.state else { return false }
+            return true
+        }
+        XCTAssertTrue(failed)
+        XCTAssertNotNil(coordinator.operation)
+        coordinator.dismissCompleted()
+        XCTAssertNil(coordinator.operation)
+    }
+
+    func testRemoteTransferCoordinatorRetainsSlotUntilCancellationUnwinds() async {
+        let coordinator = RemoteTransferCoordinator(interaction: VibeSpaceInteractionService())
+        let item = RemoteTransferItem(path: "/srv/app/file", displayName: "file", isDirectory: false)
+        coordinator.requestExternalOpen(
+            item: item,
+            projectName: "Remote",
+            using: BlockingRemoteItemTransferService()
+        )
+        XCTAssertNotNil(coordinator.operation)
+
+        coordinator.cancel()
+        if let state = coordinator.operation?.state {
+            XCTAssertEqual(state, .cancelling)
+        }
+        coordinator.requestExternalOpen(
+            item: item,
+            projectName: "Remote",
+            using: FailingRemoteItemTransferService()
+        )
+        XCTAssertEqual(coordinator.errorMessage, AppStrings.RemoteTransfer.alreadyInProgress)
+
+        let cleared = await waitForCondition(timeout: 2) { coordinator.operation == nil }
+        XCTAssertTrue(cleared)
+    }
+
+    func testSSHConnectionFormRejectsInvalidPorts() {
+        let viewModel = SSHConnectionSheetViewModel()
+        viewModel.host = "example.com"
+        viewModel.user = "dev"
+
+        for invalidPort in ["0", "65536", "not-a-port"] {
+            viewModel.port = invalidPort
+            XCTAssertFalse(viewModel.isValid)
+            XCTAssertNil(viewModel.buildProfile(existingID: nil, importedFromConfig: false))
+        }
+
+        viewModel.port = "65535"
+        XCTAssertTrue(viewModel.isValid)
+        XCTAssertEqual(
+            viewModel.buildProfile(existingID: nil, importedFromConfig: false)?.port,
+            65535
+        )
+    }
+
+    func testSSHConfigParserRejectsHostsWithInvalidPorts() {
+        let parsed = SSHConfigParser.parse(content: """
+        Host valid
+          HostName valid.example
+          Port 22
+        Host zero
+          HostName zero.example
+          Port 0
+        Host tooHigh
+          HostName high.example
+          Port 65536
+        """)
+
+        XCTAssertEqual(parsed.map(\.alias), ["valid"])
+        XCTAssertEqual(parsed.first?.port, 22)
     }
 }

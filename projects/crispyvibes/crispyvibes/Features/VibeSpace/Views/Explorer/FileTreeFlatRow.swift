@@ -7,6 +7,8 @@ enum FileTreeAction {
     case toggleExpansion(FileItem)
     case select(FileItem)
     case openInTab(FileItem)
+    case openInSystem(FileItem)
+    case download(FileItem)
     case openInFinder(URL)
     case createNewFile(FileItem?)
     case createNewFolder(FileItem?)
@@ -19,6 +21,24 @@ enum FileTreeAction {
     case requestDelete(FileItem)
 }
 
+
+struct ExplorerDeleteConfirmation: Equatable {
+    let title: String
+    let warning: String
+    let pathDetail: String
+
+    var message: String { "\(warning)\n\n\(pathDetail)" }
+
+    init(item: FileItem) {
+        self.init(itemName: item.displayName, fullPath: item.url.path)
+    }
+
+    init(itemName: String, fullPath: String) {
+        title = AppStrings.Explorer.deleteConfirmationTitle(itemName)
+        warning = AppStrings.Explorer.deleteConfirmationMessage(itemName)
+        pathDetail = AppStrings.Explorer.deleteConfirmationPath(fullPath)
+    }
+}
 // MARK: - Row view
 
 struct FileTreeFlatRow: Equatable, View {
@@ -30,6 +50,7 @@ struct FileTreeFlatRow: Equatable, View {
     let searchQuery: String
 
     var renameText: Binding<String>
+    var isRemoteProject = false
     var onAction: (FileTreeAction) -> Void
     var onMoveDrop: ([NSItemProvider], URL) -> Bool
 
@@ -112,14 +133,20 @@ struct FileTreeFlatRow: Equatable, View {
                 Divider()
             }
             Button(AppStrings.Explorer.openInTerminal) { onAction(.openInTerminal(directoryURL)) }
+            Button(AppStrings.Explorer.openInSystem) { onAction(.openInSystem(item)) }
+            if isRemoteProject {
+                Button(AppStrings.Explorer.download) { onAction(.download(item)) }
+            }
             if !item.isDirectory {
                 Button(AppStrings.Explorer.openInSplitHorizontal) { onAction(.openInSplitHorizontal(item)) }
                 Button(AppStrings.Explorer.openInSplitVertical) { onAction(.openInSplitVertical(item)) }
             }
             Divider()
             Button(AppStrings.Common.rename) { onAction(.startRenaming(item)) }
-            if !item.isDirectory {
+            if !isRemoteProject {
                 Button(AppStrings.Explorer.revealInFinder) { onAction(.openInFinder(item.url)) }
+            }
+            if !item.isDirectory || !isRemoteProject {
                 Divider()
             }
             Button(AppStrings.Common.delete, role: .destructive) { onAction(.requestDelete(item)) }

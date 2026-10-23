@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Previews feature handles image preview (raster, SVG), PDF viewing, and HTML rendered editing. It uses native image rendering for rasters, PDFKit for PDFs, and WKWebView for HTML/SVG. Remote files are staged locally via SFTP before preview. The threat surface includes local file rendering of untrusted content, WKWebView HTML rendering with project-root file access, and remote file staging.
+The Previews feature handles image preview (raster, SVG), PDF viewing, and HTML rendered editing. It uses native image rendering for rasters, PDFKit for PDFs, and WKWebView for HTML/SVG. Remote files are staged locally via SFTP before preview. The threat surface includes local file rendering of untrusted content, WKWebView HTML rendering whose trusted host currently receives filesystem-root read access, and remote file staging.
 
 ## Trust Boundaries
 
@@ -10,7 +10,7 @@ The Previews feature handles image preview (raster, SVG), PDF viewing, and HTML 
 |----------|-------------|
 | File system ↔ Image renderer | Raster images are loaded from disk into `NSImage`/`CGImage` for display. SVG files are loaded into a dedicated preview host. |
 | File system ↔ PDFKit | PDF files are loaded via PDFKit's native renderer. |
-| File system ↔ WKWebView (HTML) | HTML files are loaded into a WKWebView with read access scoped to the project root. A `<base>` tag is injected for relative asset resolution. |
+| File system ↔ WKWebView (HTML) | The trusted bundled editor host currently loads with filesystem-root read access so bundle and local assets can resolve. Authored HTML is nested in the exact `allow-same-origin` sandbox. A `<base>` tag resolves relative assets. |
 | Remote SFTP ↔ Local staging | Remote files are downloaded to a temporary local file for native rendering. Edits are written back via SFTP. |
 | Image editing ↔ Disk | Save writes edited raster bytes to the open file after identity checks. Export As writes a flattened copy to a user-selected `NSSavePanel` destination without rebasing the open document. |
 | Image editing ↔ Vision | Full-resolution composited pixels are passed to Apple's on-device Vision framework for OCR or foreground masking; the analysis service has no network path. |
@@ -21,7 +21,7 @@ The Previews feature handles image preview (raster, SVG), PDF viewing, and HTML 
 1. **Raster image parsing** — malformed image files (PNG, JPEG, TIFF) could exploit image decoder vulnerabilities in macOS frameworks.
 2. **SVG rendering** — SVG files may contain embedded scripts, external references, or XXE payloads.
 3. **PDF rendering** — malformed PDFs could exploit PDFKit vulnerabilities. PDFs may contain JavaScript, external links, or embedded files.
-4. **HTML rendering with project-root access** — HTML files rendered in WKWebView have read access to the entire project root, enabling local file inclusion.
+4. **HTML rendering with filesystem-root host access** — the trusted WKWebView host can load local files broadly; authored HTML is isolated in the exact `allow-same-origin` iframe but passive local inclusion remains possible.
 5. **Remote file staging** — temporary files are created in `NSTemporaryDirectory()` for remote preview. Race conditions or insufficient cleanup could leak data.
 6. **Image edit save path** — edited images are saved back to the original file URL. Symlink manipulation could redirect writes.
 7. **Raster flattening** — encoding one 8-bit frame may lose resolution, animation/pages, precision, or HDR auxiliary data.
@@ -36,10 +36,11 @@ The Previews feature handles image preview (raster, SVG), PDF viewing, and HTML 
 
 ### F009-T01: Arbitrary file read via HTML local file references
 
-- **Vector:** An HTML file contains `<img src="../../.env">` or `<script src="../../secrets.json">`. The WKWebView has read access scoped to the project root (F009-R23), so any file within the project is accessible to the rendered HTML.
-- **Impact:** Disclosure of sensitive project files (`.env`, credentials, private keys) to scripts running in the HTML preview.
-- **Likelihood:** Medium — developers open HTML files from cloned repositories; project roots commonly contain `.env` files.
-- **Mitigation:** WKWebView read access is scoped to the project root (not the entire filesystem). A `<base>` tag is injected to resolve relative paths from the file's parent directory. Consider restricting access to the file's parent directory rather than the full project root for untrusted HTML. Scripts in the WKWebView are sandboxed and cannot exfiltrate data without network access (which is not granted). Linked NFR: SEC-Data-Protection.
+- **Vector:** Authored HTML references a project file such as `<img src="../../.env">`. The iframe retains same-origin access and the WKWebView has broad local read access for asset resolution.
+- **Impact:** Sensitive project bytes may be rendered into the preview or exposed to the trusted editor bridge, although authored script exfiltration is blocked.
+- **Likelihood:** Low to medium — developers open HTML from cloned repositories and project roots commonly contain sensitive files.
+- **Mitigation:** Authored HTML is placed in an iframe whose exact sandbox is `allow-same-origin`; it is not granted scripts, forms, top navigation, popups, downloads, or modals. Network `connect-src` is also blocked by the host CSP. JavaScript remains enabled only in the trusted native editor document so Crispy can edit/synchronize the iframe. Local read access remains broad for compatibility and should be narrowed in a future hardening pass. Linked NFR: SEC-Data-Protection.
+- **Residual risk:** Passive elements such as images may still render readable project content, and same-origin lets the trusted parent read the authored DOM. Sandbox controls do not reduce the WKWebView's configured filesystem read scope.
 
 ### F009-T02: Script execution in SVG preview
 
@@ -57,10 +58,11 @@ The Previews feature handles image preview (raster, SVG), PDF viewing, and HTML 
 
 ### F009-T04: Remote file staging data leakage
 
-- **Vector:** Remote files are staged in `NSTemporaryDirectory()` for local preview. If temporary files are not cleaned up promptly, sensitive remote file content persists on the local disk.
-- **Impact:** Sensitive remote file content accessible on local disk after the preview is closed.
-- **Likelihood:** Low — cleanup runs on document change per F009-R17/R20.
-- **Mitigation:** Staged preview files are cleaned up when the active document changes (F009-R17). Temporary file paths use UUID-based names to prevent prediction. The staging directory is the system temp directory with standard user permissions. Consider using `FileManager.removeItem` in a `defer` block for guaranteed cleanup. Linked NFR: SEC-Data-Protection.
+- **Vector:** Remote files are staged locally for native preview or Open in System. A retained HTML snapshot may outlive the editor so the receiving application can continue reading it; stale files, broad permissions, or predictable names could disclose remote content.
+- **Impact:** Sensitive remote file content remains readable on the local disk after the preview or external application closes.
+- **Likelihood:** Low after permission and cleanup controls.
+- **Mitigation:** Editor-triggered remote HTML open uses the app-level `ExternalFileOpenService`, not the explorer/root transfer coordinator. It writes a UUID-contained snapshot in the app temporary area with owner-only permissions. The service cleans containers older than 24 hours both when it is constructed during application startup and on later staging. It propagates the `NSWorkspace.open` Boolean, removes the newly created container if launch fails, and never reuses an older snapshot. Shorter-lived raster/PDF staging continues to be cleaned up with document lifecycle. Linked NFR: SEC-Data-Protection.
+- **Residual risk:** A snapshot may intentionally remain for up to 24 hours, and local processes running as the same user can access user-owned temporary data.
 
 ### F009-T05: Image edit save via symlink redirection
 
@@ -151,13 +153,45 @@ The Previews feature handles image preview (raster, SVG), PDF viewing, and HTML 
 - **Residual risk:** Framework work may retain already-allocated image buffers briefly after cancellation, but its completion cannot mutate editor state.
 
 
+### F009-T16: External editing of a remote HTML snapshot is mistaken for remote editing
+
+- **Vector:** The user edits the temporary file opened by another application and assumes those changes synchronize to the SSH source.
+- **Impact:** Work performed in the external application is lost or diverges from the remote document.
+- **Likelihood:** Medium unless the copy semantics are clear.
+- **Mitigation:** The snapshot has no writeback channel and is documented as a read/copy handoff. Crispy continues to treat the remote source as authoritative; users must make durable remote edits in Crispy or explicitly transfer a replacement. Linked NFR: SEC-Data-Protection.
+- **Residual risk:** macOS cannot prevent another application from modifying its local copy, and those modifications remain outside Crispy's revision model.
+
+### F009-T17: Remote mutation during save-read-open sequencing
+
+- **Vector:** The remote file changes after Crispy validates/saves it but before or while SFTP opens and reads the bytes for the external snapshot.
+- **Impact:** The system application could receive a revision other than the one the user intended to open.
+- **Likelihood:** Low, but higher on actively modified shared remote files.
+- **Mitigation:** Invocation synchronously captures the buffer/content/file/provider, cancels pending autosave, suppresses same-buffer scheduling, waits for `activeSaveToken` rather than visual save state, and serializes the captured bytes through `beginSave(capturedContent:)`. Captured references prevent tab switches from retargeting the command; later edits remain dirty and autosave is rescheduled. The independent app-level `ExternalFileOpenService` aborts on save/read/write/launch failure, propagates a false `NSWorkspace.open` result, removes a newly staged copy after launch failure, and never falls back to an older snapshot. Linked NFR: SEC-Data-Protection.
+- **Residual risk:** After the captured revision is saved, `ExternalFileOpenService` performs a separate unversioned SFTP re-read. The remote file can change before or during that read, so the system application may open a different remote revision. This is broader than the narrow metadata-check/open TOCTOU because this path does not bind the post-save read to a version token or compare-and-swap.
+
+### F009-T18: Closing a docked editor loses a later or failed revision
+
+- **Vector:** A tab/group closes while a save is active, a later edit exists, the remote provider is replaced by another tab's provider, or the owning group/view model deallocates before the write finishes.
+- **Impact:** The last edit is written to the wrong host, silently discarded, or removed from memory after a failed save.
+- **Likelihood:** Low after serialized close hardening.
+- **Mitigation:** Final-reference close waits up to 30 seconds for the active token, flushes any later dirty revision, and retains the dirty buffer on timeout/failure. Each file tab owns its provider; the close writer strongly retains that provider and the pane worker. Docked previews/groups close all tabs and return flush tasks before release, while project lifecycle waits on those tasks. Linked NFR: SEC-Data-Protection, REL-2.
+- **Residual risk:** A watchdog may shut down project resources after 30 seconds; a retained failed buffer no longer has a visible tab and requires recovery/retry handling.
+
+### F009-T19: Authored HTML gains active browser capabilities
+
+- **Vector:** A sandbox change adds `allow-scripts`, `allow-forms`, `allow-top-navigation`, `allow-popups`, `allow-downloads`, or `allow-modals`, or removes the iframe sandbox because the parent WKWebView needs JavaScript.
+- **Impact:** Untrusted authored HTML can execute active content, submit data, navigate, open windows, download files, or display blocking UI with broad local read access.
+- **Likelihood:** Low with the exact-token invariant; impact is high if regressed.
+- **Mitigation:** The authored iframe's exact sandbox is `allow-same-origin` only. Native WKWebView JavaScript stays enabled for the trusted bundled editor host and is not a reason to grant authored scripts. Static security source asserts the exact sandbox and absence of `allow-scripts`; review must preserve the other omitted capabilities as an exact-token invariant. Linked NFR: SEC-Input-Sanitization, SEC-Data-Protection.
+- **Residual risk:** Static string checks do not prove mounted WebKit enforcement or separately assert every omitted capability.
+
 ## Residual Risks
 
-- HTML files with project-root read access can read any file in the project. This is by design for asset resolution but creates a disclosure risk for sensitive project files.
+- The trusted HTML editor host currently has filesystem-root read access. The authored iframe cannot run scripts/forms/navigation/popups/downloads/modals, but passive local references may still render sensitive content; narrowing the host read scope remains future hardening.
 - System image/PDF decoder vulnerabilities are outside the app's control; mitigation depends on macOS updates.
 - T05 replacement detection uses file-resource identity both before render and immediately before write, but a final check-to-write TOCTOU window remains.
 - Export As detects direct, symlink, and hard-link aliases, but its identity check is not atomic with the destination write.
-- Remote version checking is check-then-write without provider CAS; SFTP size+mtime tokens have one-second resolution, and tokenless providers are trusted.
+- Remote version checking for raster Save is check-then-write without provider CAS; SFTP size+mtime tokens have one-second resolution, and tokenless providers are trusted. Separately, remote HTML Open in System performs an unversioned SFTP re-read after save and may open a different revision; that broader read-after-write race is not merely the narrow metadata-check/open TOCTOU.
 - Display decode, full-resolution output, and Vision run off-main. Explicit Resize caps requested edges at 16,384 pixels, but Vision first receives a full-resolution composited image and decoding an already-huge source remains a memory-pressure risk.
 - Raster file operations are not logged.
 - Canvas keyboard handling includes crop commands, markup traversal/delete/nudge/deselect, and standard Undo/Redo. VoiceOver can press markup buttons and invoke selected-item Delete/Move or crop Shrink/Expand/Move/Apply/Cancel actions without a pointer. Status changes are announced. App-level ⌘S routes to raster Save.
@@ -166,8 +200,19 @@ The Previews feature handles image preview (raster, SVG), PDF viewing, and HTML 
 
 | NFR | Status | Notes |
 |-----|--------|-------|
-| SEC-Input-Sanitization | Compliant | Scoped file access; dedicated SVG host; system decoders. |
-| SEC-Data-Protection | Partial | Full-resolution output, revisions/generations, atomic writes, local identity checks, fail-closed remote tokens, alias-aware Export As refusal, overwrite policy, and conflict UI reduce loss; local/export/remote final TOCTOU and coarse SFTP-token risks remain. |
+| SEC-Input-Sanitization | Compliant | Authored HTML iframe is exactly `sandbox="allow-same-origin"` with no scripts/forms/navigation/popups/downloads/modals; trusted host JavaScript remains separate; dedicated SVG host and system decoders are used. |
+| SEC-Data-Protection | Partial | Full-resolution output, revisions/generations, atomic writes, serialized close flushing, retained dirty buffers, per-tab providers, local identity checks, fail-closed remote tokens, alias-aware Export As refusal, overwrite policy, and conflict UI reduce loss; watchdog expiry and local/export/remote final TOCTOU remain. |
 | PERF-Responsiveness | Partial | Decode, export, live composites, Vision, and disk writes are off-main; proxies are bounded and Resize caps requested edges at 16,384 pixels, but full-resolution output/analysis buffers can still be large and loading is not progressive. |
 | A11Y | Compliant | Stable identifiers, keyboard commands, pressable markup buttons, selected-item and crop custom actions, tool traits, slider values, and VoiceOver status announcements are implemented. |
 | OBS | Unsupported | Raster file operations are not logged. |
+
+## Verification Status
+
+Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. `Resources/MarkdownRuntime/editor.html` supplies the exact `allow-same-origin` sandbox, `MarkupRenderedEditor` retains trusted-host JavaScript, and `EditorHTMLSecurityTests.testAuthoredHTMLIframeIsSandboxedWithoutScriptCapability` statically asserts that exact string and rejects `allow-scripts` variants. The absence of forms/navigation/popups/downloads/modals follows from the exact single-token invariant and lacks separate mounted WebKit assertions. Close/save/provider and intentional-empty-HTML cases remain compiled static source rather than executed evidence.
+
+## Change History
+
+- 2026-10-23: Final reconciliation confirms the exact single-token authored sandbox, trusted-host JavaScript boundary, and precise build/test-build-only evidence limits.
+- 2026-10-23: Corrected F009-T01 for sandboxed authored content, added F009-T19 for active-capability regression, and narrowed evidence to the exact static sandbox assertion versus production/resource inspection.
+- 2026-10-23: Added F009-T18 for close-time revision loss and documented serialized flushing, provider/worker retention, dirty-buffer preservation, and static-only verification.
+- 2026-10-20: Reconciled editor-owned external-open staging and launch cleanup; distinguished the unversioned post-save SFTP re-read/different-revision risk from narrow metadata-check/open TOCTOU.

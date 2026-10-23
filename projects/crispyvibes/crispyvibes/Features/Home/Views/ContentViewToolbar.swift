@@ -359,12 +359,12 @@ extension ContentView {
                         if selectedVibeSpaceCanvasMode == .detailed {
                             contentViewerStore.openWebPage(
                                 url: URL(string: "about:blank")!,
-                                projectPath: activeVibeSpaceSession.focusedProject?.rootURL.standardizedFileURL.path
+                                projectPath: activeVibeSpaceSession.focusedProject?.projectIdentifier
                             )
                         } else {
                             presentBrowserSpotlight(
                                 url: nil,
-                                projectPath: activeVibeSpaceSession.focusedProject?.rootURL.standardizedFileURL.path,
+                                projectPath: activeVibeSpaceSession.focusedProject?.projectIdentifier,
                                 surfaceID: directMainSpotlightSurfaceID
                             )
                         }

@@ -30,6 +30,7 @@ final class VibeSpaceHydrationCoordinator: ObservableObject {
     var dockPreviewBridge: DockPreviewBridge?
     var canvasModeProvider: (() -> VibeSpaceCanvasMode)?
     weak var dockedBrowserCoordinator: DockedBrowserCoordinator?
+    weak var dockedFileViewerCoordinator: DockedFileViewerCoordinator?
 
     init(
         appShellStore: AppShellStore,
@@ -55,6 +56,9 @@ final class VibeSpaceHydrationCoordinator: ObservableObject {
     func scheduleVibeSpaceTerminalHydration(for vibespaceID: UUID) {
         cancelVibeSpaceHydration()
         guard let vibespace = vibespaceState(for: vibespaceID) else { return }
+        if let previousID = lastHydratedVibeSpaceID, previousID != vibespaceID {
+            _ = dockedFileViewerCoordinator?.removeAllGroups()
+        }
 
         // Bind the service-owned board store to this vibespace. The explicit
         // hydration path sets `lastHydratedVibeSpaceID`, which makes
@@ -122,6 +126,7 @@ final class VibeSpaceHydrationCoordinator: ObservableObject {
         }
 
         dockedBrowserCoordinator?.removeAll()
+        dockedFileViewerCoordinator?.removeAllGroups()
         contentViewerStore.teardownStandaloneACPStores()
         // Update board store's vibespaceID from the service layer so it works even
         // when the board view is not in the SwiftUI hierarchy (e.g., user is in

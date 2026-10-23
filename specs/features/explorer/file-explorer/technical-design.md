@@ -34,8 +34,12 @@ Directories are lazily loaded: children fetched only on first expansion. Already
 | Open in new window | Detached editor window |
 | Open in horizontal split | Split pane |
 | Open in vertical split | Split pane |
+| Open in System (local) | Pass the original file or directory URL to the macOS workspace |
+| Open in System (remote) | Delegate a protected temporary-copy transfer and system launch to the app-wide remote-transfer coordinator |
+| Download… (remote) | Select a local destination and delegate transactional download to the app-wide remote-transfer coordinator |
+| Reveal in Finder | Local files/directories only; omitted for SSH rows |
 
-Directories respond only to select and toggle-expansion.
+Directories support selection/expansion plus the applicable context actions above.
 
 ## Data Flow
 
@@ -51,7 +55,7 @@ Directories respond only to select and toggle-expansion.
 
 - **Create** — default names: "untitled" (file), "New Folder" (folder). Targets the selected folder or project root; a stale selected folder falls back to its nearest existing project ancestor. Enters inline rename mode immediately.
 - **Rename** — inline editing state. Committed via worker. On success: selections updated, rename event published (consumed by open editors), tree refreshed. Empty/whitespace names rejected silently.
-- **Delete** — via worker. Selections pointing to deleted item or descendants cleared. Tree refreshed.
+- **Delete** — the AppKit unified explorer, SwiftUI explorer, and Shelf Files sidebar each retain the exact item or path whose context menu initiated deletion and construct the shared `ExplorerDeleteConfirmation` from that immutable target, never by re-reading mutable current selection. The model resolves the exact local or remote item name and full path once, then supplies the title `Delete “name”?`, a permanent-deletion warning paragraph that repeats the exact name and states deletion cannot be undone, a following separate paragraph containing the localized `Path:` block and exact full local or remote path, and the destructive button label `Delete`. All three surfaces use the same confirmation content and behavior. Full-path disclosure is intentional because the confirmation is presented locally to help the user disambiguate same-named destructive targets. Confirmation invokes the appropriate worker-backed filesystem deletion only for the retained target; cancellation only dismisses the dialog and invokes no deletion. After confirmed filesystem success, both local `FolderExplorerViewModel` and legacy/enhanced `RemoteFolderExplorer` emit `ExplorerDeletionEvent(url:isDirectory:)`; they emit nothing on cancellation or failure. `ProjectSession` and `RemoteProjectSession` forward that typed event. `VibeSpaceCanvasFileOpenUseCase` closes matching tabs in every detailed editor group and delegates docked/floating cleanup to `DockedFileViewerCoordinator`. Matching is exact for files and exact-plus-path-component descendants for directories. `EditorGroupStore.closeFileTabs` calls `closeTab(..., discardUnsavedChanges: true)`, supplying no writer and discarding the buffer so close flushing or autosave cannot recreate the deleted path. Selections are cleared and the affected parent is refreshed after success.
 
 ### Expand and Collapse
 
@@ -131,6 +135,18 @@ The vibespace-level source control watcher filters observed paths before queuein
 - Internal `.git` churn (`.git/index`, object storage, logs) skipped.
 - User-visible ref changes allowed: `.git/HEAD`, `FETCH_HEAD`, `ORIG_HEAD`, `packed-refs`, `refs/...`.
 
+### External System Open and Download
+
+The shared row action model dispatches by project capability. Local Open in System passes the selected file or folder's original URL to `VibeSpaceInteractionService`, which propagates the `NSWorkspace.open` Boolean; a false result uses the explorer's existing alert. Local rows retain Reveal in Finder. SSH-backed rows never invoke Finder. They expose Open in System and Download… and forward an immutable project identifier plus remote path to the app-wide `RemoteTransferCoordinator`.
+
+That coordinator owns one user-facing slot shared by explorer file/folder rows and active project roots. It publishes preparing, transferring, cancelling, publishing, completed, and failed states to the remote overlay. Cancellation changes state immediately but deliberately keeps `operationTask` and the slot until structured cancellation terminates SFTP and removes staging. Before destination publication, the transfer service synchronously awaits a MainActor acknowledgment that `.publishing` has been installed, then performs a second `Task` cancellation check immediately before replace/move. Cancel is shown only while preparing or transferring, never while cancelling or publishing. A cancellation that arrives after the final check can coincide with the atomic replace/move boundary and may not prevent publication; this is the residual atomic-boundary semantics. Remote failures remain in the overlay until the user dismisses them; they do not route through the local/editor alert.
+
+The explorer does not construct temporary paths or publish destinations itself. Remote Open in System receives a retained owner-only temporary snapshot URL only after verified transfer success; a false workspace-open result removes that newly created snapshot and becomes a failed overlay state. Download… presents destination selection and leaves hidden-sibling publication to F034's streaming service. It reports manifest/item/byte progress but does not present a size-confirmation prompt. `AppDiagnostics` records remote transfer lifecycle and newly relevant diagnostics, and diagnostics export sanitizes path-like strings found in event metadata. Comprehensive observability for every local file operation is not implemented.
+
+This coordinator does not serialize editor-triggered remote HTML Open in System. F009 captures the editor buffer/provider and uses the separate app-level `ExternalFileOpenService`, editor busy state, and existing editor alert without the global overlay or dedicated bulk-transfer SFTP channel. Thus only one coordinator-backed explorer/root transfer runs at a time; the editor open path is independent.
+
+Native drag recognition and drag/drop transfer remain local-only. SSH rows do not create drag payloads or accept remote drag/drop; Download… is the explicit supported copy-out path.
+
 ## API / Command Contracts
 
 | Command | Timeout | Purpose |
@@ -138,11 +154,15 @@ The vibespace-level source control watcher filters observed paths before queuein
 | Tree load (list directory) | 45 s | Load project directory structure |
 | Rename | — | Rename file/folder via worker |
 | Delete | — | Delete file/folder via worker |
-| Move/Copy (drag-and-drop) | 20 s per item | Transfer files between directories |
+| Move/Copy (local drag-and-drop only) | 20 s per item | Transfer local files between directories; remote drag/drop is unsupported |
 
 ## Dependencies (frameworks, libraries)
 
-- `FolderExplorerViewModel` — per-project file tree and git state
+- `FolderExplorerViewModel` / `RemoteFolderExplorer` — emit `ExplorerDeletionEvent` only after successful local/remote removal
+- `ProjectSession` / `RemoteProjectSession` — forward typed deletion events
+- `EditorGroupStore` / `ContentViewerStore` — close exact/descendant detailed tabs with `discardUnsavedChanges`
+- `DockedFileViewerCoordinator` — closes matching floating previews and docked groups
+- `ExplorerDeleteConfirmation` — immutable exact-target confirmation content shared by AppKit unified explorer, SwiftUI explorer, and Shelf Files sidebar
 - `AppShellStore` — sidebar visibility state
 - `DirectoryWatcher` — FSEvents-backed file system monitoring
 - `PaneWorkerClient` — file operations
@@ -161,3 +181,16 @@ The vibespace-level source control watcher filters observed paths before queuein
 - Watcher path cap: 256 simultaneous paths.
 - At most one active directory listing per directory, plus one coalesced follow-up pass.
 - Drag-and-drop transfer timeout: 20 seconds per item.
+- The multi-project sidebar uses lazy project sections without requiring the UI test to enumerate every row. Its repeated-scroll regression measures liveness by issuing ⌘T after six bidirectional scroll pairs and waiting for Terminal Board, not by reading scroll offset.
+
+## Static Regression Source
+
+Final validation evidence is production build and test-build/compilation only; no test case was executed and no test pass is claimed. The typed deletion path is statically present in `FolderExplorerTypes.swift`, local `FolderExplorerViewModelActions.swift`, remote `RemoteFolderExplorer.swift`, both project-session forwarders, `VibeSpaceCanvasFileOpenUseCase.swift`, `ContentViewerStore.swift`, `EditorGroupStore.swift`, and `DockedFileViewerCoordinator.swift`. `FolderExplorerViewModelTests` directly exercises only shared confirmation formatting; test-source search found no direct invocation of `ExplorerDeletionEvent`, `closeFileTabs`, `handleDeletion`, or `discardUnsavedChanges`. Exact/descendant detailed+docked+floating closure and no-recreation therefore remain production-source inspection. `VibeSpaceAndNavigationUITests.testFilesSidebarRemainsResponsiveAfterRepeatedProjectScrolling` sends ⌘T after six down/up scroll pairs and waits for `vibespace.terminal-only`; it does not assert all-project enumeration or scroll offset.
+
+## Change History
+
+- 2026-10-23: Final reconciliation inventories every production source in the typed successful-deletion pipeline and confirms no direct deletion-event/discard-close test source; validation is build/test-build only.
+- 2026-10-23: Added the typed post-success deletion pipeline and discard-close/autosave-resurrection prevention; named the F024-R20/S54 user UI test exactly and narrowed new behavior to production-source-only verification.
+- 2026-10-23: Added the F024-R20/S54 liveness contract and narrowed delete evidence to direct shared-model formatting; validation reached build/test-build only and no test pass is claimed.
+- 2026-10-20: Expanded exact-target confirmation requirements across AppKit, SwiftUI, and Shelf; static evidence remains limited to direct shared-model formatting and does not prove per-surface target retention, Cancel, or delete dispatch.
+- 2026-10-20: Reconciled synchronous publication acknowledgment/final cancellation checking and its atomic boundary; marked diagnostics scope partial, documented path-like event-metadata sanitization, and recorded manifest progress without a size-confirmation prompt.

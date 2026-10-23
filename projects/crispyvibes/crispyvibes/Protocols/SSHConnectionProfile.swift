@@ -28,27 +28,56 @@ struct SSHConnectionProfile: Codable, Identifiable, Sendable, Hashable {
     var connectionString: String { "\(user)@\(host):\(port)" }
     var sshURI: String { "ssh://\(user)@\(host):\(port)" }
 
+    func projectIdentifier(remotePath: String) -> String {
+        var components = URLComponents()
+        components.scheme = "ssh"
+        components.user = user
+        components.host = host
+        components.port = Int(port)
+        components.path = remotePath.hasPrefix("/") ? remotePath : "/\(remotePath)"
+        return components.string ?? "\(sshURI)\(remotePath)"
+    }
+
+    static func parseIdentifierLocation(
+        _ identifier: String
+    ) -> (user: String, host: String, port: UInt16, remotePath: String)? {
+        guard identifier.hasPrefix("ssh://"),
+              let components = URLComponents(string: identifier),
+              let host = components.host,
+              !host.isEmpty else { return nil }
+
+        let user = components.user ?? NSUserName()
+        let parsedPort = components.port ?? 22
+        guard (1...Int(UInt16.max)).contains(parsedPort) else { return nil }
+        let port = UInt16(parsedPort)
+        var remotePath = components.path.isEmpty ? "~" : components.path
+        // Legacy identifiers appended raw paths without percent-encoding. Treat
+        // query/fragment delimiters as path bytes because SSH project IDs never
+        // define URL query or fragment semantics.
+        if let query = components.percentEncodedQuery {
+            remotePath += "?" + (query.removingPercentEncoding ?? query)
+        }
+        if let fragment = components.percentEncodedFragment {
+            remotePath += "#" + (fragment.removingPercentEncoding ?? fragment)
+        }
+        return (user, host, port, remotePath)
+    }
+
     /// Parses an identifier like "ssh://user@host:22/path/to/project" into (profile, remotePath).
     /// Looks up saved profiles to resolve the correct auth method.
     /// Falls back to .agent if no saved profile matches.
     static func parse(identifier: String) -> (profile: SSHConnectionProfile, remotePath: String)? {
-        guard identifier.hasPrefix("ssh://"),
-              let url = URL(string: identifier),
-              let host = url.host, !host.isEmpty else { return nil }
-
-        let user = url.user ?? NSUserName()
-        let port = UInt16(url.port ?? 22)
-        let remotePath = url.path.isEmpty ? "~" : url.path
+        guard let location = parseIdentifierLocation(identifier) else { return nil }
 
         let saved = loadSavedProfiles().first {
-            $0.host == host && $0.port == port && $0.user == user
+            $0.host == location.host && $0.port == location.port && $0.user == location.user
         }
 
         let profile = saved ?? SSHConnectionProfile(
-            id: UUID(), displayName: host, host: host, port: port,
-            user: user, authMethod: .agent, importedFromConfig: false
+            id: UUID(), displayName: location.host, host: location.host, port: location.port,
+            user: location.user, authMethod: .agent, importedFromConfig: false
         )
-        return (profile, remotePath)
+        return (profile, location.remotePath)
     }
 
     // MARK: - Private

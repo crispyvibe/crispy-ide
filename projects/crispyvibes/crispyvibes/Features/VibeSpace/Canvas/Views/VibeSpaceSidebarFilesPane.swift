@@ -26,7 +26,11 @@ struct VibeSpaceSidebarFilesPane: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 8) {
+            // F024-S01: project sections can contain variable-height AppKit trees.
+            // A LazyVStack can enter a self-invalidating item-phase loop on macOS 26,
+            // permanently blocking the main thread. The project count is small, so
+            // eager layout is both safe and more stable here.
+            VStack(alignment: .leading, spacing: 8) {
                 if !shelfStore.filePaths.isEmpty {
                     ShelfSidebarSectionView(
                         shelfStore: shelfStore,
@@ -81,15 +85,32 @@ struct VibeSpaceSidebarFilesPane: View {
     }
 
     private func parkedProjectRow(for path: String) -> some View {
-        let displayName = URL(fileURLWithPath: path).lastPathComponent
+        let presentation = ParkedProjectPresentation(identifier: path)
         return HStack(spacing: 8) {
-            Image(systemName: "shippingbox")
+            Image(systemName: presentation.isRemote ? "server.rack" : "shippingbox")
                 .foregroundStyle(activeThemePalette.secondaryTextColor)
-            Text(displayName.isEmpty ? path : displayName)
-                .font(AppTypographyTokens.captionSemibold)
-                .foregroundStyle(activeThemePalette.primaryTextColor)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(presentation.displayName)
+                    .font(AppTypographyTokens.captionSemibold)
+                    .foregroundStyle(activeThemePalette.primaryTextColor)
+                    .lineLimit(1)
+                if let detail = presentation.remoteDetail {
+                    Text(detail)
+                        .font(AppTypographyTokens.caption2)
+                        .foregroundStyle(activeThemePalette.secondaryTextColor)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
             Spacer(minLength: 0)
+            if presentation.isRemote {
+                Text(AppStrings.VibeSpace.remoteProjectBadge)
+                    .font(AppTypographyTokens.caption2Semibold)
+                    .foregroundStyle(activeThemePalette.secondaryTextColor)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(activeThemePalette.selectionBackgroundColor.opacity(0.24), in: Capsule())
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -113,7 +134,11 @@ struct VibeSpaceSidebarFilesPane: View {
                 )
             }
         }
-        .accessibilityIdentifier("vibespace.sidebar.files.parked.row.\(path)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.accessibilityLabel)
+        .accessibilityIdentifier(
+            "vibespace.sidebar.files.parked.row.\(AppDiagnostics.pathToken(path))"
+        )
     }
 
     private func projectSection(for project: AnyProjectSession) -> some View {
@@ -137,5 +162,44 @@ struct VibeSpaceSidebarFilesPane: View {
                 onProjectTransferDrop(project, plans)
             }
         )
+    }
+}
+
+struct ParkedProjectPresentation {
+    let displayName: String
+    let isRemote: Bool
+    let remoteDetail: String?
+    let accessibilityLabel: String
+
+    init(identifier: String) {
+        guard let location = SSHConnectionProfile.parseIdentifierLocation(identifier) else {
+            let name = URL(fileURLWithPath: identifier).lastPathComponent
+            self.displayName = name.isEmpty ? identifier : name
+            self.isRemote = false
+            self.remoteDetail = nil
+            self.accessibilityLabel = self.displayName
+            return
+        }
+
+        let name = (location.remotePath as NSString).lastPathComponent
+        let hostDisplay = location.port == 22
+            ? location.host
+            : AppStrings.VibeSpace.remoteHostPort(host: location.host, port: location.port)
+        self.displayName = name.isEmpty ? location.remotePath : name
+        self.isRemote = true
+        self.remoteDetail = AppStrings.VibeSpace.remoteProjectDetail(
+            host: hostDisplay,
+            path: Self.abbreviatedPath(location.remotePath)
+        )
+        self.accessibilityLabel = AppStrings.VibeSpace.parkedRemoteProjectAccessibility(
+            name: self.displayName,
+            host: hostDisplay
+        )
+    }
+
+    private static func abbreviatedPath(_ path: String) -> String {
+        let name = (path as NSString).lastPathComponent
+        guard !name.isEmpty else { return "/" }
+        return AppStrings.VibeSpace.remotePathBasename(name)
     }
 }

@@ -180,7 +180,7 @@ enum SpotlightItem {
         switch self {
         case let .terminal(project, tab):
             return .terminal(
-                projectScope: .projectPath(project.rootURL.standardizedFileURL.path),
+                projectScope: .projectPath(project.projectIdentifier),
                 tabID: tab.id
             )
         case let .standaloneTerminal(_, tileID, _, tab):
@@ -345,6 +345,7 @@ struct TerminalSpotlightState: Identifiable {
     let onAgentPresetSelected: ((TerminalPresetDefinition, TerminalPresetLaunchMode) -> Void)?
     let isTemporary: Bool
     let owningProjectRootURL: URL?
+    let owningProjectIdentifier: String?
     let surfaceID: UUID?
     let navigationIdentityOverride: SpotlightNavigationIdentity?
 
@@ -363,6 +364,7 @@ struct TerminalSpotlightState: Identifiable {
         onAgentPresetSelected: ((TerminalPresetDefinition, TerminalPresetLaunchMode) -> Void)? = nil,
         isTemporary: Bool,
         owningProjectRootURL: URL?,
+        owningProjectIdentifier: String? = nil,
         surfaceID: UUID? = nil,
         navigationIdentityOverride: SpotlightNavigationIdentity? = nil
     ) {
@@ -380,6 +382,7 @@ struct TerminalSpotlightState: Identifiable {
         self.onAgentPresetSelected = onAgentPresetSelected
         self.isTemporary = isTemporary
         self.owningProjectRootURL = owningProjectRootURL
+        self.owningProjectIdentifier = owningProjectIdentifier
         self.surfaceID = surfaceID
         self.navigationIdentityOverride = navigationIdentityOverride
     }
@@ -489,6 +492,7 @@ extension TerminalSpotlightState {
             onAgentPresetSelected: onAgentPresetSelected,
             isTemporary: isTemporary,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: owningProjectIdentifier,
             surfaceID: surfaceID,
             navigationIdentityOverride: navigationIdentityOverride
         )
@@ -1050,6 +1054,7 @@ final class TerminalSpotlightCoordinator: ObservableObject {
 extension ContentView {
     func spotlightShortcutDefinitions(
         for owningProjectRootURL: URL?,
+        projectIdentifier: String? = nil,
         fallback fallbackShortcuts: [TerminalShortcutDefinition] = []
     ) -> [TerminalShortcutDefinition] {
         guard let vibespaceID = activeVibeSpaceSession.vibespaceID ?? activeVibeSpaceID else {
@@ -1057,10 +1062,11 @@ extension ContentView {
         }
         let vibespaceShortcuts = vibespaceManagement.vibespaceShortcuts(vibespaceID: vibespaceID)
         let projectShortcuts: [TerminalShortcutDefinition]
-        if let owningProjectRootURL {
+        if let projectPath = projectIdentifier
+            ?? owningProjectRootURL?.standardizedFileURL.path {
             projectShortcuts = vibespaceManagement.projectShortcuts(
                 vibespaceID: vibespaceID,
-                projectPath: owningProjectRootURL.standardizedFileURL.path
+                projectPath: projectPath
             )
         } else {
             projectShortcuts = []
@@ -1075,7 +1081,16 @@ extension ContentView {
         vibespaceShell.presentVibeSpaceSettings(.shortcuts)
     }
 
-    private func spotlightProject(rootURL: URL?) -> AnyProjectSession? {
+    private func spotlightProject(
+        projectIdentifier: String? = nil,
+        rootURL: URL?
+    ) -> AnyProjectSession? {
+        if let projectIdentifier,
+           let project = vibespaceView.activeVibeSpaceProjects.first(where: {
+               $0.projectIdentifier == projectIdentifier
+           }) {
+            return project
+        }
         guard let rootURL else { return nil }
         let normalizedRoot = rootURL.standardizedFileURL
         return vibespaceView.activeVibeSpaceProjects.first(where: {
@@ -1097,6 +1112,7 @@ extension ContentView {
         title: String,
         accentColor: Color?,
         owningProjectRootURL: URL? = nil,
+        owningProjectIdentifier: String? = nil,
         surfaceID: UUID? = nil,
         navigationIdentityOverride: SpotlightNavigationIdentity? = nil,
         animated: Bool = true
@@ -1106,6 +1122,7 @@ extension ContentView {
            existingTabID == tabID,
            terminalSpotlightCoordinator.spotlight?.surfaceID == surfaceID,
            terminalSpotlightCoordinator.spotlight?.navigationIdentityOverride == navigationIdentityOverride,
+           terminalSpotlightCoordinator.spotlight?.owningProjectIdentifier == owningProjectIdentifier,
            terminalSpotlightCoordinator.spotlight?.owningProjectRootURL?.standardizedFileURL
                 == owningProjectRootURL?.standardizedFileURL {
             return
@@ -1114,8 +1131,13 @@ extension ContentView {
         let workingDirectoryURL = resolvedTab.workingDirectory.standardizedFileURL
         let shortcutDefinitions = spotlightShortcutDefinitions(
             for: owningProjectRootURL,
+            projectIdentifier: owningProjectIdentifier,
             fallback: terminalViewModel.shortcutCommands
         )
+        let resolvedNavigationIdentity = navigationIdentityOverride
+            ?? owningProjectIdentifier.map {
+                .terminal(projectScope: .projectPath($0), tabID: tabID)
+            }
         let spotlight = TerminalSpotlightState(
             id: UUID(),
             source: .persistent(terminalViewModel: terminalViewModel, tabID: tabID),
@@ -1128,7 +1150,8 @@ extension ContentView {
                     in: terminalViewModel,
                     directoryURL: workingDirectoryURL,
                     surfaceID: surfaceID,
-                    owningProjectRootURL: owningProjectRootURL
+                    owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: owningProjectIdentifier
                 )
             },
             onTemporaryTerminalRequested: { [weak terminalViewModel] in
@@ -1143,10 +1166,12 @@ extension ContentView {
                             in: terminalViewModel,
                             directoryURL: workingDirectoryURL,
                             surfaceID: surfaceID,
-                            owningProjectRootURL: owningProjectRootURL
+                            owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: owningProjectIdentifier
                         )
                     },
                     owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: owningProjectIdentifier,
                     surfaceID: surfaceID
                 )
             },
@@ -1159,6 +1184,7 @@ extension ContentView {
                         shortcut,
                         directoryURL: workingDirectoryURL,
                         owningProjectRootURL: owningProjectRootURL,
+                        owningProjectIdentifier: owningProjectIdentifier,
                         surfaceID: surfaceID,
                         boardStore: boardStore
                    ) {
@@ -1181,10 +1207,12 @@ extension ContentView {
                                     in: terminalViewModel,
                                     directoryURL: directoryURL,
                                     surfaceID: surfaceID,
-                                    owningProjectRootURL: owningProjectRootURL
+                                    owningProjectRootURL: owningProjectRootURL,
+                                    owningProjectIdentifier: owningProjectIdentifier
                                 )
                             },
                             owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: owningProjectIdentifier,
                             surfaceID: surfaceID,
                             initialCommand: shortcut.command
                         )
@@ -1200,8 +1228,9 @@ extension ContentView {
             },
             isTemporary: false,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: owningProjectIdentifier,
             surfaceID: surfaceID,
-            navigationIdentityOverride: navigationIdentityOverride
+            navigationIdentityOverride: resolvedNavigationIdentity
         )
         setTerminalSpotlight(spotlight, animated: animated)
     }
@@ -1214,6 +1243,7 @@ extension ContentView {
         sessionConfigurator: ((TerminalSession) -> Void)? = nil,
         onSplitTerminalRequested: (() -> Void)? = nil,
         owningProjectRootURL: URL? = nil,
+        owningProjectIdentifier: String? = nil,
         surfaceID: UUID? = nil,
         initialCommand: String? = nil,
         pushCurrentToRestore: Bool = true
@@ -1237,9 +1267,13 @@ extension ContentView {
                 restoreOrDismissSpotlight()
             }
         }
-        let fallbackShortcuts = spotlightProject(rootURL: owningProjectRootURL)?.terminalViewModel.shortcutCommands ?? []
+        let fallbackShortcuts = spotlightProject(
+            projectIdentifier: owningProjectIdentifier,
+            rootURL: owningProjectRootURL
+        )?.terminalViewModel.shortcutCommands ?? []
         let shortcutDefinitions = spotlightShortcutDefinitions(
             for: owningProjectRootURL,
+            projectIdentifier: owningProjectIdentifier,
             fallback: fallbackShortcuts
         )
         let spotlight = TerminalSpotlightState(
@@ -1258,6 +1292,7 @@ extension ContentView {
                     sessionConfigurator: sessionConfigurator,
                     onSplitTerminalRequested: onSplitTerminalRequested,
                     owningProjectRootURL: owningProjectRootURL,
+                    owningProjectIdentifier: owningProjectIdentifier,
                     surfaceID: originatingSurfaceID,
                     initialCommand: initialCommand
                 )
@@ -1281,6 +1316,7 @@ extension ContentView {
                         sessionConfigurator: sessionConfigurator,
                         onSplitTerminalRequested: onSplitTerminalRequested,
                         owningProjectRootURL: owningProjectRootURL,
+                        owningProjectIdentifier: owningProjectIdentifier,
                         surfaceID: originatingSurfaceID,
                         initialCommand: command
                     )
@@ -1291,11 +1327,15 @@ extension ContentView {
                             shortcut,
                             directoryURL: normalizedDirectoryURL,
                             owningProjectRootURL: owningProjectRootURL,
+                            owningProjectIdentifier: owningProjectIdentifier,
                             surfaceID: originatingSurfaceID,
                             boardStore: boardStore
                        ) {
                         return
-                    } else if let project = spotlightProject(rootURL: owningProjectRootURL) {
+                    } else if let project = spotlightProject(
+                        projectIdentifier: owningProjectIdentifier,
+                        rootURL: owningProjectRootURL
+                    ) {
                         project.terminalViewModel.runShortcut(shortcut, defaultDirectory: normalizedDirectoryURL)
                         requestTerminalFocusWithStabilization(for: project.terminal)
                     } else {
@@ -1314,6 +1354,7 @@ extension ContentView {
             },
             isTemporary: true,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: owningProjectIdentifier,
             surfaceID: originatingSurfaceID
         )
         setTerminalSpotlight(spotlight)
@@ -1327,15 +1368,17 @@ extension ContentView {
         in terminalViewModel: TerminalViewModel,
         directoryURL: URL,
         surfaceID: UUID? = nil,
-        owningProjectRootURL: URL? = nil
+        owningProjectRootURL: URL? = nil,
+        owningProjectIdentifier: String? = nil
     ) {
         let normalizedDirectoryURL = directoryURL.standardizedFileURL
         if let surfaceID,
            let boardStore = vibespaceHydrationCoordinator.boardStore {
-            let projectPath = owningProjectRootURL?.standardizedFileURL.path
+            let projectPath = owningProjectIdentifier
+                ?? owningProjectRootURL?.standardizedFileURL.path
                 ?? vibespaceView.activeVibeSpaceProjects.first {
                     $0.terminalViewModel === terminalViewModel
-                }?.rootURL.standardizedFileURL.path
+                }?.projectIdentifier
             if boardStore.addTile(
                 projectPath: projectPath,
                 directoryURL: normalizedDirectoryURL,
@@ -1349,9 +1392,22 @@ extension ContentView {
         requestTerminalFocusWithStabilization(for: AnyTerminalProvider(terminalViewModel))
     }
 
-    func openTerminalInEditorPane(tabID: UUID, projectRootURL: URL?) {
-        guard let rootURL = projectRootURL?.standardizedFileURL,
-              let project = vibespaceView.activeVibeSpaceProjects.first(where: { $0.rootURL.standardizedFileURL == rootURL }) else { return }
+    func openTerminalInEditorPane(
+        tabID: UUID,
+        projectRootURL: URL?,
+        projectIdentifier: String? = nil
+    ) {
+        let project = projectIdentifier.flatMap { identifier in
+            vibespaceView.activeVibeSpaceProjects.first(where: {
+                $0.projectIdentifier == identifier
+            })
+        } ?? projectRootURL.flatMap { rootURL in
+            let normalizedRoot = rootURL.standardizedFileURL
+            return vibespaceView.activeVibeSpaceProjects.first(where: {
+                $0.rootURL.standardizedFileURL == normalizedRoot
+            })
+        }
+        guard let project else { return }
         contentViewerStore.activeGroup.openTab(.terminal(projectID: project.id, tabID: tabID))
     }
 
@@ -1503,6 +1559,7 @@ extension ContentView {
             onTemporaryTerminalRequested: nil,
             isTemporary: false,
             owningProjectRootURL: owningProjectRootURL,
+            owningProjectIdentifier: selectedProject?.projectIdentifier,
             surfaceID: surfaceID ?? terminalSpotlightCoordinator.spotlight?.surfaceID
         )
         setTerminalSpotlight(spotlight, animated: animated)

@@ -89,7 +89,8 @@ struct VibeSpaceState: Identifiable {
         var unresolvedPaths: [String] = []
         let parkedSet = Set(config.parkedProjectPaths.map { Self.normalizedPath(from: $0) })
         let configuredPaths = config.projectPaths + config.unresolvedProjectPaths
-        for path in configuredPaths {
+        for rawPath in configuredPaths {
+            let path = Self.normalizedPath(from: rawPath)
             guard seenPaths.insert(path).inserted else { continue }
             // Parked projects are tracked separately and MUST NOT be instantiated
             // as live sessions (F021-R09, F021-R14).
@@ -119,7 +120,14 @@ struct VibeSpaceState: Identifiable {
 
         projects = sessions
         unresolvedProjectPaths = unresolvedPaths
-        parkedProjectPaths = config.parkedProjectPaths.map { Self.normalizedPath(from: $0) }
+        parkedProjectPaths = config.parkedProjectPaths.reduce(
+            into: (paths: [String](), seen: Set<String>())
+        ) { result, rawPath in
+            let normalized = Self.normalizedPath(from: rawPath)
+            if result.seen.insert(normalized).inserted {
+                result.paths.append(normalized)
+            }
+        }.paths
         storedProjectPaths = sessions.map(\.projectIdentifier) + unresolvedPaths
         sourceControlSettings = config.sourceControlSettings.normalized()
         if let focusedProjectPath = config.focusedProjectPath {
